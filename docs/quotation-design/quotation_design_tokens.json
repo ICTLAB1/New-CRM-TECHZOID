@@ -1,0 +1,33 @@
+{
+  "page": {
+    "size": "A4",
+    "orientation": "portrait",
+    "margin_mm": 13
+  },
+  "colors": {
+    "navy": "#0D2B55",
+    "text": "#18202A",
+    "muted": "#64748B",
+    "border": "#D7DCE2",
+    "white": "#FFFFFF"
+  },
+  "quotation_number": "TZ/QT/{FY}/{SEQ:4}",
+  "font_stack": "Inter, Arial, Helvetica, sans-serif",
+  "line_item_columns": [
+    "sr_no",
+    "description",
+    "brand",
+    "part_sku",
+    "qty",
+    "unit",
+    "unit_price",
+    "discount",
+    "taxable_value"
+  ],
+  "logo_fit": "contain",
+  "preserve_logo_aspect_ratio": true,
+  "multi_page": true,
+  "repeat_line_item_header": true,
+  "keep_totals_together": true,
+  "keep_partner_iso_footer_together": true
+}

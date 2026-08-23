@@ -1,68 +1,84 @@
 /**
- * Render sample documents to PDF for visual inspection.
+ * Render sample quotations for visual inspection.
  *
- * The ONLY verification method that works for this renderer: generate a PDF,
- * rasterise it (pdftoppm), and LOOK at the image. Measuring coordinates
- * programmatically gave false results repeatedly — both false failures and
- * missed real problems.
+ * The spec requires 1, 5, 10, 20 and 50+ line items to be checked, plus long
+ * descriptions, long addresses, CGST/SGST, IGST, zero tax, discounts and
+ * missing optional fields. The ONLY verification that works here: generate,
+ * rasterise (pdftoppm), and LOOK.
  *
- *   npx tsx scripts/render-sample.ts   (or: npx vite-node scripts/render-sample.ts)
- *   pdftoppm -png -r 110 tmp/quotation.pdf tmp/quotation
+ *   npx tsx scripts/render-sample.ts
+ *   pdftoppm -png -r 110 tmp/items-50.pdf tmp/items-50
  */
 import { writeFileSync } from "node:fs";
 import { computeDocument } from "../src/domain/tax/compute";
 import { buildDocumentModel } from "../src/domain/documents/model";
 import { DEFAULT_DOC_TEMPLATE } from "../src/domain/documents/template";
+import { DOMESTIC_TERMS } from "../src/domain/documents/terms";
 import { renderDocumentPdf } from "../src/documents/pdf/render";
 
 const settings = {
   company: {
     name: "TechZoid Technologies Private Limited",
-    address: "Plot 14, Netaji Subhash Place, Pitampura",
-    city: "New Delhi", state: "Delhi", pincode: "110034",
-    gstin: "07AAXCT2727Q1ZX", pan: "AAXCT2727Q", cin: "U72900DL2015PTC281234",
-    phone: "+91 11 4567 8900",
+    address: "407, 4th Floor, Pearl Business Park, Netaji Subhash Place, Pitampura",
+    city: "New Delhi", state: "Delhi", pincode: "110034", country: "India",
+    gstin: "07AAGCT9158R1Z0", pan: "AAGCT9158R", cin: "U72900DL2016PTC302635",
+    phone: "+91 97114 92098",
     email: "sales@techzoidtechnologies.com",
     website: "www.techzoidtechnologies.com",
   },
-  uaeOffice: { name: "TechZoid Technologies FZ-LLC", city: "Ajman Free Zone", country: "United Arab Emirates" },
-  isoCertText:
-    "ISO 9001:2015 — Quality Management System\nISO/IEC 27001:2022 — Information Security Management System\nISO/IEC 20000-1:2018 — IT Service Management System",
   signatoryName: "Abhinav Jain",
   signatoryDesignation: "Managing Director",
+  /* No approved badge assets are configured here, so every slot falls back
+     to its name. Nothing is fabricated. */
+  partnerDesignations: [
+    { label: "Microsoft Solutions Partner" },
+    { label: "Adobe Certified Reseller" },
+  ],
+  brandingLogos: [
+    { label: "HP" }, { label: "Lenovo" }, { label: "Dell Technologies" },
+    { label: "Autodesk" }, { label: "Zoho" },
+  ],
+  certLogos: [
+    { label: "ISO 9001:2015", caption: "Quality Management" },
+    { label: "ISO/IEC 27001:2022", caption: "Information Security" },
+    { label: "ISO/IEC 20000-1:2018", caption: "IT Service Management" },
+  ],
 };
 
-/* Worst-case content on purpose: 7-figure totals, 12-character Microsoft
-   SKUs, "Kaspersky", "Project", long descriptions. */
-const items = [
-  { id: "1", desc: "Microsoft 365 E5 (Annual, Commercial)", subDesc: "Includes Teams Phone, Power BI Pro and Defender for Office 365 Plan 2", brand: "Microsoft", sku: "CFQ7TTC0LFLZ", hsn: "997331", qty: 250, unit: "License", rate: 2899.5, disc: 7.5, gst: 18 },
-  { id: "2", desc: "Autodesk AutoCAD LT 2026 — Single User", subDesc: "3-year term, includes technical support", brand: "Autodesk", sku: "057N1-WW3740", hsn: "997331", qty: 12, unit: "License", rate: 42750, disc: 0, gst: 18 },
-  { id: "3", desc: "Kaspersky Endpoint Security for Business Advanced", subDesc: "Cross-platform, 1 year", brand: "Kaspersky", sku: "KL4867XAKFS", hsn: "997331", qty: 500, unit: "Node", rate: 1876.25, disc: 12, gst: 18 },
-  { id: "4", desc: "Implementation & Migration Services", subDesc: "Tenant migration, identity setup, knowledge transfer", brand: "TechZoid", sku: "SVC-PROJECT-01", hsn: "998313", qty: 1, unit: "Project", rate: 376656, disc: 0, gst: 18 },
-  { id: "5", desc: "Dell PowerEdge R760 Rack Server", subDesc: "2x Xeon Gold 6430, 256GB RAM, 4x 1.92TB NVMe", brand: "Dell", sku: "PER760-2X6430", hsn: "84714900", qty: 3, unit: "Nos", rate: 1287400, disc: 4.25, gst: 18 },
+const CATALOG = [
+  { desc: "Microsoft 365 Business Premium\nAnnual Subscription\nFor 25 Users", brand: "Microsoft", sku: "CFQ7TTC0LH1Y", qty: 25, unit: "User", rate: 18900, disc: 25 },
+  { desc: "HP EliteBook 840 G11\n14\" WUXGA Display\nIntel Core Ultra 7 155U\n16GB RAM | 512GB SSD\nWindows 11 Pro\n3 Yrs Onsite Warranty", brand: "HP", sku: "9G0K8PT", qty: 10, unit: "Nos.", rate: 112500, disc: 10 },
+  { desc: "Adobe Acrobat Pro\nDC for Teams\nAnnual Subscription\nFor 10 Users", brand: "Adobe", sku: "65302526BA01A12", qty: 10, unit: "User", rate: 15600, disc: 10 },
+  { desc: "Lenovo ThinkPad T14 Gen 5\n14\" WUXGA Display\nIntel Core Ultra 5 125U\n16GB RAM | 512GB SSD\nWindows 11 Pro", brand: "Lenovo", sku: "21MLCTO1WW", qty: 5, unit: "Nos.", rate: 105000, disc: 10 },
+  { desc: "Kaspersky Endpoint Security Select\nAnnual Subscription\nFor 25 Devices", brand: "Kaspersky", sku: "KL1941XKRBFS", qty: 25, unit: "Device", rate: 1050, disc: 25 },
+  { desc: "Dell PowerEdge R760 Rack Server\n2x Xeon Gold 6430, 256GB RAM\n4x 1.92TB NVMe", brand: "Dell", sku: "PER760-2X6430", qty: 3, unit: "Nos.", rate: 1287400, disc: 4.25 },
+  { desc: "Autodesk AutoCAD LT 2026 — Single User", brand: "Autodesk", sku: "057N1-WW3740", qty: 12, unit: "License", rate: 42750, disc: 0 },
+  { desc: "Implementation & Migration Services\nTenant migration, identity setup, knowledge transfer", brand: "TechZoid", sku: "SVC-PROJECT-01", qty: 1, unit: "Project", rate: 376656, disc: 0 },
 ];
 
-function render(docType: "quotation" | "proforma", overrides: Record<string, unknown> = {}, name: string = docType) {
+const items = (n: number) =>
+  Array.from({ length: n }, (_, i) => ({ id: String(i + 1), gst: 18, ...CATALOG[i % CATALOG.length]! }));
+
+function render(name: string, overrides: Record<string, unknown> = {}, docType: "quotation" | "proforma" = "quotation") {
   const doc = {
-    number: docType === "proforma" ? "TZ/PI/2627/0042" : "TZ/QT/2627/0117",
-    date: "2026-08-23", validUntil: "2026-09-07",
-    referenceNo: "RFQ/ACME/2026/88", revisionNo: 1,
-    preparedBy: "Priyanshi Sharma",
-    paymentTerms: "50% advance, balance on delivery",
-    subject: "Supply of Microsoft, Autodesk and Kaspersky licences with implementation services",
-    billName: "Acme Manufacturing India Private Limited",
-    billAddress: "Plot 88, Sector 63, Industrial Area Phase III",
-    billState: "Delhi", billCountry: "India",
-    billGstin: "07AAPFU0939F1ZV", billPan: "AAPFU0939F",
-    billContact: "Rajesh Kumar", billPhone: "+91 98100 12345", billEmail: "rajesh.kumar@acme-mfg.co.in",
-    items, taxType: "gst", currency: "INR", roundOff: true,
-    terms: [
-      "All prices quoted are in Indian Rupees (INR) and are exclusive of applicable GST unless explicitly stated otherwise.",
-      "Payment terms: 50% advance along with the confirmed purchase order, balance on delivery.",
-      "Licence keys, activation codes, and subscription plans, once delivered and activated, are strictly non-returnable and non-refundable as per the respective OEM's licensing policy.",
-      "Delivery of digital licences within 1–3 working days of payment realisation.",
-      "This quotation is valid for the period stated above and supersedes all previous quotations for the same requirement.",
-    ],
+    number: docType === "proforma" ? "TZ/PI/2627/0042" : "TZ/QT/2627/0001",
+    date: "2026-08-24", validUntil: "2026-09-23",
+    referenceNo: "PO/ABC/2425/078",
+    enquiryRef: "ENQ-150826-01",
+    customerCode: "CUST-000123",
+    preparedBy: "Abhinav / Sales Team",
+    paymentTerms: "As specified", deliveryTerms: "As specified",
+    billName: "ABC Private Limited",
+    billAddress: "123, Business Park,\nSector 62, Noida\nUttar Pradesh - 201309",
+    billState: "Uttar Pradesh", billCountry: "India",
+    billGstin: "09AABCA1234A1Z5", billContact: "Mr. Rajesh Sharma",
+    billEmail: "purchase@abcpl.com", billPhone: "+91 98765 43210",
+    shipSameAsBilling: false,
+    shipName: "ABC Private Limited", shipAddress: "IT Department\nPlot No. 45, Industrial Area\nPhase 2, Gurugram\nHaryana - 122002",
+    shipState: "Haryana", shipContact: "Mr. Amit Verma", shipPhone: "+91 87654 32109",
+    taxType: "gst", currency: "INR",
+    terms: [...DOMESTIC_TERMS],
+    items: items(5),
     ...overrides,
   };
 
@@ -78,10 +94,12 @@ function render(docType: "quotation" | "proforma", overrides: Record<string, unk
   });
   const pdf = renderDocumentPdf({ model, rows: totals.rows });
   writeFileSync(`tmp/${name}.pdf`, Buffer.from(pdf.output("arraybuffer")));
-  console.log(`tmp/${name}.pdf  —  ${totals.rows.length} rows, grand ${model.money.grandValue}, ${pdf.getNumberOfPages()} page(s)`);
+  console.log(`tmp/${name}.pdf — ${totals.rows.length} rows, ${model.money.grandValue}, ${pdf.getNumberOfPages()} page(s)`);
 }
 
-render("quotation");
-render("proforma", { advancePercent: 50 });
-render("quotation", { currency: "AED", taxType: "none", billCountry: "United Arab Emirates", billState: "", billGstin: "", billPan: "" }, "export-exempt");
-render("quotation", { billState: "Maharashtra" }, "interstate-igst");
+for (const n of [1, 5, 10, 20, 50]) render(`items-${n}`, { items: items(n) });
+render("interstate-igst", { billState: "Maharashtra" });
+render("zero-tax", { taxType: "none" });
+render("export-aed", { taxType: "none", currency: "AED", billCountry: "United Arab Emirates", billState: "", billGstin: "" });
+render("minimal", { items: items(1), referenceNo: "", enquiryRef: "", customerCode: "", billGstin: "", billPhone: "", shipSameAsBilling: true });
+render("proforma", { advancePercent: 50 }, "proforma");

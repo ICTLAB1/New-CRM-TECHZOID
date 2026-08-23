@@ -33,6 +33,13 @@ export interface LogoCell {
   years?: string;
 }
 
+/** One cell of the four-across reference strip under the party grid. */
+export interface RefCell { label: string; value: string }
+
+/** A logo slot. `src` is present only when an approved asset is configured;
+ *  otherwise the renderer prints `text` and never fabricates a badge. */
+export interface LogoSlot { text: string; src?: string | null; caption?: string }
+
 export interface DocumentModel {
   docType: DocType;
   isProforma: boolean;
@@ -46,15 +53,26 @@ export interface DocumentModel {
 
   header: {
     companyName: string;
+    /** "Technology Procurement | Licensing | Hardware | Enterprise Solutions" */
+    tagline: string;
     addressLine: string;
     contactLines: string[];
     uaeOffice: { name: string; lines: string } | null;
     isoLines: string[];
+    /** Date / Valid Until / Currency, beside the title block. */
     meta: Pair[];
     registrationParts: string[];
   };
 
+  /** Left column of the details grid: quotation no, date, valid until,
+   *  customer id, sales executive, enquiry reference. */
+  details: Pair[];
+
+  /** Bill To and Ship To. The design shows exactly these two, boxed. */
   parties: PartyModel[];
+
+  /** Customer Reference | Enquiry Reference | Payment Terms | Delivery Terms */
+  references: RefCell[];
 
   intro: { salutation: string | null; body: string | null; subject: string | null };
 
@@ -80,7 +98,21 @@ export interface DocumentModel {
     weAccept: { label: string; methods: string[] } | null;
   };
 
-  footer: { contactBits: string[]; closing: string };
+  /** The three strips above the footer. Each renders from configured assets
+   *  and falls back to text; nothing here is ever fabricated. */
+  strips: {
+    designations: LogoSlot[];
+    partners: LogoSlot[];
+    certifications: LogoSlot[];
+  };
+
+  footer: {
+    companyName: string;
+    addressLines: string[];
+    contactBits: string[];
+    registration: Pair[];
+    closing: string;
+  };
 }
 
 /* v1 treated a phone field holding only punctuation or a stray "-" as absent,
@@ -147,29 +179,41 @@ export function buildDocumentModel(input: BuildModelInput): DocumentModel {
     ? String(s.isoCertText || "").split("\n").map((x: string) => x.trim()).filter(Boolean)
     : [];
 
-  const meta: Pair[] = isProforma
+  const details: Pair[] = isProforma
     ? [
         ["Invoice No.", doc.number],
-        ["Reference No.", doc.referenceNo || "—"],
-        ["Revision No.", String(doc.revisionNo || 0)],
-        ["Date", fmtDate(doc.date)],
-        ["Payment Terms", (doc.advancePercent || 100) + "% Advance"],
-        ["Valid Till", fmtDate(doc.validUntil)],
-        ...(doc.quoteNumber ? ([["Ref. Quotation", doc.quoteNumber]] as Pair[]) : []),
-        ["Currency", currency],
+        ["Invoice Date", fmtDate(doc.date)],
+        ["Valid Until", fmtDate(doc.validUntil)],
+        ["Customer ID", doc.customerCode || "—"],
+        ["Sales Executive", doc.preparedBy || "—"],
+        ["Reference Quotation", doc.quoteNumber || "—"],
       ]
     : [
         ["Quotation No.", doc.number],
-        ["Reference No.", doc.referenceNo || "—"],
-        ["Revision No.", String(doc.revisionNo || 0)],
-        ["Date", fmtDate(doc.date)],
-        ["Valid Till", fmtDate(doc.validUntil)],
+        ["Quotation Date", fmtDate(doc.date)],
+        ["Valid Until", fmtDate(doc.validUntil)],
+        /* A customer-facing code, never the database id — sequential or
+           guessable identifiers must not leave the system. */
+        ["Customer ID", doc.customerCode || "—"],
         ["Sales Executive", doc.preparedBy || "—"],
-        ["Payment Terms", doc.paymentTerms || "As per agreement"],
-        /* The quotation header hardcoded "Currency: INR" while the proforma
-           read the document. Both read the document now. */
-        ["Currency", currency],
+        ["Enquiry Reference", doc.enquiryRef || "—"],
       ];
+
+  const references: RefCell[] = [
+    { label: "Customer Reference", value: doc.referenceNo || "—" },
+    { label: "Enquiry Reference", value: doc.enquiryRef || "—" },
+    { label: "Payment Terms", value: doc.paymentTerms || "As specified" },
+    { label: "Delivery Terms", value: doc.deliveryTerms || "As specified" },
+  ];
+
+  /* Beside the title: date, validity, currency. Nothing more — the details
+     column directly below already carries the number, customer id, sales
+     executive and references, and printing them twice cost 20mm of page. */
+  const meta: Pair[] = [
+    ["Date", fmtDate(doc.date)],
+    ["Valid Until", fmtDate(doc.validUntil)],
+    ["Currency", currency],
+  ];
 
   const registrationParts = [
     c.cin && "CIN: " + c.cin,
@@ -184,22 +228,28 @@ export function buildDocumentModel(input: BuildModelInput): DocumentModel {
   const placeOfSupply = (state: string | undefined): string | null =>
     isGst ? (state || "") + (stateCode ? " (" + stateCode + ")" : "") : null;
 
-  const partyRows = (p: Record<string, any>): Pair[] =>
-    ([
-      ["GSTIN", p.gstin],
-      ["PAN", p.pan],
-      ["Contact", p.contact],
-      ["Mobile", p.phone],
-      ["Email", p.email],
-      ["State", p.state],
-      ["Place of Supply", p.pos],
-    ] as [string, unknown][])
+  /* The design's boxes are deliberately short. The state and place of supply
+     are already on the address lines, and repeating them squeezes the box
+     without telling the reader anything new. */
+  const partyRows = (p: Record<string, any>, kind: "bill" | "ship"): Pair[] =>
+    (kind === "bill"
+      ? ([["GSTIN", p.gstin], ["Contact", p.contact], ["Email", p.email], ["Phone", p.phone]] as [string, unknown][])
+      : ([["Contact", p.contact], ["Phone", p.phone]] as [string, unknown][]))
       .filter(([, v]) => v !== undefined && v !== null && v !== "")
       .map(([k, v]) => [k, String(v)] as Pair);
 
+  const addressLines = (address: unknown, state: unknown, country: string): string[] => {
+    const block = String(address ?? "").split("\n").map((l) => l.trim()).filter(Boolean);
+    /* Only add the state when the address does not already name it — the
+       reference shows "Uttar Pradesh - 201309" then "India", not the state
+       twice. */
+    const hasState = !!state && block.some((l) => l.toLowerCase().includes(String(state).toLowerCase()));
+    return [...block, ...(!hasState && state ? [String(state)] : []), country].filter(Boolean);
+  };
+
   const billParty = {
     name: doc.billName,
-    lines: [doc.billAddress, [doc.billState, billCountry].filter(Boolean).join(", ")].filter(Boolean).map(String),
+    lines: addressLines(doc.billAddress, doc.billState, billCountry),
     gstin: doc.billGstin, pan: doc.billPan, contact: doc.billContact,
     phone: doc.billPhone, email: doc.billEmail, state: doc.billState,
     pos: placeOfSupply(doc.billState),
@@ -210,10 +260,7 @@ export function buildDocumentModel(input: BuildModelInput): DocumentModel {
     ? billParty
     : {
         name: doc.shipName || doc.billName,
-        lines: [
-          doc.shipAddress || doc.billAddress,
-          [doc.shipState || doc.billState, shipCountry].filter(Boolean).join(", "),
-        ].filter(Boolean).map(String),
+        lines: addressLines(doc.shipAddress || doc.billAddress, doc.shipState || doc.billState, shipCountry),
         gstin: doc.shipGstin || doc.billGstin,
         pan: doc.shipPan || doc.billPan,
         contact: doc.shipContact || doc.billContact,
@@ -223,17 +270,18 @@ export function buildDocumentModel(input: BuildModelInput): DocumentModel {
         pos: placeOfSupply(doc.shipState || doc.billState),
       };
 
-  const toParty = (heading: string, p: typeof billParty): PartyModel => ({
+  const toParty = (heading: string, p: typeof billParty, kind: "bill" | "ship"): PartyModel => ({
     heading,
     name: p.name || "—",
     lines: p.lines,
-    rows: partyRows(p),
+    rows: partyRows(p, kind),
   });
 
+  /* The design carries two party boxes, not three: Bill To and Ship To. v1's
+     separate "Quoted To" column repeated the billing party verbatim. */
   const parties: PartyModel[] = [
-    toParty(isProforma ? L.proformaBillHeading : L.quotedToHeading, billParty),
-    toParty(L.billingHeading, billParty),
-    toParty(L.shippingHeading, shipParty),
+    toParty("BILL TO", billParty, "bill"),
+    toParty("SHIP TO", shipParty, "ship"),
   ];
 
   /* ---- money ---- */
@@ -253,9 +301,9 @@ export function buildDocumentModel(input: BuildModelInput): DocumentModel {
         : [{ label: taxTypeLabel(taxType) + " @ " + gstPct + "%", value: money(t.taxTotal) }];
 
   const totalRows: TotalRow[] = [
-    { label: "Sub Total", value: money(t.gross) },
-    { label: "Discount", value: money(t.discount) },
-    { label: "Taxable Amount", value: money(t.taxable) },
+    { label: "Subtotal", value: money(t.gross) },
+    { label: "Total Discount", value: money(t.discount) },
+    { label: "Taxable Value", value: money(t.taxable) },
     ...taxRows,
     ...(doc.roundOff ? [{ label: "Round Off", value: money(t.roundDiff) }] : []),
   ];
@@ -325,16 +373,35 @@ export function buildDocumentModel(input: BuildModelInput): DocumentModel {
   };
 
   /* ---- footer ---- */
+  const toSlots = (list: unknown, textKey = "label", srcKey = "logo"): LogoSlot[] =>
+    (Array.isArray(list) ? list : [])
+      .map((x) => {
+        const item = x as Record<string, unknown>;
+        return {
+          text: String(item[textKey] ?? item["name"] ?? "").trim(),
+          src: (item[srcKey] as string) ?? (item["data"] as string) ?? null,
+          caption: (item["caption"] as string) ?? undefined,
+        };
+      })
+      .filter((slot) => slot.text || slot.src);
+
+  const strips = {
+    designations: toSlots(s.partnerDesignations),
+    partners: toSlots(s.brandingLogos, "label", "data"),
+    certifications: toSlots(s.certLogos),
+  };
+
   const footer = {
-    contactBits: [
-      hasRealPhone(c.phone) ? c.phone : null,
-      c.email,
-      c.website,
-      [c.city, c.state].filter(Boolean).join(", "),
-    ].filter(Boolean).map(String),
+    companyName: c.name || "",
+    addressLines: [c.address, [c.city, c.state, c.pincode].filter(Boolean).join(", "), c.country || "India"]
+      .filter(Boolean).map(String),
+    contactBits: [hasRealPhone(c.phone) ? c.phone : null, c.email, c.website].filter(Boolean).map(String),
+    registration: ([
+      ["GSTIN", c.gstin], ["PAN", c.pan], ["CIN", c.cin],
+    ] as [string, unknown][]).filter(([, v]) => v).map(([k, v]) => [k, String(v)] as Pair),
     closing: isProforma
       ? L.closingProforma || "This is a Proforma Invoice and not a Tax Invoice."
-      : doc.footer || L.closingQuote || "Thank you for your business!",
+      : doc.footer || L.closingQuote || "Thank you for the opportunity to submit this quotation.",
   };
 
   return {
@@ -346,8 +413,14 @@ export function buildDocumentModel(input: BuildModelInput): DocumentModel {
     title: isProforma ? "PROFORMA INVOICE" : "QUOTATION",
     sectionOrder: dt.sectionOrder,
     accentColor: dt.accentColor,
-    header: { companyName: c.name || "", addressLine, contactLines, uaeOffice, isoLines, meta, registrationParts },
+    header: {
+      companyName: c.name || "",
+      tagline: s.tagline || "Technology Procurement  |  Licensing  |  Hardware  |  Enterprise Solutions",
+      addressLine, contactLines, uaeOffice, isoLines, meta, registrationParts,
+    },
+    details,
     parties,
+    references,
     intro: {
       salutation: !isProforma && isOn(SEC.salutation) ? L.salutation || "Dear Sir / Madam," : null,
       body:
@@ -372,6 +445,7 @@ export function buildDocumentModel(input: BuildModelInput): DocumentModel {
     },
     notes,
     signature,
+    strips,
     footer,
   };
 }

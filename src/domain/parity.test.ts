@@ -55,30 +55,51 @@ describe("currency table", () => {
 });
 
 describe("currency formatting parity", () => {
-  it("fmtCurrency matches v1 for every currency and amount", () => {
-    for (const code of CODES) {
+  /* INR now groups in the Indian system — a deliberate, documented deviation
+     required by the approved quotation design. Every other currency must
+     still match v1 exactly. */
+  const NON_INR = CODES.filter((c) => c !== "INR");
+
+  it("fmtCurrency matches v1 for every non-INR currency and amount", () => {
+    for (const code of NON_INR) {
       for (const amt of AMOUNTS) {
         expect(fmtCurrency(amt, code)).toBe(v1.fmtCurrency(amt, code));
       }
     }
   });
 
-  it("fmtCurrencyPdf matches v1 for every currency and amount", () => {
-    for (const code of CODES) {
+  it("fmtCurrencyPdf matches v1 for every non-INR currency and amount", () => {
+    for (const code of NON_INR) {
       for (const amt of AMOUNTS) {
         expect(fmtCurrencyPdf(amt, code)).toBe(v1.fmtCurrencyPdf(amt, code));
       }
     }
   });
 
-  it("fmtMoneyCellPdf matches v1 and never emits a currency prefix", () => {
+  it("fmtMoneyCellPdf matches v1 for non-INR and never emits a currency prefix", () => {
     for (const code of CODES) {
       for (const amt of AMOUNTS) {
         const out = fmtMoneyCellPdf(amt, code);
-        expect(out).toBe(v1.fmtMoneyCellPdf(amt, code));
+        if (code !== "INR") expect(out).toBe(v1.fmtMoneyCellPdf(amt, code));
         expect(out).toMatch(/^-?[0-9,.]+$/);
       }
     }
+  });
+
+  describe("deviation: INR groups in lakhs and crores", () => {
+    it("v1 grouped INR western-style", () => {
+      expect(v1.fmtMoneyCellPdf(2173877.5, "INR")).toBe("2,173,877.50");
+    });
+
+    it("groups INR in the Indian system now, as the approved design renders it", () => {
+      expect(fmtMoneyCellPdf(2173877.5, "INR")).toBe("21,73,877.50");
+      expect(fmtCurrencyPdf(2537979.4, "INR")).toBe("Rs. 25,37,979.40");
+    });
+
+    it("leaves every other currency western-grouped", () => {
+      expect(fmtMoneyCellPdf(2173877.5, "USD")).toBe("2,173,877.50");
+      expect(fmtMoneyCellPdf(2173877.5, "AED")).toBe("2,173,877.50");
+    });
   });
 });
 

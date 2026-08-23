@@ -90,8 +90,16 @@ describe("totals", () => {
 
   it("prints no tax row at all for an exempt document", () => {
     const m = build({ taxType: "none" });
-    expect(m.money.rows.map((r) => r.label)).toEqual(["Sub Total", "Discount", "Taxable Amount"]);
+    expect(m.money.rows.map((r) => r.label)).toEqual(["Subtotal", "Total Discount", "Taxable Value"]);
     expect(m.money.grandValue).toBe("Rs. 24,000.00");
+  });
+
+  it("shows only the tax rows that apply — never a zero IGST beside CGST", () => {
+    // The reference image prints all three with zeros; the written spec says
+    // per tax mode, and printing a zero line invites the reader to wonder
+    // what it is for.
+    expect(build().money.rows.map((r) => r.label)).not.toContain("IGST @ 18%");
+    expect(build({ billState: "Maharashtra" }).money.rows.map((r) => r.label)).not.toContain("CGST @ 9%");
   });
 
   it("names the regime for VAT and Sales Tax", () => {
@@ -185,36 +193,112 @@ describe("proforma specifics", () => {
 });
 
 describe("party grid", () => {
-  it("shows place of supply only under GST", () => {
-    const gst = build().parties[0]!;
-    expect(gst.rows.map(([k]) => k)).toContain("Place of Supply");
-    const vat = build({ taxType: "vat" }).parties[0]!;
-    expect(vat.rows.map(([k]) => k)).not.toContain("Place of Supply");
+  it("carries exactly two boxes: BILL TO and SHIP TO", () => {
+    // v1 had a third column that repeated the billing party verbatim.
+    expect(build().parties.map((p) => p.heading)).toEqual(["BILL TO", "SHIP TO"]);
   });
 
-  it("decodes the state code into the place of supply", () => {
-    expect(build().parties[0]!.rows).toContainEqual(["Place of Supply", "Delhi (07)"]);
+  it("keeps the bill-to box to GSTIN, contact, email and phone", () => {
+    const m = build({ billContact: "Rajesh Kumar", billEmail: "rajesh@acme.in", billPhone: "+91 98100 12345" });
+    expect(m.parties[0]!.rows.map(([k]) => k)).toEqual(["GSTIN", "Contact", "Email", "Phone"]);
+  });
+
+  it("keeps the ship-to box to contact and phone only", () => {
+    // The design's ship box is deliberately short; state and place of supply
+    // are already on the address lines above it.
+    const ship = build({ shipSameAsBilling: false, shipContact: "Amit Verma", shipPhone: "+91 87654 32109" }).parties[1]!;
+    expect(ship.rows.map(([k]) => k)).toEqual(["Contact", "Phone"]);
   });
 
   it("falls back to billing when shipping is the same", () => {
     const m = build();
-    expect(m.parties[2]!.name).toBe(m.parties[1]!.name);
+    expect(m.parties[1]!.name).toBe(m.parties[0]!.name);
   });
 
   it("uses distinct shipping details when they differ", () => {
     const m = build({ shipSameAsBilling: false, shipName: "Acme Warehouse", shipState: "Haryana" });
-    expect(m.parties[2]!.name).toBe("Acme Warehouse");
-    expect(m.parties[1]!.name).toBe("Acme Industries Pvt Ltd");
+    expect(m.parties[1]!.name).toBe("Acme Warehouse");
+    expect(m.parties[0]!.name).toBe("Acme Industries Pvt Ltd");
   });
 
-  it("carries the country on the address line, for exports", () => {
+  it("does not repeat the state when the address already names it", () => {
+    const m = build({ billAddress: "12 Industrial Area\nDelhi - 110034", billState: "Delhi" });
+    const delhiLines = m.parties[0]!.lines.filter((l) => l.toLowerCase().includes("delhi"));
+    expect(delhiLines).toHaveLength(1);
+  });
+
+  it("ends the address with the country, for exports", () => {
     const m = build({ billCountry: "United Arab Emirates", billState: "" });
-    expect(m.parties[0]!.lines.join(" ")).toContain("United Arab Emirates");
+    expect(m.parties[0]!.lines.at(-1)).toBe("United Arab Emirates");
   });
 
   it("omits empty rows rather than printing blank labels", () => {
-    const m = build({ billGstin: "", billPan: "", billPhone: "" });
+    const m = build({ billGstin: "", billPhone: "" });
     expect(m.parties[0]!.rows.map(([k]) => k)).not.toContain("GSTIN");
+    expect(m.parties[0]!.rows.map(([k]) => k)).not.toContain("Phone");
+  });
+});
+
+describe("header and details", () => {
+  it("keeps the header block to date, validity and currency", () => {
+    // Printing the number, customer id and sales executive here too cost
+    // 20mm of page and said everything twice.
+    expect(build().header.meta.map(([k]) => k)).toEqual(["Date", "Valid Until", "Currency"]);
+  });
+
+  it("carries the rest in the details column", () => {
+    const m = build({ customerCode: "CUST-000123", enquiryRef: "ENQ-150826-01", preparedBy: "Priyanshi" });
+    const labels = m.details.map(([k]) => k);
+    expect(labels).toEqual([
+      "Quotation No.", "Quotation Date", "Valid Until", "Customer ID", "Sales Executive", "Enquiry Reference",
+    ]);
+    expect(m.details).toContainEqual(["Customer ID", "CUST-000123"]);
+  });
+
+  it("never falls back to the database id for the customer-facing code", () => {
+    // A sequential or guessable identifier must not leave the system.
+    const m = build({ customerCode: "" });
+    expect(m.details.find(([k]) => k === "Customer ID")?.[1]).toBe("—");
+  });
+
+  it("carries the company tagline", () => {
+    expect(build().header.tagline).toContain("Technology Procurement");
+  });
+});
+
+describe("reference strip", () => {
+  it("has the four cells the design specifies", () => {
+    expect(build().references.map((r) => r.label)).toEqual([
+      "Customer Reference", "Enquiry Reference", "Payment Terms", "Delivery Terms",
+    ]);
+  });
+
+  it("falls back rather than leaving a cell blank", () => {
+    const m = build({ referenceNo: "", enquiryRef: "", paymentTerms: "", deliveryTerms: "" });
+    expect(m.references.map((r) => r.value)).toEqual(["—", "—", "As specified", "As specified"]);
+  });
+});
+
+describe("partner, certification and footer strips", () => {
+  it("renders a slot as text when no approved asset is configured", () => {
+    // Nothing is ever fabricated: no asset means the name, not a badge.
+    const m = build({}, "quotation", { partnerDesignations: [{ label: "Microsoft Solutions Partner" }] });
+    expect(m.strips.designations[0]).toMatchObject({ text: "Microsoft Solutions Partner", src: null });
+  });
+
+  it("is empty when nothing is configured", () => {
+    const m = build();
+    expect(m.strips.designations).toEqual([]);
+    expect(m.strips.partners).toEqual([]);
+    expect(m.strips.certifications).toEqual([]);
+  });
+
+  it("carries the registration numbers in the footer", () => {
+    expect(build().footer.registration.map(([k]) => k)).toEqual(["GSTIN", "PAN", "CIN"]);
+  });
+
+  it("closes with the design's line", () => {
+    expect(build().footer.closing).toBe("Thank you for the opportunity to submit this quotation.");
   });
 });
 

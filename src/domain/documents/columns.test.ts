@@ -3,171 +3,54 @@ import { buildItemColumns, CONTENT_WIDTH_MM, MEASURED_TABLE_WIDTH_MM, naturalWid
 import { computeDocument } from "../tax/compute";
 import type { ComputedRow } from "../tax/types";
 
-const ALL = { subDesc: true, brand: true, sku: true, hsn: true };
 const build = (o: Partial<Parameters<typeof buildItemColumns>[0]> = {}) =>
-  buildItemColumns({ currency: "INR", taxType: "gst", columns: ALL, ...o });
+  buildItemColumns({ currency: "INR", taxType: "gst", columns: {}, ...o });
 
-/** The measured widths, with no absorb/shrink applied. */
 const natural = (o: Partial<Parameters<typeof buildItemColumns>[0]> = {}) =>
-  buildItemColumns({ currency: "INR", taxType: "gst", columns: ALL, ...o, tableWidthMm: null });
+  buildItemColumns({ currency: "INR", taxType: "gst", columns: {}, ...o, tableWidthMm: null });
 
-describe("measured widths", () => {
-  it("every column shown totals exactly 180mm before fitting", () => {
-    // The figure the widths were measured to. If this changes, they were not
-    // re-measured against worst-case content in a rendered image.
+describe("the approved nine columns", () => {
+  it("is exactly the design's column set, in order", () => {
+    expect(build().map((c) => c.key)).toEqual([
+      "num", "desc", "brand", "sku", "qty", "unit", "rate", "disc", "taxable",
+    ]);
+  });
+
+  it("totals exactly the 184mm content width", () => {
     expect(naturalWidth(natural())).toBe(MEASURED_TABLE_WIDTH_MM);
+    expect(MEASURED_TABLE_WIDTH_MM).toBe(CONTENT_WIDTH_MM);
   });
 
-  it("fills the full content width once fitted", () => {
-    expect(naturalWidth(build())).toBeCloseTo(CONTENT_WIDTH_MM, 6);
+  it("carries no per-row tax column — tax lives in the summary block only", () => {
+    // A per-row tax column would state the same thing twice and cost the
+    // description its width.
+    const keys = build().map((c) => c.key);
+    expect(keys).not.toContain("gst");
+    expect(keys).not.toContain("gstamt");
+    expect(keys).not.toContain("hsn");
   });
 
-  it("has 13 columns with everything on", () => {
-    expect(build()).toHaveLength(13);
-  });
-});
-
-describe("hidden columns", () => {
-  it("the description column absorbs the freed width", () => {
-    const all = build();
-    const some = build({ columns: { subDesc: false, brand: false, sku: false, hsn: false } });
-    const descAll = all.find((c) => c.key === "desc")!.w;
-    const descSome = some.find((c) => c.key === "desc")!.w;
-    expect(descSome).toBeGreaterThan(descAll);
-    // No dead gap on the right, whatever is hidden.
-    expect(naturalWidth(some)).toBeCloseTo(CONTENT_WIDTH_MM, 6);
-  });
-
-  it.each([
-    ["subDesc"], ["brand"], ["sku"], ["hsn"],
-  ])("still fills the width with %s hidden", (key) => {
-    const cols = build({ columns: { ...ALL, [key]: false } });
-    expect(cols.some((c) => c.key === key)).toBe(false);
-    expect(naturalWidth(cols)).toBeCloseTo(CONTENT_WIDTH_MM, 6);
-  });
-
-  it("absent toggles mean visible, so an older settings row loses nothing", () => {
-    expect(build({ columns: {} })).toHaveLength(13);
-  });
-
-  it("never shrinks a numeric column when the table is narrowed", () => {
-    const wide = build();
-    const narrow = build({ tableWidthMm: 120 });
-    for (const key of ["rate", "gstamt", "total", "qty", "disc", "gst", "num", "unit"] as const) {
-      expect(narrow.find((c) => c.key === key)!.w, key).toBe(wide.find((c) => c.key === key)!.w);
-    }
-  });
-
-  it("takes a shortfall out of the text columns, down to a floor", () => {
-    const narrow = build({ tableWidthMm: 120 });
-    expect(narrow.find((c) => c.key === "desc")!.w).toBeGreaterThanOrEqual(12);
-    expect(narrow.find((c) => c.key === "subDesc")!.w).toBeGreaterThanOrEqual(12);
-  });
-});
-
-describe("tax columns", () => {
-  it("are dropped entirely for a no-tax document", () => {
-    const cols = build({ taxType: "none" });
-    expect(cols.some((c) => c.key === "gst")).toBe(false);
-    expect(cols.some((c) => c.key === "gstamt")).toBe(false);
-    // and the description absorbs their width — no gap.
-    expect(naturalWidth(cols)).toBeCloseTo(CONTENT_WIDTH_MM, 6);
-  });
-
-  it("name the regime in the amount header", () => {
-    expect(build({ taxType: "gst" }).find((c) => c.key === "gstamt")!.head).toContain("GST Amount");
-    expect(build({ taxType: "vat" }).find((c) => c.key === "gstamt")!.head).toContain("VAT Amount");
-    expect(build({ taxType: "sales_tax" }).find((c) => c.key === "gstamt")!.head).toContain("Sales Tax Amount");
-  });
-});
-
-describe("money cells", () => {
-  const totals = computeDocument(
-    { items: [{ id: "1", desc: "Item", qty: 2, rate: 376656, disc: 0, gst: 18 }], taxType: "gst" },
-    "Delhi",
-  );
-  const row = totals.rows[0] as ComputedRow;
-
-  it("name the currency in the header, once", () => {
-    const cols = build({ currency: "USD" });
-    expect(cols.find((c) => c.key === "rate")!.head).toBe("Unit Price\n(USD)");
-    expect(cols.find((c) => c.key === "total")!.head).toBe("Total\n(USD)");
-  });
-
-  it("carry a bare number in the cell — never a currency prefix", () => {
-    // "Rs. 376,6 / 56.00" is what adding the prefix back looked like.
-    for (const key of ["rate", "gstamt", "total"] as const) {
-      for (const currency of ["INR", "USD", "KWD", "JPY", "PKR"]) {
-        const col = build({ currency }).find((c) => c.key === key)!;
-        expect(col.get(row, 0), `${key}/${currency}`).toMatch(/^-?[0-9,.]+$/);
-      }
-    }
-  });
-
-  it("respects each currency's decimal places", () => {
-    const cell = (currency: string) => build({ currency }).find((c) => c.key === "rate")!.get(row, 0);
-    expect(cell("INR")).toBe("376,656.00");
-    expect(cell("JPY")).toBe("376,656");
-    expect(cell("KWD")).toBe("376,656.000");
-  });
-
-  it("is monospaced and right-aligned so figures line up down the column", () => {
-    for (const key of ["rate", "gstamt", "total"] as const) {
-      const col = build().find((c) => c.key === key)!;
-      expect(col.mono).toBe(true);
-      expect(col.align).toBe("right");
-    }
-  });
-});
-
-describe("cell content", () => {
-  const totals = computeDocument(
-    { items: [{ id: "1", qty: 3, rate: 100, disc: 12.5, gst: 18, unit: "License" }], taxType: "gst" },
-    "Delhi",
-  );
-  const row = totals.rows[0] as ComputedRow;
-
-  it("falls back to an em dash for a missing description", () => {
-    expect(build().find((c) => c.key === "desc")!.get(row, 0)).toBe("—");
-  });
-
-  it("numbers rows from 1", () => {
-    expect(build().find((c) => c.key === "num")!.get(row, 0)).toBe("1");
-    expect(build().find((c) => c.key === "num")!.get(row, 41)).toBe("42");
-  });
-
-  it("shows discount to two decimals and tax as a percentage", () => {
-    expect(build().find((c) => c.key === "disc")!.get(row, 0)).toBe("12.50");
-    expect(build().find((c) => c.key === "gst")!.get(row, 0)).toBe("18%");
-  });
-
-  it("renders empty strings, not 'undefined', for absent optional fields", () => {
-    for (const col of build()) {
-      expect(col.get(row, 0), col.key).not.toContain("undefined");
-    }
+  it("keeps all nine columns for an exempt document", () => {
+    // Nothing in this table depends on the tax regime.
+    expect(build({ taxType: "none" })).toHaveLength(9);
+    expect(naturalWidth(build({ taxType: "none" }))).toBeCloseTo(CONTENT_WIDTH_MM, 6);
   });
 });
 
 describe("measured metrics (golden)", () => {
   /* Width, type size and padding only work as a SET. A narrow column at
-     default padding wraps mid-number — "12.0 / 0" in Disc. and "18 / %" in
-     Tax %, which is how this table was found to have drifted from v1.
-     Changing any value here means re-measuring in a rendered PDF image
-     (scripts/compare-v1-pdf.mjs), not adjusting until a test passes. */
+     default padding wraps mid-number. Changing any value here means
+     re-measuring in a rendered PDF image, not adjusting until a test passes. */
   const GOLDEN: Record<string, { w: number; fontSize: number; pad: string; mono: boolean }> = {
-    num:    { w: 9,  fontSize: 6.6, pad: "default", mono: false },
-    desc:   { w: 27, fontSize: 6.6, pad: "default", mono: false },
-    subDesc:{ w: 20, fontSize: 6.3, pad: "default", mono: false },
-    brand:  { w: 12, fontSize: 6.3, pad: "tight",   mono: false },
-    sku:    { w: 14, fontSize: 4.7, pad: "tight",   mono: true },
-    hsn:    { w: 11, fontSize: 5.8, pad: "tight",   mono: true },
-    qty:    { w: 8,  fontSize: 6.6, pad: "default", mono: false },
-    unit:   { w: 9,  fontSize: 6.2, pad: "tight",   mono: false },
-    rate:   { w: 18, fontSize: 5.9, pad: "money",   mono: true },
-    disc:   { w: 8,  fontSize: 6.6, pad: "tight",   mono: false },
-    gst:    { w: 7,  fontSize: 6.6, pad: "tight",   mono: false },
-    gstamt: { w: 18, fontSize: 5.9, pad: "money",   mono: true },
-    total:  { w: 19, fontSize: 5.9, pad: "money",   mono: true },
+    num:     { w: 11, fontSize: 6.6, pad: "default", mono: false },
+    desc:    { w: 48, fontSize: 6.6, pad: "default", mono: false },
+    brand:   { w: 17, fontSize: 6.3, pad: "tight",   mono: false },
+    sku:     { w: 22, fontSize: 5.4, pad: "tight",   mono: true },
+    qty:     { w: 12, fontSize: 6.6, pad: "tight",   mono: false },
+    unit:    { w: 12, fontSize: 6.2, pad: "tight",   mono: false },
+    rate:    { w: 20, fontSize: 5.9, pad: "money",   mono: true },
+    disc:    { w: 20, fontSize: 5.9, pad: "money",   mono: true },
+    taxable: { w: 22, fontSize: 5.9, pad: "money",   mono: true },
   };
 
   it("matches the measured values for every column", () => {
@@ -179,16 +62,77 @@ describe("measured metrics (golden)", () => {
     }
   });
 
-  it("gives the narrow numeric columns tight padding", () => {
-    // Default padding costs ~1.6mm of content width, which these cannot spare.
-    for (const key of ["disc", "gst", "unit", "hsn", "sku", "brand"] as const) {
-      expect(natural().find((c) => c.key === key)!.pad, key).toBe("tight");
+  it("gives money columns money padding, never default", () => {
+    for (const key of ["rate", "disc", "taxable"] as const) {
+      expect(natural().find((c) => c.key === key)!.pad, key).toBe("money");
+    }
+  });
+});
+
+describe("money cells", () => {
+  const totals = computeDocument(
+    { items: [{ id: "1", desc: "Item", qty: 25, rate: 18900, disc: 25, gst: 18 }], taxType: "gst" },
+    "Delhi",
+  );
+  const row = totals.rows[0] as ComputedRow;
+
+  it("names the currency in the header, once", () => {
+    const cols = build({ currency: "USD" });
+    expect(cols.find((c) => c.key === "rate")!.head).toBe("UNIT PRICE\n(USD)");
+    expect(cols.find((c) => c.key === "taxable")!.head).toBe("TAXABLE VALUE\n(USD)");
+  });
+
+  it("carries a bare number in the cell — never a currency prefix", () => {
+    for (const key of ["rate", "disc", "taxable"] as const) {
+      for (const currency of ["INR", "USD", "KWD", "JPY", "PKR"]) {
+        const col = build({ currency }).find((c) => c.key === key)!;
+        expect(col.get(row, 0), `${key}/${currency}`).toMatch(/^-?[0-9,.]+$/);
+      }
     }
   });
 
-  it("gives money columns money padding, never default", () => {
-    for (const key of ["rate", "gstamt", "total"] as const) {
-      expect(natural().find((c) => c.key === key)!.pad, key).toBe("money");
+  it("groups INR in lakhs and crores, as the approved design renders it", () => {
+    const cell = (key: string) => build().find((c) => c.key === key)!.get(row, 0);
+    expect(cell("rate")).toBe("18,900.00");
+    expect(cell("disc")).toBe("1,18,125.00");
+    expect(cell("taxable")).toBe("3,54,375.00");
+  });
+
+  it("shows the discount as an amount, not a percentage", () => {
+    // The design's column is "DISCOUNT (INR)" — a rupee figure, not "25%".
+    expect(build().find((c) => c.key === "disc")!.get(row, 0)).not.toContain("%");
+  });
+
+  it("shows each row's taxable value, which the summary then totals", () => {
+    expect(build().find((c) => c.key === "taxable")!.get(row, 0)).toBe("3,54,375.00");
+  });
+
+  it("respects each currency's decimal places", () => {
+    const cell = (currency: string) => build({ currency }).find((c) => c.key === "rate")!.get(row, 0);
+    expect(cell("JPY")).toBe("18,900");
+    expect(cell("KWD")).toBe("18,900.000");
+  });
+});
+
+describe("cell content", () => {
+  const totals = computeDocument(
+    { items: [{ id: "1", qty: 3, rate: 100, disc: 0, gst: 18, unit: "License" }], taxType: "gst" },
+    "Delhi",
+  );
+  const row = totals.rows[0] as ComputedRow;
+
+  it("falls back to an em dash for a missing description", () => {
+    expect(build().find((c) => c.key === "desc")!.get(row, 0)).toBe("—");
+  });
+
+  it("numbers rows from 1", () => {
+    expect(build().find((c) => c.key === "num")!.get(row, 0)).toBe("1");
+    expect(build().find((c) => c.key === "num")!.get(row, 49)).toBe("50");
+  });
+
+  it("renders empty strings, not 'undefined', for absent optional fields", () => {
+    for (const col of build()) {
+      expect(col.get(row, 0), col.key).not.toContain("undefined");
     }
   });
 });

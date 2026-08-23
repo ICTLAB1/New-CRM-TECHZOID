@@ -87,7 +87,7 @@ export const DEFAULT_LABELS: DocLabels = {
   billingHeading: "Billing Address",
   shippingHeading: "Shipping Address (If different)",
   proformaBillHeading: "Bill To",
-  closingQuote: "Thank you for your business!",
+  closingQuote: "Thank you for the opportunity to submit this quotation.",
   closingProforma: "This is a Proforma Invoice and not a Tax Invoice.",
   amountInWordsLabel: "Amount in Words:",
   grandTotalLabel: "Grand Total",

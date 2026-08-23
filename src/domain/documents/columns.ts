@@ -1,10 +1,9 @@
 import { fmtMoneyCellPdf } from "../currency/format";
-import { taxTypeLabel } from "../tax/types";
 import type { ComputedRow } from "../tax/types";
 import { isOn, type ColumnToggles } from "./template";
 
 /**
- * The items table.
+ * The items table, per the approved TechZoid quotation design.
  *
  * THIS IS THE SHARED DEFINITION. The PDF renderer and the on-screen preview
  * both build their table from this one function — which columns appear, in
@@ -12,21 +11,28 @@ import { isOn, type ColumnToggles } from "./template";
  * and it took a byte-level comparison to catch; a single definition is what
  * stops it happening again. Do not add a column to one renderer only.
  *
- * WIDTHS ARE MEASURED, NOT CHOSEN. They were sized against real worst-case
- * content — 7-figure totals, 12-character Microsoft SKUs, "Kaspersky",
- * "Project" — so nothing wraps mid-value. With every column shown they total
- * exactly 180mm (asserted by test). Changing one means re-measuring against
- * that content, in a rendered PDF image, not by eye.
+ * Nine columns, totalling exactly the 184mm content width at 13mm margins:
  *
- * MONEY COLUMNS CARRY A BARE NUMBER. The header already names the currency
- * ("Unit Price (INR)"). Repeating "Rs." in every cell pushed large figures
- * onto a second line mid-number — "Rs. 376,6 / 56.00" — which looks broken to
- * a customer. Do not add the prefix back.
+ *   Sr. No. | Product / Service Description | Brand | Part / SKU
+ *           | Qty | Unit | Unit Price (INR) | Discount (INR) | Taxable Value (INR)
+ *
+ * Widths are measured against worst-case content — 7-figure Indian-grouped
+ * totals, 12-character Microsoft SKUs, "Kaspersky", "Project", multi-line
+ * descriptions. Changing one means re-measuring in a rendered PDF image, not
+ * by eye.
+ *
+ * TAX IS NOT IN THIS TABLE. The design carries CGST/SGST/IGST in the summary
+ * block only, so a per-row tax column would state the same thing twice and
+ * cost the description its width. The taxable value each row contributes is
+ * the last column.
+ *
+ * MONEY CELLS CARRY A BARE NUMBER. The header already names the currency.
+ * Repeating "Rs." in every cell pushed large figures onto a second line
+ * mid-number — "Rs. 376,6 / 56.00" — which looks broken to a customer.
  */
 
 export type ColumnKey =
-  | "num" | "desc" | "subDesc" | "brand" | "sku" | "hsn"
-  | "qty" | "unit" | "rate" | "disc" | "gst" | "gstamt" | "total";
+  | "num" | "desc" | "brand" | "sku" | "qty" | "unit" | "rate" | "disc" | "taxable";
 
 export type Align = "left" | "center" | "right";
 
@@ -66,7 +72,7 @@ export interface ItemColumn {
 
 /** Total width available between the page margins, and the measured base. */
 export const CONTENT_WIDTH_MM = 184;
-export const MEASURED_TABLE_WIDTH_MM = 180;
+export const MEASURED_TABLE_WIDTH_MM = 184;
 /** Text columns may be squeezed no narrower than this before they wrap badly. */
 export const MIN_TEXT_COL_MM = 12;
 
@@ -77,8 +83,6 @@ interface ColumnSpec extends Omit<ItemColumn, "head" | "get"> {
   always?: boolean;
   /** Hidden when this optional column is switched off in settings. */
   toggle?: keyof ColumnToggles;
-  /** Hidden when the document carries no tax at all. */
-  taxOnly?: boolean;
 }
 
 interface BuildCtx {
@@ -87,47 +91,41 @@ interface BuildCtx {
 }
 
 const SPECS: ColumnSpec[] = [
-  { key: "num", head: "S.No.", w: 9, align: "center", mono: false, bold: false, fontSize: BASE_FONT_PT, pad: "default", muted: true, always: true,
+  { key: "num", head: "SR. NO.", w: 11, align: "center", mono: false, bold: false, fontSize: BASE_FONT_PT, pad: "default", muted: true, always: true,
     get: (_r, i) => String(i + 1) },
-  { key: "desc", head: "Product Description", w: 27, align: "left", mono: false, bold: true, fontSize: BASE_FONT_PT, pad: "default", muted: false, always: true,
+  { key: "desc", head: "PRODUCT / SERVICE DESCRIPTION", w: 48, align: "left", mono: false, bold: true, fontSize: BASE_FONT_PT, pad: "default", muted: false, always: true,
     get: (r) => r.desc || "—" },
-  { key: "subDesc", head: "Description", w: 20, align: "left", mono: false, bold: false, fontSize: 6.3, pad: "default", muted: true, toggle: "subDesc",
-    get: (r) => r.subDesc || "" },
-  { key: "brand", head: "Brand", w: 12, align: "left", mono: false, bold: false, fontSize: 6.3, pad: "tight", muted: false, toggle: "brand",
+  /* Rendered as a logo where the brand has an approved asset configured, and
+     as its name where it does not. Never a fabricated badge. */
+  { key: "brand", head: "BRAND", w: 17, align: "center", mono: false, bold: false, fontSize: 6.3, pad: "tight", muted: false, always: true,
     get: (r) => r.brand || "" },
-  { key: "sku", head: "SKU / Part No.", w: 14, align: "left", mono: true, bold: false, fontSize: 4.7, pad: "tight", muted: false, toggle: "sku",
+  { key: "sku", head: "PART / SKU", w: 22, align: "center", mono: true, bold: false, fontSize: 5.4, pad: "tight", muted: false, always: true,
     get: (r) => r.sku || "" },
-  { key: "hsn", head: "HSN", w: 11, align: "left", mono: true, bold: false, fontSize: 5.8, pad: "tight", muted: false, toggle: "hsn",
-    get: (r) => r.hsn || "" },
-  { key: "qty", head: "Qty", w: 8, align: "center", mono: false, bold: false, fontSize: BASE_FONT_PT, pad: "default", muted: false, always: true,
-    get: (r) => String(r.qty) },
-  { key: "unit", head: "Unit", w: 9, align: "center", mono: false, bold: false, fontSize: 6.2, pad: "tight", muted: false, always: true,
+  { key: "qty", head: "QTY", w: 12, align: "center", mono: false, bold: false, fontSize: BASE_FONT_PT, pad: "tight", muted: false, always: true,
+    get: (r) => String(r.qty ?? "") },
+  { key: "unit", head: "UNIT", w: 12, align: "center", mono: false, bold: false, fontSize: 6.2, pad: "tight", muted: false, always: true,
     get: (r) => r.unit || "" },
-  { key: "rate", head: "", w: 18, align: "right", mono: true, bold: false, fontSize: 5.9, pad: "money", muted: false, always: true,
+  { key: "rate", head: "", w: 20, align: "right", mono: true, bold: false, fontSize: 5.9, pad: "money", muted: false, always: true,
     get: () => "" },
-  { key: "disc", head: "Disc.\n(%)", w: 8, align: "right", mono: false, bold: false, fontSize: BASE_FONT_PT, pad: "tight", muted: false, always: true,
-    get: (r) => Number(r.disc || 0).toFixed(2) },
-  { key: "gst", head: "Tax\n%", w: 7, align: "right", mono: false, bold: false, fontSize: BASE_FONT_PT, pad: "tight", muted: false, taxOnly: true,
-    get: (r) => (r.gst || 0) + "%" },
-  { key: "gstamt", head: "", w: 18, align: "right", mono: true, bold: false, fontSize: 5.9, pad: "money", muted: false, taxOnly: true,
+  { key: "disc", head: "", w: 20, align: "right", mono: true, bold: false, fontSize: 5.9, pad: "money", muted: false, always: true,
     get: () => "" },
-  { key: "total", head: "", w: 19, align: "right", mono: true, bold: true, fontSize: 5.9, pad: "money", muted: false, always: true,
+  { key: "taxable", head: "", w: 22, align: "right", mono: true, bold: true, fontSize: 5.9, pad: "money", muted: false, always: true,
     get: () => "" },
 ];
 
-/** Headers and cell getters that depend on the document's currency / regime. */
+/** Headers and cell getters that depend on the document's currency. */
 const DYNAMIC: Partial<Record<ColumnKey, { head: (c: BuildCtx) => string; get: (c: BuildCtx) => ItemColumn["get"] }>> = {
   rate: {
-    head: (c) => "Unit Price\n(" + c.currency + ")",
+    head: (c) => "UNIT PRICE\n(" + c.currency + ")",
     get: (c) => (r) => fmtMoneyCellPdf(r.rate, c.currency),
   },
-  gstamt: {
-    head: (c) => (c.taxType === "gst" ? "GST" : taxTypeLabel(c.taxType)) + " Amount\n(" + c.currency + ")",
-    get: (c) => (r) => fmtMoneyCellPdf(r.tax, c.currency),
+  disc: {
+    head: (c) => "DISCOUNT\n(" + c.currency + ")",
+    get: (c) => (r) => fmtMoneyCellPdf(r.discAmt, c.currency),
   },
-  total: {
-    head: (c) => "Total\n(" + c.currency + ")",
-    get: (c) => (r) => fmtMoneyCellPdf(r.total, c.currency),
+  taxable: {
+    head: (c) => "TAXABLE VALUE\n(" + c.currency + ")",
+    get: (c) => (r) => fmtMoneyCellPdf(r.taxable, c.currency),
   },
 };
 
@@ -152,10 +150,8 @@ export interface BuildColumnsOptions {
  */
 export function buildItemColumns(opts: BuildColumnsOptions): ItemColumn[] {
   const ctx: BuildCtx = { currency: opts.currency || "INR", taxType: opts.taxType || "gst" };
-  const showTax = ctx.taxType !== "none";
 
   const cols: ItemColumn[] = SPECS.filter((spec) => {
-    if (spec.taxOnly) return showTax;
     if (spec.always) return true;
     return spec.toggle ? isOn(opts.columns[spec.toggle]) : true;
   }).map((spec) => {

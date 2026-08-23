@@ -18,7 +18,7 @@ before the next.
 |---|-------|-------|
 | 1 | Project structure, TypeScript, database layer, auth, RLS | data layer + schema done; auth UI pending |
 | 2 | Domain logic — tax, currency, numbering — with tests | **done, parity-verified against v1** |
-| 3 | PDF generation, verified by rendering images | **done, compared against v1's own renderer** |
+| 3 | PDF generation, verified by rendering images | **done — rebuilt to the approved quotation design** |
 | 4 | Design system and shell | **done** |
 | 5 | Customers and pipeline | **done** |
 | 6 | Quotations and proformas with live preview | not started |
@@ -126,6 +126,11 @@ npx tsx scripts/render-sample.ts          # writes tmp/*.pdf
 pdftoppm -png -r 110 tmp/quotation.pdf tmp/quotation
 node scripts/compare-v1-pdf.mjs           # same doc through v1's own renderer
 ```
+
+The approved design pack lives in [`docs/quotation-design/`](docs/quotation-design/).
+`scripts/render-sample.ts` writes the full check set the spec requires — 1, 5,
+10, 20 and 50 line items, inter-state IGST, zero tax, an AED export, a minimal
+record with optional fields missing, and a proforma.
 
 `compare-v1-pdf.mjs` renders the identical document through the extracted v1
 generator, diffs the extracted text, and pixel-diffs the rasterised page. A

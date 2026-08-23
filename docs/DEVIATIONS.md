@@ -100,3 +100,66 @@ and no brief item calls them out:
   empty — and the per-sheet import report is what surfaces it.
 - **An unknown `taxType` is taxed**, not treated as exempt. Only the exact
   string `"none"` zeroes tax.
+
+---
+
+## 4. The approved quotation design replaces v1's document layout
+
+`docs/quotation-design/` holds the supplied pack — reference render, spec,
+tokens and data example. The document is now built to that design: navy
+header with a number plaque, a three-column details grid (quotation details,
+BILL TO, SHIP TO), a four-cell reference strip, a nine-column items table, a
+terms-and-summary split, partner/certification strips and a company footer.
+
+Four points where the pack, v1, and the rebuild brief disagreed, each decided
+explicitly rather than picked silently:
+
+### 4a. INR now groups in lakhs and crores
+
+v1 grouped every currency western-style — an INR document read
+"₹2,173,877.50". The approved design renders "₹21,73,877.50" on every figure.
+INR uses `en-IN`; every other currency keeps `en-US`, which is correct for
+USD, AED, EUR and the rest.
+
+**This changes the face of every INR document the company sends.** Pinned by
+`parity.test.ts` → "deviation: INR groups in lakhs and crores", which also
+asserts non-INR currencies still match v1 exactly.
+
+### 4b. The licence-key clause is gone from the default terms
+
+v1's domestic terms carried:
+
+> Licence keys, activation codes, and subscription plans, once delivered and
+> activated, are strictly non-returnable and non-refundable as per the
+> respective OEM's licensing policy.
+
+The supplied spec omits it and instructs that the standard terms must not
+mention licence keys, activation or provisioning at all. The fourteen supplied
+clauses are used verbatim, so **that cover is no longer in the default terms**
+for a business whose main product line is software licences.
+
+Decided explicitly. Terms remain fully editable per document, so the clause
+can be re-added to any individual quotation, and `terms.ts` records where it
+went. Restoring it as a default is a one-line change to `DOMESTIC_TERMS`.
+
+### 4c. Tax rows follow the tax mode, not the reference image
+
+The reference image prints CGST, SGST **and** IGST together with zeros in the
+inapplicable rows. The spec text says to show CGST/SGST or IGST according to
+the actual tax mode, which is also v1's behaviour. The written spec wins: a
+zero line invites the reader to wonder what it is for.
+
+### 4d. Logo slots fall back to text
+
+No badge or partner image assets were supplied. The layout reserves the slots
+and renders them from settings when assets are configured; until then each
+prints its name, shrinking to fit rather than breaking a brand name mid-word.
+No badge, partner designation or certification is ever drawn from nothing.
+
+### Not adopted from the spec
+
+- **"Never use browser floating point"** — the rebuild brief states tax and
+  currency behaviour must not change, and the parity suite pins it. The
+  existing discipline is `round2()` at every step, which is what v1 does and
+  what those tests hold. Introducing a decimal library would change results.
+  Revisit only with the parity suite as the check.

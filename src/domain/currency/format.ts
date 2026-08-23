@@ -1,5 +1,19 @@
 import { getCurrency } from "./currencies";
 
+/**
+ * Grouping locale for a currency.
+ *
+ * DEVIATION FROM v1 (deliberate): v1 grouped every currency western-style, so
+ * an INR document read "2,173,877.50". Indian invoices group in lakhs and
+ * crores — "21,73,877.50" — and the approved quotation design renders it that
+ * way on every figure. INR gets en-IN; everything else keeps en-US, which is
+ * correct for USD, AED, EUR and the rest.
+ *
+ * Recorded in docs/DEVIATIONS.md and pinned by test: this changes the face of
+ * every INR document the company sends.
+ */
+export const groupingLocale = (code: string): string => (code === "INR" ? "en-IN" : "en-US");
+
 /** On-screen money. Browsers have full Unicode font support, so the real
  *  symbol is used. Locale is en-US (v1 behaviour) — grouping is western
  *  even for INR here; the Indian-grouped helper below is separate. */
@@ -8,7 +22,7 @@ export function fmtCurrency(amount: unknown, currencyCode: string | null | undef
   const n = Number(amount) || 0;
   return (
     cur.symbol +
-    n.toLocaleString("en-US", { minimumFractionDigits: cur.decimals, maximumFractionDigits: cur.decimals })
+    n.toLocaleString(groupingLocale(cur.code), { minimumFractionDigits: cur.decimals, maximumFractionDigits: cur.decimals })
   );
 }
 
@@ -44,7 +58,7 @@ export function fmtCurrencyPdf(amount: unknown, currencyCode: string | null | un
     : cur.symbol;
   return (
     symbol +
-    n.toLocaleString("en-US", { minimumFractionDigits: cur.decimals, maximumFractionDigits: cur.decimals })
+    n.toLocaleString(groupingLocale(cur.code), { minimumFractionDigits: cur.decimals, maximumFractionDigits: cur.decimals })
   );
 }
 
@@ -56,7 +70,7 @@ export function fmtCurrencyPdf(amount: unknown, currencyCode: string | null | un
 export function fmtMoneyCellPdf(amount: unknown, currencyCode: string | null | undefined): string {
   const cur = getCurrency(currencyCode);
   const n = Number(amount) || 0;
-  return n.toLocaleString("en-US", {
+  return n.toLocaleString(groupingLocale(cur.code), {
     minimumFractionDigits: cur.decimals,
     maximumFractionDigits: cur.decimals,
   });
