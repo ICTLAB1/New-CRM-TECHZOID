@@ -275,3 +275,68 @@ button.tile:hover { background: var(--surface-2); }
 .meter-fill.is-good { background: var(--good); }
 .meter-fill.is-warn { background: var(--warn); }
 .meter-fill.is-bad  { background: var(--bad); }
+
+/* ── kanban ────────────────────────────────────────────────────────────
+   Columns are fixed-width and scroll horizontally rather than squeezing:
+   a seven-stage board compressed into a laptop width gives every card a
+   two-word line and nothing is readable. */
+/* Columns stretch to a common height so the whole column is a drop target,
+   not just the few pixels a short list happens to occupy. Ragged column
+   bottoms also make an empty stage look broken rather than empty. */
+.board { display: grid; grid-auto-flow: column; grid-auto-columns: 232px; gap: var(--gap); overflow-x: auto; padding-bottom: var(--gap); align-items: stretch; }
+.board-col { display: flex; flex-direction: column; background: var(--surface-2); border: 1px solid var(--rule); border-radius: var(--radius-card); min-height: 340px; }
+.board-body { flex: 1 1 auto; }
+
+/* The board always overflows on a laptop — seven stages do not fit. A fade
+   at the right edge says so; a card sliced by the viewport just looks broken. */
+.board-wrap { position: relative; }
+.board-wrap::after {
+  content: ""; position: absolute; top: 0; right: 0; bottom: var(--gap); width: 28px;
+  background: linear-gradient(to right, transparent, var(--bg));
+  pointer-events: none;
+}
+.board-col.is-over { background: var(--accent-weak); border-color: var(--accent); }
+.board-head { display: flex; align-items: center; gap: var(--gap-tight); padding: 8px 11px; border-bottom: 1px solid var(--rule); }
+.board-head-label { font-size: var(--t-small); font-weight: 600; color: var(--ink); }
+.board-head-count { margin-left: auto; font-family: var(--mono); font-size: var(--t-micro); color: var(--ink-4); }
+.board-head-total { padding: 5px 11px 7px; font-size: var(--t-small); color: var(--ink-4); border-bottom: 1px solid var(--rule); font-variant-numeric: tabular-nums; }
+.board-body { padding: var(--gap-tight); display: flex; flex-direction: column; gap: var(--gap-tight); }
+
+.deal {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-left: var(--edge) solid transparent;
+  border-radius: var(--radius);
+  padding: 9px 10px;
+  cursor: grab;
+  text-align: left;
+  width: 100%;
+  font: inherit;
+}
+.deal:hover { border-color: var(--rule-strong); }
+.deal:active { cursor: grabbing; }
+.deal.is-dragging { opacity: .4; }
+.deal-name { font-size: var(--t-body); font-weight: 500; color: var(--ink); }
+.deal-meta { margin-top: 3px; font-size: var(--t-small); color: var(--ink-4); display: flex; align-items: center; gap: 6px; }
+.deal-value { margin-top: 5px; font-size: var(--t-body); font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; }
+.deal.needs-warn { border-left-color: var(--warn); }
+.deal.needs-bad  { border-left-color: var(--bad); }
+
+/* A stage dot in the column head, matching the chip dots elsewhere. */
+.stage-dot { width: 6px; height: 6px; border-radius: 50%; flex: none; }
+.stage-dot.tone-neutral { background: var(--neutral); }
+.stage-dot.tone-accent  { background: var(--accent); }
+.stage-dot.tone-warn    { background: var(--warn); }
+.stage-dot.tone-good    { background: var(--good); }
+.stage-dot.tone-bad     { background: var(--bad); }
+
+/* ── detail sheet: a side panel, not a centred dialog ──────────────────
+   A customer record is long. A centred modal that scrolls internally hides
+   how much is left; a full-height side panel does not. */
+.scrim-side { padding: 0; align-items: stretch; justify-content: flex-end; }
+.side { max-width: 660px; border-radius: 0; min-height: 100vh; }
+.side .modal-foot { position: sticky; bottom: 0; border-radius: 0; }
+@media (max-width: 720px) { .scrim-side { align-items: flex-end; } .side { min-height: auto; max-height: 92vh; border-radius: 14px 14px 0 0; } }
+
+/* ── inline warning panel ─────────────────────────────────────────────── */
+.notice { display: flex; gap: var(--gap); padding: 11px 13px; border: 1px solid var(--rule); border-left: var(--edge) solid var(--warn); border-radius: var(--radius); background: var(--warn-weak); font-size: var(--t-body); color: var(--ink-2); }

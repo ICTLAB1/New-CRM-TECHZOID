@@ -20,9 +20,16 @@ const code = (s: string): string => s.replace(/\/\*[\s\S]*?\*\//g, "");
 const allCode = code(all);
 
 describe("no decoration", () => {
-  it("uses no gradients anywhere", () => {
-    // "No gradients" is explicit in the brief. v1's primary button had one.
-    expect(allCode).not.toMatch(/linear-gradient|radial-gradient|conic-gradient/);
+  it("uses gradients only as scroll affordances, never as decoration", () => {
+    // "No gradients" is explicit in the brief, and v1's primary button had
+    // one. The single permitted use is the fade at the edge of a scrolling
+    // region: it carries information (there is more this way) rather than
+    // decorating a surface. Every occurrence must be inside a *-wrap::after.
+    const uses = [...allCode.matchAll(/([^{}]*)\{[^}]*(linear|radial|conic)-gradient[^}]*\}/g)]
+      .map((m) => (m[1] ?? "").trim().split("\n").pop()?.trim() ?? "");
+    for (const selector of uses) {
+      expect(selector, `gradient in ${selector}`).toMatch(/-wrap::after$/);
+    }
   });
 
   it("defines exactly one shadow token and uses no ad-hoc box-shadows", () => {

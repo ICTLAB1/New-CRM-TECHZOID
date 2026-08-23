@@ -17,10 +17,15 @@ export interface ModalProps {
   description?: ReactNode;
   onClose: () => void;
   footer?: ReactNode;
+  /** A full-height panel down the right edge instead of a centred dialog.
+   *  For long records: a centred dialog that scrolls internally hides how
+   *  much is left, and a customer form is thirty fields. Still becomes a
+   *  bottom sheet on a phone. */
+  side?: boolean;
   children: ReactNode;
 }
 
-export function Modal({ open, title, description, onClose, footer, children }: ModalProps) {
+export function Modal({ open, title, description, onClose, footer, side, children }: ModalProps) {
   const panel = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -41,8 +46,8 @@ export function Modal({ open, title, description, onClose, footer, children }: M
   if (!open) return null;
 
   return (
-    <div className="scrim" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal" role="dialog" aria-modal="true" tabIndex={-1} ref={panel}>
+    <div className={"scrim" + (side ? " scrim-side" : "")} onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className={"modal" + (side ? " side" : "")} role="dialog" aria-modal="true" tabIndex={-1} ref={panel}>
         <header className="modal-head">
           <div>
             <div className="card-title">{title}</div>

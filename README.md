@@ -20,7 +20,7 @@ before the next.
 | 2 | Domain logic — tax, currency, numbering — with tests | **done, parity-verified against v1** |
 | 3 | PDF generation, verified by rendering images | **done, compared against v1's own renderer** |
 | 4 | Design system and shell | **done** |
-| 5 | Customers and pipeline | not started |
+| 5 | Customers and pipeline | **done** |
 | 6 | Quotations and proformas with live preview | not started |
 | 7 | Orders, dispatch, subscriptions, renewals | not started |
 | 8 | Dashboard and reports | not started |
@@ -53,12 +53,16 @@ src/
     payments/      payment ledger derivation
     geo/           states (with GST codes), countries
     documents/     the shared document model — what a document SAYS
+    customers/     duplicate detection, GSTIN auto-fill, owner cascade
+    pipeline/      stages, lost reasons
   documents/pdf/   the jsPDF renderer — geometry only
   data/            Supabase client, entity sync, legacy normalisation
   components/      shared component library
   styles/          design tokens and component styles
   app/             application shell and navigation
-  features/        feature folders                     (stages 5-10)
+  features/        feature folders
+    customers/     list, record sheet, duplicate warning
+    pipeline/      kanban board, lost-reason capture
 supabase/          schema and RLS — carried forward, not redesigned
 netlify/functions/ backend; contracts must not change
 scripts/           v1 reference extraction for parity tests

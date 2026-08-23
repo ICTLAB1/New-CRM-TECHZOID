@@ -19,26 +19,37 @@ await new Promise((r) => server.listen(4599, r));
 
 const browser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium" });
 
-for (const [name, viewport] of Object.entries({
-  desktop: { width: 1440, height: 1150 },
-  "desktop-top": { width: 1440, height: 760 },
-  phone: { width: 390, height: 844 },
-})) {
+const DESKTOP = { width: 1440, height: 900 };
+const PHONE = { width: 390, height: 844 };
+
+/** Screenshot one screen, navigating to it by its sidebar item first. */
+async function shoot(name, viewport, navLabel, after) {
   const page = await browser.newPage({ viewport, deviceScaleFactor: 2 });
   await page.goto("http://localhost:4599/", { waitUntil: "networkidle" });
-  await page.waitForTimeout(600);
-  await page.screenshot({ path: `tmp/ui-${name}.png`, fullPage: name === "desktop" });
+  if (navLabel) {
+    await page.getByRole("button", { name: navLabel, exact: true }).first().click();
+    await page.waitForTimeout(300);
+  }
+  if (after) await after(page);
+  await page.waitForTimeout(400);
+  await page.screenshot({ path: `tmp/ui-${name}.png`, fullPage: !!(after === undefined && viewport === DESKTOP) });
   console.log(`tmp/ui-${name}.png`);
   await page.close();
 }
 
-// The bottom sheet: same Modal component, phone width.
-const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
-await page.goto("http://localhost:4599/", { waitUntil: "networkidle" });
-await page.getByRole("button", { name: "Filters" }).click();
-await page.waitForTimeout(400);
-await page.screenshot({ path: "tmp/ui-sheet.png" });
-console.log("tmp/ui-sheet.png");
+await shoot("pipeline", DESKTOP, "Pipeline");
+await shoot("customers", DESKTOP, "Customers");
+await shoot("customer-sheet", DESKTOP, "Customers", async (page) => {
+  await page.getByText("Acme Manufacturing India Pvt Ltd").first().click();
+  await page.waitForTimeout(400);
+});
+await shoot("components", DESKTOP, "Components");
+await shoot("pipeline-phone", PHONE, null, async (page) => {
+  await page.getByRole("button", { name: "Menu" }).click();
+  await page.waitForTimeout(250);
+  await page.getByRole("button", { name: "Pipeline", exact: true }).first().click();
+  await page.waitForTimeout(350);
+});
 
 await browser.close();
 server.close();

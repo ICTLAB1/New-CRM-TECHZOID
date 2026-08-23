@@ -1,8 +1,8 @@
 import { useState } from "react";
-import { AppShell, PageHead } from "./AppShell";
+import { PageHead } from "./AppShell";
 import { Button, Card, Chip, Empty, Field, Input, Meter, Select, StatTile, SummaryBar, Tabs, Textarea } from "../components/primitives";
 import { Confirm, Modal } from "../components/Modal";
-import { ToastProvider, useToast } from "../components/Toast";
+import { useToast } from "../components/Toast";
 import { inr, inrList, inrShort } from "../domain/currency/format";
 
 /**
@@ -215,12 +215,5 @@ function Body() {
 }
 
 export function Showcase() {
-  const [view, setView] = useState("quotations");
-  return (
-    <ToastProvider>
-      <AppShell view={view} onNavigate={setView} user={{ name: "Abhinav Jain", role: "Admin" }}>
-        <Body />
-      </AppShell>
-    </ToastProvider>
-  );
+  return <Body />;
 }

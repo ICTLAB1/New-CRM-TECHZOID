@@ -44,6 +44,7 @@ export const NAV: NavSection[] = [
       { id: "catalog", label: "Product catalog" },
       { id: "team", label: "Team" },
       { id: "settings", label: "Settings" },
+      { id: "components", label: "Components" },
     ],
   },
 ];
