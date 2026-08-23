@@ -2,7 +2,7 @@ import type { CSSProperties } from "react";
 import type { DocumentModel, LogoSlot, Pair } from "../../domain/documents/model";
 import { medallionNumber } from "../../domain/documents/model";
 import type { ComputedRow } from "../../domain/tax/types";
-import { CONTENT_WIDTH_MM } from "../../domain/documents/columns";
+import { CONTENT_WIDTH_MM, splitDescription } from "../../domain/documents/columns";
 
 /**
  * The on-screen document.
@@ -157,12 +157,12 @@ export function DocumentPreview({ model: m, rows, brandLogos = {}, scale = 1 }: 
                   if (c.key === "desc") {
                     /* Product name bold, specification beneath it lighter —
                        the same hierarchy the PDF draws. */
-                    const [title, ...rest] = value.split("\n");
+                    const { title, rest } = splitDescription(value);
                     return (
                       <td key={c.key} className={cls}>
                         <span style={{ fontWeight: 700, color: "#18202A" }}>{title}</span>
-                        {rest.length ? (
-                          <span style={{ display: "block", fontWeight: 400, color: "#64748B" }}>{rest.join("\n")}</span>
+                        {rest ? (
+                          <span style={{ display: "block", fontWeight: 400, color: "#64748B" }}>{rest}</span>
                         ) : null}
                       </td>
                     );

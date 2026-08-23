@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildItemColumns, CONTENT_WIDTH_MM, MEASURED_TABLE_WIDTH_MM, naturalWidth } from "./columns";
+import { buildItemColumns, CONTENT_WIDTH_MM, MEASURED_TABLE_WIDTH_MM, naturalWidth, splitDescription } from "./columns";
 import { computeDocument } from "../tax/compute";
 import type { ComputedRow } from "../tax/types";
 
@@ -134,5 +134,26 @@ describe("cell content", () => {
     for (const col of build()) {
       expect(col.get(row, 0), col.key).not.toContain("undefined");
     }
+  });
+});
+
+describe("splitting a description", () => {
+  /* The PDF and the preview disagreed here: the PDF only drew the first line
+     bold when there was a second one, so a single-line product name printed
+     in the grey meant for specifications. */
+  it("always yields a title, even with nothing beneath it", () => {
+    expect(splitDescription("AutoCAD LT 2026")).toEqual({ title: "AutoCAD LT 2026", rest: "" });
+  });
+
+  it("keeps every specification line together", () => {
+    expect(splitDescription("HP EliteBook 840\n14\" display\n16GB RAM")).toEqual({
+      title: "HP EliteBook 840",
+      rest: '14" display\n16GB RAM',
+    });
+  });
+
+  it("survives an empty description", () => {
+    expect(splitDescription("")).toEqual({ title: "", rest: "" });
+    expect(splitDescription(null)).toEqual({ title: "", rest: "" });
   });
 });

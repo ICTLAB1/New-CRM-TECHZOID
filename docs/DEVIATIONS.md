@@ -540,3 +540,20 @@ often on a phone.
 
 The honeypot field is positioned off-screen rather than `display: none`: some
 bots skip hidden fields, and the field only works if they fill it in.
+
+---
+
+## 14. A drift the guard didn't catch
+
+Found by rasterising a sample quotation and looking at it: a line item with no
+sub-description printed its **product name** in the grey meant for
+specifications. The PDF only redrew the first line in bold when there was a
+second line beneath it; the preview always drew it bold. The two renderers
+disagreed, on screen, for the simplest possible item.
+
+The drift guard asserts that every value in the model reaches the preview. It
+cannot see a style, so it could not see this.
+
+The fix is the same shape as the rest of this architecture: the decision moved
+out of both renderers into `splitDescription`, which they now both call, and
+which is tested — including the single-line case that broke.

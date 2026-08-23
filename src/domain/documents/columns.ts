@@ -208,3 +208,23 @@ export function fitToWidth(cols: ItemColumn[], tableWidthMm: number): void {
 export function naturalWidth(cols: readonly { w: number }[]): number {
   return cols.reduce((a, c) => a + c.w, 0);
 }
+
+/**
+ * A line item's description, split into what it is and what it comes with.
+ *
+ * Both renderers ask this rather than deciding for themselves. They disagreed
+ * once: the PDF only drew the first line in bold when there WAS a second one,
+ * so a product with no sub-description printed its name in the grey meant for
+ * specifications, while the preview showed it bold. One function, one answer.
+ */
+export interface DescriptionParts {
+  /** The product name. Always present, always the strong line. */
+  title: string;
+  /** The specification beneath it, if any. */
+  rest: string;
+}
+
+export function splitDescription(value: string | null | undefined): DescriptionParts {
+  const [title = "", ...rest] = String(value ?? "").split("\n");
+  return { title, rest: rest.join("\n") };
+}

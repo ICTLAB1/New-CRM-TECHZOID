@@ -282,8 +282,13 @@ export function renderDocumentPdf(opts: RenderOptions): jsPDF {
         /* The description cell: product name bold, specification beneath it
            lighter, as the design shows. autoTable styles a whole cell at
            once, so the text is drawn plain and the first line redrawn bold
-           over a white patch. */
-        if (column.index === descIndex && cell.text.length > 1) {
+           over a white patch.
+           
+           This runs for a one-line description too. It used to require a
+           second line, so a product with no specification printed its NAME in
+           the grey meant for specifications — while the preview showed it
+           bold. */
+        if (column.index === descIndex && cell.text.length > 0) {
           const fs = cell.styles.fontSize;
           const lead = fs * 0.3528 * 1.15;
           const px = cell.styles.cellPadding.left;
