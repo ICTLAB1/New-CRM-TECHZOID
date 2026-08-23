@@ -98,6 +98,18 @@ consumes those values directly rather than deriving them — it did derive them
 briefly, and produced `12.0 / 0` in the Disc. column, caught by rendering the
 page and looking at it.
 
+### The drift guard
+
+`src/documents/preview/DocumentPreview.test.tsx` renders the preview with
+`renderToStaticMarkup` and asserts that every value the model carries — each
+header meta row, detail row, reference cell, party row, summary line, term,
+registration number and strip slot — actually appears in the markup. The items
+table is checked cell by cell against the same column getters the PDF calls,
+and column widths against the same millimetre figures.
+
+So a figure the PDF prints cannot quietly go missing on screen, and neither
+renderer can start formatting money its own way.
+
 ### Not yet ported
 
 v1's opt-in free-canvas layout (`canvasQuotation` / `canvasProforma`, where

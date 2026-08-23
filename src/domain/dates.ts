@@ -31,3 +31,11 @@ export function fmtDateShort(iso: string | null | undefined): string {
 
 export const isOverdue = (iso: string | null | undefined, today: string = TODAY()): boolean =>
   !!iso && iso < today;
+
+/** Add days to an ISO date, staying on the local calendar. */
+export function addDays(iso: string, days: number): string {
+  const d = parse(iso);
+  if (!d) return iso;
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+}

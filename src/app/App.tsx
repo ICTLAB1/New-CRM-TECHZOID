@@ -6,7 +6,11 @@ import { CustomersScreen } from "../features/customers/CustomersScreen";
 import { PipelineBoard } from "../features/pipeline/PipelineBoard";
 import { CustomerSheet } from "../features/customers/CustomerSheet";
 import { Showcase } from "./Showcase";
-import { CUSTOMERS, CUSTOM_FIELDS, USERS, WORKSPACE } from "./demoData";
+import { QuotationsScreen } from "../features/quotations/QuotationsScreen";
+import {
+  BRAND_LOGOS, CATALOG, CUSTOMERS, CUSTOM_FIELDS, PROFORMAS, QUOTATIONS, SETTINGS, USERS, WORKSPACE,
+} from "./demoData";
+import type { SalesDocument } from "../domain/documents/create";
 import type { Customer } from "../domain/customers/customer";
 import type { Workspace } from "../domain/customers/cascade";
 
@@ -17,6 +21,9 @@ function Body() {
   const [customers, setCustomers] = useState<Customer[]>(CUSTOMERS);
   const [workspace, setWorkspace] = useState<Workspace>(WORKSPACE);
   const [editing, setEditing] = useState<Customer | null>(null);
+  const [quotations, setQuotations] = useState<SalesDocument[]>(QUOTATIONS);
+  const [proformas, setProformas] = useState<SalesDocument[]>(PROFORMAS);
+  const [settings, setSettings] = useState<Record<string, unknown>>(SETTINGS);
   const user = USERS[0]!;
 
   return (
@@ -48,6 +55,29 @@ function Body() {
             />
           ) : null}
         </main>
+      ) : view === "quotations" ? (
+        <QuotationsScreen
+          docType="quotation"
+          documents={quotations}
+          customers={customers}
+          catalog={CATALOG}
+          settings={settings}
+          brandLogos={BRAND_LOGOS}
+          currentUser={user}
+          onChange={(docs, s) => { setQuotations(docs); setSettings(s); }}
+          onCreateProforma={(pf) => { setProformas((cur) => [pf, ...cur]); setView("proformas"); }}
+        />
+      ) : view === "proformas" ? (
+        <QuotationsScreen
+          docType="proforma"
+          documents={proformas}
+          customers={customers}
+          catalog={CATALOG}
+          settings={settings}
+          brandLogos={BRAND_LOGOS}
+          currentUser={user}
+          onChange={(docs, s) => { setProformas(docs); setSettings(s); }}
+        />
       ) : view === "components" ? (
         <Showcase />
       ) : (

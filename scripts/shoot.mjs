@@ -43,6 +43,17 @@ await shoot("customer-sheet", DESKTOP, "Customers", async (page) => {
   await page.getByText("Acme Manufacturing India Pvt Ltd").first().click();
   await page.waitForTimeout(400);
 });
+await shoot("quotations", DESKTOP, "Quotations");
+await shoot("editor", { width: 1600, height: 1100 }, "Quotations", async (page) => {
+  await page.getByText("TZ/QT/2627/0117").first().click();
+  await page.waitForTimeout(600);
+});
+await shoot("editor-items", { width: 1600, height: 1100 }, "Quotations", async (page) => {
+  await page.getByText("TZ/QT/2627/0117").first().click();
+  await page.waitForTimeout(400);
+  await page.getByRole("tab", { name: /Items/ }).click();
+  await page.waitForTimeout(400);
+});
 await shoot("components", DESKTOP, "Components");
 await shoot("pipeline-phone", PHONE, null, async (page) => {
   await page.getByRole("button", { name: "Menu" }).click();

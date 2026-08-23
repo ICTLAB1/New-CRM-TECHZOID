@@ -232,12 +232,16 @@ export function renderDocumentPdf(opts: RenderOptions): jsPDF {
         cellPadding: PADDING_MM[cd.pad],
       };
       if (cd.mono) style["font"] = "courier";
-      if (cd.bold) style["fontStyle"] = "bold";
+      /* The description is drawn plain and its first line redrawn bold in
+         didDrawCell; bolding the whole cell would bold the specification. */
+      if (cd.bold && cd.key !== "desc") style["fontStyle"] = "bold";
+      if (cd.key === "desc") style["textColor"] = MUTED;
       if (cd.muted) style["textColor"] = MUTED;
       columnStyles[i] = style;
     });
 
     const brandIndex = cols.findIndex((c) => c.key === "brand");
+    const descIndex = cols.findIndex((c) => c.key === "desc");
     const brands = images.brands ?? {};
 
     (pdf as PdfWithAutoTable).autoTable({
@@ -269,8 +273,31 @@ export function renderDocumentPdf(opts: RenderOptions): jsPDF {
       didDrawCell: (data: Record<string, unknown>) => {
         const section = data["section"] as string;
         const column = data["column"] as { index: number };
-        const cell = data["cell"] as { x: number; y: number; width: number; height: number; text: string[] };
-        if (section !== "body" || column.index !== brandIndex) return;
+        const cell = data["cell"] as {
+          x: number; y: number; width: number; height: number; text: string[];
+          styles: { fontSize: number; cellPadding: { top: number; left: number } };
+        };
+        if (section !== "body") return;
+
+        /* The description cell: product name bold, specification beneath it
+           lighter, as the design shows. autoTable styles a whole cell at
+           once, so the text is drawn plain and the first line redrawn bold
+           over a white patch. */
+        if (column.index === descIndex && cell.text.length > 1) {
+          const fs = cell.styles.fontSize;
+          const lead = fs * 0.3528 * 1.15;
+          const px = cell.styles.cellPadding.left;
+          const py = cell.styles.cellPadding.top;
+          const first = cell.text[0] ?? "";
+          const top = cell.y + py + (cell.height - py * 2 - cell.text.length * lead) / 2;
+          pdf.setFillColor(255, 255, 255);
+          pdf.rect(cell.x + px - 0.3, top - 0.2, cell.width - px * 2 + 0.6, lead + 0.4, "F");
+          pdf.setFont("helvetica", "bold").setFontSize(fs).setTextColor(...INK);
+          pdf.text(first, cell.x + px, top + lead * 0.72);
+          return;
+        }
+
+        if (column.index !== brandIndex) return;
         const name = (cell.text.join(" ") || "").trim().toLowerCase();
         const asset = brands[name];
         if (!asset) return;

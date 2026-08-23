@@ -1,0 +1,115 @@
+/* ─────────────────────────────────────────────────────────────────────
+   The on-screen document.
+
+   Laid out in MILLIMETRES, the same unit the PDF renderer works in and the
+   same unit the shared column definitions are measured in. That is what
+   keeps the preview honest: a column is 22mm in both, not 22mm in one and
+   "about a fifth" in the other.
+
+   Colours come from the design tokens, so the document reads as part of the
+   product — but its palette is the DOCUMENT's navy, not the app accent.
+   ───────────────────────────────────────────────────────────────────── */
+
+.doc-scale { transform-origin: top left; width: 210mm; }
+
+.doc-page {
+  width: 210mm;
+  min-height: 297mm;
+  padding: 13mm;
+  background: #fff;
+  color: #18202A;
+  font-family: var(--sans);
+  font-size: 2.4mm;
+  line-height: 1.35;
+  box-shadow: var(--lift);
+  font-variant-numeric: tabular-nums;
+}
+
+.doc-page * { box-sizing: border-box; }
+
+/* ── header ── */
+.doc-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 6mm; }
+.doc-mark { font-size: 7mm; font-weight: 800; color: #0D2B55; letter-spacing: -0.02em; line-height: 1; }
+.doc-legal { margin-top: 2.5mm; font-size: 3.4mm; font-weight: 700; color: #0D2B55; }
+.doc-tagline { margin-top: 1.2mm; font-size: 2.5mm; color: #64748B; }
+.doc-title { font-size: 6.6mm; font-weight: 700; color: #0D2B55; text-align: right; line-height: 1; }
+.doc-plaque { margin-top: 2.5mm; padding: 1.6mm 3mm; background: #0D2B55; color: #fff; font-weight: 700; font-size: 3.4mm; text-align: center; }
+.doc-headmeta { margin-top: 2.5mm; }
+.doc-rule-navy { border: 0; border-top: 0.7mm solid #0D2B55; margin: 3mm 0 4mm; }
+
+/* ── label : value rows ── */
+.doc-rows { display: grid; grid-template-columns: auto 2mm 1fr; row-gap: 1.1mm; column-gap: 0; align-items: baseline; }
+.doc-rows dt { color: #64748B; font-size: 2.5mm; }
+.doc-rows .sep { color: #64748B; }
+.doc-rows dd { margin: 0; font-weight: 700; color: #18202A; font-size: 2.5mm; }
+
+/* ── details + parties ── */
+.doc-parties { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5mm; align-items: start; }
+.doc-block-title { font-size: 2.7mm; font-weight: 700; color: #0D2B55; margin-bottom: 3mm; }
+.doc-party { border: 0.2mm solid #D7DCE2; }
+.doc-party-head { background: #0D2B55; color: #fff; font-size: 2.6mm; font-weight: 700; padding: 1.4mm 2.5mm; }
+.doc-party-body { padding: 2.5mm; }
+.doc-party-name { font-weight: 700; font-size: 3mm; color: #18202A; }
+.doc-party-line { color: #64748B; font-size: 2.5mm; }
+.doc-party .doc-rows { margin-top: 1.5mm; }
+
+/* ── reference strip ── */
+.doc-refs { display: grid; border: 0.2mm solid #D7DCE2; margin-top: 5mm; }
+.doc-ref { text-align: center; border-left: 0.2mm solid #D7DCE2; }
+.doc-ref:first-child { border-left: 0; }
+.doc-ref-label { background: #F1F4F8; color: #0D2B55; font-size: 2.3mm; font-weight: 700; padding: 1.4mm 1mm; border-bottom: 0.2mm solid #D7DCE2; }
+.doc-ref-value { padding: 1.8mm 1mm; font-size: 2.6mm; }
+
+/* ── items ── */
+.doc-items { width: 100%; border-collapse: collapse; margin-top: 5mm; table-layout: fixed; }
+.doc-items th { background: #0D2B55; color: #fff; font-size: 2.2mm; font-weight: 700; text-align: center; padding: 1.4mm 0.8mm; vertical-align: middle; white-space: pre-line; }
+.doc-items td { border: 0.15mm solid #D7DCE2; padding: 1.4mm 0.8mm; vertical-align: middle; }
+.doc-items tbody tr:nth-child(odd) td { background: #FAFBFC; }
+.doc-items .a-left { text-align: left; }
+.doc-items .a-center { text-align: center; }
+.doc-items .a-right { text-align: right; }
+.doc-items .mono { font-family: var(--mono); }
+.doc-items .bold { font-weight: 700; }
+.doc-items .muted { color: #64748B; }
+.doc-items .desc { white-space: pre-line; }
+.doc-brand-logo { max-width: 100%; max-height: 9mm; object-fit: contain; display: block; margin: 0 auto; }
+
+/* ── money block ── */
+.doc-money { display: flex; gap: 7mm; margin-top: 5mm; align-items: flex-start; }
+.doc-terms { flex: 1 1 auto; min-width: 0; }
+.doc-terms ol { margin: 3mm 0 0; padding-left: 5mm; }
+.doc-terms li { font-size: 2.3mm; margin-bottom: 0.8mm; color: #18202A; }
+.doc-summary { width: 78mm; flex: none; border: 0.2mm solid #D7DCE2; }
+.doc-summary-head { background: #F1F4F8; color: #0D2B55; font-size: 2.7mm; font-weight: 700; padding: 1.5mm 3mm; }
+.doc-sum-row { display: flex; justify-content: space-between; gap: 3mm; padding: 1.4mm 3mm; border-bottom: 0.15mm solid #D7DCE2; font-size: 2.6mm; }
+.doc-sum-row span:first-child { color: #64748B; }
+.doc-sum-row span:last-child { font-family: var(--mono); }
+.doc-grand { display: flex; justify-content: space-between; gap: 3mm; padding: 2.4mm 3mm; background: #0D2B55; color: #fff; font-weight: 700; font-size: 3mm; }
+.doc-grand span:last-child { font-family: var(--mono); }
+.doc-words { padding: 2mm 3mm 2.5mm; }
+.doc-words-label { font-size: 2.4mm; font-weight: 700; color: #0D2B55; }
+.doc-words-value { font-size: 2.4mm; color: #18202A; }
+
+/* ── strips ── */
+.doc-strips { display: grid; border: 0.2mm solid #D7DCE2; margin-top: 5mm; }
+.doc-strip { border-left: 0.2mm solid #D7DCE2; padding: 1.6mm 2mm 2.4mm; }
+.doc-strip:first-child { border-left: 0; }
+.doc-strip-title { text-align: center; font-size: 2.1mm; font-weight: 700; color: #0D2B55; margin-bottom: 2mm; }
+.doc-slots { display: flex; align-items: center; justify-content: space-around; gap: 2mm; min-height: 11mm; }
+.doc-slot { flex: 1 1 0; min-width: 0; text-align: center; }
+.doc-slot img { max-width: 100%; max-height: 8.5mm; object-fit: contain; display: block; margin: 0 auto; }
+.doc-slot-text { font-size: 2.3mm; font-weight: 700; color: #18202A; }
+.doc-cert { display: flex; align-items: center; gap: 1.5mm; text-align: left; }
+.doc-medal { width: 6.2mm; height: 6.2mm; flex: none; border: 0.45mm solid #0D2B55; border-radius: 50%; display: grid; place-items: center; line-height: 1; }
+.doc-medal-inner { width: 4.8mm; height: 4.8mm; border: 0.18mm solid #0D2B55; border-radius: 50%; display: grid; place-items: center; align-content: center; }
+.doc-medal b { font-size: 2.1mm; color: #0D2B55; display: block; }
+.doc-medal i { font-size: 1.1mm; color: #0D2B55; font-style: normal; display: block; }
+.doc-cert-title { font-size: 2.1mm; font-weight: 700; color: #0D2B55; }
+.doc-cert-scope { font-size: 1.8mm; color: #64748B; }
+
+/* ── footer ── */
+.doc-foot-rule { border: 0; border-top: 0.5mm solid #0D2B55; margin: 5mm 0 3mm; }
+.doc-foot { display: grid; grid-template-columns: 44% 26% 1fr; gap: 4mm; }
+.doc-foot-name { font-size: 2.9mm; font-weight: 700; color: #0D2B55; }
+.doc-foot-line { font-size: 2.5mm; color: #64748B; }
+.doc-closing { margin-top: 6mm; padding-top: 2mm; border-top: 0.2mm solid #D7DCE2; display: flex; justify-content: space-between; font-size: 2.4mm; color: #64748B; }

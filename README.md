@@ -21,7 +21,7 @@ before the next.
 | 3 | PDF generation, verified by rendering images | **done — rebuilt to the approved quotation design** |
 | 4 | Design system and shell | **done** |
 | 5 | Customers and pipeline | **done** |
-| 6 | Quotations and proformas with live preview | not started |
+| 6 | Quotations and proformas with live preview | **done** |
 | 7 | Orders, dispatch, subscriptions, renewals | not started |
 | 8 | Dashboard and reports | not started |
 | 9 | Integrations — email, Microsoft OAuth, WhatsApp, AI | not started |
@@ -55,7 +55,9 @@ src/
     documents/     the shared document model — what a document SAYS
     customers/     duplicate detection, GSTIN auto-fill, owner cascade
     pipeline/      stages, lost reasons
-  documents/pdf/   the jsPDF renderer — geometry only
+  documents/
+    pdf/           the jsPDF renderer — geometry only
+    preview/       the React renderer — the same model, on screen
   data/            Supabase client, entity sync, legacy normalisation
   components/      shared component library
   styles/          design tokens and component styles

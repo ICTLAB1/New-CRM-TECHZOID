@@ -93,8 +93,12 @@ interface BuildCtx {
 const SPECS: ColumnSpec[] = [
   { key: "num", head: "SR. NO.", w: 11, align: "center", mono: false, bold: false, fontSize: BASE_FONT_PT, pad: "default", muted: true, always: true,
     get: (_r, i) => String(i + 1) },
+  /* Title on the first line, specification beneath it — the design's
+     description cell is multi-line, and the sub-description was being
+     captured in the editor and then never printed. Both renderers bold the
+     first line and set the rest lighter. */
   { key: "desc", head: "PRODUCT / SERVICE DESCRIPTION", w: 48, align: "left", mono: false, bold: true, fontSize: BASE_FONT_PT, pad: "default", muted: false, always: true,
-    get: (r) => r.desc || "—" },
+    get: (r) => [r.desc || "—", (r.subDesc ?? "").trim()].filter(Boolean).join("\n") },
   /* Rendered as a logo where the brand has an approved asset configured, and
      as its name where it does not. Never a fabricated badge. */
   { key: "brand", head: "BRAND", w: 17, align: "center", mono: false, bold: false, fontSize: 6.3, pad: "tight", muted: false, always: true,

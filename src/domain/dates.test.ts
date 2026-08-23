@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fmtDate, fmtDateShort, isOverdue } from "./dates";
+import { addDays, fmtDate, fmtDateShort, isOverdue } from "./dates";
 
 describe("date formatting", () => {
   it("gives tables the year", () => {
@@ -40,5 +40,25 @@ describe("overdue", () => {
     expect(isOverdue("2026-09-01", "2026-08-23")).toBe(false);
     expect(isOverdue(null, "2026-08-23")).toBe(false);
     expect(isOverdue("", "2026-08-23")).toBe(false);
+  });
+});
+
+describe("addDays", () => {
+  it("moves forward and back", () => {
+    expect(addDays("2026-08-23", 15)).toBe("2026-09-07");
+    expect(addDays("2026-08-23", -1)).toBe("2026-08-22");
+  });
+
+  it("crosses month and year boundaries", () => {
+    expect(addDays("2026-12-28", 5)).toBe("2027-01-02");
+    expect(addDays("2026-02-27", 2)).toBe("2026-03-01");
+  });
+
+  it("handles a leap year", () => {
+    expect(addDays("2028-02-28", 1)).toBe("2028-02-29");
+  });
+
+  it("returns unparseable input unchanged", () => {
+    expect(addDays("nonsense", 5)).toBe("nonsense");
   });
 });
