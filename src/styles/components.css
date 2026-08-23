@@ -200,6 +200,7 @@ button.tile:hover { background: var(--surface-2); }
 .tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--rule); }
 .tab {
   padding: 8px 12px 9px;
+  white-space: nowrap;
   border: 0; background: transparent;
   font: inherit; font-size: var(--t-body); font-weight: 500;
   color: var(--ink-3); cursor: pointer;

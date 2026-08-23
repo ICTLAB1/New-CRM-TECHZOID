@@ -23,7 +23,7 @@ before the next.
 | 5 | Customers and pipeline | **done** |
 | 6 | Quotations and proformas with live preview | **done** |
 | 7 | Orders, dispatch, subscriptions, renewals | **done** |
-| 8 | Dashboard and reports | not started |
+| 8 | Dashboard and reports | **done** |
 | 9 | Integrations — email, Microsoft OAuth, WhatsApp, AI | not started |
 | 10 | Settings, team management, catalog | not started |
 

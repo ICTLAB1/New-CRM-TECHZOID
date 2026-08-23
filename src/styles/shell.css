@@ -87,7 +87,11 @@
 @media (max-width: 760px) { .topsearch { display: none; } }
 
 .page { padding: var(--gap-wide) var(--gap-page) 56px; }
+/* The title may shrink; the actions may not. A long subtitle was squeezing
+   the action row until its buttons stacked vertically. */
 .page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--gap-wide); margin-bottom: var(--gap-wide); flex-wrap: wrap; }
+.page-head > :first-child { min-width: 0; flex: 1 1 auto; }
+.page-head > :last-child { flex: 0 0 auto; }
 .page-title { font-size: var(--t-page); font-weight: 600; color: var(--ink); letter-spacing: -0.02em; }
 .page-sub { margin-top: 3px; font-size: var(--t-body); color: var(--ink-4); }
 

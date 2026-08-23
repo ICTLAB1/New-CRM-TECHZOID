@@ -10,6 +10,8 @@ import { QuotationsScreen } from "../features/quotations/QuotationsScreen";
 import { OrdersScreen } from "../features/orders/OrdersScreen";
 import { DispatchScreen } from "../features/orders/DispatchScreen";
 import { RenewalsScreen } from "../features/subscriptions/RenewalsScreen";
+import { DashboardScreen } from "../features/dashboard/DashboardScreen";
+import { ReportsScreen } from "../features/dashboard/ReportsScreen";
 import type { SalesOrder, DeliveryChallan } from "../domain/orders/create";
 import type { Subscription } from "../domain/subscriptions/expiry";
 import {
@@ -23,7 +25,7 @@ import type { Workspace } from "../domain/customers/cascade";
 /** The application. Screens land here as each stage completes; everything
  *  still to come falls through to a placeholder rather than a broken link. */
 function Body() {
-  const [view, setView] = useState("pipeline");
+  const [view, setView] = useState("dashboard");
   const [customers, setCustomers] = useState<Customer[]>(CUSTOMERS);
   const [workspace, setWorkspace] = useState<Workspace>(WORKSPACE);
   const [editing, setEditing] = useState<Customer | null>(null);
@@ -37,7 +39,22 @@ function Body() {
 
   return (
     <AppShell view={view} onNavigate={setView} user={user}>
-      {view === "customers" ? (
+      {view === "dashboard" ? (
+        <DashboardScreen
+          workspace={{ customers, quotations, proformas, orders, challans, subscriptions }}
+          users={USERS}
+          currentUser={user}
+          settings={settings}
+          onNavigate={setView}
+        />
+      ) : view === "reports" ? (
+        <ReportsScreen
+          workspace={{ customers, quotations, proformas, orders, challans, subscriptions }}
+          users={USERS}
+          currentUser={user}
+          settings={settings}
+        />
+      ) : view === "customers" ? (
         <CustomersScreen
           customers={customers}
           workspace={workspace}

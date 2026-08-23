@@ -56,6 +56,8 @@ await shoot("editor-items", { width: 1600, height: 1100 }, "Quotations", async (
   await page.getByRole("tab", { name: /Items/ }).click();
   await page.waitForTimeout(400);
 });
+await shoot("dashboard", DESKTOP, "Dashboard");
+await shoot("reports", DESKTOP, "Reports");
 await shoot("orders", DESKTOP, "Sales orders");
 await shoot("renewals", DESKTOP, "Renewals");
 await shoot("components", DESKTOP, "Components");

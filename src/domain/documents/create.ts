@@ -2,6 +2,7 @@ import { addDays, TODAY } from "../dates";
 import { buildDocNumber } from "../numbering/docNumber";
 import type { Customer } from "../customers/customer";
 import type { LineItem } from "../tax/types";
+import type { PaymentEntry } from "../payments/ledger";
 import { DOMESTIC_TERMS, suggestTermsSet } from "./terms";
 
 /**
@@ -85,7 +86,7 @@ export interface SalesDocument {
   notes?: string;
   roundOff: boolean;
   advancePercent?: number;
-  paymentHistory?: unknown[];
+  paymentHistory?: PaymentEntry[];
   bankAccountId?: string;
   templateId?: string;
   preparedBy: string;
