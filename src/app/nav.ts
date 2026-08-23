@@ -36,6 +36,7 @@ export const NAV: NavSection[] = [
     items: [
       { id: "reports", label: "Reports" },
       { id: "activity", label: "Activity" },
+      { id: "assistant", label: "Assistant" },
     ],
   },
   {
@@ -43,6 +44,7 @@ export const NAV: NavSection[] = [
     items: [
       { id: "catalog", label: "Product catalog" },
       { id: "team", label: "Team" },
+      { id: "integrations", label: "Integrations" },
       { id: "settings", label: "Settings" },
       { id: "components", label: "Components" },
     ],

@@ -12,7 +12,7 @@ describe("navigation", () => {
     for (const required of [
       "dashboard", "pipeline", "customers", "quotations", "proformas",
       "orders", "dispatch", "subscriptions", "renewals",
-      "reports", "activity", "catalog", "team", "settings", "components",
+      "reports", "activity", "assistant", "catalog", "team", "integrations", "settings", "components",
     ]) {
       expect(ids, required).toContain(required);
     }

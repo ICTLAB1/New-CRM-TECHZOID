@@ -14,6 +14,14 @@ features/ one folder per feature area, owning its screens and local state.
           Reaches into domain/ for calculation and data/ for persistence.
 
 components/ the shared library. Presentational, no business logic.
+
+integrations/ one interface describing everything the browser asks a server
+          to do on its behalf, plus the implementation that calls the Netlify
+          functions. Screens take the interface, never `fetch`.
+
+netlify/  the functions themselves, plus lib/ — the shared HTTP, auth,
+          validation, signing and rate-limiting they all use. Plain .mjs,
+          because that is what Netlify runs.
 ```
 
 The direction of dependency is strictly one-way:
@@ -26,6 +34,41 @@ components/ (depends on nothing but React)
 
 `domain/` importing from `features/` or `data/` is the thing to watch for in
 review — it is what turned v1 into a 12,000-line file.
+
+## The server boundary
+
+Anything needing a secret runs in a Netlify function: the Microsoft client
+secret, the Resend key, the WhatsApp token, the Anthropic key, and the Supabase
+service-role key. None of them may ever reach a browser bundle.
+
+Everything else goes straight to Supabase from the client, where row-level
+security is the access control. The rule for deciding: **if the operation
+needs a credential the user should not hold, it is a function; if it only needs
+to be limited to that user's own rows, it is RLS.**
+
+Four rules live in `netlify/lib/` so no handler has to remember them:
+
+- CORS is locked to the site's own origin, never `*`
+- a response never carries an internal error message; `fail()` logs the detail
+  and returns a sentence written for a person
+- every endpoint that costs money or writes to the database is rate limited,
+  counted in Postgres because a serverless process is too short-lived to count
+  anything in memory
+- the OAuth `state` is HMAC-signed and expires, so a callback cannot be made to
+  attach one person's mailbox to another person's account
+
+`docs/DEVIATIONS.md` §8 records what each of these was in v1, because every one
+of them replaced a live vulnerability rather than a stylistic choice.
+
+### Integrations are optional, and say so
+
+No integration is allowed to block work. WhatsApp always offers "Open in
+WhatsApp instead", which needs no setup at all; email falls back from a
+personal Microsoft 365 mailbox to the shared sender; the assistant and the
+invoicing address each degrade to a sentence explaining what an admin needs to
+add. A preview build with no server behind it runs on `demoApi`, which refuses
+every outward-facing action and says why — there is no mode where a button
+looks like it worked and did nothing.
 
 ## Why the domain layer is separate
 

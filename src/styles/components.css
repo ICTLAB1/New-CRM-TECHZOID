@@ -341,3 +341,66 @@ button.tile:hover { background: var(--surface-2); }
 
 /* ── inline warning panel ─────────────────────────────────────────────── */
 .notice { display: flex; gap: var(--gap); padding: 11px 13px; border: 1px solid var(--rule); border-left: var(--edge) solid var(--warn); border-radius: var(--radius); background: var(--warn-weak); font-size: var(--t-body); color: var(--ink-2); }
+
+/* ── notice variants ───────────────────────────────────────────────────
+   The default notice warns. These say "this failed" and "this worked" —
+   the same object, recoloured, because three differently-shaped banners on
+   one screen is three things to learn instead of one. */
+.notice-bad  { border-left-color: var(--bad);  background: var(--bad-weak); }
+.notice-good { border-left-color: var(--good); background: var(--good-weak); }
+.notice-flat { border-left-color: var(--rule); background: var(--surface-2); }
+
+/* ── setup steps ───────────────────────────────────────────────────────
+   A numbered procedure someone follows in another browser tab. The number
+   is a real column so wrapped text lines up under itself rather than under
+   the digit — over seven steps that is the difference between a list you
+   can keep your place in and one you cannot. */
+.steps { display: grid; gap: 18px; margin: 0; padding: 0; list-style: none; counter-reset: step; }
+.step { display: grid; grid-template-columns: 22px 1fr; gap: 10px; align-items: start; }
+.step::before {
+  counter-increment: step; content: counter(step);
+  display: grid; place-items: center;
+  width: 22px; height: 22px; border-radius: 50%;
+  background: var(--accent); color: var(--on-accent);
+  font-size: var(--t-micro); font-weight: 700; font-variant-numeric: tabular-nums;
+}
+.step-title { font-weight: 600; color: var(--ink-1); }
+.step-body { font-size: var(--t-body); color: var(--ink-2); line-height: 1.65; }
+.step-body > * + * { margin-top: 7px; }
+
+/* A value that must be copied character for character. It scrolls rather
+   than wraps: a redirect URI broken across two lines is a redirect URI
+   somebody pastes wrongly. */
+.copy-row { display: flex; gap: 8px; align-items: center; }
+.copy-row code {
+  flex: 1; min-width: 0; overflow-x: auto; white-space: nowrap;
+  padding: 5px 9px; border: 1px solid var(--rule); border-radius: var(--radius);
+  background: var(--surface-2); font-family: var(--mono); font-size: var(--t-micro);
+}
+
+/* ── status list ───────────────────────────────────────────────────── */
+.status-line { display: grid; grid-template-columns: 16px 1fr; gap: 9px; align-items: start; padding: 4px 0; font-size: var(--t-body); }
+.status-mark { font-weight: 700; line-height: 1.5; }
+.status-mark.is-good { color: var(--good); }
+.status-mark.is-bad  { color: var(--bad); }
+.status-detail { color: var(--ink-3); }
+
+/* ── chat ──────────────────────────────────────────────────────────────
+   Asymmetric on purpose: the question is short and belongs to you, the
+   answer is long and belongs to the page. Two facing bubble columns waste
+   half the width on the side that needs it most. */
+.chat { display: grid; gap: 14px; }
+.chat-turn { display: grid; gap: 5px; }
+.chat-who { font-size: var(--t-micro); text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-3); }
+.chat-you .chat-text {
+  justify-self: end; max-width: 70ch;
+  padding: 9px 12px; border-radius: var(--radius); background: var(--accent-weak);
+}
+.chat-you .chat-who { justify-self: end; }
+.chat-text { font-size: var(--t-body); color: var(--ink-1); line-height: 1.7; white-space: pre-wrap; }
+.chat-prompts { display: flex; flex-wrap: wrap; gap: 7px; }
+
+/* A short name rather than a long value: the code shouldn't stretch, or a
+   twelve-character variable name reads as an empty text field. */
+.copy-row.compact code { flex: 0 0 auto; }
+.copy-row.compact .field-hint { flex: 1; min-width: 0; }

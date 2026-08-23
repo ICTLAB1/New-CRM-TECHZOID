@@ -12,10 +12,13 @@ import { DispatchScreen } from "../features/orders/DispatchScreen";
 import { RenewalsScreen } from "../features/subscriptions/RenewalsScreen";
 import { DashboardScreen } from "../features/dashboard/DashboardScreen";
 import { ReportsScreen } from "../features/dashboard/ReportsScreen";
+import { IntegrationsScreen } from "../features/settings/IntegrationsScreen";
+import { AssistantScreen } from "../features/assistant/AssistantScreen";
+import { integrations } from "../integrations";
 import type { SalesOrder, DeliveryChallan } from "../domain/orders/create";
 import type { Subscription } from "../domain/subscriptions/expiry";
 import {
-  BRAND_LOGOS, CATALOG, CHALLANS, CUSTOMERS, CUSTOM_FIELDS, ORDERS, PROFORMAS,
+  BRAND_LOGOS, CATALOG, CHALLANS, CUSTOMERS, CUSTOM_FIELDS, DOC_IMAGES, ORDERS, PROFORMAS,
   QUOTATIONS, SETTINGS, SUBSCRIPTIONS, USERS, WORKSPACE,
 } from "./demoData";
 import type { SalesDocument } from "../domain/documents/create";
@@ -89,6 +92,8 @@ function Body() {
           catalog={CATALOG}
           settings={settings}
           brandLogos={BRAND_LOGOS}
+          docImages={DOC_IMAGES}
+          api={integrations}
           currentUser={user}
           onChange={(docs, s) => { setQuotations(docs); setSettings(s); }}
           onCreateProforma={(pf) => { setProformas((cur) => [pf, ...cur]); setView("proformas"); }}
@@ -101,6 +106,8 @@ function Body() {
           catalog={CATALOG}
           settings={settings}
           brandLogos={BRAND_LOGOS}
+          docImages={DOC_IMAGES}
+          api={integrations}
           currentUser={user}
           onChange={(docs, s) => { setProformas(docs); setSettings(s); }}
         />
@@ -115,6 +122,21 @@ function Body() {
         <DispatchScreen challans={challans} onChange={setChallans} />
       ) : view === "subscriptions" || view === "renewals" ? (
         <RenewalsScreen subscriptions={subscriptions} customers={customers} onChange={setSubscriptions} />
+      ) : view === "integrations" ? (
+        <IntegrationsScreen
+          api={integrations}
+          user={user}
+          settings={settings}
+          onSettingsChange={setSettings}
+        />
+      ) : view === "assistant" ? (
+        <AssistantScreen
+          api={integrations}
+          workspace={{ customers, quotations, proformas, orders, challans, subscriptions }}
+          users={USERS}
+          currentUser={user}
+          settings={settings}
+        />
       ) : view === "components" ? (
         <Showcase />
       ) : (

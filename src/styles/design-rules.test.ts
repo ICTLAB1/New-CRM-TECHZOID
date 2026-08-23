@@ -45,6 +45,16 @@ describe("no decoration", () => {
   });
 });
 
+describe("nothing scrolls sideways", () => {
+  it("does not freeze the page head's title block when there are no actions", () => {
+    // A page head with one child matches :first-child AND :last-child. The
+    // later rule used to win, sizing the title block to its content and
+    // giving every actionless screen a horizontal scrollbar on a phone.
+    const shell = code(css["shell.css"] ?? "");
+    expect(shell).toMatch(/\.page-head > :last-child:not\(:first-child\)/);
+  });
+});
+
 describe("one accent", () => {
   it("declares a single accent hue", () => {
     const tokens = code(css["tokens.css"] ?? "");

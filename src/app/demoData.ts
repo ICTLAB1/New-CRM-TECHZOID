@@ -43,6 +43,7 @@ export const WORKSPACE: Workspace = {
 
 import { DEFAULT_CERTIFICATIONS, DEFAULT_PARTNER_DESIGNATIONS, DEFAULT_TECHNOLOGY_PARTNERS } from "../domain/documents/brandDefaults";
 import { BRAND_ASSETS } from "../assets/brandAssets";
+import type { DocImages } from "../documents/pdf/render";
 import { DOMESTIC_TERMS } from "../domain/documents/terms";
 import type { SalesDocument } from "../domain/documents/create";
 import type { CatalogProduct } from "../domain/catalog/types";
@@ -71,6 +72,11 @@ export const SETTINGS: Record<string, unknown> = {
     account: "50200045678901", ifsc: "HDFC0000123", swift: "HDFCINBB",
     branch: "Netaji Subhash Place, New Delhi", accountType: "Current Account",
   }],
+
+  /* Where "Send for invoicing" routes to. Kept in settings rather than in
+     code so it can be changed without a deploy. */
+  invoicingEmail: "accounts@techzoidtechnologies.com",
+  invoicingCc: "",
 };
 
 /** Brand logos for the items table, keyed by the brand name on a line. */
@@ -78,6 +84,17 @@ export const BRAND_LOGOS: Record<string, { src: string }> = {
   hp: { src: BRAND_ASSETS.hp.src },
   acer: { src: BRAND_ASSETS.acer.src },
   cisco: { src: BRAND_ASSETS.ciscoPartner.src },
+};
+
+/** The same artwork for the PDF, which needs the pixel dimensions in order
+ *  to place it without distorting the aspect ratio. The preview gets them
+ *  from the image itself; jsPDF cannot. */
+export const DOC_IMAGES: DocImages = {
+  brands: {
+    hp: BRAND_ASSETS.hp,
+    acer: BRAND_ASSETS.acer,
+    cisco: BRAND_ASSETS.ciscoPartner,
+  },
 };
 
 export const CATALOG: CatalogProduct[] = [

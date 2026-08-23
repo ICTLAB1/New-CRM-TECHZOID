@@ -246,3 +246,133 @@ same thing in a tenth of the space, and a month grid cannot show the value at
 risk, which is the number that makes the list worth opening.
 
 Say the word if the calendar is used in practice and it comes back.
+
+---
+
+## 8. The Netlify functions
+
+Nine functions, rewritten. **Every deployed contract is unchanged**: the same
+paths, the same request fields, the same environment-variable names, the same
+provider for each service. In particular `/.netlify/functions/ms-oauth-callback`
+keeps its exact path, because the Azure app registration on the live tenant
+points at it and renaming it would break every connected mailbox until someone
+edited the registration by hand.
+
+What changed is what happens inside them. Each item below was a live
+vulnerability or a real failure mode in v1.
+
+### 8a. HTML injection in the OAuth callback — fixed
+
+`ms-oauth-callback` returns an HTML page, and interpolated Microsoft's
+`error_description` query parameter straight into it. That parameter is under
+the control of whoever crafts the link back to the callback, so any script in
+it ran on the site's own origin, where the CRM's Supabase session lives.
+
+Everything variable now goes through `escapeHtml`, and the page carries a
+restrictive `Content-Security-Policy`. The escaping is asserted by test using an
+actual `<script>` payload.
+
+### 8b. OAuth state was not verified — fixed
+
+v1 passed the CRM user's id through the OAuth `state` parameter and trusted it
+on the way back. Anyone could consent with their own Microsoft account and hand
+back a state naming somebody else: from then on that person's quotations would
+send from the attacker's mailbox, and their customer correspondence would land
+in the attacker's Sent Items.
+
+State is now HMAC-signed with a 15-minute expiry and compared with
+`timingSafeEqual`. Forged, tampered, expired and future-dated states are each
+rejected under test. `MS_STATE_SECRET` is the signing key; it falls back to the
+service-role key so an existing deployment keeps working, and the diagnostics
+screen says a dedicated secret is better.
+
+### 8c. `ai-proxy` was unauthenticated — fixed
+
+It called a paid API with no sign-in check at all. Anyone who guessed the URL
+could spend the company's money. It now requires a Supabase session and is rate
+limited per user, and the model is pinned server-side — v1 took it from the
+request body, so a caller could ask for the most expensive one available.
+
+### 8d. Internal errors were returned to callers — fixed
+
+Five handlers returned `err.message` to the client: database messages, provider
+responses, sometimes a stack. `fail()` logs the internal detail and returns only
+a sentence written for whoever is standing at the screen.
+
+### 8e. `Access-Control-Allow-Origin: *` on token-bearing endpoints — fixed
+
+Every function answered any origin. CORS now echoes only a configured origin
+(`ALLOWED_ORIGINS`, or Netlify's own `URL`/`DEPLOY_PRIME_URL`). With none
+configured it still falls back to `*`, because a half-deployed site that cannot
+call its own API is a worse failure — and the diagnostics screen reports the
+fallback so an admin can see it.
+
+### 8f. No rate limiting anywhere — added
+
+Counted in Postgres, not in memory: a serverless function is a fresh process
+often enough that an in-memory counter limits nothing. **Schema addition**:
+`supabase/004_rate_limits.sql` adds a `rate_limits` table and an atomic
+`consume_rate_limit` function. RLS is enabled with no policies, so only the
+service role can touch it.
+
+If the limiter itself errors the request is **allowed**, and the error is
+logged. Losing enquiries because a counter broke is worse than briefly losing
+the limit.
+
+### 8g. Removing the last Admin is refused — new
+
+`delete_user` refuses to remove the only remaining Admin. Doing so locks
+everyone out of team management and settings, recoverable only from the
+Supabase dashboard.
+
+### 8h. Welcome email failure no longer reads as account failure
+
+Per the brief: if the mail fails the account still exists. `create_user` returns
+`{ success: true, emailSent, emailError }` and the message names what to do —
+share the password directly. Reporting an error would send an admin round the
+loop again, straight into "a user with this email address has already been
+registered".
+
+### 8i. `ms-diagnostics` changed shape
+
+The one deployed contract that did change, deliberately: it is admin-only, both
+ends are rewritten here, and the old shape could not carry what the screen needs
+— which secret is set, a four-character masked hint so an admin can tell the
+secret from the secret's ID, whether the table exists, and Microsoft's own
+verdict on the credentials with `AADSTS…` codes translated into English. It also
+moved from POST to GET, since it changes nothing.
+
+It reports presence and a masked hint, never a value. The one exception is
+`MS_REDIRECT_URI`, which is a public URL that has to be pasted into Azure
+character for character.
+
+---
+
+## 9. Integrations: three client-side corrections
+
+### 9a. "Send for invoicing" never sent the customer's PO
+
+v1 read `doc.billPo` when building the message to accounts. Nothing in the
+application ever wrote that field — the PO lives in `referenceNo`, the editor's
+"Customer Reference" — so the line silently never appeared. Now reads the field
+that holds it, under test.
+
+### 9b. The WhatsApp fallback link dropped the country code
+
+"Open in WhatsApp instead" is the route that always works: no provider, no
+token, no setup. v1 passed the raw digits to `wa.me`, so a ten-digit Indian
+number — which is how every number in this CRM is typed — opened a chat with
+nobody. The same normalisation the server already applied is now applied to the
+link, and both copies of the rule are under test.
+
+### 9c. The assistant is given a scoped summary, not the records
+
+v1 built the assistant's context from whatever the browser held, which under RLS
+is already narrowed for a Sales user. The context is now built through
+`scopeWorkspace` explicitly, so the narrowing is a decision in the code rather
+than a consequence of how the data happened to load. Asserted by test: a Sales
+user's snapshot contains their own customers and not a colleague's.
+
+The assistant is also told to say when the snapshot does not contain an answer
+rather than produce a figure, and every suggested question is one the snapshot
+can actually answer.

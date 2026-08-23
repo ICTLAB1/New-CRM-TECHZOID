@@ -8,8 +8,6 @@ export default defineConfig({
     alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) },
   },
   build: { outDir: "dist", sourcemap: true },
-  test: {
-    environment: "node",
-    include: ["src/**/*.test.ts"],
-  },
-} as never);
+  /* Test configuration lives in vitest.config.ts, which takes precedence
+     over this file. Keeping a second copy here is how the two drift. */
+});

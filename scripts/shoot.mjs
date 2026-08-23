@@ -61,6 +61,30 @@ await shoot("reports", DESKTOP, "Reports");
 await shoot("orders", DESKTOP, "Sales orders");
 await shoot("renewals", DESKTOP, "Renewals");
 await shoot("components", DESKTOP, "Components");
+await shoot("integrations", DESKTOP, "Integrations");
+await shoot("integrations-setup", DESKTOP, "Integrations", async (page) => {
+  await page.getByRole("button", { name: /One-time setup/ }).click();
+  await page.waitForTimeout(500);
+});
+await shoot("assistant", DESKTOP, "Assistant");
+await shoot("doc-email", { width: 1600, height: 1100 }, "Quotations", async (page) => {
+  await page.getByText("TZ/QT/2627/0117").first().click();
+  await page.waitForTimeout(500);
+  await page.getByRole("button", { name: "Email", exact: true }).click();
+  await page.waitForTimeout(400);
+});
+await shoot("doc-invoicing", { width: 1600, height: 1100 }, "Quotations", async (page) => {
+  await page.getByText("TZ/QT/2627/0117").first().click();
+  await page.waitForTimeout(500);
+  await page.getByRole("button", { name: /Send for invoicing/ }).click();
+  await page.waitForTimeout(400);
+});
+await shoot("integrations-phone", PHONE, null, async (page) => {
+  await page.getByRole("button", { name: "Menu" }).click();
+  await page.waitForTimeout(250);
+  await page.getByRole("button", { name: "Integrations", exact: true }).first().click();
+  await page.waitForTimeout(350);
+});
 await shoot("pipeline-phone", PHONE, null, async (page) => {
   await page.getByRole("button", { name: "Menu" }).click();
   await page.waitForTimeout(250);

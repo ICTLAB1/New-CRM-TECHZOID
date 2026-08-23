@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Button, Card, Field, Input, Select, Tabs, Textarea } from "../../components/primitives";
+import { DocumentActions } from "./DocumentActions";
+import type { DocImages } from "../../documents/pdf/render";
+import type { IntegrationsApi } from "../../integrations/api";
 import { Modal } from "../../components/Modal";
 import { DocumentPreview } from "../../documents/preview/DocumentPreview";
 import { LineItemsEditor } from "./LineItemsEditor";
@@ -56,6 +59,9 @@ export interface DocumentEditorProps {
   catalog: CatalogProduct[];
   settings: Record<string, unknown>;
   brandLogos?: Record<string, { src: string }>;
+  /** Artwork for the PDF, which needs pixel dimensions the preview does not. */
+  docImages?: DocImages;
+  api: IntegrationsApi;
   onSave: (doc: SalesDocument) => void;
   onClose: () => void;
 }
@@ -63,7 +69,7 @@ export interface DocumentEditorProps {
 type Tab = "document" | "items" | "terms";
 
 export function DocumentEditor({
-  doc: initial, docType, customers, catalog, settings, brandLogos, onSave, onClose,
+  doc: initial, docType, customers, catalog, settings, brandLogos, docImages, api, onSave, onClose,
 }: DocumentEditorProps) {
   const [doc, setDoc] = useState<SalesDocument>(initial);
   const [tab, setTab] = useState<Tab>("document");
@@ -288,6 +294,23 @@ export function DocumentEditor({
             <span className="field-hint">
               {totals.rows.length} line{totals.rows.length === 1 ? "" : "s"} · {inrList(totals.grand)} grand total
             </span>
+          </div>
+
+          {/* Sending is separated from saving by a rule, because these leave
+              the building: a PDF on someone's disk, an email a customer
+              reads, a request in the accounts inbox. Nothing here saves the
+              document — what is sent is what is on screen. */}
+          <div className="row-tight wrap" style={{ borderTop: "1px solid var(--rule)", paddingTop: 12 }}>
+            <DocumentActions
+              api={api}
+              doc={doc}
+              docType={docType}
+              model={model}
+              rows={totals.rows}
+              totals={totals}
+              settings={settings}
+              images={docImages}
+            />
           </div>
         </div>
 

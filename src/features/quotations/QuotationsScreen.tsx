@@ -14,6 +14,8 @@ import { computeDocument } from "../../domain/tax/compute";
 import { inrList } from "../../domain/currency/format";
 import { fmtDate, isOverdue } from "../../domain/dates";
 import type { Tone } from "../../components/primitives";
+import type { DocImages } from "../../documents/pdf/render";
+import type { IntegrationsApi } from "../../integrations/api";
 
 const STATUS_TONE: Record<string, Tone> = {
   Draft: "neutral", Sent: "accent", Accepted: "good", Paid: "good",
@@ -27,6 +29,8 @@ export interface QuotationsScreenProps {
   catalog: CatalogProduct[];
   settings: Record<string, unknown>;
   brandLogos?: Record<string, { src: string }>;
+  docImages?: DocImages;
+  api: IntegrationsApi;
   currentUser: { id: string; name: string };
   onChange: (documents: SalesDocument[], settings: Record<string, unknown>) => void;
   /** Raising a proforma from a quotation hands it to the proformas screen. */
@@ -34,7 +38,8 @@ export interface QuotationsScreenProps {
 }
 
 export function QuotationsScreen({
-  docType, documents, customers, catalog, settings, brandLogos, currentUser, onChange, onCreateProforma,
+  docType, documents, customers, catalog, settings, brandLogos, docImages, api, currentUser,
+  onChange, onCreateProforma,
 }: QuotationsScreenProps) {
   const toast = useToast();
   const [editing, setEditing] = useState<SalesDocument | null>(null);
@@ -107,6 +112,8 @@ export function QuotationsScreen({
           catalog={catalog}
           settings={settings}
           brandLogos={brandLogos}
+          docImages={docImages}
+          api={api}
           onSave={save}
           onClose={() => setEditing(null)}
         />

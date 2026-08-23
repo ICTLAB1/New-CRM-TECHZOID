@@ -6,3 +6,6 @@ dist
 *.local
 .DS_Store
 tmp/
+
+# tsc incremental state — machine-specific, not source
+tsconfig.tsbuildinfo
