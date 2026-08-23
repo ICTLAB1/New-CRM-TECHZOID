@@ -19,7 +19,7 @@ before the next.
 | 1 | Project structure, TypeScript, database layer, auth, RLS | data layer + schema done; auth UI pending |
 | 2 | Domain logic — tax, currency, numbering — with tests | **done, parity-verified against v1** |
 | 3 | PDF generation, verified by rendering images | **done, compared against v1's own renderer** |
-| 4 | Design system and shell | not started |
+| 4 | Design system and shell | **done** |
 | 5 | Customers and pipeline | not started |
 | 6 | Quotations and proformas with live preview | not started |
 | 7 | Orders, dispatch, subscriptions, renewals | not started |
@@ -55,7 +55,9 @@ src/
     documents/     the shared document model — what a document SAYS
   documents/pdf/   the jsPDF renderer — geometry only
   data/            Supabase client, entity sync, legacy normalisation
-  components/      shared component library            (stage 4)
+  components/      shared component library
+  styles/          design tokens and component styles
+  app/             application shell and navigation
   features/        feature folders                     (stages 5-10)
 supabase/          schema and RLS — carried forward, not redesigned
 netlify/functions/ backend; contracts must not change
@@ -98,6 +100,17 @@ The reference is extracted verbatim from v1, never retyped:
 ```bash
 scripts/extract-v1-reference.sh /path/to/v1/src/App.jsx
 ```
+
+## Verifying the interface
+
+Same discipline as the PDF — build it and look at it:
+
+```bash
+npm run build && node scripts/shoot.mjs   # desktop, phone, bottom sheet
+```
+
+The agreed direction and the rules that hold it together are in
+[`docs/DESIGN.md`](docs/DESIGN.md), enforced by `src/styles/design-rules.test.ts`.
 
 ## Verifying the PDF
 

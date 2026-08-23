@@ -1,0 +1,90 @@
+/* ─────────────────────────────────────────────────────────────────────
+   Design tokens.
+
+   The agreed direction: light, professional, restrained. ONE accent blue.
+   Colour is reserved for meaning — green for won/paid, amber for attention,
+   red for overdue — and never used decoratively. Structure is carried by
+   hairline rules and a left edge on things that need action, not by
+   gradients, drop shadows or coloured panels.
+
+   Rules this file exists to enforce:
+     · no gradients
+     · no shadow larger than a lift on something genuinely floating
+     · every figure renders with tabular numerals so columns align
+     · a semantic colour never appears except to mean its state
+   ───────────────────────────────────────────────────────────────────── */
+
+:root {
+  /* ── ink ───────────────────────────────────────────────────────────
+     Values are near-black and large; labels are grey and small. That
+     contrast is what makes a dense screen readable without boxes. */
+  --ink:          #10151F;  /* values, headings */
+  --ink-2:        #39424F;  /* body copy */
+  --ink-3:        #6B7480;  /* labels */
+  --ink-4:        #99A1AC;  /* meta, placeholders */
+
+  /* ── surfaces ─────────────────────────────────────────────────────── */
+  --bg:           #F4F5F7;  /* app background */
+  --surface:      #FFFFFF;  /* cards, tables, sheets */
+  --surface-2:    #FAFBFC;  /* table headers, inset panels */
+  --surface-3:    #EFF1F4;  /* hover, track */
+
+  /* ── rules ────────────────────────────────────────────────────────── */
+  --rule:         #E3E6EA;  /* hairline between things */
+  --rule-strong:  #CDD2D9;  /* deliberate division */
+
+  /* ── the one accent ───────────────────────────────────────────────── */
+  --accent:       #1B4FD8;
+  --accent-hover: #1740B4;
+  --accent-weak:  #EDF1FD;  /* selected row, active nav */
+  --accent-rule:  #C3D0F6;
+  --on-accent:    #FFFFFF;  /* text on an accent fill */
+
+  /* ── semantic: each means exactly one thing ───────────────────────── */
+  --good:         #167A5B;  /* won, paid, delivered */
+  --good-weak:    #E7F4EF;
+  --warn:         #A56A0B;  /* needs attention, due soon */
+  --warn-weak:    #FBF2E2;
+  --bad:          #B3311F;  /* overdue, lost, failed */
+  --bad-weak:     #FBECE9;
+  --neutral:      #5C6672;  /* draft, inactive, no state */
+  --neutral-weak: #EFF1F4;
+
+  /* ── type ─────────────────────────────────────────────────────────── */
+  --sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  --t-micro:  10.5px;  /* eyebrow / column head */
+  --t-small:  12px;    /* labels, meta */
+  --t-body:   13px;    /* the default */
+  --t-mid:    14px;
+  --t-lg:     17px;    /* card values */
+  --t-xl:     22px;    /* KPI figures */
+  --t-page:   19px;    /* page title */
+
+  /* ── space: a 4px grid, named by use not size ─────────────────────── */
+  --gap-hair:  2px;
+  --gap-tight: 6px;
+  --gap:       10px;
+  --gap-wide:  16px;
+  --gap-block: 24px;
+  --gap-page:  32px;
+
+  /* ── geometry ─────────────────────────────────────────────────────── */
+  --radius:      5px;   /* controls */
+  --radius-card: 7px;   /* panels */
+  --control-h:   32px;
+  --control-h-lg:38px;
+  --edge:        3px;   /* the action edge on a card that needs one */
+
+  /* The only shadow in the system, for things genuinely above the page. */
+  --lift: 0 6px 24px rgba(16, 21, 31, .12), 0 1px 3px rgba(16, 21, 31, .08);
+
+  --sidebar-w: 216px;
+  --topbar-h:  52px;
+}
+
+/* Reduced motion is honoured everywhere; nothing here is load-bearing. */
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}

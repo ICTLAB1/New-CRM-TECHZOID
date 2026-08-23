@@ -1,0 +1,105 @@
+/* ─────────────────────────────────────────────────────────────────────
+   The application shell: sidebar, topbar, page frame, mobile nav.
+   ───────────────────────────────────────────────────────────────────── */
+
+.shell { display: grid; grid-template-columns: var(--sidebar-w) minmax(0, 1fr); min-height: 100vh; }
+
+/* ── sidebar ───────────────────────────────────────────────────────────
+   Light, like the rest of the product. An active item is marked by a left
+   accent rule and near-black text, not a filled pill — the same structural
+   device the cards and table rows use. */
+.sidebar {
+  position: sticky; top: 0; align-self: start;
+  height: 100vh;
+  display: flex; flex-direction: column;
+  background: var(--surface);
+  border-right: 1px solid var(--rule);
+  overflow-y: auto;
+}
+.sidebar-brand { display: flex; align-items: center; gap: 9px; height: var(--topbar-h); padding: 0 var(--gap-wide); border-bottom: 1px solid var(--rule); flex: none; }
+.brand-mark { width: 22px; height: 22px; border-radius: 4px; background: var(--accent); color: var(--on-accent); display: grid; place-items: center; font-size: 11px; font-weight: 700; letter-spacing: -.02em; flex: none; }
+.brand-name { font-size: var(--t-mid); font-weight: 600; color: var(--ink); letter-spacing: -0.01em; }
+
+.nav { padding: var(--gap) var(--gap-tight) var(--gap-block); }
+.nav-section { padding: var(--gap-wide) 10px 5px; }
+.nav-section:first-child { padding-top: 4px; }
+
+.nav-item {
+  display: flex; align-items: center; gap: 9px;
+  width: 100%;
+  padding: 6px 10px;
+  border: 0; border-left: var(--edge) solid transparent;
+  background: transparent;
+  border-radius: 0 var(--radius) var(--radius) 0;
+  font: inherit; font-size: var(--t-body); font-weight: 500;
+  color: var(--ink-3); text-align: left; cursor: pointer;
+}
+.nav-item:hover { background: var(--surface-3); color: var(--ink); }
+.nav-item[aria-current="page"] { background: var(--accent-weak); border-left-color: var(--accent); color: var(--ink); }
+.nav-icon { width: 15px; height: 15px; flex: none; color: currentColor; }
+.nav-badge {
+  margin-left: auto;
+  min-width: 18px; height: 17px; padding: 0 5px;
+  display: inline-grid; place-items: center;
+  border-radius: 3px;
+  background: var(--warn-weak); color: var(--warn);
+  font-family: var(--mono); font-size: var(--t-micro); font-weight: 500;
+}
+
+.sidebar-foot { margin-top: auto; padding: var(--gap) var(--gap-wide) var(--gap-wide); border-top: 1px solid var(--rule); }
+.who { display: flex; align-items: center; gap: 9px; }
+.who-mark { width: 26px; height: 26px; border-radius: 50%; background: var(--surface-3); color: var(--ink-2); display: grid; place-items: center; font-size: var(--t-small); font-weight: 600; flex: none; }
+.who-name { font-size: var(--t-body); font-weight: 500; color: var(--ink); }
+.who-role { font-size: var(--t-small); color: var(--ink-4); }
+
+/* ── main column ───────────────────────────────────────────────────── */
+.main { min-width: 0; display: flex; flex-direction: column; }
+
+.topbar {
+  position: sticky; top: 0; z-index: 30;
+  display: flex; align-items: center; gap: var(--gap);
+  height: var(--topbar-h); padding: 0 var(--gap-page);
+  background: var(--surface);
+  border-bottom: 1px solid var(--rule);
+}
+/* The topbar orients; it does not repeat the page title in the same weight
+   directly above it. Section in grey, current screen in ink, both small. */
+.crumb { display: flex; align-items: center; gap: 6px; font-size: var(--t-small); min-width: 0; }
+.crumb-section { color: var(--ink-4); }
+.crumb-sep { color: var(--rule-strong); }
+.crumb-current { color: var(--ink-2); font-weight: 500; }
+.topbar-crumb { font-size: var(--t-small); color: var(--ink-4); }
+
+.page { padding: var(--gap-block) var(--gap-page) 56px; }
+.page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--gap-wide); margin-bottom: var(--gap-block); flex-wrap: wrap; }
+.page-title { font-size: var(--t-page); font-weight: 600; color: var(--ink); letter-spacing: -0.02em; }
+.page-sub { margin-top: 3px; font-size: var(--t-body); color: var(--ink-4); }
+
+/* ── split editor: document on the right, form on the left ─────────────
+   On a phone the preview is hidden outright. A scaled A4 page is
+   unreadable at that width, and keeping it costs the form half the screen. */
+.split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--gap-wide); align-items: start; }
+.split-preview { position: sticky; top: calc(var(--topbar-h) + var(--gap-block)); }
+
+/* ── mobile ────────────────────────────────────────────────────────── */
+.mobile-only { display: none; }
+
+@media (max-width: 960px) {
+  .shell { grid-template-columns: minmax(0, 1fr); }
+  .sidebar {
+    position: fixed; inset: 0 auto 0 0; z-index: 70;
+    width: 264px;
+    transform: translateX(-100%);
+    transition: transform .18s ease;
+    box-shadow: var(--lift);
+  }
+  .sidebar.is-open { transform: none; }
+  .sidebar-scrim { position: fixed; inset: 0; z-index: 65; background: rgba(16,21,31,.38); }
+  .mobile-only { display: inline-flex; }
+  .page { padding: var(--gap-wide) var(--gap-wide) 72px; }
+  .tile { padding: 11px 13px 13px; }
+  .tile-value { font-size: var(--t-lg); }
+  .topbar { padding: 0 var(--gap-wide); }
+  .split { grid-template-columns: minmax(0, 1fr); }
+  .split-preview { display: none; }
+}

@@ -1,0 +1,99 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import "./tokens.css";
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body, #root { height: 100%; }
+
+body {
+  margin: 0;
+  font-family: var(--sans);
+  font-size: var(--t-body);
+  line-height: 1.45;
+  color: var(--ink-2);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Every figure in the product aligns down its column. This is the single
+   most load-bearing typographic rule here: money in a table that does not
+   line up reads as sloppy no matter what else is right. */
+body { font-variant-numeric: tabular-nums; }
+.num, td.num, .figure { font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1; }
+
+h1, h2, h3, h4 { margin: 0; font-weight: 600; color: var(--ink); letter-spacing: -0.01em; }
+
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-radius: 2px;
+}
+
+::selection { background: var(--accent-weak); }
+
+/* ── scrollbars: present but quiet ─────────────────────────────────── */
+.scroll::-webkit-scrollbar { width: 8px; height: 8px; }
+.scroll::-webkit-scrollbar-thumb { background: var(--rule-strong); border-radius: 8px; }
+.scroll::-webkit-scrollbar-track { background: transparent; }
+
+/* ── the eyebrow: small, mono, tracked out ─────────────────────────────
+   Used for column heads and section labels. It is the one piece of
+   deliberate typographic character in the system. */
+.eyebrow {
+  font-family: var(--mono);
+  font-size: var(--t-micro);
+  font-weight: 500;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+}
+
+/* ── label / value pair: the core density device ───────────────────────
+   Small grey label above a larger near-black value. */
+.label {
+  display: block;
+  font-size: var(--t-small);
+  font-weight: 500;
+  color: var(--ink-3);
+  margin-bottom: var(--gap-tight);
+}
+.value { font-size: var(--t-mid); color: var(--ink); font-weight: 500; }
+.value-lg { font-size: var(--t-lg); color: var(--ink); font-weight: 600; letter-spacing: -0.01em; }
+
+.muted { color: var(--ink-4); }
+.mono  { font-family: var(--mono); }
+
+/* ── utility rows ──────────────────────────────────────────────────── */
+.row { display: flex; align-items: center; gap: var(--gap); }
+.row-tight { display: flex; align-items: center; gap: var(--gap-tight); }
+.spread { display: flex; align-items: center; justify-content: space-between; gap: var(--gap); }
+.wrap { flex-wrap: wrap; }
+.grow { flex: 1 1 auto; min-width: 0; }
+.stack { display: flex; flex-direction: column; gap: var(--gap); }
+.stack-wide { display: flex; flex-direction: column; gap: var(--gap-block); }
+
+.grid { display: grid; gap: var(--gap-wide); }
+.grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.grid-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.grid-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+
+/* Stat tiles never collapse to one per row. A phone showing a single KPI
+   per screen makes the reader scroll past five screens to reach any actual
+   content — the opposite of the dense, quiet reading this design is for.
+   Auto-fit keeps at least two across at 390px and as many as fit above. */
+.grid-tiles { grid-template-columns: repeat(auto-fit, minmax(148px, 1fr)); gap: var(--gap); }
+
+@media (max-width: 1100px) {
+  .grid-5, .grid-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .grid-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 620px) {
+  .grid-2, .grid-3, .grid-4, .grid-5 { grid-template-columns: minmax(0, 1fr); }
+}
+
+.truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
