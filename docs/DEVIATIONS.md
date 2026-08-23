@@ -517,3 +517,26 @@ than showing an empty workspace that looks like data loss.
 v1 stored the product catalog inside `settings.productCatalog`. It stays there:
 it is configuration rather than records, and the brief is explicit that the
 schema does not change.
+
+---
+
+## 13. The public registration form
+
+Ported from v1, at the same address — `?lead=<salesperson-id>` — so links
+already shared with customers keep working. It is checked before anything
+else, so a customer with a link never sees a sign-in screen.
+
+Three changes, all in the same direction: it is filled in once, by a stranger,
+often on a phone.
+
+- **It says why it wants a GSTIN.** "Optional, but with it your invoice carries
+  the tax credit you can claim" — a stranger has no reason to hand over a tax
+  number to a form, and the previous version simply asked.
+- **The GSTIN is checked as it is typed**, with the same 15-character checksum
+  the CRM uses, so a transposition is caught here rather than on the invoice.
+- **A dead link is not the visitor's fault.** "Please check the link, or ask
+  whoever sent it to you for a fresh one" — and it says plainly that nothing
+  typed would reach anyone until it works.
+
+The honeypot field is positioned off-screen rather than `display: none`: some
+bots skip hidden fields, and the field only works if they fill it in.

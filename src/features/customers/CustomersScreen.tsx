@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { PageHead } from "../../app/AppShell";
+import { ShareLinkDialog } from "../leads/ShareLinkDialog";
 import { Button, Card, Chip, Empty, Input, Select, Tabs } from "../../components/primitives";
 import { useToast } from "../../components/Toast";
 import { blankCustomer, customerLabel, type Customer } from "../../domain/customers/customer";
@@ -30,6 +31,7 @@ export function CustomersScreen({ customers, workspace, users, customFields, cur
   const [stageFilter, setStageFilter] = useState<string>("all");
   const [owner, setOwner] = useState<string>("all");
   const [editing, setEditing] = useState<Customer | null>(null);
+  const [sharing, setSharing] = useState(false);
   const [pending, setPending] = useState<Pending | null>(null);
 
   const canReassign = currentUser.role === "Admin" || currentUser.role === "Manager";
@@ -87,9 +89,15 @@ export function CustomersScreen({ customers, workspace, users, customFields, cur
         title="Customers"
         sub={`${customers.length} account${customers.length === 1 ? "" : "s"} in the CRM.`}
         actions={
-          <Button tone="primary" onClick={() => setEditing(blankCustomer(currentUser.id, uid()))}>
-            New customer
-          </Button>
+          <>
+            {/* Sharing a link beats typing a customer's GSTIN from a phone
+                call, so it sits next to the manual route rather than being
+                buried in a menu. */}
+            <Button tone="default" onClick={() => setSharing(true)}>Share a registration link</Button>
+            <Button tone="primary" onClick={() => setEditing(blankCustomer(currentUser.id, uid()))}>
+              New customer
+            </Button>
+          </>
         }
       />
 
@@ -191,6 +199,7 @@ export function CustomersScreen({ customers, workspace, users, customFields, cur
           onContinue={() => commit(pending.customer)}
         />
       ) : null}
+      <ShareLinkDialog open={sharing} user={currentUser} onClose={() => setSharing(false)} />
     </main>
   );
 }

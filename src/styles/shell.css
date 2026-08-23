@@ -138,3 +138,17 @@
 /* A strip above the page, inside the scrolling area so it scrolls away
    rather than eating height from every screen underneath it. */
 .page-banner { margin: var(--gap-block) var(--gap-block) 0; align-items: center; justify-content: space-between; }
+
+/* ── the public registration form ──────────────────────────────────────
+   Reached by a stranger with a link, on a phone, once. Wider than the
+   sign-in card because it is a real form, and centred on nothing else. */
+.public-form { display: grid; place-items: start center; min-height: 100vh; padding: var(--gap-block); background: var(--bg); }
+.public-panel { width: 100%; max-width: 720px; }
+.public-head { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+.public-logo { max-height: 40px; max-width: 180px; object-fit: contain; }
+.public-company { font-size: var(--t-page); font-weight: 600; color: var(--ink); }
+.public-foot { margin-top: 14px; text-align: center; font-size: var(--t-small); }
+
+/* Off-screen rather than display:none — some bots skip hidden fields, and
+   this one only works if they fill it in. */
+.honeypot { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }

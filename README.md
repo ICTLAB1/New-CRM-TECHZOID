@@ -28,6 +28,7 @@ before the next.
 | 10 | Settings, team management, catalog | **done** |
 | — | Incentives and the activity timeline, ported from v1 | **done** |
 | — | Sign-in and the live workspace wired to Supabase | **done** |
+| — | The public customer registration form | **done** |
 
 Nothing here is deployed. The live site at `crm.ttpldelhi.com` still runs v1.
 
