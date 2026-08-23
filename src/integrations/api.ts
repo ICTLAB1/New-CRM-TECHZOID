@@ -86,8 +86,8 @@ export class IntegrationError extends Error {
 const FN = "/.netlify/functions/";
 
 async function authHeader(): Promise<Record<string, string>> {
-  const { supabase } = await import("../data/supabase");
-  const { data } = await supabase.auth.getSession();
+  const { getSupabase } = await import("../data/supabase");
+  const { data } = await getSupabase().auth.getSession();
   const token = data.session?.access_token;
   if (!token) throw new IntegrationError("Your session has ended. Sign in again.", 401);
   return { "Content-Type": "application/json", Authorization: "Bearer " + token };
@@ -122,7 +122,8 @@ export function netlifyApi(): IntegrationsApi {
 
   return {
     async mailbox() {
-      const { supabase } = await import("../data/supabase");
+      const { getSupabase } = await import("../data/supabase");
+      const supabase = getSupabase();
       const { data: session } = await supabase.auth.getUser();
       const id = session.user?.id;
       if (!id) return null;
@@ -148,7 +149,8 @@ export function netlifyApi(): IntegrationsApi {
     },
 
     async disconnectMailbox() {
-      const { supabase } = await import("../data/supabase");
+      const { getSupabase } = await import("../data/supabase");
+      const supabase = getSupabase();
       const { data: session } = await supabase.auth.getUser();
       const id = session.user?.id;
       if (!id) throw new IntegrationError("Your session has ended. Sign in again.", 401);

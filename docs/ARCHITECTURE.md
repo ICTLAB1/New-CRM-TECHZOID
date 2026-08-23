@@ -175,3 +175,38 @@ definition of each thing in it. Two rules keep it that way:
   half-filled settings row can never produce an undefined label at render time.
 
 Settings panels edit a draft and commit on Save. Nothing writes as you type.
+
+## Two modes, one set of screens
+
+`Workbench` owns no data. It takes the records, the settings, the team and the
+signed-in user, and hands changes back. Two containers supply those:
+
+- **live** — a Supabase session, `useWorkspace` holding the workspace, writes
+  diffed against what the server is known to hold;
+- **preview** — the same screens over fixtures, with a banner on every page
+  saying there is nothing behind them.
+
+Anything that behaves differently between the two is a bug waiting for the
+worst possible moment, so the difference is confined to those two containers.
+
+### How a write works
+
+1. The screen calls `onChange(key, next)`. State updates immediately — the
+   interface must not wait on a network round trip to redraw a list.
+2. `syncEntity` diffs `next` against the last state the **server** is known to
+   hold and issues only the upserts and deletes that differ.
+3. On failure the workspace is reloaded and a banner says the change didn't
+   save. Keeping a change the database rejected is the worst of both: the
+   screen would show something that does not exist.
+
+Row-level security is the authorisation boundary. Nothing here pre-filters
+what a user may write "to be helpful" — that would turn a database guarantee
+into a UI convention, and a UI convention is one refactor from being gone.
+
+### Realtime
+
+Any change to any table refetches the workspace, debounced, and **never while
+a save is in flight** — a broadcast arriving mid-write would otherwise pull
+the pre-write rows back over what was just typed. Refetching everything rather
+than applying individual row events is deliberate: at this size it costs
+nothing and it cannot get out of step.

@@ -1,220 +1,184 @@
-import { useState } from "react";
-import { AppShell, PageHead } from "./AppShell";
+import { useCallback, useEffect, useState } from "react";
 import { ToastProvider } from "../components/Toast";
-import { Card } from "../components/primitives";
-import { CustomersScreen } from "../features/customers/CustomersScreen";
-import { PipelineBoard } from "../features/pipeline/PipelineBoard";
-import { CustomerSheet } from "../features/customers/CustomerSheet";
-import { Showcase } from "./Showcase";
-import { QuotationsScreen } from "../features/quotations/QuotationsScreen";
-import { OrdersScreen } from "../features/orders/OrdersScreen";
-import { DispatchScreen } from "../features/orders/DispatchScreen";
-import { RenewalsScreen } from "../features/subscriptions/RenewalsScreen";
-import { DashboardScreen } from "../features/dashboard/DashboardScreen";
-import { ReportsScreen } from "../features/dashboard/ReportsScreen";
-import { IntegrationsScreen } from "../features/settings/IntegrationsScreen";
-import { SettingsScreen } from "../features/settings/SettingsScreen";
-import { CatalogScreen } from "../features/catalog/CatalogScreen";
-import { TeamScreen, type TeamMember } from "../features/team/TeamScreen";
-import { IncentivesScreen } from "../features/incentives/IncentivesScreen";
-import { ActivityScreen } from "../features/activity/ActivityScreen";
-import type { CatalogProduct } from "../domain/catalog/types";
-import { AssistantScreen } from "../features/assistant/AssistantScreen";
-import { integrations } from "../integrations";
-import type { SalesOrder, DeliveryChallan } from "../domain/orders/create";
-import type { Subscription } from "../domain/subscriptions/expiry";
-import {
-  BRAND_LOGOS, CATALOG, CHALLANS, CUSTOMERS, DOC_IMAGES, ORDERS, PROFORMAS,
-  QUOTATIONS, SETTINGS, SUBSCRIPTIONS, USERS, WORKSPACE,
-} from "./demoData";
-import type { SalesDocument } from "../domain/documents/create";
-import type { Customer } from "../domain/customers/customer";
-import type { Workspace } from "../domain/customers/cascade";
+import { Button, Card } from "../components/primitives";
+import { Workbench } from "./Workbench";
+import { SignIn, NoProfile } from "./SignIn";
+import { useWorkspace, type WorkspaceData } from "../data/useWorkspace";
+import { isConfigured, loadProfile, onSessionChange, signOut, type SignedInUser } from "../data/session";
+import { CHALLANS, CUSTOMERS, ORDERS, PROFORMAS, QUOTATIONS, SETTINGS, SUBSCRIPTIONS, USERS } from "./demoData";
+import type { TeamMember } from "../features/team/TeamScreen";
+import type { Session } from "@supabase/supabase-js";
 
-/** The application. Screens land here as each stage completes; everything
- *  still to come falls through to a placeholder rather than a broken link. */
-function Body() {
-  const [view, setView] = useState("dashboard");
-  const [customers, setCustomers] = useState<Customer[]>(CUSTOMERS);
-  const [workspace, setWorkspace] = useState<Workspace>(WORKSPACE);
-  const [editing, setEditing] = useState<Customer | null>(null);
-  const [quotations, setQuotations] = useState<SalesDocument[]>(QUOTATIONS);
-  const [proformas, setProformas] = useState<SalesDocument[]>(PROFORMAS);
-  const [settings, setSettings] = useState<Record<string, unknown>>(SETTINGS);
-  const [orders, setOrders] = useState<SalesOrder[]>(ORDERS);
-  const [challans, setChallans] = useState<DeliveryChallan[]>(CHALLANS);
-  const [subscriptions, setSubscriptions] = useState<Subscription[]>(SUBSCRIPTIONS);
-  const [catalog, setCatalog] = useState<CatalogProduct[]>(CATALOG);
-  const [team, setTeam] = useState<TeamMember[]>(USERS);
-  const user = team[0] ?? USERS[0]!;
-  const isAdmin = user.role === "Admin";
-  /* Defined in Settings → Custom fields, so both the customer form and the
-     settings screen read one list. */
-  const customFields = (settings["customFields"] as { id: string; label: string }[] | undefined) ?? [];
-
-  return (
-    <AppShell view={view} onNavigate={setView} user={user}>
-      {view === "dashboard" ? (
-        <DashboardScreen
-          workspace={{ customers, quotations, proformas, orders, challans, subscriptions }}
-          users={USERS}
-          currentUser={user}
-          settings={settings}
-          onNavigate={setView}
-        />
-      ) : view === "reports" ? (
-        <ReportsScreen
-          workspace={{ customers, quotations, proformas, orders, challans, subscriptions }}
-          users={USERS}
-          currentUser={user}
-          settings={settings}
-        />
-      ) : view === "customers" ? (
-        <CustomersScreen
-          customers={customers}
-          workspace={workspace}
-          users={USERS}
-          customFields={customFields}
-          currentUser={user}
-          onChange={(c, w) => { setCustomers(c); setWorkspace(w); }}
-        />
-      ) : view === "pipeline" ? (
-        <main className="page">
-          <PageHead
-            title="Pipeline"
-            sub="Drag a deal to move it. Moving to Lost asks why — you can always skip."
-          />
-          <PipelineBoard customers={customers} onChange={setCustomers} onOpen={setEditing} />
-          {editing ? (
-            <CustomerSheet
-              customer={editing}
-              users={USERS}
-              customFields={customFields}
-              canReassign
-              onSave={(next) => { setCustomers((cur) => cur.map((c) => (c.id === next.id ? next : c))); setEditing(null); }}
-              onClose={() => setEditing(null)}
-            />
-          ) : null}
-        </main>
-      ) : view === "quotations" ? (
-        <QuotationsScreen
-          docType="quotation"
-          documents={quotations}
-          customers={customers}
-          catalog={catalog}
-          settings={settings}
-          brandLogos={BRAND_LOGOS}
-          docImages={DOC_IMAGES}
-          api={integrations}
-          currentUser={user}
-          onChange={(docs, s) => { setQuotations(docs); setSettings(s); }}
-          onCreateProforma={(pf) => { setProformas((cur) => [pf, ...cur]); setView("proformas"); }}
-        />
-      ) : view === "proformas" ? (
-        <QuotationsScreen
-          docType="proforma"
-          documents={proformas}
-          customers={customers}
-          catalog={catalog}
-          settings={settings}
-          brandLogos={BRAND_LOGOS}
-          docImages={DOC_IMAGES}
-          api={integrations}
-          currentUser={user}
-          onChange={(docs, s) => { setProformas(docs); setSettings(s); }}
-        />
-      ) : view === "orders" ? (
-        <OrdersScreen
-          orders={orders}
-          challans={challans}
-          settings={settings}
-          onChange={(o, c, s) => { setOrders(o); setChallans(c); setSettings(s); }}
-        />
-      ) : view === "dispatch" ? (
-        <DispatchScreen challans={challans} onChange={setChallans} />
-      ) : view === "subscriptions" || view === "renewals" ? (
-        <RenewalsScreen subscriptions={subscriptions} customers={customers} onChange={setSubscriptions} />
-      ) : view === "integrations" ? (
-        <IntegrationsScreen
-          api={integrations}
-          user={user}
-          settings={settings}
-          onSettingsChange={setSettings}
-        />
-      ) : view === "assistant" ? (
-        <AssistantScreen
-          api={integrations}
-          workspace={{ customers, quotations, proformas, orders, challans, subscriptions }}
-          users={USERS}
-          currentUser={user}
-          settings={settings}
-        />
-      ) : view === "activity" ? (
-        <ActivityScreen
-          workspace={{ customers, quotations, proformas, orders, challans, subscriptions }}
-          users={team}
-          currentUser={user}
-          settings={settings}
-        />
-      ) : view === "catalog" ? (
-        <CatalogScreen catalog={catalog} canEdit={isAdmin} onChange={setCatalog} />
-      ) : view === "team" ? (
-        <TeamScreen api={integrations} members={team} currentUser={user} onChange={setTeam} />
-      ) : view === "incentives" ? (
-        <IncentivesScreen
-          workspace={{ customers, quotations, proformas, orders, challans, subscriptions }}
-          settings={settings}
-          users={team}
-          currentUser={user}
-        />
-      ) : view === "settings" ? (
-        <SettingsScreen
-          settings={settings}
-          canEdit={isAdmin}
-          onChange={setSettings}
-          workspaceForBackup={() => ({
-            customers, quotations, proformas, orders, challans, subscriptions, catalog, settings,
-          })}
-          onRestore={(data) => {
-            /* Whatever the file holds, one field at a time, each guarded —
-               a backup written by an older version is missing some of them,
-               and a missing list must leave what is here alone rather than
-               emptying it. */
-            const list = <T,>(key: string, current: T[]): T[] =>
-              Array.isArray(data[key]) ? (data[key] as T[]) : current;
-            setCustomers(list("customers", customers));
-            setQuotations(list("quotations", quotations));
-            setProformas(list("proformas", proformas));
-            setOrders(list("orders", orders));
-            setChallans(list("challans", challans));
-            setSubscriptions(list("subscriptions", subscriptions));
-            setCatalog(list("catalog", catalog));
-            if (data["settings"] && typeof data["settings"] === "object") {
-              setSettings((cur) => ({ ...cur, ...(data["settings"] as Record<string, unknown>) }));
-            }
-          }}
-        />
-      ) : view === "components" ? (
-        <Showcase />
-      ) : (
-        <main className="page">
-          <PageHead title="Not built yet" sub="This screen arrives in a later stage." />
-          <Card>
-            <p style={{ margin: 0 }}>
-              Customers and the pipeline are working. Quotations, orders, dashboards, reports,
-              integrations and settings are still to come.
-            </p>
-          </Card>
-        </main>
-      )}
-    </AppShell>
-  );
-}
+/**
+ * Which mode the app is in.
+ *
+ * With Supabase configured it signs in and works on the real workspace. With
+ * it unconfigured — a preview build, a screenshot run, someone opening the
+ * repo to look — it runs the same screens on fixtures, and says so at the top
+ * of every page. There is deliberately no middle state where it looks live
+ * and isn't.
+ */
 
 export function App() {
   return (
     <ToastProvider>
-      <Body />
+      {isConfigured() ? <LiveApp /> : <DemoApp />}
     </ToastProvider>
+  );
+}
+
+/* ── live ──────────────────────────────────────────────────────────── */
+
+type AuthState =
+  | { status: "checking" }
+  | { status: "signed-out" }
+  | { status: "no-profile"; email: string }
+  | { status: "signed-in"; user: SignedInUser };
+
+function LiveApp() {
+  const [auth, setAuth] = useState<AuthState>({ status: "checking" });
+
+  const resolve = useCallback(async (session: Session | null) => {
+    if (!session) {
+      setAuth({ status: "signed-out" });
+      return;
+    }
+    const user = await loadProfile(session);
+    setAuth(user
+      ? { status: "signed-in", user }
+      : { status: "no-profile", email: session.user.email ?? "your account" });
+  }, []);
+
+  useEffect(() => {
+    /* onAuthStateChange fires immediately with the stored session, so this
+       one subscription covers both the first load and every change after. */
+    const unsubscribe = onSessionChange((session) => void resolve(session));
+    return unsubscribe;
+  }, [resolve]);
+
+  if (auth.status === "checking") return <Splash message="Signing you in…" />;
+  if (auth.status === "signed-out") return <SignIn />;
+  if (auth.status === "no-profile") {
+    return <NoProfile email={auth.email} onSignOut={() => void signOut()} />;
+  }
+  return <LiveWorkbench user={auth.user} />;
+}
+
+function LiveWorkbench({ user }: { user: SignedInUser }) {
+  const ws = useWorkspace(true);
+
+  if (ws.state === "loading") return <Splash message="Loading your workspace…" />;
+  if (ws.state === "failed") {
+    return (
+      <Splash
+        message={ws.error ?? "Something went wrong."}
+        action={<Button tone="primary" onClick={() => void ws.reload()}>Try again</Button>}
+      />
+    );
+  }
+
+  const team: TeamMember[] = ws.profiles.map((p) => ({ id: p.id, name: p.name, email: p.email, role: p.role }));
+
+  return (
+    <Workbench
+      data={ws.data}
+      settings={ws.settings}
+      team={team.length ? team : [{ id: user.id, name: user.name, email: user.email, role: user.role }]}
+      user={user}
+      onChange={ws.update}
+      onSettingsChange={ws.updateSettings}
+      onTeamChange={(next) => ws.setProfiles(next.map((m) => ({ ...m, email: m.email ?? "" })))}
+      onRestore={(backup) => restore(backup, ws.data, ws.update, ws.settings, ws.updateSettings)}
+      onSignOut={() => void signOut()}
+      banner={ws.saveError ? (
+        <div className="page-banner notice notice-bad">
+          <span>{ws.saveError}</span>
+          <Button size="sm" tone="quiet" onClick={ws.dismissSaveError}>Dismiss</Button>
+        </div>
+      ) : null}
+    />
+  );
+}
+
+/* ── demo ──────────────────────────────────────────────────────────── */
+
+function DemoApp() {
+  const [data, setData] = useState<WorkspaceData>({
+    customers: CUSTOMERS,
+    quotations: QUOTATIONS,
+    proformas: PROFORMAS,
+    orders: ORDERS,
+    challans: CHALLANS,
+    subscriptions: SUBSCRIPTIONS,
+  });
+  const [settings, setSettings] = useState<Record<string, unknown>>(SETTINGS);
+  const [team, setTeam] = useState<TeamMember[]>(USERS);
+
+  const update = <K extends keyof WorkspaceData>(key: K, next: WorkspaceData[K]) =>
+    setData((cur) => ({ ...cur, [key]: next }));
+
+  return (
+    <Workbench
+      data={data}
+      settings={settings}
+      team={team}
+      user={team[0] ?? USERS[0]!}
+      onChange={update}
+      onSettingsChange={setSettings}
+      onTeamChange={setTeam}
+      onRestore={(backup) => restore(backup, data, update, settings, setSettings)}
+      banner={
+        <div className="page-banner notice">
+          <span>
+            <strong>Preview.</strong> Sample records, and nothing behind them — no database, no email, no
+            documents leaving this browser. Every screen is the real one.
+          </span>
+        </div>
+      }
+    />
+  );
+}
+
+/* ── shared ────────────────────────────────────────────────────────── */
+
+/**
+ * Apply a backup file.
+ *
+ * One list at a time, each guarded: a backup written by an older version is
+ * missing some of them, and a missing list must leave what is there alone
+ * rather than emptying it.
+ */
+function restore(
+  backup: Record<string, unknown>,
+  data: WorkspaceData,
+  update: <K extends keyof WorkspaceData>(key: K, next: WorkspaceData[K]) => void,
+  settings: Record<string, unknown>,
+  updateSettings: (next: Record<string, unknown>) => void,
+): void {
+  for (const key of Object.keys(data) as (keyof WorkspaceData)[]) {
+    const list = backup[key];
+    if (Array.isArray(list)) update(key, list as WorkspaceData[typeof key]);
+  }
+  if (backup["settings"] && typeof backup["settings"] === "object") {
+    updateSettings({ ...settings, ...(backup["settings"] as Record<string, unknown>) });
+  }
+}
+
+function Splash({ message, action }: { message: string; action?: React.ReactNode }) {
+  return (
+    <main className="signin">
+      <div className="signin-panel">
+        <div className="signin-brand">
+          <span className="brand-mark">TZ</span>
+          <span className="brand-name">TechZoid</span>
+        </div>
+        <Card>
+          <div className="stack">
+            <p style={{ margin: 0 }}>{message}</p>
+            {action}
+          </div>
+        </Card>
+      </div>
+    </main>
   );
 }

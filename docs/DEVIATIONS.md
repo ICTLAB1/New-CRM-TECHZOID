@@ -474,3 +474,46 @@ Two small corrections to v1's version:
   than showing nothing for both;
 - a record with no timestamp is grouped as **Undated** rather than filed under
   1 January 1970.
+
+---
+
+## 12. Wiring the real workspace
+
+### 12a. The Supabase client is created on first use
+
+It was created at module scope, so merely importing anything in `data/` threw
+when the environment wasn't configured — which took down the preview build
+entirely, including screens that never touch a database. Nothing connects now
+until something asks for the client.
+
+### 12b. A failed save reloads rather than pretending
+
+Writes are optimistic: the screen updates first. If the write is rejected —
+usually row-level security refusing something that isn't yours — the workspace
+reloads and a banner says the change wasn't saved. v1 left the rejected change
+on screen, so a Sales user could edit a colleague's record, see it apparently
+save, and find it unchanged the next morning.
+
+### 12c. Realtime never overwrites a save in flight
+
+A change broadcast while a write is in progress used to pull the pre-write rows
+back over what had just been typed. The refetch is debounced and skipped while
+anything is being saved.
+
+### 12d. Sign-in never says which half was wrong
+
+"Invalid login credentials" is now "That email and password don't match an
+account." Telling someone the address exists but the password is wrong is how
+an attacker works out which addresses are worth attacking.
+
+### 12e. A sign-in with no profile row says so
+
+The account exists, the CRM has no record of who it belongs to, and every
+screen would be empty. It now says exactly that and offers to sign out, rather
+than showing an empty workspace that looks like data loss.
+
+### 12f. The catalog stays in the settings row
+
+v1 stored the product catalog inside `settings.productCatalog`. It stays there:
+it is configuration rather than records, and the brief is explicit that the
+schema does not change.

@@ -103,7 +103,7 @@ export function DashboardScreen({
               {attention.length > 6 ? (
                 <div style={{ padding: "9px var(--gap-wide)", borderTop: "1px solid var(--rule)" }}>
                   <span className="field-hint">
-                    {attention.length - 6} more item{attention.length - 6 === 1 ? "" : "s"} need attention.
+                    {attention.length - 6} more item{attention.length - 6 === 1 ? " needs" : "s need"} attention.
                   </span>
                 </div>
               ) : null}

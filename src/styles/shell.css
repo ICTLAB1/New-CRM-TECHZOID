@@ -127,3 +127,14 @@
   .split { grid-template-columns: minmax(0, 1fr); }
   .split-preview { display: none; }
 }
+
+/* ── sign in ───────────────────────────────────────────────────────────
+   The only screen with no shell around it. Centred, narrow, and nothing
+   else on it: there is exactly one thing to do here. */
+.signin { display: grid; place-items: center; min-height: 100vh; padding: var(--gap-wide); background: var(--bg); }
+.signin-panel { width: 100%; max-width: 380px; }
+.signin-brand { display: flex; align-items: center; gap: 9px; margin-bottom: 18px; justify-content: center; }
+
+/* A strip above the page, inside the scrolling area so it scrolls away
+   rather than eating height from every screen underneath it. */
+.page-banner { margin: var(--gap-block) var(--gap-block) 0; align-items: center; justify-content: space-between; }

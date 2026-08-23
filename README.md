@@ -16,7 +16,7 @@ before the next.
 
 | # | Stage | State |
 |---|-------|-------|
-| 1 | Project structure, TypeScript, database layer, auth, RLS | data layer + schema done; auth UI pending |
+| 1 | Project structure, TypeScript, database layer, auth, RLS | **done** |
 | 2 | Domain logic — tax, currency, numbering — with tests | **done, parity-verified against v1** |
 | 3 | PDF generation, verified by rendering images | **done — rebuilt to the approved quotation design** |
 | 4 | Design system and shell | **done** |
@@ -24,10 +24,19 @@ before the next.
 | 6 | Quotations and proformas with live preview | **done** |
 | 7 | Orders, dispatch, subscriptions, renewals | **done** |
 | 8 | Dashboard and reports | **done** |
-| 9 | Integrations — email, Microsoft OAuth, WhatsApp, AI | not started |
-| 10 | Settings, team management, catalog | not started |
+| 9 | Integrations — email, Microsoft OAuth, WhatsApp, AI | **done, with six security fixes** |
+| 10 | Settings, team management, catalog | **done** |
+| — | Incentives and the activity timeline, ported from v1 | **done** |
+| — | Sign-in and the live workspace wired to Supabase | **done** |
 
 Nothing here is deployed. The live site at `crm.ttpldelhi.com` still runs v1.
+
+### Two modes, deliberately
+
+With `VITE_SUPABASE_URL` set the app signs in and works on the real workspace.
+Without it, the same screens run on sample records and say so at the top of
+every page — no database, no email, nothing leaving the browser. There is no
+middle state where it looks live and isn't.
 
 ## Running it
 
@@ -61,7 +70,8 @@ src/
   data/            Supabase client, entity sync, legacy normalisation
   components/      shared component library
   styles/          design tokens and component styles
-  app/             application shell and navigation
+  integrations/    one interface for everything the browser asks a server to do
+  app/             application shell, sign-in, and the screen routing
   features/        feature folders
     customers/     list, record sheet, duplicate warning
     pipeline/      kanban board, lost-reason capture
@@ -94,6 +104,13 @@ Each was a production bug in v1. They are enforced by tests, not by memory.
 - The `profiles` update policy needs its `with check` clause, or any user can
   make themselves Admin.
 - `ai-proxy` requires a signed-in user; it calls a paid API.
+- The OAuth `state` is signed and expires, or a callback can attach one
+  person's mailbox to another person's account.
+- Everything variable in `ms-oauth-callback`'s HTML is escaped: that page
+  interpolated an attacker-controlled query parameter straight into itself.
+- A function never returns an internal error message to a client.
+- A catalog import saves before it reports, and a welcome email that fails
+  does not lose the account.
 
 ## Parity testing
 

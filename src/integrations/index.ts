@@ -1,4 +1,5 @@
 import { demoApi, netlifyApi, type IntegrationsApi } from "./api";
+import { isSupabaseConfigured } from "../data/supabase";
 
 /**
  * Which implementation the app runs on.
@@ -8,7 +9,6 @@ import { demoApi, netlifyApi, type IntegrationsApi } from "./api";
  * refuses every outward-facing action and says why. There is no third mode
  * where a button looks like it worked and did nothing.
  */
-export const integrations: IntegrationsApi =
-  import.meta.env.VITE_SUPABASE_URL ? netlifyApi() : demoApi();
+export const integrations: IntegrationsApi = isSupabaseConfigured() ? netlifyApi() : demoApi();
 
 export type { IntegrationsApi } from "./api";

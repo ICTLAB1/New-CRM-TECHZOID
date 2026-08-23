@@ -6,13 +6,18 @@ export interface AppShellProps {
   view: string;
   onNavigate: (id: string) => void;
   user: { name: string; role: string };
+  /** Absent in the demo build, where there is nobody to sign out. */
+  onSignOut?: () => void;
+  /** A strip above the page for something that applies everywhere — a save
+   *  that failed, a preview with no server behind it. */
+  banner?: ReactNode;
   children: ReactNode;
 }
 
 const initials = (name: string): string =>
   name.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? "").join("");
 
-export function AppShell({ view, onNavigate, user, children }: AppShellProps) {
+export function AppShell({ view, onNavigate, user, onSignOut, banner, children }: AppShellProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const section = NAV.find((s) => s.items.some((i) => i.id === view));
   const current = section?.items.find((i) => i.id === view);
@@ -55,10 +60,13 @@ export function AppShell({ view, onNavigate, user, children }: AppShellProps) {
         <div className="sidebar-foot">
           <div className="who">
             <span className="who-mark" aria-hidden>{initials(user.name)}</span>
-            <span>
+            <span className="grow">
               <span className="who-name" style={{ display: "block" }}>{user.name}</span>
               <span className="who-role">{user.role}</span>
             </span>
+            {onSignOut ? (
+              <Button tone="quiet" size="sm" onClick={onSignOut}>Sign out</Button>
+            ) : null}
           </div>
         </div>
       </aside>
@@ -75,6 +83,7 @@ export function AppShell({ view, onNavigate, user, children }: AppShellProps) {
           <input className="topsearch" type="search" placeholder="Search customers, quotations, orders…" aria-label="Search" />
           <span className="topbar-crumb">FY 2026-27</span>
         </header>
+        {banner}
         {children}
       </div>
     </div>

@@ -1,4 +1,4 @@
-import { supabase } from "./supabase";
+import { getSupabase } from "./supabase";
 import { ENTITY_EXTRA_COLS, ENTITY_TABLES, rowToItem, type EntityBase, type EntityRow, type EntityTable } from "./entities";
 
 export interface Profile {
@@ -9,19 +9,19 @@ export interface Profile {
 }
 
 export async function fetchEntity<T extends EntityBase>(table: EntityTable): Promise<T[]> {
-  const { data, error } = await supabase.from(table).select("id, owner_id, data");
+  const { data, error } = await getSupabase().from(table).select("id, owner_id, data");
   if (error) throw error;
   return ((data as EntityRow[] | null) || []).map((r) => rowToItem<T>(r));
 }
 
 export async function fetchSettings(): Promise<Record<string, unknown>> {
-  const { data, error } = await supabase.from("settings").select("data").eq("id", "main").single();
+  const { data, error } = await getSupabase().from("settings").select("data").eq("id", "main").single();
   if (error) throw error;
   return (data?.data as Record<string, unknown>) ?? {};
 }
 
 export async function fetchProfiles(): Promise<Profile[]> {
-  const { data, error } = await supabase
+  const { data, error } = await getSupabase()
     .from("profiles")
     .select("id, name, role, email")
     .order("created_at", { ascending: true });
@@ -51,7 +51,7 @@ export async function syncEntity<T extends EntityBase>(
     if (!prevItem || JSON.stringify(prevItem) !== JSON.stringify(item)) {
       const { ownerId, ...rest } = item;
       ops.push(
-        supabase.from(table).upsert({
+        getSupabase().from(table).upsert({
           id,
           owner_id: ownerId,
           data: rest,
@@ -62,7 +62,7 @@ export async function syncEntity<T extends EntityBase>(
     }
   }
   for (const id of prevMap.keys()) {
-    if (!nextMap.has(id)) ops.push(supabase.from(table).delete().eq("id", id));
+    if (!nextMap.has(id)) ops.push(getSupabase().from(table).delete().eq("id", id));
   }
 
   const results = await Promise.all(ops);
@@ -75,7 +75,7 @@ export async function syncSettings(
   next: Record<string, unknown>,
 ): Promise<void> {
   if (JSON.stringify(prev) === JSON.stringify(next)) return;
-  const { error } = await supabase
+  const { error } = await getSupabase()
     .from("settings")
     .update({ data: next, updated_at: new Date().toISOString() })
     .eq("id", "main");
@@ -85,7 +85,7 @@ export async function syncSettings(
 /** Live sync: any row change in any of these tables fires `onChange(table)`
  *  so every signed-in screen refetches. Respects RLS automatically. */
 export function subscribeAll(onChange: (table: string) => void) {
-  const channel = supabase.channel("crm-live-sync");
+  const channel = getSupabase().channel("crm-live-sync");
   [...ENTITY_TABLES, "settings"].forEach((table) => {
     channel.on("postgres_changes", { event: "*", schema: "public", table }, () => onChange(table));
   });

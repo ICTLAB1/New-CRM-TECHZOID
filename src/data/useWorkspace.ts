@@ -1,0 +1,220 @@
+import { useCallback, useEffect, useRef, useState } from "react";
+import { fetchEntity, fetchProfiles, fetchSettings, subscribeAll, syncEntity, syncSettings } from "./store";
+import { normalizeCustomer, normalizeDocument } from "./normalize";
+import type { EntityTable } from "./entities";
+import type { Customer } from "../domain/customers/customer";
+import type { SalesDocument } from "../domain/documents/create";
+import type { SalesOrder, DeliveryChallan } from "../domain/orders/create";
+import type { Subscription } from "../domain/subscriptions/expiry";
+
+/**
+ * The workspace, loaded once and kept in step.
+ *
+ * Three things happen here and nowhere else:
+ *
+ *   1. **Normalisation on load.** Records written before `currency`,
+ *      `taxType` or `billCountry` existed are filled in as they arrive, so no
+ *      screen ever has to ask whether a field is there.
+ *   2. **Writes are diffed, not replayed.** `syncEntity` sends only the rows
+ *      that actually changed, so saving a customer does not rewrite the
+ *      table — and RLS rejects anything this user may not touch.
+ *   3. **Realtime refetches, but never over an in-flight save.** A change
+ *      broadcast while we are mid-write would otherwise pull the pre-write
+ *      rows back over what was just typed.
+ */
+
+export interface WorkspaceData {
+  customers: Customer[];
+  quotations: SalesDocument[];
+  proformas: SalesDocument[];
+  orders: SalesOrder[];
+  challans: DeliveryChallan[];
+  subscriptions: Subscription[];
+}
+
+export interface Profile {
+  id: string;
+  name: string;
+  email?: string;
+  role: string;
+}
+
+export type LoadState = "loading" | "ready" | "failed";
+
+/** App-side name to database table. The table is called `quotes`; every
+ *  screen calls them quotations. */
+const TABLE_OF: Record<keyof WorkspaceData, EntityTable> = {
+  customers: "customers",
+  quotations: "quotes",
+  proformas: "proformas",
+  orders: "orders",
+  challans: "challans",
+  subscriptions: "subscriptions",
+};
+
+const EMPTY: WorkspaceData = {
+  customers: [], quotations: [], proformas: [], orders: [], challans: [], subscriptions: [],
+};
+
+async function loadAll(): Promise<{ data: WorkspaceData; settings: Record<string, unknown>; profiles: Profile[] }> {
+  const [customers, quotations, proformas, orders, challans, subscriptions, settings, profiles] = await Promise.all([
+    fetchEntity<Customer>("customers"),
+    fetchEntity<SalesDocument>("quotes"),
+    fetchEntity<SalesDocument>("proformas"),
+    fetchEntity<SalesOrder>("orders"),
+    fetchEntity<DeliveryChallan>("challans"),
+    fetchEntity<Subscription>("subscriptions"),
+    fetchSettings(),
+    fetchProfiles(),
+  ]);
+
+  /* Normalisation takes a bag of unknown fields and gives one back, so each
+     call is cast at the boundary rather than the normaliser being widened to
+     know about every record type. */
+  const fixCustomer = (c: Customer): Customer =>
+    normalizeCustomer(c as unknown as Record<string, unknown>) as unknown as Customer;
+  const fixDoc = <T>(d: T): T =>
+    normalizeDocument(d as unknown as Record<string, unknown>) as unknown as T;
+
+  return {
+    data: {
+      customers: customers.map(fixCustomer),
+      quotations: quotations.map(fixDoc),
+      proformas: proformas.map(fixDoc),
+      orders: orders.map(fixDoc),
+      challans,
+      subscriptions,
+    },
+    settings,
+    profiles: profiles as unknown as Profile[],
+  };
+}
+
+export interface Workspace {
+  state: LoadState;
+  error: string | null;
+  data: WorkspaceData;
+  settings: Record<string, unknown>;
+  profiles: Profile[];
+  /** Saving right now. Screens use it to disable a second submit. */
+  saving: boolean;
+  /** The last write that failed, kept until it succeeds or is dismissed. */
+  saveError: string | null;
+  reload: () => Promise<void>;
+  update: <K extends keyof WorkspaceData>(key: K, next: WorkspaceData[K]) => void;
+  updateSettings: (next: Record<string, unknown>) => void;
+  setProfiles: (next: Profile[]) => void;
+  dismissSaveError: () => void;
+}
+
+export function useWorkspace(enabled: boolean): Workspace {
+  const [state, setState] = useState<LoadState>(enabled ? "loading" : "ready");
+  const [error, setError] = useState<string | null>(null);
+  const [data, setData] = useState<WorkspaceData>(EMPTY);
+  const [settings, setSettings] = useState<Record<string, unknown>>({});
+  const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  /* The last state the server is known to hold, so a write can be diffed
+     against it rather than against whatever the screen happens to show. */
+  const committed = useRef<WorkspaceData>(EMPTY);
+  const committedSettings = useRef<Record<string, unknown>>({});
+  const inFlight = useRef(0);
+
+  const reload = useCallback(async () => {
+    try {
+      const loaded = await loadAll();
+      committed.current = loaded.data;
+      committedSettings.current = loaded.settings;
+      setData(loaded.data);
+      setSettings(loaded.settings);
+      setProfiles(loaded.profiles);
+      setState("ready");
+      setError(null);
+    } catch (err) {
+      console.error("workspace load failed:", err);
+      setState("failed");
+      setError("Couldn't load your workspace. Check your connection and try again.");
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!enabled) return;
+    void reload();
+  }, [enabled, reload]);
+
+  /* Live sync. Another person's change arrives as a table name; we refetch
+     everything, which is cheap at this size and cannot get out of step the
+     way applying individual row events can. */
+  useEffect(() => {
+    if (!enabled || state !== "ready") return;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const channel = subscribeAll(() => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        /* Never pull the server's rows back over a save still in flight. */
+        if (inFlight.current > 0) return;
+        void reload();
+      }, 700);
+    });
+    return () => {
+      if (timer) clearTimeout(timer);
+      void channel.unsubscribe();
+    };
+  }, [enabled, state, reload]);
+
+  const update = useCallback(<K extends keyof WorkspaceData>(key: K, next: WorkspaceData[K]) => {
+    /* Optimistic: the screen updates now, the write follows. If it fails the
+       error says so and `reload` puts the truth back — silently keeping a
+       change the database rejected is the worst of both. */
+    setData((cur) => ({ ...cur, [key]: next }));
+    if (!enabled) return;
+
+    inFlight.current += 1;
+    setSaving(true);
+    const previous = committed.current[key];
+    void syncEntity(TABLE_OF[key], previous as never, next as never)
+      .then(() => {
+        committed.current = { ...committed.current, [key]: next };
+        setSaveError(null);
+      })
+      .catch((err) => {
+        console.error("save failed:", err);
+        setSaveError("That change couldn't be saved. Your workspace has been reloaded — please try again.");
+        void reload();
+      })
+      .finally(() => {
+        inFlight.current -= 1;
+        if (inFlight.current === 0) setSaving(false);
+      });
+  }, [enabled, reload]);
+
+  const updateSettings = useCallback((next: Record<string, unknown>) => {
+    setSettings(next);
+    if (!enabled) return;
+
+    inFlight.current += 1;
+    setSaving(true);
+    void syncSettings(committedSettings.current, next)
+      .then(() => {
+        committedSettings.current = next;
+        setSaveError(null);
+      })
+      .catch((err) => {
+        console.error("settings save failed:", err);
+        setSaveError("Those settings couldn't be saved — only an admin or manager may change them.");
+        void reload();
+      })
+      .finally(() => {
+        inFlight.current -= 1;
+        if (inFlight.current === 0) setSaving(false);
+      });
+  }, [enabled, reload]);
+
+  return {
+    state, error, data, settings, profiles, saving, saveError,
+    reload, update, updateSettings, setProfiles,
+    dismissSaveError: () => setSaveError(null),
+  };
+}

@@ -48,6 +48,14 @@ import { DOMESTIC_TERMS } from "../domain/documents/terms";
 import type { SalesDocument } from "../domain/documents/create";
 import type { CatalogProduct } from "../domain/catalog/types";
 
+export const CATALOG: CatalogProduct[] = [
+  { id: "p1", name: "Microsoft 365 Business Premium (Annual)", publisher: "Microsoft", licenseType: "NCE", productId: "CFQ7TTC0LCHC", skuId: "CFQ7TTC0LH1Y", termDuration: "1 Year", billingPlan: "Annual", segment: "Commercial", costPrice: 17200, sellPrice: 18900, hsn: "997331", unit: "User", active: true, createdAt: 0, updatedAt: 0 },
+  { id: "p2", name: "HP EliteBook 840 G11", publisher: "HP", licenseType: "Hardware", productId: "", skuId: "9G0K8PT", termDuration: "", billingPlan: "", segment: "Commercial", costPrice: 104000, sellPrice: 112500, hsn: "84713010", unit: "Nos.", active: true, createdAt: 0, updatedAt: 0 },
+  { id: "p3", name: "Adobe Acrobat Pro DC for Teams", publisher: "Adobe", licenseType: "Subscription", productId: "", skuId: "65302526BA01A12", termDuration: "1 Year", billingPlan: "Annual", segment: "Commercial", costPrice: 14200, sellPrice: 15600, hsn: "997331", unit: "User", active: true, createdAt: 0, updatedAt: 0 },
+  { id: "p4", name: "Acer Veriton Desktop", publisher: "Acer", licenseType: "Hardware", productId: "", skuId: "DT.VT8SI.001", termDuration: "", billingPlan: "", segment: "Commercial", costPrice: 41000, sellPrice: 46500, hsn: "84714110", unit: "Nos.", active: true, createdAt: 0, updatedAt: 0 },
+  { id: "p5", name: "Implementation & Migration Services", publisher: "TechZoid", licenseType: "Services", productId: "", skuId: "SVC-PROJECT-01", termDuration: "", billingPlan: "", segment: "Commercial", costPrice: 0, sellPrice: 376656, hsn: "998313", unit: "Project", active: true, createdAt: 0, updatedAt: 0 },
+];
+
 export const SETTINGS: Record<string, unknown> = {
   company: {
     name: "TechZoid Technologies Private Limited",
@@ -77,6 +85,10 @@ export const SETTINGS: Record<string, unknown> = {
      code so it can be changed without a deploy. */
   invoicingEmail: "accounts@techzoidtechnologies.com",
   invoicingCc: "",
+
+  /* The catalog is configuration, not records — it lives in the settings
+     row exactly as it did in v1, so the schema needs no new table. */
+  productCatalog: CATALOG,
 
   /* One live scheme, so the Incentives screen has something to show. */
   incentiveSchemes: [{
@@ -116,13 +128,6 @@ export const DOC_IMAGES: DocImages = {
   },
 };
 
-export const CATALOG: CatalogProduct[] = [
-  { id: "p1", name: "Microsoft 365 Business Premium (Annual)", publisher: "Microsoft", licenseType: "NCE", productId: "CFQ7TTC0LCHC", skuId: "CFQ7TTC0LH1Y", termDuration: "1 Year", billingPlan: "Annual", segment: "Commercial", costPrice: 17200, sellPrice: 18900, hsn: "997331", unit: "User", active: true, createdAt: 0, updatedAt: 0 },
-  { id: "p2", name: "HP EliteBook 840 G11", publisher: "HP", licenseType: "Hardware", productId: "", skuId: "9G0K8PT", termDuration: "", billingPlan: "", segment: "Commercial", costPrice: 104000, sellPrice: 112500, hsn: "84713010", unit: "Nos.", active: true, createdAt: 0, updatedAt: 0 },
-  { id: "p3", name: "Adobe Acrobat Pro DC for Teams", publisher: "Adobe", licenseType: "Subscription", productId: "", skuId: "65302526BA01A12", termDuration: "1 Year", billingPlan: "Annual", segment: "Commercial", costPrice: 14200, sellPrice: 15600, hsn: "997331", unit: "User", active: true, createdAt: 0, updatedAt: 0 },
-  { id: "p4", name: "Acer Veriton Desktop", publisher: "Acer", licenseType: "Hardware", productId: "", skuId: "DT.VT8SI.001", termDuration: "", billingPlan: "", segment: "Commercial", costPrice: 41000, sellPrice: 46500, hsn: "84714110", unit: "Nos.", active: true, createdAt: 0, updatedAt: 0 },
-  { id: "p5", name: "Implementation & Migration Services", publisher: "TechZoid", licenseType: "Services", productId: "", skuId: "SVC-PROJECT-01", termDuration: "", billingPlan: "", segment: "Commercial", costPrice: 0, sellPrice: 376656, hsn: "998313", unit: "Project", active: true, createdAt: 0, updatedAt: 0 },
-];
 
 const baseDoc = (over: Partial<SalesDocument>): SalesDocument => ({
   id: "d" + Math.random().toString(36).slice(2, 8),
