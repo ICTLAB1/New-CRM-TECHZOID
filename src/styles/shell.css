@@ -17,17 +17,19 @@
   overflow-y: auto;
 }
 .sidebar-brand { display: flex; align-items: center; gap: 9px; height: var(--topbar-h); padding: 0 var(--gap-wide); border-bottom: 1px solid var(--rule); flex: none; }
-.brand-mark { width: 22px; height: 22px; border-radius: 4px; background: var(--accent); color: var(--on-accent); display: grid; place-items: center; font-size: 11px; font-weight: 700; letter-spacing: -.02em; flex: none; }
+.brand-mark { width: 20px; height: 20px; border-radius: 2px; background: var(--accent); color: var(--on-accent); display: grid; place-items: center; font-size: 10px; font-weight: 700; letter-spacing: -.02em; flex: none; }
 .brand-name { font-size: var(--t-mid); font-weight: 600; color: var(--ink); letter-spacing: -0.01em; }
 
 .nav { padding: var(--gap) var(--gap-tight) var(--gap-block); }
-.nav-section { padding: var(--gap-wide) 10px 5px; }
+/* Section labels are orientation, not headlines: small, grey, sentence
+   case. Tracked-out mono capitals here compete with the items under them. */
+.nav-section { padding: var(--gap-wide) 10px 4px; font-size: var(--t-small); font-weight: 600; color: var(--ink-4); letter-spacing: 0; text-transform: none; font-family: var(--sans); }
 .nav-section:first-child { padding-top: 4px; }
 
 .nav-item {
   display: flex; align-items: center; gap: 9px;
   width: 100%;
-  padding: 6px 10px;
+  padding: 5px 10px;
   border: 0; border-left: var(--edge) solid transparent;
   background: transparent;
   border-radius: 0 var(--radius) var(--radius) 0;
@@ -35,7 +37,8 @@
   color: var(--ink-3); text-align: left; cursor: pointer;
 }
 .nav-item:hover { background: var(--surface-3); color: var(--ink); }
-.nav-item[aria-current="page"] { background: var(--accent-weak); border-left-color: var(--accent); color: var(--ink); }
+.nav-item[aria-current="page"] { border-left-color: var(--accent); color: var(--ink); font-weight: 600; }
+.nav-item[aria-current="page"]:hover { background: var(--surface-3); }
 .nav-icon { width: 15px; height: 15px; flex: none; color: currentColor; }
 .nav-badge {
   margin-left: auto;
@@ -68,10 +71,23 @@
 .crumb-section { color: var(--ink-4); }
 .crumb-sep { color: var(--rule-strong); }
 .crumb-current { color: var(--ink-2); font-weight: 500; }
-.topbar-crumb { font-size: var(--t-small); color: var(--ink-4); }
+.topbar-crumb { font-size: var(--t-small); color: var(--ink-4); font-family: var(--mono); }
 
-.page { padding: var(--gap-block) var(--gap-page) 56px; }
-.page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--gap-wide); margin-bottom: var(--gap-block); flex-wrap: wrap; }
+.topsearch {
+  width: 260px; height: 26px;
+  padding: 0 9px;
+  font: inherit; font-size: var(--t-small);
+  color: var(--ink);
+  background: var(--surface-2);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+}
+.topsearch::placeholder { color: var(--ink-4); }
+.topsearch:focus { outline: none; background: var(--surface); border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-weak); }
+@media (max-width: 760px) { .topsearch { display: none; } }
+
+.page { padding: var(--gap-wide) var(--gap-page) 56px; }
+.page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--gap-wide); margin-bottom: var(--gap-wide); flex-wrap: wrap; }
 .page-title { font-size: var(--t-page); font-weight: 600; color: var(--ink); letter-spacing: -0.02em; }
 .page-sub { margin-top: 3px; font-size: var(--t-body); color: var(--ink-4); }
 

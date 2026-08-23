@@ -7,6 +7,31 @@ anything that needs action.
 The rules below are enforced by `src/styles/design-rules.test.ts`, not by
 memory — each is a decision a later change could quietly undo.
 
+## What "professional" meant here
+
+The first pass read as a competent dashboard template. The changes that moved
+it toward enterprise software were all reductions:
+
+- **A deeper, lower-chroma accent** (`#1F4B99`). A bright blue reads consumer;
+  the semantic colours were desaturated to match, so nothing looks like an alarm.
+- **The headline figures became one instrument, not five cards.** A row of
+  rounded boxes is a consumer-dashboard idiom; a single ruled panel divided by
+  hairlines is how a ledger or an ERP presents the same numbers, and it is denser.
+- **Status chips lost their fill.** Down a status column, forty tinted lozenges
+  are the loudest thing on the screen and none of them means more than the
+  others. The default is a dot and coloured text; the filled variant is reserved
+  for where a state is the subject rather than an attribute.
+- **Tighter everything** — 12.5px body, 3–4px radii, 30px controls, 7px table
+  rows, 46px topbar. More rows visible without shrinking anything below reading
+  size.
+- **Sentence-case labels.** Tracked-out mono capitals on every tile and column
+  head is costume. The mono face is kept for document numbers and the FY marker,
+  where it aids scanning.
+- **Money without decimals in list views.** A column of forty figures all ending
+  ".00" is forty repetitions of nothing. Documents and detail views keep full
+  precision.
+- **A global search in the topbar**, because an empty bar reads unfinished.
+
 ## Colour
 
 | Token | Means | Used for |
@@ -33,9 +58,9 @@ Dense and quiet: small grey labels above larger near-black values. That
 contrast is what makes a dense screen readable without drawing boxes
 around everything.
 
-- `.eyebrow` — mono, 10.5px, tracked out, uppercase. Column heads and section
-  labels. The one piece of deliberate typographic character in the system.
 - `.label` / `.value` — the core density device.
+- `.eyebrow` — mono, tracked out, uppercase. Kept for genuinely dense
+  reference material, not spent on every tile and column head.
 - **Tabular numerals everywhere.** Money that does not line up down a column
   reads as sloppy no matter what else is right. Set globally on `body` and
   again on every numeric surface.
@@ -72,6 +97,9 @@ Errors say what to do, not just what failed:
   footer.
 - Stat tiles never drop to one per row. Five KPIs at one per screen means five
   screens of scrolling before any content.
+- The summary bar's column count travels as a CSS custom property, never as an
+  inline `grid-template-columns` — an inline declaration beats every media
+  query, and pinned five columns onto a 390px phone.
 
 ## Reviewing a change
 

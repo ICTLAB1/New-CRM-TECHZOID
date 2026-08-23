@@ -67,6 +67,16 @@ export function inr(n: unknown): string {
   return "₹" + (Number(n) || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+/**
+ * Rupees for a list or table column: Indian grouping, no decimals.
+ *
+ * A column of forty figures all ending ".00" is forty repetitions of nothing.
+ * Documents and detail views keep full precision — this is for scanning.
+ */
+export function inrList(n: unknown): string {
+  return "₹" + Math.round(Number(n) || 0).toLocaleString("en-IN");
+}
+
 /** Compact Indian rupees for dashboard tiles: Cr / L / K. */
 export function inrShort(n: unknown): string {
   const v = Number(n) || 0;

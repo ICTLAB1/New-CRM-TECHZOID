@@ -83,14 +83,19 @@
 
 /* ── card ──────────────────────────────────────────────────────────── */
 .card {
+  display: flex;
+  flex-direction: column;
   background: var(--surface);
   border: 1px solid var(--rule);
   border-radius: var(--radius-card);
 }
-.card-pad { padding: var(--gap-wide); }
+/* Cards sitting side by side share a bottom edge. Ragged bottoms across a
+   row read as unfinished, however tidy each card is on its own. */
+.card > .card-pad { flex: 1 1 auto; }
+.card-pad { padding: 13px var(--gap-wide) var(--gap-wide); }
 .card-head {
   display: flex; align-items: center; justify-content: space-between; gap: var(--gap);
-  padding: 11px var(--gap-wide);
+  padding: 9px var(--gap-wide);
   border-bottom: 1px solid var(--rule);
 }
 .card-title { font-size: var(--t-mid); font-weight: 600; color: var(--ink); }
@@ -103,28 +108,66 @@
 .edge-good { border-left-color: var(--good); }
 .edge-accent { border-left-color: var(--accent); }
 
-/* ── stat tile ─────────────────────────────────────────────────────── */
-.tile { background: var(--surface); border: 1px solid var(--rule); border-radius: var(--radius-card); padding: 13px var(--gap-wide) 15px; }
-.tile-label { font-family: var(--mono); font-size: var(--t-micro); font-weight: 500; letter-spacing: .09em; text-transform: uppercase; color: var(--ink-4); }
-.tile-value { margin-top: 7px; font-size: var(--t-xl); font-weight: 600; color: var(--ink); letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
-.tile-meta { margin-top: 3px; font-size: var(--t-small); color: var(--ink-4); }
+/* ── summary bar ───────────────────────────────────────────────────────
+   The headline figures read as ONE instrument, divided by hairlines —
+   not as five separate floating cards. A row of rounded boxes is a
+   consumer-dashboard idiom; a single ruled panel is how a ledger, a
+   trading screen or an ERP presents the same numbers, and it is denser. */
+.summary {
+  display: grid;
+  grid-template-columns: repeat(var(--summary-cols, 4), minmax(0, 1fr));
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-card);
+  overflow: hidden;
+}
+.tile { padding: 11px var(--gap-wide) 13px; border-left: 1px solid var(--rule); min-width: 0; }
+.tile:first-child { border-left: 0; }
+.tile-label { font-size: var(--t-small); font-weight: 500; color: var(--ink-3); }
+.tile-value { margin-top: 5px; font-size: var(--t-xl); font-weight: 600; color: var(--ink); letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.tile-meta { margin-top: 2px; font-size: var(--t-small); color: var(--ink-4); }
 .tile-value.is-good { color: var(--good); }
 .tile-value.is-bad  { color: var(--bad); }
 .tile-value.is-warn { color: var(--warn); }
+button.tile { background: transparent; text-align: left; font: inherit; cursor: pointer; }
+button.tile:hover { background: var(--surface-2); }
 
-/* ── chip: state, never decoration ─────────────────────────────────── */
+/* Wrapping onto a second line needs a rule above it, or the grid reads as
+   two unrelated bars. */
+@media (max-width: 1100px) {
+  .summary { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .summary .tile:nth-child(n+4) { border-top: 1px solid var(--rule); }
+  .summary .tile:nth-child(3n+1) { border-left: 0; }
+}
+@media (max-width: 620px) {
+  .summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .summary .tile:nth-child(n+3) { border-top: 1px solid var(--rule); }
+  .summary .tile:nth-child(odd) { border-left: 0; }
+}
+
+/* ── chip: state, never decoration ─────────────────────────────────────
+   The default carries no fill at all — a dot and coloured text. Down a
+   status column, forty tinted lozenges are the loudest thing on the
+   screen and none of them means more than the others. The filled variant
+   is for the one place a state is the subject rather than an attribute. */
 .chip {
   display: inline-flex; align-items: center; gap: 5px;
-  height: 20px; padding: 0 8px;
-  border-radius: 3px;
   font-size: var(--t-small); font-weight: 500;
   white-space: nowrap;
 }
-.chip-neutral { background: var(--neutral-weak); color: var(--neutral); }
-.chip-good    { background: var(--good-weak);    color: var(--good); }
-.chip-warn    { background: var(--warn-weak);    color: var(--warn); }
-.chip-bad     { background: var(--bad-weak);     color: var(--bad); }
-.chip-accent  { background: var(--accent-weak);  color: var(--accent); }
+.chip-neutral { color: var(--neutral); }
+.chip-good    { color: var(--good); }
+.chip-warn    { color: var(--warn); }
+.chip-bad     { color: var(--bad); }
+.chip-accent  { color: var(--accent); }
+
+.chip-solid { height: 18px; padding: 0 7px; border-radius: 2px; }
+.chip-solid.chip-neutral { background: var(--neutral-weak); }
+.chip-solid.chip-good    { background: var(--good-weak); }
+.chip-solid.chip-warn    { background: var(--warn-weak); }
+.chip-solid.chip-bad     { background: var(--bad-weak); }
+.chip-solid.chip-accent  { background: var(--accent-weak); }
+
 /* A dot carries the state for anyone who cannot separate the hues. */
 .chip-dot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; flex: none; }
 
@@ -132,19 +175,17 @@
 .table-wrap { overflow-x: auto; }
 .table { width: 100%; border-collapse: collapse; font-size: var(--t-body); }
 .table th {
-  padding: 8px 12px;
+  padding: 7px 12px;
   text-align: left;
   background: var(--surface-2);
-  border-bottom: 1px solid var(--rule);
-  font-family: var(--mono);
-  font-size: var(--t-micro);
-  font-weight: 500;
-  letter-spacing: .09em;
-  text-transform: uppercase;
-  color: var(--ink-4);
+  border-bottom: 1px solid var(--rule-strong);
+  font-size: var(--t-small);
+  font-weight: 600;
+  letter-spacing: .01em;
+  color: var(--ink-3);
   white-space: nowrap;
 }
-.table td { padding: 9px 12px; border-bottom: 1px solid var(--rule); color: var(--ink-2); vertical-align: middle; }
+.table td { padding: 7px 12px; border-bottom: 1px solid var(--rule); color: var(--ink-2); vertical-align: middle; }
 .table tbody tr:last-child td { border-bottom: 0; }
 .table tbody tr:hover td { background: var(--surface-2); }
 .table tr.is-selected td { background: var(--accent-weak); }
@@ -208,7 +249,7 @@
 }
 
 /* ── empty state ───────────────────────────────────────────────────── */
-.empty { padding: 44px 24px; text-align: center; }
+.empty { padding: 30px 24px; text-align: center; }
 .empty-title { font-size: var(--t-mid); font-weight: 600; color: var(--ink); }
 .empty-body { margin-top: 5px; font-size: var(--t-body); color: var(--ink-4); }
 .empty-action { margin-top: var(--gap-wide); }

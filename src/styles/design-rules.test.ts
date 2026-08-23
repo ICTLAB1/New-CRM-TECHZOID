@@ -99,6 +99,15 @@ describe("mobile", () => {
     expect(mobile).toMatch(/\.split-preview\s*\{\s*display:\s*none/);
   });
 
+  it("lets the summary bar reflow — its column count is a custom property", () => {
+    // An inline grid-template-columns beats every media query: five columns
+    // stayed pinned onto a 390px phone and wrapped every figure mid-value.
+    const comp = code(css["components.css"] ?? "");
+    expect(comp).toMatch(/\.summary\s*\{[^}]*var\(--summary-cols/);
+    const mobile = comp.slice(comp.indexOf("@media (max-width: 620px)"));
+    expect(mobile).toMatch(/\.summary\s*\{\s*grid-template-columns:\s*repeat\(2/);
+  });
+
   it("never drops stat tiles to one per row", () => {
     // Five KPIs at one per screen is five screens before any content.
     expect(code(css["base.css"] ?? "")).toMatch(/\.grid-tiles\s*\{[^}]*auto-fit/);

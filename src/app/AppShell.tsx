@@ -72,7 +72,8 @@ export function AppShell({ view, onNavigate, user, children }: AppShellProps) {
             <span className="crumb-current">{current?.label ?? "CRM"}</span>
           </nav>
           <span className="grow" />
-          <span className="topbar-crumb mono">FY 2026-27</span>
+          <input className="topsearch" type="search" placeholder="Search customers, quotations, orders…" aria-label="Search" />
+          <span className="topbar-crumb">FY 2026-27</span>
         </header>
         {children}
       </div>

@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from "react";
+import type { ButtonHTMLAttributes, CSSProperties, InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from "react";
 
 /* The shared component library. Presentational only — nothing here reaches
    for domain logic or data. Every visual decision resolves to a token. */
@@ -113,20 +113,41 @@ export function StatTile({ label, value, meta, tone, onClick }: StatTileProps) {
     </>
   );
   if (!onClick) return <div className="tile">{body}</div>;
+  return <button type="button" className="tile" onClick={onClick}>{body}</button>;
+}
+
+/**
+ * The headline figures, read as one instrument divided by hairlines rather
+ * than as a row of floating cards. Columns are set here so the dividing
+ * rules land correctly when it wraps.
+ */
+export function SummaryBar({ children, columns }: { children: ReactNode; columns: number }) {
+  /* The count travels as a custom property, not as an inline
+     grid-template-columns. An inline declaration wins over every media
+     query, which pinned five columns onto a 390px phone and wrapped every
+     figure mid-value. */
   return (
-    <button type="button" className="tile" style={{ textAlign: "left", cursor: "pointer", font: "inherit" }} onClick={onClick}>
-      {body}
-    </button>
+    <div className="summary" style={{ "--summary-cols": columns } as CSSProperties}>
+      {children}
+    </div>
   );
 }
 
 /* ── chip ──────────────────────────────────────────────────────────────
    State only. A chip that means nothing is noise, and it dilutes the ones
    that do. The dot carries the state for anyone who cannot separate hues. */
-export interface ChipProps { tone?: Tone; dot?: boolean; children: ReactNode }
-export function Chip({ tone = "neutral", dot = true, children }: ChipProps) {
+export interface ChipProps {
+  tone?: Tone;
+  dot?: boolean;
+  /** Tinted background. Reserve it for where a state is the subject of the
+   *  screen — down a status column, forty tinted lozenges are the loudest
+   *  thing on the page and none of them means more than the others. */
+  solid?: boolean;
+  children: ReactNode;
+}
+export function Chip({ tone = "neutral", dot = true, solid = false, children }: ChipProps) {
   return (
-    <span className={cx("chip", `chip-${tone}`)}>
+    <span className={cx("chip", `chip-${tone}`, solid && "chip-solid")}>
       {dot ? <span className="chip-dot" /> : null}
       {children}
     </span>

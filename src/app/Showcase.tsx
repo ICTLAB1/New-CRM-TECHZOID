@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { AppShell, PageHead } from "./AppShell";
-import { Button, Card, Chip, Empty, Field, Input, Meter, Select, StatTile, Tabs, Textarea } from "../components/primitives";
+import { Button, Card, Chip, Empty, Field, Input, Meter, Select, StatTile, SummaryBar, Tabs, Textarea } from "../components/primitives";
 import { Confirm, Modal } from "../components/Modal";
 import { ToastProvider, useToast } from "../components/Toast";
-import { inr, inrShort } from "../domain/currency/format";
+import { inr, inrList, inrShort } from "../domain/currency/format";
 
 /**
  * A single screen exercising every component in the system, used to review
@@ -40,15 +40,17 @@ function Body() {
         }
       />
 
-      <div className="grid grid-tiles" style={{ marginBottom: "var(--gap-block)" }}>
-        <StatTile label="Open pipeline" value={inrShort(24_860_000)} meta="18 deals" />
-        <StatTile label="Won this month" value={inrShort(4_120_000)} meta="6 deals" tone="good" />
-        <StatTile label="Quotes pending" value="11" meta="3 past validity" />
-        <StatTile label="Payments due" value={inrShort(1_860_400)} meta="2 overdue" tone="bad" />
-        <StatTile label="Renewals ≤30 days" value="7" meta="₹3.1 L at risk" tone="warn" />
+      <div style={{ marginBottom: "var(--gap-wide)" }}>
+        <SummaryBar columns={5}>
+          <StatTile label="Open pipeline" value={inrShort(24_860_000)} meta="18 deals" />
+          <StatTile label="Won this month" value={inrShort(4_120_000)} meta="6 deals" tone="good" />
+          <StatTile label="Quotes pending" value="11" meta="3 past validity" />
+          <StatTile label="Payments due" value={inrShort(1_860_400)} meta="2 overdue" tone="bad" />
+          <StatTile label="Renewals ≤30 days" value="7" meta="₹3.1 L at risk" tone="warn" />
+        </SummaryBar>
       </div>
 
-      <div className="grid grid-3" style={{ marginBottom: "var(--gap-block)", alignItems: "start" }}>
+      <div className="grid grid-3" style={{ marginBottom: "var(--gap-wide)" }}>
         <Card edge="bad" title="Overdue proforma">
           <div className="label">Vertex Analytics Pvt Ltd</div>
           <div className="value-lg">{inr(486000)}</div>
@@ -103,7 +105,7 @@ function Body() {
                   <td>{q.owner}</td>
                   <td><Chip tone={q.tone}>{q.status}</Chip></td>
                   <td className="muted">{q.due}</td>
-                  <td className="num strong">{inr(q.value)}</td>
+                  <td className="num strong">{inrList(q.value)}</td>
                 </tr>
               ))}
             </tbody>
@@ -158,9 +160,14 @@ function Body() {
               <Chip tone="bad">Lost</Chip>
               <Chip tone="neutral">Expired</Chip>
             </div>
-            <div className="field-hint" style={{ marginTop: 12 }}>
+            <div className="field-hint" style={{ marginTop: 10 }}>
               Green means won or paid, amber means it needs attention, red means overdue or lost.
               Nothing else is coloured.
+            </div>
+            <div className="label" style={{ marginTop: 16 }}>Filled — reserved for where a state is the subject</div>
+            <div className="row-tight wrap">
+              <Chip solid tone="bad">Overdue</Chip>
+              <Chip solid tone="good">Paid in full</Chip>
             </div>
           </Card>
           <Card padded={false}>
