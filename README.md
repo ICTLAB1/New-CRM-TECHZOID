@@ -18,7 +18,7 @@ before the next.
 |---|-------|-------|
 | 1 | Project structure, TypeScript, database layer, auth, RLS | data layer + schema done; auth UI pending |
 | 2 | Domain logic — tax, currency, numbering — with tests | **done, parity-verified against v1** |
-| 3 | PDF generation, verified by rendering images | not started |
+| 3 | PDF generation, verified by rendering images | **done, compared against v1's own renderer** |
 | 4 | Design system and shell | not started |
 | 5 | Customers and pipeline | not started |
 | 6 | Quotations and proformas with live preview | not started |
@@ -52,6 +52,8 @@ src/
     catalog/       Excel/CSV price-list parsing
     payments/      payment ledger derivation
     geo/           states (with GST codes), countries
+    documents/     the shared document model — what a document SAYS
+  documents/pdf/   the jsPDF renderer — geometry only
   data/            Supabase client, entity sync, legacy normalisation
   components/      shared component library            (stage 4)
   features/        feature folders                     (stages 5-10)
@@ -96,3 +98,24 @@ The reference is extracted verbatim from v1, never retyped:
 ```bash
 scripts/extract-v1-reference.sh /path/to/v1/src/App.jsx
 ```
+
+## Verifying the PDF
+
+Never by measuring coordinates — that gave false results repeatedly in v1,
+both false failures and missed real problems. Render it and look at it:
+
+```bash
+npx tsx scripts/render-sample.ts          # writes tmp/*.pdf
+pdftoppm -png -r 110 tmp/quotation.pdf tmp/quotation
+node scripts/compare-v1-pdf.mjs           # same doc through v1's own renderer
+```
+
+`compare-v1-pdf.mjs` renders the identical document through the extracted v1
+generator, diffs the extracted text, and pixel-diffs the rasterised page. A
+concentrated block of differing pixels in one row band is a real difference;
+scattered single pixels are anti-aliasing. Then **look at both images** — the
+numbers are a filter, not the verdict.
+
+This caught a live regression: the Disc. and Tax % columns were rendering
+`12.0 / 0` and `18 / %`, wrapped mid-value, because their cell padding had
+been derived from a style bucket instead of carried as a measured value.

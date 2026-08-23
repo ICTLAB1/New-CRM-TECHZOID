@@ -69,3 +69,39 @@ with a test that pins the new behaviour.
   OAuth redirect URI points at `/.netlify/functions/ms-oauth-callback`. That
   path is load-bearing outside this repository.
 - **Tax, currency and document-numbering behaviour.** Guarded by parity tests.
+
+## The document renderers
+
+A document is described once and drawn twice:
+
+```
+domain/documents/model.ts    what the document SAYS  ─┬─▶ documents/pdf/     (jsPDF, millimetres)
+domain/documents/columns.ts  the items table          └─▶ features/…/preview (React, CSS)
+```
+
+The brief's requirement is that the preview and the PDF share one
+implementation, because they drifted apart in v1 and it took a byte-level
+comparison to catch. Literal component sharing is impossible — one draws into
+a PDF canvas, the other into the DOM — so the split is drawn at the only place
+drift actually hurts: **every decision about content lives in the model**, and
+a renderer owns nothing but geometry and drawing primitives.
+
+That means labels, figures, row order, section order and visibility, column
+selection, and money formatting are all resolved once, in
+`buildDocumentModel()`. A renderer that computes any of those locally has
+re-opened the bug.
+
+`columns.ts` carries width, type size, padding, alignment and the cell getter
+for every column. All of it is measured, and the three metrics only work as a
+set: a narrow column at default padding wraps mid-number. The PDF renderer
+consumes those values directly rather than deriving them — it did derive them
+briefly, and produced `12.0 / 0` in the Disc. column, caught by rendering the
+page and looking at it.
+
+### Not yet ported
+
+v1's opt-in free-canvas layout (`canvasQuotation` / `canvasProforma`, where
+each block is dragged to its own millimetre coordinates) is not implemented
+here yet. It ships disabled by default in v1, so classic stacked flow is the
+behaviour every live document currently uses. It needs porting before v2 can
+replace v1 for anyone who has switched it on.
