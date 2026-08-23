@@ -124,6 +124,55 @@ export const PROFORMAS: SalesDocument[] = [
   baseDoc({ id: "pf1", number: "TZ/PI/2627/0042", status: "Sent", advancePercent: 50, paymentHistory: [] }),
 ];
 
+import type { SalesOrder, DeliveryChallan } from "../domain/orders/create";
+import type { Subscription } from "../domain/subscriptions/expiry";
+
+export const ORDERS: SalesOrder[] = [
+  { id: "o1", number: "TZ/SO/2627/0011", ownerId: "u-priyanshi", customerId: "c1", proformaId: "pf1", proformaNumber: "TZ/PI/2627/0042", poNumber: "PO/ABC/2425/078",
+    billName: "Acme Manufacturing India Pvt Ltd", billAddress: "Plot 88, Sector 63, New Delhi", billState: "Delhi", billContact: "Rajesh Kumar", billPhone: "+91 98100 12345",
+    shipName: "Acme Manufacturing India Pvt Ltd", shipAddress: "Plot 88, Sector 63, New Delhi", shipState: "Delhi", shipContact: "Rajesh Kumar", shipPhone: "+91 98100 12345",
+    currency: "INR", taxType: "gst", stage: "procurement", date: "2026-08-20", roundOff: true,
+    items: [
+      { id: "oi1", desc: "Microsoft 365 Business Premium", qty: 25, unit: "User", rate: 18900, disc: 5, gst: 18 },
+      { id: "oi2", desc: "HP EliteBook 840 G11", qty: 10, unit: "Nos.", rate: 112500, disc: 8, gst: 18 },
+    ], createdAt: 0, updatedAt: 0 },
+  { id: "o2", number: "TZ/SO/2627/0010", ownerId: "u-rashmi", customerId: "c2", poNumber: "PO/NL/551",
+    billName: "Northline Logistics", billAddress: "Hinjewadi, Pune", billState: "Maharashtra", billContact: "Meera Iyer", billPhone: "+91 98220 11223",
+    shipName: "Northline Logistics", shipAddress: "Hinjewadi, Pune", shipState: "Maharashtra", shipContact: "Meera Iyer", shipPhone: "+91 98220 11223",
+    currency: "INR", taxType: "gst", stage: "dispatched", date: "2026-08-12", roundOff: true,
+    items: [{ id: "oi3", desc: "Acer Veriton Desktop", qty: 8, unit: "Nos.", rate: 46500, disc: 0, gst: 18 }],
+    createdAt: 0, updatedAt: 0 },
+  { id: "o3", number: "TZ/SO/2627/0008", ownerId: "u-priyanshi", customerId: "c7", poNumber: "",
+    billName: "Deccan Cements Limited", billAddress: "Banjara Hills, Hyderabad", billState: "Telangana", billContact: "V. Prakash", billPhone: "+91 90000 55555",
+    shipName: "Deccan Cements Limited", shipAddress: "Banjara Hills, Hyderabad", shipState: "Telangana", shipContact: "V. Prakash", shipPhone: "+91 90000 55555",
+    currency: "INR", taxType: "gst", stage: "delivered", date: "2026-07-28", roundOff: true,
+    items: [{ id: "oi4", desc: "Implementation & Migration Services", qty: 1, unit: "Project", rate: 376656, disc: 0, gst: 18 }],
+    createdAt: 0, updatedAt: 0 },
+];
+
+export const CHALLANS: DeliveryChallan[] = [
+  { id: "d1", number: "TZ/DC/2627/0004", ownerId: "u-priyanshi", orderId: "o1", orderNumber: "TZ/SO/2627/0011", poNumber: "PO/ABC/2425/078",
+    date: "2026-08-22", shipName: "Acme Manufacturing India Pvt Ltd", shipAddress: "Plot 88, Sector 63, New Delhi", shipState: "Delhi",
+    shipContact: "Rajesh Kumar", shipPhone: "+91 98100 12345",
+    items: [{ itemId: "oi1", qty: 25 }], courier: "Bluedart", trackingNo: "BD8829114411",
+    status: "In Transit", dispatchDate: "2026-08-22", expectedDeliveryDate: "2026-08-25", createdAt: 0, updatedAt: 0 },
+  { id: "d2", number: "TZ/DC/2627/0003", ownerId: "u-rashmi", orderId: "o2", orderNumber: "TZ/SO/2627/0010",
+    date: "2026-08-14", shipName: "Northline Logistics", shipAddress: "Hinjewadi, Pune", shipState: "Maharashtra",
+    shipContact: "Meera Iyer", shipPhone: "+91 98220 11223",
+    items: [{ itemId: "oi3", qty: 8 }], courier: "Delhivery", trackingNo: "DL5512907733",
+    status: "Delivered", dispatchDate: "2026-08-14", expectedDeliveryDate: "2026-08-18", deliveredDate: "2026-08-17", createdAt: 0, updatedAt: 0 },
+];
+
+export const SUBSCRIPTIONS: Subscription[] = [
+  { id: "s1", ownerId: "u-priyanshi", customerId: "c1", customerName: "Acme Manufacturing India Pvt Ltd", vendor: "Microsoft", product: "Microsoft 365 E3 (250 seats)", type: "Subscription", billing: "Annual", startDate: "2025-09-01", expiryDate: "2026-08-31", seats: 250, sellPrice: 1875000, status: "Active", renewalStage: "Quotation Sent" },
+  { id: "s2", ownerId: "u-rashmi", customerId: "c2", customerName: "Northline Logistics", vendor: "Kaspersky", product: "Endpoint Security Select (120 nodes)", type: "Subscription", billing: "Annual", startDate: "2025-08-28", expiryDate: "2026-08-27", seats: 120, sellPrice: 226800, status: "Active", renewalStage: "Reminder Sent" },
+  { id: "s3", ownerId: "u-priyanshi", customerId: "c7", customerName: "Deccan Cements Limited", vendor: "Autodesk", product: "AutoCAD LT (12 users)", type: "Subscription", billing: "3-Year", startDate: "2024-09-15", expiryDate: "2026-09-14", seats: 12, sellPrice: 513000, status: "Active", renewalStage: "Upcoming" },
+  { id: "s4", ownerId: "u-rashmi", customerId: "c4", customerName: "Vertex Analytics Pvt Ltd", vendor: "Adobe", product: "Creative Cloud for Teams (8 seats)", type: "Subscription", billing: "Annual", startDate: "2025-06-01", expiryDate: "2026-08-18", seats: 8, sellPrice: 448000, status: "Active", renewalStage: "Customer Contacted" },
+  { id: "s5", ownerId: "u-priyanshi", customerId: "c5", customerName: "Harbour Foods Pvt Ltd", vendor: "Microsoft", product: "Windows Server 2022 Standard", type: "Perpetual", startDate: "2024-03-11", sellPrice: 285000, status: "Perpetual License", renewalStage: "Upcoming" },
+  { id: "s6", ownerId: "u-rashmi", customerId: "c8", customerName: "Meridian Health Systems", vendor: "VMware", product: "vSphere Standard (4 hosts)", type: "Support Contract", billing: "Annual", startDate: "2025-11-02", expiryDate: "2026-11-01", seats: 4, sellPrice: 690000, status: "Active", renewalStage: "Upcoming" },
+  { id: "s7", ownerId: "u-priyanshi", customerId: "c3", customerName: "Sunrise Education Trust", vendor: "Microsoft", product: "M365 A3 for Faculty (60 seats)", type: "Subscription", billing: "Annual", startDate: "2025-07-01", expiryDate: "2026-06-30", seats: 60, sellPrice: 324000, status: "Expired", renewalStage: "Lost" },
+];
+
 export const CUSTOM_FIELDS = [
   { id: "cf-po", label: "PO portal / vendor code" },
   { id: "cf-terms", label: "Agreed credit terms" },

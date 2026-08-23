@@ -209,3 +209,40 @@ supplied badge wording unaltered. Asserted by test.
 `Cisco_Partner_Supplied_Reference.png` was cropped from a corporate signature
 image and is visibly upscaled — soft at print size. It renders acceptably at
 the strip's scale, but a vector or higher-resolution original would be better.
+
+---
+
+## 6. Renewals: two changes to how expiry reads
+
+### 6a. Days remaining is counted in calendar days
+
+v1 measured to 23:59:59 on the expiry date from the current clock time, so a
+subscription expiring **today** reported "1 day left" for most of the working
+day — read by a salesperson as a day of runway that does not exist. Counted in
+whole calendar days now, so the number means what its label says and gives the
+same answer whatever time it is asked. Pinned by test.
+
+### 6b. A lapsed licence reads as overdue, not as history
+
+v1 greyed out an expired subscription. That contradicted its own sort, which
+puts the most urgent first: a customer whose licence lapsed last week is
+unlicensed *today*, which is the most urgent row on the screen. Red means
+overdue everywhere else in this product, so it means overdue here.
+
+Renewals someone has explicitly marked **Lost** are excluded from the due list
+instead — otherwise the list stops being a to-do.
+
+---
+
+## 7. Three renewal screens became one
+
+v1 had a renewal dashboard, a renewal pipeline and a renewal calendar. All
+three read the same records and answered the same question — what is about to
+lapse, and what is it worth — so they are one screen with 7/30/90-day windows
+across the top.
+
+The calendar earned its place least: a list sorted by days remaining says the
+same thing in a tenth of the space, and a month grid cannot show the value at
+risk, which is the number that makes the list worth opening.
+
+Say the word if the calendar is used in practice and it comes back.

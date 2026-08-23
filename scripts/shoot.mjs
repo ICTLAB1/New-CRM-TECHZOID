@@ -27,7 +27,9 @@ async function shoot(name, viewport, navLabel, after) {
   const page = await browser.newPage({ viewport, deviceScaleFactor: 2 });
   await page.goto("http://localhost:4599/", { waitUntil: "networkidle" });
   if (navLabel) {
-    await page.getByRole("button", { name: navLabel, exact: true }).first().click();
+    /* Nav items with a badge have it in their accessible name ("Renewals 7"),
+       so match on the label rather than the whole string. */
+    await page.getByRole("button", { name: new RegExp(`^${navLabel}\\b`) }).first().click();
     await page.waitForTimeout(300);
   }
   if (after) await after(page);
@@ -54,6 +56,8 @@ await shoot("editor-items", { width: 1600, height: 1100 }, "Quotations", async (
   await page.getByRole("tab", { name: /Items/ }).click();
   await page.waitForTimeout(400);
 });
+await shoot("orders", DESKTOP, "Sales orders");
+await shoot("renewals", DESKTOP, "Renewals");
 await shoot("components", DESKTOP, "Components");
 await shoot("pipeline-phone", PHONE, null, async (page) => {
   await page.getByRole("button", { name: "Menu" }).click();

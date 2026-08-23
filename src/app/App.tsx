@@ -7,8 +7,14 @@ import { PipelineBoard } from "../features/pipeline/PipelineBoard";
 import { CustomerSheet } from "../features/customers/CustomerSheet";
 import { Showcase } from "./Showcase";
 import { QuotationsScreen } from "../features/quotations/QuotationsScreen";
+import { OrdersScreen } from "../features/orders/OrdersScreen";
+import { DispatchScreen } from "../features/orders/DispatchScreen";
+import { RenewalsScreen } from "../features/subscriptions/RenewalsScreen";
+import type { SalesOrder, DeliveryChallan } from "../domain/orders/create";
+import type { Subscription } from "../domain/subscriptions/expiry";
 import {
-  BRAND_LOGOS, CATALOG, CUSTOMERS, CUSTOM_FIELDS, PROFORMAS, QUOTATIONS, SETTINGS, USERS, WORKSPACE,
+  BRAND_LOGOS, CATALOG, CHALLANS, CUSTOMERS, CUSTOM_FIELDS, ORDERS, PROFORMAS,
+  QUOTATIONS, SETTINGS, SUBSCRIPTIONS, USERS, WORKSPACE,
 } from "./demoData";
 import type { SalesDocument } from "../domain/documents/create";
 import type { Customer } from "../domain/customers/customer";
@@ -24,6 +30,9 @@ function Body() {
   const [quotations, setQuotations] = useState<SalesDocument[]>(QUOTATIONS);
   const [proformas, setProformas] = useState<SalesDocument[]>(PROFORMAS);
   const [settings, setSettings] = useState<Record<string, unknown>>(SETTINGS);
+  const [orders, setOrders] = useState<SalesOrder[]>(ORDERS);
+  const [challans, setChallans] = useState<DeliveryChallan[]>(CHALLANS);
+  const [subscriptions, setSubscriptions] = useState<Subscription[]>(SUBSCRIPTIONS);
   const user = USERS[0]!;
 
   return (
@@ -78,6 +87,17 @@ function Body() {
           currentUser={user}
           onChange={(docs, s) => { setProformas(docs); setSettings(s); }}
         />
+      ) : view === "orders" ? (
+        <OrdersScreen
+          orders={orders}
+          challans={challans}
+          settings={settings}
+          onChange={(o, c, s) => { setOrders(o); setChallans(c); setSettings(s); }}
+        />
+      ) : view === "dispatch" ? (
+        <DispatchScreen challans={challans} onChange={setChallans} />
+      ) : view === "subscriptions" || view === "renewals" ? (
+        <RenewalsScreen subscriptions={subscriptions} customers={customers} onChange={setSubscriptions} />
       ) : view === "components" ? (
         <Showcase />
       ) : (

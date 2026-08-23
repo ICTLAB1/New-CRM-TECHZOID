@@ -22,7 +22,7 @@ before the next.
 | 4 | Design system and shell | **done** |
 | 5 | Customers and pipeline | **done** |
 | 6 | Quotations and proformas with live preview | **done** |
-| 7 | Orders, dispatch, subscriptions, renewals | not started |
+| 7 | Orders, dispatch, subscriptions, renewals | **done** |
 | 8 | Dashboard and reports | not started |
 | 9 | Integrations — email, Microsoft OAuth, WhatsApp, AI | not started |
 | 10 | Settings, team management, catalog | not started |
