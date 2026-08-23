@@ -37,6 +37,7 @@ export const NAV: NavSection[] = [
       { id: "reports", label: "Reports" },
       { id: "activity", label: "Activity" },
       { id: "assistant", label: "Assistant" },
+      { id: "incentives", label: "Incentives" },
     ],
   },
   {

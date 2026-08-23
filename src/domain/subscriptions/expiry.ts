@@ -43,6 +43,10 @@ export interface Subscription {
   status?: string;
   renewalStage?: string;
   notes?: string;
+  createdAt?: number;
+  /* When the row last changed. Incentive schemes date a renewal by this,
+     which is the only thing in the record that says WHEN it was renewed. */
+  updatedAt?: number;
 }
 
 /**

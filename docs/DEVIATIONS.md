@@ -376,3 +376,101 @@ user's snapshot contains their own customers and not a colleague's.
 The assistant is also told to say when the snapshot does not contain an answer
 rather than produce a figure, and every suggested question is one the snapshot
 can actually answer.
+
+---
+
+## 10. Settings, team and catalog
+
+### 10a. A catalog import saves before it reports
+
+v1 parsed a workbook, showed a summary of what it had found, and left the
+products in component state. Closing the dialog threw the entire import away —
+silently, after telling you it had worked.
+
+Here the parse and the save are one action, and the report describes something
+that has already happened. The summary now says how many were saved and how
+many products from other vendors were left alone.
+
+### 10b. Every sheet still reports back
+
+Carried over from the parser, and surfaced properly: a sheet that contributed
+nothing lists the column names it actually has, so an unreadable price list can
+be diagnosed from the screen rather than by sending the file to a developer.
+
+### 10c. Priceless products stay available
+
+Stated on the product form itself, next to the switch someone might otherwise
+flip: a product with no price stays in the picker. Marking priceless products
+inactive emptied the picker for anyone whose list quotes price on request.
+
+### 10d. Custom fields have one definition
+
+v1 kept the customer form's extra fields in a constant and edited them in
+settings — two lists that could disagree. There is now one, in the settings
+row, read by both.
+
+### 10e. Removing the last Admin is refused in the interface too
+
+The server already refuses it (§8g). The role selector disables the change as
+well, so the answer arrives before the round trip rather than after it.
+
+### 10f. Incentive arithmetic is unchanged, deliberately
+
+Two things in v1's payout calculation look like bugs and have been kept:
+
+- a **Percentage** payout is a percentage of *revenue* whatever metric the slab
+  is measured on — a slab on "Deals Won" at 2% pays 2% of revenue;
+- a slab's **bonus is added on top of** its payout, not instead of it.
+
+Both are how every payout already made was worked out. Changing either would
+silently restate what somebody is owed. They are pinned by test with those
+exact words, so a future reader does not "fix" them.
+
+### 10g. Settings commit on Save, never as you type
+
+Each panel edits a draft and writes on Save, with a visible "not saved yet" and
+a discard. A settings row that updates on every keystroke is how a company name
+gets stored as "TechZoid Technologies Priv" when someone is called away
+mid-edit — and that name prints on documents a customer's auditor may read.
+
+### 10h. Restoring a backup will not empty a list the file lacks
+
+A backup written by an older version has fewer lists in it. Restore replaces
+only the lists the file actually contains; anything missing is left alone
+rather than being emptied. The confirmation counts each list before replacing
+anything.
+
+### 10i. Every label now names its control
+
+Found while automating a check of the catalog import: no form in the app bound
+a `<label>` to its input. Clicking a label focused nothing, and a screen reader
+announced an unnamed box on every field in the product form, the customer
+sheet, the document editor and settings.
+
+`Field` now generates an id and hands it to the control it wraps, so all of
+them are fixed at once and a new form cannot reintroduce it. Pinned by test,
+including the case where the caller sets its own id.
+
+---
+
+## 11. Two v1 screens ported in full
+
+### 11a. Incentives
+
+`calcMetrics` and `computePayout` carried over with the arithmetic unchanged
+(see §10f), plus one addition: the screen names the nearest slab still out of
+reach and how far away it is, instead of showing a zero and leaving someone to
+work out why.
+
+### 11b. The activity timeline
+
+Notes people typed and records the app created, merged into one stream, newest
+first, grouped by day and filterable by kind, customer, person and how far
+back. Same scoping rule as everywhere else: a Sales user sees their own work.
+
+Two small corrections to v1's version:
+
+- a challan takes its customer and owner from the order it belongs to, rather
+  than showing nothing for both;
+- a record with no timestamp is grouped as **Undated** rather than filed under
+  1 January 1970.

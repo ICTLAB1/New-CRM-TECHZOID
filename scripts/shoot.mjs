@@ -79,6 +79,31 @@ await shoot("doc-invoicing", { width: 1600, height: 1100 }, "Quotations", async 
   await page.getByRole("button", { name: /Send for invoicing/ }).click();
   await page.waitForTimeout(400);
 });
+await shoot("catalog", DESKTOP, "Product catalog");
+await shoot("catalog-import", DESKTOP, "Product catalog", async (page) => {
+  await page.getByRole("button", { name: /Import a price list/ }).first().click();
+  await page.waitForTimeout(400);
+});
+await shoot("team", DESKTOP, "Team");
+await shoot("team-add", DESKTOP, "Team", async (page) => {
+  await page.getByRole("button", { name: /Add someone/ }).click();
+  await page.waitForTimeout(400);
+});
+await shoot("settings", DESKTOP, "Settings");
+await shoot("settings-document", DESKTOP, "Settings", async (page) => {
+  await page.getByRole("tab", { name: /Document/ }).click();
+  await page.waitForTimeout(400);
+});
+await shoot("settings-numbering", DESKTOP, "Settings", async (page) => {
+  await page.getByRole("tab", { name: /Numbering/ }).click();
+  await page.waitForTimeout(400);
+});
+await shoot("settings-incentives", DESKTOP, "Settings", async (page) => {
+  await page.getByRole("tab", { name: /Incentives/ }).click();
+  await page.waitForTimeout(400);
+});
+await shoot("incentives", DESKTOP, "Incentives");
+await shoot("activity", DESKTOP, "Activity");
 await shoot("integrations-phone", PHONE, null, async (page) => {
   await page.getByRole("button", { name: "Menu" }).click();
   await page.waitForTimeout(250);

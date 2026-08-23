@@ -404,3 +404,44 @@ button.tile:hover { background: var(--surface-2); }
    twelve-character variable name reads as an empty text field. */
 .copy-row.compact code { flex: 0 0 auto; }
 .copy-row.compact .field-hint { flex: 1; min-width: 0; }
+
+/* An identifier typed into a field — GSTIN, PAN, CIN, IFSC. Monospaced so a
+   transposed character is visible while it is being typed, which is the only
+   moment anyone will catch it. `.mono` alone loses to `.input`. */
+.input.mono { font-family: var(--mono); }
+
+/* ── activity timeline ─────────────────────────────────────────────────
+   A single column with the time in its own gutter, so a day's events read
+   down one line rather than as a stack of cards. The rule is continuous
+   between entries: it is what makes it a timeline rather than a list. */
+.timeline-day {
+  position: sticky; top: 0; z-index: 1;
+  margin: 18px 0 8px; padding: 6px 0;
+  background: var(--surface);
+  font-size: var(--t-small); font-weight: 600; color: var(--ink-3);
+  text-transform: uppercase; letter-spacing: 0.05em;
+}
+.timeline-row { display: grid; grid-template-columns: 62px 13px 1fr; gap: 10px; align-items: start; }
+.timeline-time { padding-top: 2px; font-size: var(--t-small); color: var(--ink-4); text-align: right; white-space: nowrap; }
+.timeline-mark { position: relative; align-self: stretch; }
+.timeline-mark::before {
+  content: ""; position: absolute; left: 5px; top: 0; bottom: 0;
+  width: 1px; background: var(--rule);
+}
+.timeline-mark::after {
+  content: ""; position: absolute; left: 2px; top: 6px;
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--surface); border: 1.5px solid var(--rule-strong);
+}
+.timeline-row:last-child .timeline-mark::before { bottom: auto; height: 10px; }
+.timeline-body { padding-bottom: 16px; min-width: 0; }
+.timeline-detail { margin-top: 3px; font-size: var(--t-body); color: var(--ink-2); line-height: 1.6; }
+
+/* A search box with pickers beside it. Each picker keeps a sensible width
+   and they wrap as a group; left to themselves, selects in a flex row each
+   claim a whole line. */
+.filter-row { display: flex; flex-wrap: wrap; gap: var(--gap); align-items: center; }
+.filter-row > .select { flex: 1 1 150px; max-width: 220px; }
+@media (max-width: 720px) {
+  .filter-row > .select { max-width: none; }
+}

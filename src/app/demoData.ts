@@ -5,10 +5,10 @@ import type { Workspace } from "../domain/customers/cascade";
  *  Not shipped: nothing imports this outside the demo app entry. */
 
 export const USERS = [
-  { id: "u-abhinav", name: "Abhinav Jain", role: "Admin" },
-  { id: "u-priyanshi", name: "Priyanshi Sharma", role: "Sales" },
-  { id: "u-rashmi", name: "Rashmi Verma", role: "Sales" },
-  { id: "u-kuldeep", name: "Kuldeep Kumar", role: "Accounts" },
+  { id: "u-abhinav", name: "Abhinav Jain", email: "abhinav@example.com", role: "Admin" },
+  { id: "u-priyanshi", name: "Priyanshi Sharma", email: "priyanshi@example.com", role: "Sales" },
+  { id: "u-rashmi", name: "Rashmi Verma", email: "rashmi@example.com", role: "Sales" },
+  { id: "u-kuldeep", name: "Kuldeep Kumar", email: "kuldeep@example.com", role: "Accounts" },
 ];
 
 const day = (offset: number): string => {
@@ -77,6 +77,25 @@ export const SETTINGS: Record<string, unknown> = {
      code so it can be changed without a deploy. */
   invoicingEmail: "accounts@techzoidtechnologies.com",
   invoicingCc: "",
+
+  /* One live scheme, so the Incentives screen has something to show. */
+  incentiveSchemes: [{
+    id: "sch-q", name: "Quarterly sales incentive",
+    description: "Paid on business won in the quarter, plus a bonus for renewals kept.",
+    period: "Quarterly", active: true,
+    slabs: [
+      { id: "sl-1", metric: "Revenue", minTarget: 2_000_000, maxTarget: 0, payoutType: "Percentage", payoutValue: 1.5, bonusFlat: 0 },
+      { id: "sl-2", metric: "Deals Won", minTarget: 5, maxTarget: 0, payoutType: "Flat", payoutValue: 15_000, bonusFlat: 0 },
+      { id: "sl-3", metric: "Renewals", minTarget: 3, maxTarget: 0, payoutType: "Flat", payoutValue: 0, bonusFlat: 10_000 },
+    ],
+  }],
+
+  /* Extra fields on a customer record. They live in settings, not in code,
+     so Settings → Custom fields is the only place that defines them. */
+  customFields: [
+    { id: "cf-po", label: "PO portal / vendor code" },
+    { id: "cf-terms", label: "Agreed credit terms" },
+  ],
 };
 
 /** Brand logos for the items table, keyed by the brand name on a line. */
@@ -190,7 +209,3 @@ export const SUBSCRIPTIONS: Subscription[] = [
   { id: "s7", ownerId: "u-priyanshi", customerId: "c3", customerName: "Sunrise Education Trust", vendor: "Microsoft", product: "M365 A3 for Faculty (60 seats)", type: "Subscription", billing: "Annual", startDate: "2025-07-01", expiryDate: "2026-06-30", seats: 60, sellPrice: 324000, status: "Expired", renewalStage: "Lost" },
 ];
 
-export const CUSTOM_FIELDS = [
-  { id: "cf-po", label: "PO portal / vendor code" },
-  { id: "cf-terms", label: "Agreed credit terms" },
-];

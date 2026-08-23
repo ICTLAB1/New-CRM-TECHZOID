@@ -13,12 +13,18 @@ import { RenewalsScreen } from "../features/subscriptions/RenewalsScreen";
 import { DashboardScreen } from "../features/dashboard/DashboardScreen";
 import { ReportsScreen } from "../features/dashboard/ReportsScreen";
 import { IntegrationsScreen } from "../features/settings/IntegrationsScreen";
+import { SettingsScreen } from "../features/settings/SettingsScreen";
+import { CatalogScreen } from "../features/catalog/CatalogScreen";
+import { TeamScreen, type TeamMember } from "../features/team/TeamScreen";
+import { IncentivesScreen } from "../features/incentives/IncentivesScreen";
+import { ActivityScreen } from "../features/activity/ActivityScreen";
+import type { CatalogProduct } from "../domain/catalog/types";
 import { AssistantScreen } from "../features/assistant/AssistantScreen";
 import { integrations } from "../integrations";
 import type { SalesOrder, DeliveryChallan } from "../domain/orders/create";
 import type { Subscription } from "../domain/subscriptions/expiry";
 import {
-  BRAND_LOGOS, CATALOG, CHALLANS, CUSTOMERS, CUSTOM_FIELDS, DOC_IMAGES, ORDERS, PROFORMAS,
+  BRAND_LOGOS, CATALOG, CHALLANS, CUSTOMERS, DOC_IMAGES, ORDERS, PROFORMAS,
   QUOTATIONS, SETTINGS, SUBSCRIPTIONS, USERS, WORKSPACE,
 } from "./demoData";
 import type { SalesDocument } from "../domain/documents/create";
@@ -38,7 +44,13 @@ function Body() {
   const [orders, setOrders] = useState<SalesOrder[]>(ORDERS);
   const [challans, setChallans] = useState<DeliveryChallan[]>(CHALLANS);
   const [subscriptions, setSubscriptions] = useState<Subscription[]>(SUBSCRIPTIONS);
-  const user = USERS[0]!;
+  const [catalog, setCatalog] = useState<CatalogProduct[]>(CATALOG);
+  const [team, setTeam] = useState<TeamMember[]>(USERS);
+  const user = team[0] ?? USERS[0]!;
+  const isAdmin = user.role === "Admin";
+  /* Defined in Settings → Custom fields, so both the customer form and the
+     settings screen read one list. */
+  const customFields = (settings["customFields"] as { id: string; label: string }[] | undefined) ?? [];
 
   return (
     <AppShell view={view} onNavigate={setView} user={user}>
@@ -62,7 +74,7 @@ function Body() {
           customers={customers}
           workspace={workspace}
           users={USERS}
-          customFields={CUSTOM_FIELDS}
+          customFields={customFields}
           currentUser={user}
           onChange={(c, w) => { setCustomers(c); setWorkspace(w); }}
         />
@@ -77,7 +89,7 @@ function Body() {
             <CustomerSheet
               customer={editing}
               users={USERS}
-              customFields={CUSTOM_FIELDS}
+              customFields={customFields}
               canReassign
               onSave={(next) => { setCustomers((cur) => cur.map((c) => (c.id === next.id ? next : c))); setEditing(null); }}
               onClose={() => setEditing(null)}
@@ -89,7 +101,7 @@ function Body() {
           docType="quotation"
           documents={quotations}
           customers={customers}
-          catalog={CATALOG}
+          catalog={catalog}
           settings={settings}
           brandLogos={BRAND_LOGOS}
           docImages={DOC_IMAGES}
@@ -103,7 +115,7 @@ function Body() {
           docType="proforma"
           documents={proformas}
           customers={customers}
-          catalog={CATALOG}
+          catalog={catalog}
           settings={settings}
           brandLogos={BRAND_LOGOS}
           docImages={DOC_IMAGES}
@@ -136,6 +148,51 @@ function Body() {
           users={USERS}
           currentUser={user}
           settings={settings}
+        />
+      ) : view === "activity" ? (
+        <ActivityScreen
+          workspace={{ customers, quotations, proformas, orders, challans, subscriptions }}
+          users={team}
+          currentUser={user}
+          settings={settings}
+        />
+      ) : view === "catalog" ? (
+        <CatalogScreen catalog={catalog} canEdit={isAdmin} onChange={setCatalog} />
+      ) : view === "team" ? (
+        <TeamScreen api={integrations} members={team} currentUser={user} onChange={setTeam} />
+      ) : view === "incentives" ? (
+        <IncentivesScreen
+          workspace={{ customers, quotations, proformas, orders, challans, subscriptions }}
+          settings={settings}
+          users={team}
+          currentUser={user}
+        />
+      ) : view === "settings" ? (
+        <SettingsScreen
+          settings={settings}
+          canEdit={isAdmin}
+          onChange={setSettings}
+          workspaceForBackup={() => ({
+            customers, quotations, proformas, orders, challans, subscriptions, catalog, settings,
+          })}
+          onRestore={(data) => {
+            /* Whatever the file holds, one field at a time, each guarded —
+               a backup written by an older version is missing some of them,
+               and a missing list must leave what is here alone rather than
+               emptying it. */
+            const list = <T,>(key: string, current: T[]): T[] =>
+              Array.isArray(data[key]) ? (data[key] as T[]) : current;
+            setCustomers(list("customers", customers));
+            setQuotations(list("quotations", quotations));
+            setProformas(list("proformas", proformas));
+            setOrders(list("orders", orders));
+            setChallans(list("challans", challans));
+            setSubscriptions(list("subscriptions", subscriptions));
+            setCatalog(list("catalog", catalog));
+            if (data["settings"] && typeof data["settings"] === "object") {
+              setSettings((cur) => ({ ...cur, ...(data["settings"] as Record<string, unknown>) }));
+            }
+          }}
         />
       ) : view === "components" ? (
         <Showcase />

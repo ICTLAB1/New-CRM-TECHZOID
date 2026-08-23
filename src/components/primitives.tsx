@@ -1,4 +1,5 @@
-import type { ButtonHTMLAttributes, CSSProperties, InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from "react";
+import { Children, cloneElement, isValidElement, useId } from "react";
+import type { ButtonHTMLAttributes, CSSProperties, InputHTMLAttributes, ReactElement, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from "react";
 
 /* The shared component library. Presentational only — nothing here reaches
    for domain logic or data. Every visual decision resolves to a token. */
@@ -37,10 +38,36 @@ export interface FieldProps {
 }
 
 export function Field({ label, hint, error, htmlFor, children }: FieldProps) {
+  /* The label is bound to the control automatically.
+   *
+   * Every form in this app used to render a label with no `for`, so clicking
+   * a label focused nothing and a screen reader announced an unnamed box.
+   * Rather than ask forty call sites to invent ids, Field generates one and
+   * hands it to the first child that hasn't got one. Pass `htmlFor` to
+   * override — a Field wrapping something that isn't a single control still
+   * needs to say what it is labelling. */
+  const generated = useId();
+  const id = htmlFor ?? generated;
+
+  let control: ReactNode = children;
+  /* Whatever the label ends up pointing at: the child's own id if it has
+     one, otherwise the id we gave it. */
+  let target = id;
+  if (!htmlFor) {
+    let claimed = false;
+    control = Children.map(children, (child) => {
+      if (claimed || !isValidElement(child)) return child;
+      claimed = true;
+      const existing = (child.props as { id?: string }).id;
+      if (existing) { target = existing; return child; }
+      return cloneElement(child as ReactElement<{ id?: string }>, { id });
+    });
+  }
+
   return (
     <div>
-      {label ? <label className="label" htmlFor={htmlFor}>{label}</label> : null}
-      {children}
+      {label ? <label className="label" htmlFor={target}>{label}</label> : null}
+      {control}
       {error ? <div className="field-msg">{error}</div> : hint ? <div className="field-hint">{hint}</div> : null}
     </div>
   );

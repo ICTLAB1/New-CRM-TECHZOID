@@ -160,3 +160,18 @@ each block is dragged to its own millimetre coordinates) is not implemented
 here yet. It ships disabled by default in v1, so classic stacked flow is the
 behaviour every live document currently uses. It needs porting before v2 can
 replace v1 for anyone who has switched it on.
+
+## Where a setting lives
+
+One `settings` row holds everything configurable, and it is the only
+definition of each thing in it. Two rules keep it that way:
+
+- **No constant shadows a setting.** The customer form's extra fields were a
+  constant in v1 *and* a settings value — two lists that could disagree. There
+  is one now, and the form reads it.
+- **A default belongs in `domain/`, not in a screen.** `DOMESTIC_TERMS`,
+  `DEFAULT_DOC_TEMPLATE`, `DEFAULT_PARTNER_DESIGNATIONS` and the rest are
+  values the domain can fall back to when the settings row has nothing, so a
+  half-filled settings row can never produce an undefined label at render time.
+
+Settings panels edit a draft and commit on Save. Nothing writes as you type.
