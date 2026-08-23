@@ -127,7 +127,9 @@ pdftoppm -png -r 110 tmp/quotation.pdf tmp/quotation
 node scripts/compare-v1-pdf.mjs           # same doc through v1's own renderer
 ```
 
-The approved design pack lives in [`docs/quotation-design/`](docs/quotation-design/).
+The approved design pack lives in [`docs/quotation-design/`](docs/quotation-design/),
+and the supplied brand/ISO artwork in [`brand-assets/`](brand-assets/) — run
+`node scripts/build-brand-assets.mjs` to re-embed it after changing a file.
 `scripts/render-sample.ts` writes the full check set the spec requires — 1, 5,
 10, 20 and 50 line items, inter-state IGST, zero tax, an AED export, a minimal
 record with optional fields missing, and a proforma.

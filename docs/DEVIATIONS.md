@@ -163,3 +163,49 @@ No badge, partner designation or certification is ever drawn from nothing.
   existing discipline is `round2()` at every step, which is what v1 does and
   what those tests hold. Introducing a decimal library would change results.
   Revisit only with the parity suite as the check.
+
+---
+
+## 5. Supplied brand and ISO assets
+
+Source files and the supplier's usage README live in `brand-assets/`;
+`scripts/build-brand-assets.mjs` trims, downscales and embeds them as data
+URIs in `src/assets/brandAssets.ts`. Seed values for the settings record are
+in `src/domain/documents/brandDefaults.ts`.
+
+### 5a. The third certification was wrong in the supplied strip
+
+`ISO_Certifications_Supplied_Reference.png` names the third certification
+**"ISO 22000-1:2018 — Food Safety Management System"**. The design spec and
+the individual asset filename both name **ISO/IEC 20000-1:2018 — IT Service
+Management System**. These are unrelated standards, and a food-safety claim on
+an IT quotation would be false.
+
+Confirmed with the owner as **ISO/IEC 20000-1:2018, IT Service Management
+System**. Pinned by test, which also asserts no certification mentions 22000
+or food safety.
+
+### 5b. The individual ISO badges are drawn, not pasted
+
+All three supplied ISO PNGs are broken artwork: the standard number overflows
+its ring, is clipped at the image edge, and collides with the caption text.
+Verified programmatically — `ISO_9001_2015.png` has ink touching the left
+edge, `ISO_IEC_20000-1_2018.png` the left and right.
+
+The renderer draws the ring, number, title and scope instead. It is crisp at
+any size, prints the scope in full, and lets the third certification be
+corrected without new artwork. An explicitly configured asset still wins, so
+approved badges can replace this when supplied.
+
+### 5c. HP and Acer are logos, not partner designations
+
+`brand-assets/README.md` is explicit: no approved HP or Acer partner badge was
+supplied, so neither may be captioned as a partner. They appear as plain brand
+logos among the technology partners. Microsoft, Adobe and Cisco keep their
+supplied badge wording unaltered. Asserted by test.
+
+### 5d. Asset quality note
+
+`Cisco_Partner_Supplied_Reference.png` was cropped from a corporate signature
+image and is visibly upscaled — soft at print size. It renders acceptably at
+the strip's scale, but a vector or higher-resolution original would be better.

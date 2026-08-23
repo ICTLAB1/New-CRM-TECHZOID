@@ -36,9 +36,30 @@ export interface LogoCell {
 /** One cell of the four-across reference strip under the party grid. */
 export interface RefCell { label: string; value: string }
 
-/** A logo slot. `src` is present only when an approved asset is configured;
- *  otherwise the renderer prints `text` and never fabricates a badge. */
-export interface LogoSlot { text: string; src?: string | null; caption?: string }
+/** A slot in one of the footer strips.
+ *
+ *  `src` is present only when an approved asset is configured; otherwise the
+ *  renderer prints `text`, and never fabricates a badge.
+ *
+ *  `medallion` marks a certification the renderer draws natively — the ring
+ *  with the standard number inside it, the title beside it. The supplied ISO
+ *  PNGs had the number overflowing its circle and colliding with the caption,
+ *  and drawing it is both crisp at any size and correctable without new
+ *  artwork. */
+export interface LogoSlot {
+  text: string;
+  src?: string | null;
+  caption?: string;
+  medallion?: string;
+  /** Natural pixel size, so the renderer can preserve the aspect ratio. */
+  w?: number;
+  h?: number;
+}
+
+/** "ISO/IEC 27001:2022" -> "27001:2022", for the ring. */
+export function medallionNumber(label: string): string {
+  return label.replace(/^ISO(\/IEC)?\s*/i, "").trim();
+}
 
 export interface DocumentModel {
   docType: DocType;
@@ -373,22 +394,29 @@ export function buildDocumentModel(input: BuildModelInput): DocumentModel {
   };
 
   /* ---- footer ---- */
-  const toSlots = (list: unknown, textKey = "label", srcKey = "logo"): LogoSlot[] =>
+  const toSlots = (list: unknown, opts: { medallion?: boolean } = {}): LogoSlot[] =>
     (Array.isArray(list) ? list : [])
       .map((x) => {
         const item = x as Record<string, unknown>;
-        return {
-          text: String(item[textKey] ?? item["name"] ?? "").trim(),
-          src: (item[srcKey] as string) ?? (item["data"] as string) ?? null,
+        const text = String(item["label"] ?? item["name"] ?? "").trim();
+        const slot: LogoSlot = {
+          text,
+          src: (item["logo"] as string) ?? (item["data"] as string) ?? null,
           caption: (item["caption"] as string) ?? undefined,
+          w: typeof item["w"] === "number" ? item["w"] : undefined,
+          h: typeof item["h"] === "number" ? item["h"] : undefined,
         };
+        /* Certifications are drawn, not pasted — see LogoSlot. An explicitly
+           supplied asset still wins, so approved artwork can replace this. */
+        if (opts.medallion && !slot.src) slot.medallion = medallionNumber(text);
+        return slot;
       })
       .filter((slot) => slot.text || slot.src);
 
   const strips = {
     designations: toSlots(s.partnerDesignations),
-    partners: toSlots(s.brandingLogos, "label", "data"),
-    certifications: toSlots(s.certLogos),
+    partners: toSlots(s.brandingLogos),
+    certifications: toSlots(s.certLogos, { medallion: true }),
   };
 
   const footer = {

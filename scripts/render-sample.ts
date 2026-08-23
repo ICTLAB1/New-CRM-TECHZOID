@@ -15,6 +15,9 @@ import { buildDocumentModel } from "../src/domain/documents/model";
 import { DEFAULT_DOC_TEMPLATE } from "../src/domain/documents/template";
 import { DOMESTIC_TERMS } from "../src/domain/documents/terms";
 import { renderDocumentPdf } from "../src/documents/pdf/render";
+import {
+  DEFAULT_CERTIFICATIONS, DEFAULT_PARTNER_DESIGNATIONS, DEFAULT_TECHNOLOGY_PARTNERS,
+} from "../src/domain/documents/brandDefaults";
 
 const settings = {
   company: {
@@ -28,21 +31,9 @@ const settings = {
   },
   signatoryName: "Abhinav Jain",
   signatoryDesignation: "Managing Director",
-  /* No approved badge assets are configured here, so every slot falls back
-     to its name. Nothing is fabricated. */
-  partnerDesignations: [
-    { label: "Microsoft Solutions Partner" },
-    { label: "Adobe Certified Reseller" },
-  ],
-  brandingLogos: [
-    { label: "HP" }, { label: "Lenovo" }, { label: "Dell Technologies" },
-    { label: "Autodesk" }, { label: "Zoho" },
-  ],
-  certLogos: [
-    { label: "ISO 9001:2015", caption: "Quality Management" },
-    { label: "ISO/IEC 27001:2022", caption: "Information Security" },
-    { label: "ISO/IEC 20000-1:2018", caption: "IT Service Management" },
-  ],
+  partnerDesignations: DEFAULT_PARTNER_DESIGNATIONS,
+  brandingLogos: DEFAULT_TECHNOLOGY_PARTNERS,
+  certLogos: DEFAULT_CERTIFICATIONS,
 };
 
 const CATALOG = [

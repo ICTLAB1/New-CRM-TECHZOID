@@ -54,9 +54,10 @@ export interface RenderOptions {
 const A4 = { w: 210, h: 297 };
 const M = 13;
 const CW = A4.w - M * 2;
-/* The closing line sits at A4.h-8 above a rule at A4.h-12. Reserving 20mm
-   for a 12mm band cost a whole page on short quotations. */
-const FOOT_RESERVE = 15;
+/* The closing line sits at A4.h-8 above a rule at A4.h-12, so content may
+   run to A4.h-14 and no further. Reserving 20mm for a 12mm band cost a whole
+   page on short quotations; reserving too little collided with the rule. */
+const FOOT_RESERVE = 14;
 
 /* Palette, from the design tokens. */
 const NAVY = hexToRgb("#0D2B55");
@@ -392,16 +393,62 @@ export function renderDocumentPdf(opts: RenderOptions): jsPDF {
   }
 
   /* ─────────────────── partner / ISO strips ─────────────────── */
+  /** The ISO ring, drawn rather than pasted: the supplied badge PNGs had the
+   *  number overflowing its circle and colliding with the caption. */
+  function drawMedallion(cx: number, cy: number, r: number, number: string): void {
+    pdf.setDrawColor(...NAVY).setLineWidth(0.45);
+    pdf.circle(cx, cy, r, "S");
+    pdf.setLineWidth(0.18);
+    pdf.circle(cx, cy, r - 0.7, "S");
+    pdf.setFont("helvetica", "bold").setFontSize(r * 1.5).setTextColor(...NAVY);
+    pdf.text("ISO", cx, cy - r * 0.05, { align: "center" });
+    /* The number has to live inside the ring — shrink until it does. */
+    let size = r * 0.78;
+    while (size > 2) {
+      pdf.setFontSize(size);
+      /* The chord available at the number's height, not the full diameter —
+         measuring against the diameter let the widest standard touch the
+         inner ring. */
+      if (pdf.getTextWidth(number) <= (r - 0.7) * 1.35) break;
+      size -= 0.15;
+    }
+    pdf.text(number, cx, cy + r * 0.55, { align: "center" });
+  }
+
+  /**
+   * Shrink a string until it fits.
+   *
+   * `mode` matters: text drawn on ONE line must be measured whole, and text
+   * allowed to wrap need only fit its longest word. Measuring the longest
+   * word for a single-line label let "ISO/IEC 27001:2022" — two words that
+   * each fit — run straight into the next certification's ring.
+   */
+  function fitFont(text: string, maxW: number, start: number, mode: "line" | "wrap", floor = 3.4): number {
+    let size = start;
+    while (size > floor) {
+      pdf.setFontSize(size);
+      const measured = mode === "line"
+        ? pdf.getTextWidth(text)
+        : Math.max(...text.split(/\s+/).map((w) => pdf.getTextWidth(w)));
+      if (measured <= maxW) break;
+      size -= 0.15;
+    }
+    return size;
+  }
+
   function drawStrips(): void {
     const groups = [
-      { title: "TECHNOLOGY PARTNER DESIGNATIONS", slots: m.strips.designations, flex: 1.1 },
-      { title: "OUR TECHNOLOGY PARTNERS", slots: m.strips.partners, flex: 1.5 },
-      { title: "CERTIFIED MANAGEMENT SYSTEMS", slots: m.strips.certifications, flex: 1.2 },
+      { title: "TECHNOLOGY PARTNER DESIGNATIONS", slots: m.strips.designations, flex: 1.05 },
+      { title: "OUR TECHNOLOGY PARTNERS", slots: m.strips.partners, flex: 1.15 },
+      { title: "CERTIFIED MANAGEMENT SYSTEMS", slots: m.strips.certifications, flex: 1.5 },
     ].filter((g) => g.slots.length);
     if (!groups.length) return;
 
-    const stripH = 19;
-    need(stripH + 3);
+    const stripH = 20;
+    /* The design pack asks for the partner, certification and footer blocks
+       to stay together. Reserving only the strip's own height left a page
+       carrying nothing but the company footer. */
+    need(stripH + 3 + measureFooter().height);
     const top = y;
     const totalFlex = groups.reduce((a, g) => a + g.flex, 0);
 
@@ -412,40 +459,68 @@ export function renderDocumentPdf(opts: RenderOptions): jsPDF {
       const w = (CW * group.flex) / totalFlex;
       if (gi > 0) pdf.line(x, top, x, top + stripH);
 
-      pdf.setFont("helvetica", "bold").setFontSize(6).setTextColor(...NAVY);
-      pdf.text(group.title, x + w / 2, top + 4.2, { align: "center" });
+      pdf.setFont("helvetica", "bold").setFontSize(5.8).setTextColor(...NAVY);
+      pdf.text(group.title, x + w / 2, top + 4, { align: "center" });
 
-      /* Slots share the row evenly. A slot with an approved asset draws it
-         with its aspect ratio preserved; one without prints its name. Never
-         a fabricated badge or an invented certification. */
       const slotW = w / group.slots.length;
+      const bandTop = top + 6;
+      const bandH = stripH - 7;
+
       group.slots.forEach((slot: LogoSlot, si) => {
-        const cx = x + si * slotW + slotW / 2;
+        const sx = x + si * slotW;
+        const cx = sx + slotW / 2;
+
         if (slot.src) {
-          const box = fitBox({ w: 100, h: 34 }, slotW - 5, 8);
-          pdf.addImage(slot.src, "PNG", cx - box.w / 2, top + 6.5, box.w, box.h, undefined, "FAST");
-        } else {
-          /* Shrink to fit rather than break a brand name mid-word:
-             "Dell Tech / nologies" is worse than a smaller "Dell
-             Technologies". Steps down until the longest word fits. */
-          let size = 6.4;
-          pdf.setFont("helvetica", "bold");
-          while (size > 4.2) {
-            pdf.setFontSize(size);
-            const longest = Math.max(...slot.text.split(/\s+/).map((w) => pdf.getTextWidth(w)));
-            if (longest <= slotW - 3) break;
-            size -= 0.3;
+          /* Approved artwork, fitted with its aspect ratio preserved. */
+          /* Without a natural size the aspect ratio is unknown, so fall back
+             to filling the box rather than guessing and distorting. */
+          const natural = slot.w && slot.h ? { w: slot.w, h: slot.h } : null;
+          /* Cap the height well below the band. Fitting to the full band let
+             a square mark (HP) render at twice the optical weight of a wide
+             one (Acer) beside it, which reads as favouritism rather than as
+             aspect ratio being preserved. */
+          const box = fitBox(natural, slotW - 5, Math.min(bandH - 2, 8.5));
+          pdf.addImage(slot.src, "PNG", cx - box.w / 2, bandTop + (bandH - box.h) / 2, box.w, box.h, undefined, "FAST");
+          return;
+        }
+
+        if (slot.medallion) {
+          /* Ring on the left, standard and scope to its right. */
+          const r = 3.1;
+          const textX = sx + 2 + r * 2 + 1.5;
+          const textW = slotW - (textX - sx) - 2;
+          drawMedallion(sx + 2 + r, bandTop + bandH / 2, r, slot.medallion);
+
+          pdf.setFont("helvetica", "bold").setTextColor(...NAVY);
+          pdf.setFontSize(fitFont(slot.text, textW, 5.6, "line"));
+          pdf.text(slot.text, textX, bandTop + 4.6);
+
+          if (slot.caption) {
+            /* The scope must print in full. Truncating it turns "Quality
+               Management System" into "Quality Management", which names a
+               different thing from the certificate. Shrink and use the whole
+               band rather than dropping the last word. */
+            pdf.setFont("helvetica", "normal").setTextColor(...MUTED);
+            let capSize = 4.4;
+            let lines: string[] = [];
+            const maxLines = 3;
+            while (capSize > 3) {
+              pdf.setFontSize(capSize);
+              lines = pdf.splitTextToSize(slot.caption, textW) as string[];
+              if (lines.length <= maxLines) break;
+              capSize -= 0.15;
+            }
+            pdf.text(lines.slice(0, maxLines), textX, bandTop + 8);
           }
-          pdf.setTextColor(...INK);
-          const lines = pdf.splitTextToSize(slot.text, slotW - 3) as string[];
-          const start = top + (lines.length > 1 ? 9 : 10.5);
-          pdf.text(lines.slice(0, 2), cx, start, { align: "center" });
+          return;
         }
-        if (slot.caption) {
-          pdf.setFont("helvetica", "normal").setFontSize(4.9).setTextColor(...MUTED);
-          const cap = pdf.splitTextToSize(slot.caption, slotW - 3) as string[];
-          pdf.text(cap.slice(0, 2), cx, top + 15.5, { align: "center" });
-        }
+
+        /* No asset and not a certification: the name, shrunk to fit rather
+           than broken mid-word. */
+        pdf.setFont("helvetica", "bold").setTextColor(...INK);
+        pdf.setFontSize(fitFont(slot.text, slotW - 3, 6.4, "wrap", 4.2));
+        const lines = pdf.splitTextToSize(slot.text, slotW - 3) as string[];
+        pdf.text(lines.slice(0, 2), cx, bandTop + bandH / 2 + (lines.length > 1 ? -0.8 : 0.8), { align: "center" });
       });
       x += w;
     });
@@ -454,37 +529,52 @@ export function renderDocumentPdf(opts: RenderOptions): jsPDF {
   }
 
   /* ─────────────────────────── footer ─────────────────────────── */
-  function drawFooter(): void {
-    need(17);
-    rule(y, M, M + CW, NAVY, 0.5);
-    y += 5;
-    const top = y;
-
-    /* Explicit column widths. Drawing the legal name from the left margin
-       with no bound ran it straight through the phone number in the next
-       column — the company name is long and the columns were even thirds. */
+  /** Column geometry and measured height of the footer, computed before
+   *  anything is placed so the strips can reserve room for both. */
+  function measureFooter() {
     const nameW = CW * 0.44;
     const contactX = M + nameW + 4;
     const contactW = CW * 0.26;
     const regX = contactX + contactW + 4;
     const regW = M + CW - regX - (images.qr ? 20 : 0);
 
-    pdf.setFont("helvetica", "bold").setFontSize(7.6).setTextColor(...NAVY);
+    pdf.setFont("helvetica", "bold").setFontSize(7.6);
     const nameLines = pdf.splitTextToSize(m.footer.companyName.toUpperCase(), nameW) as string[];
+    pdf.setFont("helvetica", "normal").setFontSize(6.6);
+    const addressWrapped = m.footer.addressLines.map((l) => pdf.splitTextToSize(l, nameW) as string[]);
+    const contactWrapped = m.footer.contactBits.map((b) => pdf.splitTextToSize(b, contactW) as string[]);
+
+    const leftH = nameLines.length * 3.4 + 1 + addressWrapped.reduce((a, w) => a + w.length * 2.9, 0);
+    const contactH = contactWrapped.reduce((a, w) => a + w.length * 3.2, 0);
+    const regH = m.footer.registration.length * 3.9;
+    const height = 5 + Math.max(leftH, contactH, regH, images.qr ? 17 : 0) + 2;
+
+    return { nameW, contactX, contactW, regX, regW, nameLines, addressWrapped, contactWrapped, height };
+  }
+
+  function drawFooter(): void {
+    /* Explicit column widths. Drawing the legal name from the left margin
+       with no bound ran it straight through the phone number in the next
+       column — the company name is long and the columns were even thirds. */
+    const { contactX, regX, regW, nameLines, addressWrapped, contactWrapped, height } = measureFooter();
+
+    need(height);
+    rule(y, M, M + CW, NAVY, 0.5);
+    y += 5;
+    const top = y;
+
+    pdf.setFont("helvetica", "bold").setFontSize(7.6).setTextColor(...NAVY);
     pdf.text(nameLines, M, top);
     let ay = top + nameLines.length * 3.4 + 1;
 
     pdf.setFont("helvetica", "normal").setFontSize(6.6).setTextColor(...MUTED);
-    for (const line of m.footer.addressLines) {
-      const wrapped = pdf.splitTextToSize(line, nameW) as string[];
+    for (const wrapped of addressWrapped) {
       pdf.text(wrapped, M, ay);
       ay += wrapped.length * 2.9;
     }
 
     let cy = top;
-    pdf.setFont("helvetica", "normal").setFontSize(6.6).setTextColor(...MUTED);
-    for (const bit of m.footer.contactBits) {
-      const wrapped = pdf.splitTextToSize(bit, contactW) as string[];
+    for (const wrapped of contactWrapped) {
       pdf.text(wrapped, contactX, cy);
       cy += wrapped.length * 3.2;
     }
