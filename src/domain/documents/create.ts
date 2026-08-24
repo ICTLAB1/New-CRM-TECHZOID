@@ -3,6 +3,7 @@ import { buildDocNumber } from "../numbering/docNumber";
 import type { Customer } from "../customers/customer";
 import type { LineItem } from "../tax/types";
 import type { PaymentEntry } from "../payments/ledger";
+import type { GoodsReceipt } from "../purchasing/receipts";
 import { DOMESTIC_TERMS, PURCHASE_ORDER_TERMS, suggestTermsSet } from "./terms";
 
 /**
@@ -118,6 +119,11 @@ export interface SalesDocument {
   roundOff: boolean;
   advancePercent?: number;
   paymentHistory?: PaymentEntry[];
+  /** Deliveries logged against a purchase order. Events, not totals: what
+   *  has been received is derived from these on every read, so a corrected
+   *  delivery is a removed event rather than an unpickable running sum.
+   *  Empty on every other document type — nothing arrives against a quote. */
+  receipts?: GoodsReceipt[];
   bankAccountId?: string;
   templateId?: string;
   preparedBy: string;
@@ -333,6 +339,8 @@ export function newPurchaseOrder({ settings, user, customer = null, today = TODA
     status: "Draft",
     items: [blankItem(settings.defaultGst)],
     terms: [...PURCHASE_ORDER_TERMS],
+    /* Nothing has arrived against an order that has not been placed. */
+    receipts: [],
     notes: "",
     roundOff: true,
     preparedBy: user.name,
@@ -478,6 +486,11 @@ export function duplicateQuotation(
     validUntil: addDays(today, settings.defaultValidityDays ?? 15),
     items: quote.items.map((it) => ({ ...it, id: uid() })),
     terms: [...(quote.terms ?? [])],
+    /* Deliveries do NOT come across. Duplicating a purchase order to re-order
+       the same goods must not claim the new order has already arrived — and
+       the line ids are fresh above, so the old receipt lines would dangle
+       against items that no longer exist. */
+    receipts: [],
     createdAt: Date.now(), updatedAt: Date.now(),
   };
 }

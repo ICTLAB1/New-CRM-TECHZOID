@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { PageHead } from "../../app/AppShell";
 import { Button, Card, Chip, Empty, Input, Select, Tabs } from "../../components/primitives";
 import { Confirm } from "../../components/Modal";
+import { GoodsReceiptDialog } from "../purchasing/GoodsReceiptDialog";
 import { useToast } from "../../components/Toast";
 import { DocumentEditor } from "./DocumentEditor";
 import {
@@ -14,6 +15,7 @@ import type { CatalogProduct } from "../../domain/catalog/types";
 import { computeDocument } from "../../domain/tax/compute";
 import { inrList } from "../../domain/currency/format";
 import { fmtDate, isOverdue } from "../../domain/dates";
+import { receiptStatusLabel, summarizeReceipts } from "../../domain/purchasing/receipts";
 import type { Tone } from "../../components/primitives";
 import type { DocImages } from "../../documents/pdf/render";
 import type { IntegrationsApi } from "../../integrations/api";
@@ -53,6 +55,7 @@ export function QuotationsScreen({
   const [status, setStatus] = useState("all");
   const [owner, setOwner] = useState("all");
   const [confirmDelete, setConfirmDelete] = useState<SalesDocument | null>(null);
+  const [receiving, setReceiving] = useState<SalesDocument | null>(null);
 
   const isPo = docType === "purchase_order";
   const isInvoice = docType === "invoice";
@@ -194,6 +197,9 @@ export function QuotationsScreen({
                   <th>Date</th>
                   <th>{isPo ? "Required by" : isInvoice ? "Payment due" : "Valid until"}</th>
                   <th>Status</th>
+                  {/* What has actually turned up, which is a different
+                      question from what the buyer did with the order. */}
+                  {isPo ? <th>Received</th> : null}
                   <th className="num">Value</th>
                   <th />
                 </tr>
@@ -213,10 +219,14 @@ export function QuotationsScreen({
                         {fmtDate(d.validUntil)}
                       </td>
                       <td><Chip tone={STATUS_TONE[live] ?? "neutral"}>{live}</Chip></td>
+                      {isPo ? <td><ReceiptCell doc={d} /></td> : null}
                       <td className="num strong">{inrList(totals.grand)}</td>
                       <td>
                         <span className="row-tight">
                           <Button size="sm" tone="quiet" onClick={() => setEditing(d)}>Edit</Button>
+                          {isPo && d.status !== "Cancelled" && d.status !== "Draft" ? (
+                            <Button size="sm" tone="default" onClick={() => setReceiving(d)}>Receive</Button>
+                          ) : null}
                           {docType === "quotation" || isPo ? (
                             <>
                               <Button size="sm" tone="quiet" onClick={() => duplicate(d)}>Duplicate</Button>
@@ -253,6 +263,40 @@ export function QuotationsScreen({
         }}
         onCancel={() => setConfirmDelete(null)}
       />
+
+      {receiving ? (
+        <GoodsReceiptDialog
+          /* Remounted whenever the delivery count changes, so the prefilled
+             quantities reset to what is NOW outstanding. Without this, the
+             inputs would still hold the quantities just recorded and a second
+             click would double-count the same delivery. */
+          key={receiving.id + ":" + (receiving.receipts?.length ?? 0)}
+          open
+          doc={receiving}
+          currentUser={currentUser}
+          onSave={(next) => {
+            onChange(documents.map((d) => (d.id === next.id ? next : d)), settings);
+            /* Kept open on the freshly saved order, so removing a delivery
+               that was just logged does not mean reopening the dialog. */
+            setReceiving(next);
+          }}
+          onClose={() => setReceiving(null)}
+        />
+      ) : null}
     </main>
+  );
+}
+
+/** How much of a purchase order has arrived, at a glance. Derived on every
+ *  render from the deliveries logged against it — never a stored figure. */
+function ReceiptCell({ doc }: { doc: SalesDocument }) {
+  const s = summarizeReceipts(doc);
+  if (s.lineCount === 0) return <span className="muted">—</span>;
+  const tone: Tone = s.status === "complete" ? "good" : s.status === "over" ? "accent" : s.status === "partial" ? "warn" : "neutral";
+  return (
+    <span className="row-tight">
+      <Chip tone={tone}>{receiptStatusLabel(s.status)}</Chip>
+      {s.status === "partial" ? <span className="field-hint">{s.pct}%</span> : null}
+    </span>
   );
 }

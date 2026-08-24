@@ -224,6 +224,33 @@ export const PURCHASE_ORDERS: SalesDocument[] = [
     shipContact: "Rajesh Kumar", shipPhone: "+91 98100 12345",
     terms: [...PURCHASE_ORDER_TERMS],
   }),
+  /* Half-delivered: the laptops arrived, the licences have not. This is the
+     state the receiving screen exists for, so demo mode shows it rather than
+     only ever showing orders nothing has happened to. */
+  baseDoc({
+    id: "po2", number: "TZ/PO/2026-27/0006", status: "Partially Received",
+    subject: "Purchase order for IT products and services",
+    referenceNo: "ING/QT/44190",
+    billName: "", billAddress: "", billState: "", billContact: "", billPhone: "", billEmail: "", billGstin: "",
+    vendorName: "Ingram Micro India Private Limited",
+    vendorContact: "Order Desk",
+    vendorAddress: "Unit 301, Boomerang, Chandivali Farm Road\nAndheri East",
+    vendorState: "Maharashtra", vendorCountry: "India",
+    vendorGstin: "27AAACI9550L1ZW",
+    vendorEmail: "orders@example-distributor.in", vendorPhone: "+91 22 6140 5000",
+    customerId: "",
+    shipSameAsBilling: true,
+    date: "2026-08-06", validUntil: "2026-08-27",
+    terms: [...PURCHASE_ORDER_TERMS],
+    receipts: [
+      {
+        id: "gr1", date: "2026-08-18", challanNo: "IM/DC/2026/55871",
+        receivedBy: "Priyanshi Sharma",
+        note: "Ten laptops, all sealed. Licence keys still to follow.",
+        lines: [{ itemId: "i2", qty: 10 }],
+      },
+    ],
+  }),
 ];
 
 import type { SalesOrder, DeliveryChallan } from "../domain/orders/create";
