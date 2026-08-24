@@ -84,7 +84,15 @@ export function DocumentPreview({ model: m, rows, brandLogos = {}, scale = 1 }: 
       <article className="doc-page">
         <header className="doc-head">
           <div>
-            <div className="doc-mark">TECHZOID</div>
+            {/* The uploaded logo when there is one, the wordmark when there
+                isn't — the same choice, from the same field, that the PDF
+                makes. This used to be the literal text "TECHZOID" no matter
+                what had been uploaded. */}
+            {m.header.logo ? (
+              <img className="doc-logo" src={m.header.logo.src} alt={m.header.companyName} />
+            ) : (
+              <div className="doc-mark">TECHZOID</div>
+            )}
             <div className="doc-legal">{m.header.companyName.toUpperCase()}</div>
             <div className="doc-tagline">{m.header.tagline}</div>
             {m.header.addressLines.map((line, i) => (

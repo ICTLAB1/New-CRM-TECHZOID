@@ -457,38 +457,66 @@ function InvoicingPanel({
   const toast = useToast();
   const [to, setTo] = useState(String(settings["invoicingEmail"] ?? ""));
   const [cc, setCc] = useState(String(settings["invoicingCc"] ?? ""));
+  const [quoteCc, setQuoteCc] = useState(
+    String(settings["quoteCcEmail"] ?? "abhinav.jain@techzoidtechnologies.com"),
+  );
 
   const save = () => {
-    onChange({ ...settings, invoicingEmail: to.trim(), invoicingCc: cc.trim() });
-    toast("Invoicing addresses saved");
+    onChange({
+      ...settings,
+      invoicingEmail: to.trim(),
+      invoicingCc: cc.trim(),
+      quoteCcEmail: quoteCc.trim(),
+    });
+    toast("Email addresses saved");
   };
 
-  const dirty = to.trim() !== String(settings["invoicingEmail"] ?? "") || cc.trim() !== String(settings["invoicingCc"] ?? "");
+  const dirty =
+    to.trim() !== String(settings["invoicingEmail"] ?? "") ||
+    cc.trim() !== String(settings["invoicingCc"] ?? "") ||
+    quoteCc.trim() !== String(settings["quoteCcEmail"] ?? "abhinav.jain@techzoidtechnologies.com");
 
   return (
     <Card
-      title="Send for invoicing"
+      title="Outgoing email"
       actions={dirty && canEdit ? <Button size="sm" tone="primary" onClick={save}>Save</Button> : null}
     >
       <p className="muted" style={{ marginTop: 0 }}>
-        Where the "Send for invoicing" button on a quotation or proforma sends to. Everyone can use the
-        button; only an admin sets the address.
+        Who gets copied on what leaves the CRM. Everyone can use the buttons; only an admin sets the
+        addresses.
       </p>
-      <div className="grid grid-2" style={{ marginTop: 12 }}>
-        <Field label="Accounts address" hint="The tax invoice request goes here, with the PDF attached.">
-          <Input type="email" value={to} disabled={!canEdit} onChange={(e) => setTo(e.target.value)}
-            placeholder="accounts@example.com" />
-        </Field>
-        <Field label="Copy to" hint="Optional. Comma-separate more than one.">
-          <Input value={cc} disabled={!canEdit} onChange={(e) => setCc(e.target.value)}
-            placeholder="finance@example.com" />
-        </Field>
-      </div>
-      {!to.trim() ? (
-        <div className="notice" style={{ marginTop: 12 }}>
-          <span>No address is set, so "Send for invoicing" will tell people to ask an admin rather than fail quietly.</span>
+
+      <div style={{ marginTop: 14 }}>
+        <span className="eyebrow">Quotations and proformas</span>
+        <div className="grid grid-2" style={{ marginTop: 8 }}>
+          <Field
+            label="Always copy"
+            hint="Filled in on every quotation sent to a customer. The sender can still clear it before sending."
+          >
+            <Input type="email" value={quoteCc} disabled={!canEdit} onChange={(e) => setQuoteCc(e.target.value)}
+              placeholder="manager@example.com" />
+          </Field>
         </div>
-      ) : null}
+      </div>
+
+      <div style={{ marginTop: 18, borderTop: "1px solid var(--rule)", paddingTop: 14 }}>
+        <span className="eyebrow">Send for invoicing</span>
+        <div className="grid grid-2" style={{ marginTop: 8 }}>
+          <Field label="Accounts address" hint="The tax invoice request goes here, with the PDF attached.">
+            <Input type="email" value={to} disabled={!canEdit} onChange={(e) => setTo(e.target.value)}
+              placeholder="accounts@example.com" />
+          </Field>
+          <Field label="Copy to" hint="Optional. Comma-separate more than one.">
+            <Input value={cc} disabled={!canEdit} onChange={(e) => setCc(e.target.value)}
+              placeholder="finance@example.com" />
+          </Field>
+        </div>
+        {!to.trim() ? (
+          <div className="notice" style={{ marginTop: 12 }}>
+            <span>No address is set, so "Send for invoicing" will tell people to ask an admin rather than fail quietly.</span>
+          </div>
+        ) : null}
+      </div>
     </Card>
   );
 }

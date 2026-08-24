@@ -40,7 +40,9 @@ export interface WorkbenchProps {
   data: WorkspaceData;
   settings: Record<string, unknown>;
   team: TeamMember[];
-  user: { id: string; name: string; role: string };
+  /** `email` is what a quotation is sent as and replied to — it already
+   *  arrives here from the profile; it simply was not declared. */
+  user: { id: string; name: string; email?: string; role: string };
   onChange: <K extends keyof WorkspaceData>(key: K, next: WorkspaceData[K]) => void;
   onSettingsChange: (next: Record<string, unknown>) => void;
   onTeamChange: (next: TeamMember[]) => void;
@@ -127,7 +129,14 @@ export function Workbench({
   };
 
   return (
-    <AppShell view={view} onNavigate={setView} user={user} onSignOut={onSignOut} banner={banner}>
+    <AppShell
+      view={view}
+      onNavigate={setView}
+      user={user}
+      brand={settings["company"] as { name?: string; logo?: string } | undefined}
+      onSignOut={onSignOut}
+      banner={banner}
+    >
       {view === "dashboard" ? (
         <DashboardScreen
           workspace={analytics}

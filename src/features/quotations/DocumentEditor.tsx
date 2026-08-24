@@ -62,6 +62,8 @@ export interface DocumentEditorProps {
   /** Artwork for the PDF, which needs pixel dimensions the preview does not. */
   docImages?: DocImages;
   api: IntegrationsApi;
+  /** Whose name and address a sent quotation carries. */
+  currentUser: { id: string; name: string; email?: string };
   onSave: (doc: SalesDocument) => void;
   onClose: () => void;
 }
@@ -69,7 +71,7 @@ export interface DocumentEditorProps {
 type Tab = "document" | "items" | "terms";
 
 export function DocumentEditor({
-  doc: initial, docType, customers, catalog, settings, brandLogos, docImages, api, onSave, onClose,
+  doc: initial, docType, customers, catalog, settings, brandLogos, docImages, api, currentUser, onSave, onClose,
 }: DocumentEditorProps) {
   const [doc, setDoc] = useState<SalesDocument>(initial);
   const [tab, setTab] = useState<Tab>("document");
@@ -310,6 +312,7 @@ export function DocumentEditor({
               totals={totals}
               settings={settings}
               images={docImages}
+              currentUser={currentUser}
             />
           </div>
         </div>

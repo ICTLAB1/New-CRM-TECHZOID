@@ -108,7 +108,16 @@ interface Company {
   name?: string; address?: string; city?: string; state?: string; pincode?: string;
   country?: string; gstin?: string; pan?: string; cin?: string;
   phone?: string; email?: string; website?: string; tagline?: string;
+  /** The logo as a data URI, with the natural size it was uploaded at.
+   *  Both are needed: without the dimensions a renderer cannot preserve the
+   *  aspect ratio and would stretch it to fill its box. */
+  logo?: string; logoW?: number; logoH?: number;
 }
+
+/** Largest logo we will store, measured on the encoded string rather than
+ *  the file: a data URI is about a third larger than the bytes it carries,
+ *  and this whole object goes into one settings row read on every load. */
+const MAX_LOGO_DATA_URI = 400_000;
 
 interface UaeOffice {
   address?: string; phone?: string; businessLicense?: string; taxRegistrationNumber?: string;
@@ -127,10 +136,55 @@ function CompanyPanel({ settings, canEdit, onChange }: { settings: Record<string
     "Company details saved",
   );
 
+  const toast = useToast();
+  const logoInput = useRef<HTMLInputElement>(null);
+  const [logoError, setLogoError] = useState("");
+
   const set = (key: keyof Company) => (e: { target: { value: string } }) =>
     setDraft((d) => ({ ...d, company: { ...d.company, [key]: e.target.value } }));
   const setUae = (key: keyof UaeOffice) => (e: { target: { value: string } }) =>
     setDraft((d) => ({ ...d, uaeOffice: { ...d.uaeOffice, [key]: e.target.value } }));
+
+  /* Read in the browser and stored inline with the rest of the company
+     details, so there is no file host to configure and no second thing that
+     can be missing when a document renders. The natural size is measured
+     here, once, rather than by every renderer at draw time. */
+  const pickLogo = (file: File | undefined) => {
+    setLogoError("");
+    if (!file) return;
+    if (!/^image\/(png|jpeg|svg\+xml|webp)$/.test(file.type)) {
+      setLogoError("That needs to be a PNG, JPG, SVG or WebP image.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onerror = () => setLogoError("Couldn't read that file. Try saving it again and re-picking it.");
+    reader.onload = () => {
+      const src = String(reader.result ?? "");
+      if (src.length > MAX_LOGO_DATA_URI) {
+        setLogoError(
+          `That image is too large (about ${Math.round(src.length / 1024)} KB encoded). ` +
+          "Around 300 KB or less is plenty — a logo prints at 46mm wide.",
+        );
+        return;
+      }
+      const img = new Image();
+      img.onerror = () => setLogoError("That file doesn't look like an image the browser can read.");
+      img.onload = () => {
+        setDraft((d) => ({
+          ...d,
+          company: { ...d.company, logo: src, logoW: img.naturalWidth, logoH: img.naturalHeight },
+        }));
+        toast("Logo ready — press Save to keep it");
+      };
+      img.src = src;
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const clearLogo = () => {
+    setLogoError("");
+    setDraft((d) => ({ ...d, company: { ...d.company, logo: "", logoW: 0, logoH: 0 } }));
+  };
 
   return (
     <div className="stack">
@@ -141,6 +195,39 @@ function CompanyPanel({ settings, canEdit, onChange }: { settings: Record<string
         </p>
 
         <div className="stack" style={{ marginTop: 14 }}>
+          <Field
+            label="Company logo"
+            hint="Printed at the top-left of every quotation and proforma. A wide PNG with a transparent background works best."
+          >
+            <div className="row-tight wrap" style={{ gap: 12, alignItems: "center" }}>
+              {draft.company.logo ? (
+                <img
+                  src={draft.company.logo}
+                  alt="Company logo"
+                  style={{ maxWidth: 180, maxHeight: 48, objectFit: "contain", border: "1px solid var(--rule)", borderRadius: 6, padding: 6, background: "#fff" }}
+                />
+              ) : (
+                <span className="field-hint">
+                  No logo yet — documents print the company name instead.
+                </span>
+              )}
+              <input
+                ref={logoInput}
+                type="file"
+                accept="image/png,image/jpeg,image/svg+xml,image/webp"
+                style={{ display: "none" }}
+                onChange={(e) => { pickLogo(e.target.files?.[0]); e.target.value = ""; }}
+              />
+              <Button size="sm" disabled={!canEdit} onClick={() => logoInput.current?.click()}>
+                {draft.company.logo ? "Replace" : "Upload logo"}
+              </Button>
+              {draft.company.logo ? (
+                <Button size="sm" tone="quiet" disabled={!canEdit} onClick={clearLogo}>Remove</Button>
+              ) : null}
+            </div>
+          </Field>
+          {logoError ? <div className="notice notice-bad"><span>{logoError}</span></div> : null}
+
           <Field label="Legal name" hint="Exactly as registered — this goes on documents a customer may present to their auditor.">
             <Input value={draft.company.name ?? ""} disabled={!canEdit} onChange={set("name")} />
           </Field>

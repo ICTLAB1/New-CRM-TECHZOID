@@ -32,6 +32,9 @@ export async function handler(event) {
   const to = str(body.to, 320);
   const subject = str(body.subject, 300);
   const message = String(body.message ?? "");
+  /* The designed version, when the client built one. Larger cap than the
+     text: the markup and an inlined logo are most of its weight. */
+  const html = String(body.html ?? "").slice(0, 400_000) || null;
 
   if (!to || !subject || !message) {
     return fail(event, 400, "A recipient, a subject and a message are all required.");
@@ -45,6 +48,13 @@ export async function handler(event) {
 
   const { list: cc, invalid } = emailList(body.cc);
   if (invalid) return fail(event, 400, `"${invalid}" in the CC list isn't a valid email address.`);
+
+  /* Validated rather than passed through: an unchecked Reply-To is a way to
+     have the company's own mailbox invite replies to somewhere else. */
+  const replyTo = str(body.replyTo, 320);
+  if (replyTo && !isEmail(replyTo)) {
+    return fail(event, 400, `"${replyTo}" isn't a valid reply-to address.`);
+  }
 
   const att = checkAttachment(body.attachmentBase64, body.attachmentName);
   if (!att.ok) return fail(event, 400, att.error);
@@ -69,12 +79,12 @@ export async function handler(event) {
   }
 
   if (mailbox?.refresh_token && process.env.MS_CLIENT_ID && process.env.MS_CLIENT_SECRET) {
-    return sendViaMicrosoft(event, { admin, user, mailbox, to, cc, subject, message, attachment: att.attachment });
+    return sendViaMicrosoft(event, { admin, user, mailbox, to, cc, subject, message, html, replyTo, attachment: att.attachment });
   }
-  return sendViaResend(event, { to, cc, subject, message, attachment: att.attachment, ip: clientIp(event) });
+  return sendViaResend(event, { to, cc, subject, message, html, replyTo, attachment: att.attachment, ip: clientIp(event) });
 }
 
-async function sendViaMicrosoft(event, { admin, user, mailbox, to, cc, subject, message, attachment }) {
+async function sendViaMicrosoft(event, { admin, user, mailbox, to, cc, subject, message, html, replyTo, attachment }) {
   const tenant = process.env.MS_TENANT_ID || "common";
   try {
     const tokenResp = await fetch("https://login.microsoftonline.com/" + encodeURIComponent(tenant) + "/oauth2/v2.0/token", {
@@ -106,10 +116,18 @@ async function sendViaMicrosoft(event, { admin, user, mailbox, to, cc, subject, 
 
     const graphMessage = {
       subject,
-      body: { contentType: "Text", content: message },
+      /* Graph carries ONE body. With a designed version, that is the HTML —
+         Outlook and Gmail both render it, and Graph generates the plain-text
+         alternative itself. */
+      body: html ? { contentType: "HTML", content: html } : { contentType: "Text", content: message },
       toRecipients: [{ emailAddress: { address: to } }],
     };
     if (cc.length) graphMessage.ccRecipients = cc.map((a) => ({ emailAddress: { address: a } }));
+    /* Sending from their own mailbox already puts their address on it, so a
+       Reply-To only earns its place when it points somewhere else. */
+    if (replyTo && replyTo !== mailbox.ms_email) {
+      graphMessage.replyTo = [{ emailAddress: { address: replyTo } }];
+    }
     if (attachment) {
       graphMessage.attachments = [{
         "@odata.type": "#microsoft.graph.fileAttachment",
@@ -138,7 +156,7 @@ async function sendViaMicrosoft(event, { admin, user, mailbox, to, cc, subject, 
   }
 }
 
-async function sendViaResend(event, { to, cc, subject, message, attachment }) {
+async function sendViaResend(event, { to, cc, subject, message, html, replyTo, attachment }) {
   const apiKey = process.env.RESEND_API_KEY;
   const fromAddress = process.env.EMAIL_FROM || "sales@techzoidtechnologies.com";
 
@@ -152,9 +170,17 @@ async function sendViaResend(event, { to, cc, subject, message, attachment }) {
       from: "TechZoid Technologies <" + fromAddress + ">",
       to: [to],
       subject,
+      /* Both versions, so the recipient's client picks. Sending HTML alone
+         scores worse with spam filters and leaves nothing for a client that
+         refuses to render it. */
       text: message,
     };
+    if (html) payload.html = html;
     if (cc.length) payload.cc = cc;
+    /* This one matters most on this path: the message goes out from the
+       shared company address, so without it a customer's reply never reaches
+       the salesperson who actually quoted them. */
+    if (replyTo) payload.reply_to = replyTo;
     if (attachment) payload.attachments = [{ filename: attachment.name, content: attachment.base64 }];
 
     const resp = await fetch("https://api.resend.com/emails", {

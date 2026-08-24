@@ -13,6 +13,12 @@ import type { DocumentModel } from "../../domain/documents/model";
 import type { ComputedRow, DocumentTotals } from "../../domain/tax/types";
 import type { SalesDocument } from "../../domain/documents/create";
 import { IntegrationError, type IntegrationsApi } from "../../integrations/api";
+import {
+  buildEmailHtml, buildEmailText, type EmailCompany, type EmailSender,
+} from "../../domain/integrations/emailTemplate";
+
+/** Copied on every quotation unless an admin changes `quoteCcEmail`. */
+const DEFAULT_QUOTE_CC = "abhinav.jain@techzoidtechnologies.com";
 
 /**
  * Everything you can do with a finished document: keep it, send it, or hand
@@ -31,6 +37,8 @@ export interface DocumentActionsProps {
   totals: DocumentTotals;
   settings: Record<string, unknown>;
   images?: DocImages;
+  /** Whose name and address the email carries. */
+  currentUser?: { id: string; name: string; email?: string };
 }
 
 const label = (docType: "quotation" | "proforma") =>
@@ -52,13 +60,45 @@ function defaultMessage(doc: SalesDocument, docType: "quotation" | "proforma", t
   ].filter((l, i, all) => !(l === "" && all[i - 1] === "")).join("\n");
 }
 
-export function DocumentActions({ api, doc, docType, model, rows, totals, settings, images }: DocumentActionsProps) {
+export function DocumentActions({
+  api, doc, docType, model, rows, totals, settings, images, currentUser,
+}: DocumentActionsProps) {
   const toast = useToast();
   const [emailOpen, setEmailOpen] = useState(false);
   const [whatsAppOpen, setWhatsAppOpen] = useState(false);
 
   const renderOpts = { model, rows, images };
   const message = defaultMessage(doc, docType, totals);
+
+  const company = (settings["company"] ?? {}) as Record<string, unknown>;
+
+  /* Everyone who sends a quotation copies the same address, so it is filled
+     in rather than remembered — but left editable, because "always" is not
+     the same as "without exception". Configurable so this does not need a
+     code change the day it moves. */
+  const autoCc = String(settings["quoteCcEmail"] ?? DEFAULT_QUOTE_CC);
+
+  const emailBrand: EmailCompany = {
+    name: String(company["name"] ?? ""),
+    tagline: String(company["tagline"] ?? ""),
+    website: String(company["website"] ?? ""),
+    phone: String(company["phone"] ?? ""),
+    email: String(company["email"] ?? ""),
+    logo: String(company["logo"] ?? "") || undefined,
+    addressLines: model.header.addressLines,
+    gstin: String(company["gstin"] ?? ""),
+    cin: String(company["cin"] ?? ""),
+  };
+
+  /* The person actually sending, falling back to whoever prepared the
+     document — never to the company's own generic details, which would put
+     an anonymous signature on a personal message. */
+  const emailSender: EmailSender = {
+    name: currentUser?.name || doc.preparedBy || "",
+    designation: String(settings["signatoryDesignation"] ?? ""),
+    email: currentUser?.email || "",
+    phone: String(company["phone"] ?? ""),
+  };
 
   const download = () => {
     try {
@@ -70,9 +110,11 @@ export function DocumentActions({ api, doc, docType, model, rows, totals, settin
 
   return (
     <>
+      <Button tone="primary" onClick={() => setEmailOpen(true)}>
+        Send {docType === "proforma" ? "proforma" : "quote"} to customer
+      </Button>
       <Button tone="default" onClick={download}>Download PDF</Button>
       <Button tone="quiet" onClick={() => previewPdf(renderOpts)}>Open PDF</Button>
-      <Button tone="default" onClick={() => setEmailOpen(true)}>Email</Button>
       <Button tone="default" onClick={() => setWhatsAppOpen(true)}>WhatsApp</Button>
       <SendForInvoicing
         api={api}
@@ -88,8 +130,11 @@ export function DocumentActions({ api, doc, docType, model, rows, totals, settin
         api={api}
         onClose={() => setEmailOpen(false)}
         defaultTo={doc.billEmail}
+        defaultCc={autoCc}
         defaultSubject={`${label(docType)} ${doc.number} — ${doc.billName}`}
         defaultMessage={message}
+        sender={emailSender}
+        company={emailBrand}
         getAttachment={async () => pdfAttachment(renderOpts)}
       />
 
@@ -113,27 +158,48 @@ interface EmailDialogProps {
   open: boolean;
   api: IntegrationsApi;
   defaultTo?: string;
+  defaultCc?: string;
   defaultSubject: string;
   defaultMessage: string;
+  sender: EmailSender;
+  company: EmailCompany;
   getAttachment: () => Promise<{ base64: string; filename: string }>;
   onClose: () => void;
 }
 
-function EmailDialog({ open, api, defaultTo = "", defaultSubject, defaultMessage, getAttachment, onClose }: EmailDialogProps) {
+function EmailDialog({
+  open, api, defaultTo = "", defaultCc = "", defaultSubject, defaultMessage,
+  sender, company, getAttachment, onClose,
+}: EmailDialogProps) {
   const toast = useToast();
   const [to, setTo] = useState(defaultTo);
-  const [cc, setCc] = useState("");
+  const [cc, setCc] = useState(defaultCc);
   const [subject, setSubject] = useState(defaultSubject);
   const [message, setMessage] = useState(defaultMessage);
   const [attach, setAttach] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [showPreview, setShowPreview] = useState(false);
 
   const send = async () => {
     setError(""); setBusy(true);
     try {
       const attachment = attach ? await getAttachment() : null;
-      const result = await api.sendEmail({ to, cc, subject, message, attachment });
+      const content = {
+        body: message,
+        sender,
+        company,
+        attachmentName: attachment?.filename ?? null,
+      };
+      const result = await api.sendEmail({
+        to, cc, subject,
+        /* Both versions, built from the same content so they cannot say
+           different things. */
+        message: buildEmailText(content),
+        html: buildEmailHtml(content),
+        replyTo: sender.email || undefined,
+        attachment,
+      });
       toast(result.via === "microsoft" && result.from ? "Sent from " + result.from : "Email sent", "good");
       onClose();
     } catch (err) {
@@ -142,11 +208,18 @@ function EmailDialog({ open, api, defaultTo = "", defaultSubject, defaultMessage
     setBusy(false);
   };
 
+  const edited = message !== defaultMessage || subject !== defaultSubject || to !== defaultTo;
+
   return (
     <Modal
       open={open}
-      title="Send by email"
-      description="Sent from your own mailbox when one is connected, otherwise from the company address."
+      title="Send to customer"
+      description={
+        sender.email
+          ? `Goes out as ${sender.email}, with your signature. Replies come back to you.`
+          : "Sent from your own mailbox when one is connected, otherwise from the company address."
+      }
+      unsavedChanges={edited && !busy}
       onClose={onClose}
       footer={
         <>
@@ -160,16 +233,36 @@ function EmailDialog({ open, api, defaultTo = "", defaultSubject, defaultMessage
       <div className="stack">
         <div className="grid grid-2">
           <Field label="To"><Input type="email" value={to} onChange={(e) => setTo(e.target.value)} /></Field>
-          <Field label="Copy to" hint="Optional. Comma-separate more than one.">
+          <Field label="Copy to" hint="Filled in automatically. Comma-separate more than one, or clear it.">
             <Input value={cc} onChange={(e) => setCc(e.target.value)} />
           </Field>
         </div>
         <Field label="Subject"><Input value={subject} onChange={(e) => setSubject(e.target.value)} /></Field>
-        <Field label="Message"><Textarea rows={9} value={message} onChange={(e) => setMessage(e.target.value)} /></Field>
+        <Field label="Message" hint="Your signature and the company details are added automatically underneath.">
+          <Textarea rows={9} value={message} onChange={(e) => setMessage(e.target.value)} />
+        </Field>
         <label className="row-tight" style={{ cursor: "pointer" }}>
           <input type="checkbox" checked={attach} onChange={(e) => setAttach(e.target.checked)} />
           <span>Attach the PDF</span>
         </label>
+
+        <div>
+          <Button size="sm" tone="quiet" onClick={() => setShowPreview((v) => !v)}>
+            {showPreview ? "Hide preview" : "Preview what the customer sees"}
+          </Button>
+          {showPreview ? (
+            /* Rendered in a sandboxed frame: this is the real markup that
+               will be sent, and it must not be able to touch the app around
+               it or load anything from outside. */
+            <iframe
+              title="Email preview"
+              sandbox=""
+              srcDoc={buildEmailHtml({ body: message, sender, company, attachmentName: attach ? "quotation.pdf" : null })}
+              style={{ width: "100%", height: 380, border: "1px solid var(--rule)", borderRadius: 8, marginTop: 10, background: "#fff" }}
+            />
+          ) : null}
+        </div>
+
         {error ? <div className="notice notice-bad"><span>{error}</span></div> : null}
       </div>
     </Modal>

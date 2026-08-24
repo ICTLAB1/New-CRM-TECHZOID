@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Button } from "./primitives";
 
 /**
@@ -22,16 +22,35 @@ export interface ModalProps {
    *  much is left, and a customer form is thirty fields. Still becomes a
    *  bottom sheet on a phone. */
   side?: boolean;
+  /**
+   * There are edits in here that closing would throw away.
+   *
+   * Escape and a click on the backdrop are both easy to hit by accident —
+   * Escape especially, since it is also how you dismiss a browser autofill
+   * menu or an IME candidate list. With this set, either one asks first
+   * instead of silently discarding a half-filled form. The X button asks
+   * too: it is deliberate, but "close" and "discard everything I typed"
+   * should not be the same click without a word.
+   */
+  unsavedChanges?: boolean;
   children: ReactNode;
 }
 
-export function Modal({ open, title, description, onClose, footer, side, children }: ModalProps) {
+export function Modal({ open, title, description, onClose, footer, side, unsavedChanges, children }: ModalProps) {
   const panel = useRef<HTMLDivElement>(null);
+  const [confirming, setConfirming] = useState(false);
+
+  /* Read through a ref inside the key handler so the listener does not have
+     to be town down and re-added on every keystroke that changes it. */
+  const dirty = useRef(unsavedChanges);
+  dirty.current = unsavedChanges;
 
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key !== "Escape") return;
+      if (dirty.current) setConfirming(true);
+      else onClose();
     };
     document.addEventListener("keydown", onKey);
     const previous = document.body.style.overflow;
@@ -43,20 +62,46 @@ export function Modal({ open, title, description, onClose, footer, side, childre
     };
   }, [open, onClose]);
 
+  /* A dialog reopened after being dismissed must not still be asking. */
+  useEffect(() => { if (!open) setConfirming(false); }, [open]);
+
   if (!open) return null;
 
+  const attemptClose = () => {
+    if (unsavedChanges) setConfirming(true);
+    else onClose();
+  };
+
   return (
-    <div className={"scrim" + (side ? " scrim-side" : "")} onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+    <div className={"scrim" + (side ? " scrim-side" : "")} onMouseDown={(e) => { if (e.target === e.currentTarget) attemptClose(); }}>
       <div className={"modal" + (side ? " side" : "")} role="dialog" aria-modal="true" tabIndex={-1} ref={panel}>
         <header className="modal-head">
           <div>
             <div className="card-title">{title}</div>
             {description ? <div className="field-hint" style={{ marginTop: 4 }}>{description}</div> : null}
           </div>
-          <Button tone="quiet" size="sm" iconOnly aria-label="Close" onClick={onClose}>✕</Button>
+          <Button tone="quiet" size="sm" iconOnly aria-label="Close" onClick={attemptClose}>✕</Button>
         </header>
         <div className="modal-body">{children}</div>
         {footer ? <footer className="modal-foot">{footer}</footer> : null}
+
+        {/* Drawn INSIDE the panel rather than as a second Modal: a nested
+            scrim over the first one dims the very thing being asked about,
+            and stacks two Escape handlers that would both fire. */}
+        {confirming ? (
+          <div className="modal-guard" role="alertdialog" aria-modal="true" aria-label="Discard changes?">
+            <div className="modal-guard-box">
+              <div className="card-title">Discard your changes?</div>
+              <p className="field-hint" style={{ marginTop: 6 }}>
+                What you have typed here hasn't been saved yet. Closing now loses it.
+              </p>
+              <div className="row-tight" style={{ marginTop: 14, justifyContent: "flex-end" }}>
+                <Button tone="quiet" onClick={() => setConfirming(false)}>Keep editing</Button>
+                <Button tone="danger" onClick={() => { setConfirming(false); onClose(); }}>Discard</Button>
+              </div>
+            </div>
+          </div>
+        ) : null}
       </div>
     </div>
   );

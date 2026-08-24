@@ -113,9 +113,12 @@ export function renderDocumentPdf(opts: RenderOptions): jsPDF {
     const rightW = 74;
     const rightX = M + CW - rightW;
 
-    if (images.logo) {
-      const box = fitBox(images.logo, 46, 12);
-      pdf.addImage(images.logo.src, "PNG", M, y, box.w, box.h, undefined, "FAST");
+    /* From the model, not from `images` — the preview reads the same field,
+       so the two cannot show different company logos. */
+    const logo = m.header.logo;
+    if (logo) {
+      const box = fitBox(logo, 46, 12);
+      pdf.addImage(logo.src, "PNG", M, y, box.w, box.h, undefined, "FAST");
       y += box.h + 3;
     } else {
       pdf.setFont("helvetica", "bold").setFontSize(20).setTextColor(...NAVY);

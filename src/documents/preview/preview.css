@@ -30,6 +30,8 @@
 /* ── header ── */
 .doc-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 6mm; }
 .doc-mark { font-size: 7mm; font-weight: 800; color: #0D2B55; letter-spacing: -0.02em; line-height: 1; }
+/* Same box the PDF fits the logo into: 46mm x 12mm, aspect ratio kept. */
+.doc-logo { max-width: 46mm; max-height: 12mm; object-fit: contain; object-position: left center; display: block; }
 .doc-legal { margin-top: 2.5mm; font-size: 3.4mm; font-weight: 700; color: #0D2B55; }
 .doc-tagline { margin-top: 1.2mm; font-size: 2.5mm; color: #64748B; }
 .doc-head-line { margin-top: 0.8mm; font-size: 2.2mm; color: #64748B; }

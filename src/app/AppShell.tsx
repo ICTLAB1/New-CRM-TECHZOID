@@ -6,6 +6,9 @@ export interface AppShellProps {
   view: string;
   onNavigate: (id: string) => void;
   user: { name: string; role: string };
+  /** The company's own branding, from settings. Absent until an admin has
+   *  uploaded a logo, in which case the wordmark stands in. */
+  brand?: { name?: string; logo?: string };
   /** Absent in the demo build, where there is nobody to sign out. */
   onSignOut?: () => void;
   /** A strip above the page for something that applies everywhere — a save
@@ -17,7 +20,7 @@ export interface AppShellProps {
 const initials = (name: string): string =>
   name.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? "").join("");
 
-export function AppShell({ view, onNavigate, user, onSignOut, banner, children }: AppShellProps) {
+export function AppShell({ view, onNavigate, user, brand, onSignOut, banner, children }: AppShellProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const section = NAV.find((s) => s.items.some((i) => i.id === view));
   const current = section?.items.find((i) => i.id === view);
@@ -33,8 +36,14 @@ export function AppShell({ view, onNavigate, user, onSignOut, banner, children }
 
       <aside className={"sidebar scroll" + (menuOpen ? " is-open" : "")}>
         <div className="sidebar-brand">
-          <span className="brand-mark" aria-hidden>TZ</span>
-          <span className="brand-name">TechZoid</span>
+          {brand?.logo ? (
+            <img className="brand-logo" src={brand.logo} alt={brand.name || "Home"} />
+          ) : (
+            <>
+              <span className="brand-mark" aria-hidden>TZ</span>
+              <span className="brand-name">{brand?.name || "TechZoid"}</span>
+            </>
+          )}
         </div>
 
         <nav className="nav">

@@ -20,7 +20,17 @@ export interface EmailRequest {
   to: string;
   cc?: string;
   subject: string;
+  /** The plain-text version. Always sent: some clients prefer it, spam
+   *  filters score a message without one worse, and it is what a screen
+   *  reader reads. */
   message: string;
+  /** The designed version. When present the message goes out as HTML with
+   *  `message` as its fallback, rather than as bare text. */
+  html?: string;
+  /** Where a reply should go. Set to the salesperson's own address so a
+   *  customer replying to a message sent through the shared company mailbox
+   *  still reaches the person who quoted them. */
+  replyTo?: string;
   attachment?: { base64: string; filename: string } | null;
 }
 
@@ -181,6 +191,8 @@ export function netlifyApi(): IntegrationsApi {
         cc: request.cc,
         subject: request.subject,
         message: request.message,
+        html: request.html,
+        replyTo: request.replyTo,
         attachmentBase64: request.attachment?.base64,
         attachmentName: request.attachment?.filename,
       });

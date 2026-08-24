@@ -31,7 +31,7 @@ export interface QuotationsScreenProps {
   brandLogos?: Record<string, { src: string }>;
   docImages?: DocImages;
   api: IntegrationsApi;
-  currentUser: { id: string; name: string };
+  currentUser: { id: string; name: string; email?: string };
   onChange: (documents: SalesDocument[], settings: Record<string, unknown>) => void;
   /** Raising a proforma from a quotation hands it to the proformas screen. */
   onCreateProforma?: (proforma: SalesDocument) => void;
@@ -114,6 +114,7 @@ export function QuotationsScreen({
           brandLogos={brandLogos}
           docImages={docImages}
           api={api}
+          currentUser={currentUser}
           onSave={save}
           onClose={() => setEditing(null)}
         />

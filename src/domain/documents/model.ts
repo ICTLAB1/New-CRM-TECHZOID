@@ -67,6 +67,12 @@ export interface DocumentModel {
 
   header: {
     companyName: string;
+    /** The uploaded company logo, or null to print the wordmark instead.
+     *  On the MODEL rather than passed to each renderer separately, because
+     *  the preview and the PDF disagreeing about the company's own logo is
+     *  exactly the drift this architecture exists to prevent — the preview
+     *  used to hardcode "TECHZOID" while the PDF drew whatever it was given. */
+    logo: { src: string; w: number; h: number } | null;
     /** "Technology Procurement | Licensing | Hardware | Enterprise Solutions" */
     tagline: string;
     /** Each element is one printed line: street, then city/state/pincode,
@@ -472,6 +478,9 @@ export function buildDocumentModel(input: BuildModelInput): DocumentModel {
     accentColor: dt.accentColor,
     header: {
       companyName: c.name || "",
+      /* Only a logo with its natural size is usable: without both, a
+         renderer cannot preserve the aspect ratio and would stretch it. */
+      logo: c.logo && c.logoW && c.logoH ? { src: String(c.logo), w: Number(c.logoW), h: Number(c.logoH) } : null,
       tagline: c.tagline || "Technology Procurement  |  Licensing  |  Hardware  |  Enterprise Solutions",
       addressLines: headerAddressLines, contactLine, registration, uaeOffice, meta,
     },

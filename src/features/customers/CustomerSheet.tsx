@@ -38,12 +38,20 @@ export function CustomerSheet({ customer, users, customFields, canReassign, onSa
 
   const isIndia = !f.country || f.country === "India";
 
+  /* Compared against what was opened, not tracked with a flag: a field
+     typed into and then typed back out of is not an unsaved change, and
+     asking about it would train people to dismiss the question. */
+  const unsaved = JSON.stringify(f) !== JSON.stringify({
+    ...customer, notes: customer.notes ?? [], customFields: customer.customFields ?? {},
+  });
+
   return (
     <Modal
       open
       side
       title={customerLabel(f)}
       description={customer.company ? "Editing an existing account." : "New account."}
+      unsavedChanges={unsaved}
       onClose={onClose}
       footer={
         <>
