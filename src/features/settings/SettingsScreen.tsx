@@ -188,6 +188,26 @@ function CompanyPanel({ settings, canEdit, onChange }: { settings: Record<string
 
   return (
     <div className="stack">
+      {/* Written straight through rather than into the draft: it is one
+          boolean, and making somebody press Save to change whether they get
+          asked before saving is a joke at their expense. */}
+      <Card title="How this workspace behaves">
+        <label className="row-tight" style={{ cursor: canEdit ? "pointer" : "default" }}>
+          <input
+            type="checkbox"
+            disabled={!canEdit}
+            checked={settings["confirmBeforeSave"] !== false}
+            onChange={(e) => onChange({ ...settings, confirmBeforeSave: e.target.checked })}
+          />
+          <span>Ask before saving a customer or a document</span>
+        </label>
+        <div className="field-hint" style={{ marginTop: 8 }}>
+          On by default. Worth knowing: a question asked before every save stops being read after the
+          twentieth one, and the reflex to dismiss it carries over to the dialogs that guard something
+          irreversible. Deleting always asks, whatever this is set to.
+        </div>
+      </Card>
+
       <Card title="Who we are">
         <p className="muted" style={{ marginTop: 0 }}>
           This is what prints at the top of every quotation and proforma. The seller's state also decides

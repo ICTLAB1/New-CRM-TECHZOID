@@ -156,6 +156,7 @@ export function Workbench({
           users={team}
           customFields={customFields}
           currentUser={user}
+          settings={settings}
           onChange={(next, ownership) => { handleCustomersChange(next); applyOwnership(ownership); }}
         />
       ) : view === "pipeline" ? (
@@ -172,6 +173,7 @@ export function Workbench({
               customFields={customFields}
               canReassign={isAdmin || user.role === "Manager"}
               currentUser={user}
+              settings={settings}
               onSave={(next) => {
                 handleCustomersChange(customers.map((c) => (c.id === next.id ? next : c)));
                 setEditing(null);

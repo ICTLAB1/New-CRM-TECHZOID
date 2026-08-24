@@ -84,7 +84,18 @@
   --topbar-h:  46px;
 }
 
-/* Reduced motion is honoured everywhere; nothing here is load-bearing. */
+/* ── motion ──────────────────────────────────────────────────────────
+   Two durations and one curve, so everything that moves moves alike.
+   Short, because this is a tool people use all day: motion here is meant
+   to say WHERE something came from, not to be noticed. */
+:root {
+  --ease:      cubic-bezier(.2, .8, .3, 1);
+  --t-quick:   .12s;   /* hover, focus, a colour change */
+  --t-enter:   .18s;   /* something arriving on screen */
+}
+
+/* Reduced motion is honoured everywhere; nothing here is load-bearing.
+   Everything still ARRIVES — it just arrives already in place. */
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }
 }

@@ -221,7 +221,16 @@ button.tile:hover { background: var(--surface-2); }
   padding: 48px 16px;
   background: rgba(16, 21, 31, .38);
   overflow-y: auto;
+  animation: scrim-in var(--t-enter) var(--ease) both;
 }
+@keyframes scrim-in { from { opacity: 0 } to { opacity: 1 } }
+/* Rises a little as it fades in: the movement says the panel came from the
+   page rather than being pasted over it. */
+@keyframes modal-in { from { opacity: 0; transform: translateY(8px) scale(.99) } to { opacity: 1; transform: none } }
+/* A side sheet slides in from the edge it lives on, so it reads as a drawer
+   rather than as a dialog that happens to be tall. */
+@keyframes side-in  { from { transform: translateX(24px); opacity: .4 } to { transform: none; opacity: 1 } }
+
 .modal {
   width: 100%; max-width: 560px;
   background: var(--surface);
@@ -229,11 +238,23 @@ button.tile:hover { background: var(--surface-2); }
   box-shadow: var(--lift);
   /* Anchors .modal-guard, which covers this panel and nothing else. */
   position: relative;
+  /* NEVER taller than the screen. The body scrolls inside instead, which
+     keeps the header and footer in view — and, load-bearing, keeps
+     `.modal-guard` (inset: 0 on this element) within the viewport. When the
+     panel grew past the screen, the guard's centred confirm box was centred
+     on the PANEL and landed above the fold: Escape dimmed the sheet and
+     showed nothing, which reads as Escape doing nothing at all. */
+  display: flex; flex-direction: column;
+  max-height: calc(100vh - 96px);
+  animation: modal-in var(--t-enter) var(--ease) both;
 }
+/* The one part that scrolls. */
+.modal-head, .modal-foot { flex: 0 0 auto; }
 
 /* "Discard your changes?" — drawn over the panel it is asking about, rather
    than as a second scrim over the whole screen. */
 .modal-guard {
+  animation: scrim-in var(--t-quick) var(--ease) both;
   position: absolute; inset: 0; z-index: 1;
   display: flex; align-items: center; justify-content: center;
   padding: 16px;
@@ -241,6 +262,7 @@ button.tile:hover { background: var(--surface-2); }
   border-radius: var(--radius-card);
 }
 .modal-guard-box {
+  animation: modal-in var(--t-enter) var(--ease) both;
   width: 100%; max-width: 380px;
   background: var(--surface);
   border-radius: var(--radius-card);
@@ -248,7 +270,7 @@ button.tile:hover { background: var(--surface-2); }
   padding: var(--gap-wide);
 }
 .modal-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--gap); padding: var(--gap-wide); border-bottom: 1px solid var(--rule); }
-.modal-body { padding: var(--gap-wide); }
+.modal-body { padding: var(--gap-wide); overflow-y: auto; flex: 1 1 auto; }
 .modal-foot { display: flex; justify-content: flex-end; gap: var(--gap-tight); padding: 12px var(--gap-wide); border-top: 1px solid var(--rule); background: var(--surface-2); border-radius: 0 0 var(--radius-card) var(--radius-card); }
 
 @media (max-width: 720px) {
@@ -276,7 +298,9 @@ button.tile:hover { background: var(--surface-2); }
 
 /* ── toast ─────────────────────────────────────────────────────────── */
 .toast-dock { position: fixed; right: var(--gap-wide); bottom: var(--gap-wide); z-index: 80; display: flex; flex-direction: column; gap: var(--gap-tight); }
+@keyframes toast-in { from { opacity: 0; transform: translateY(10px) } to { opacity: 1; transform: none } }
 .toast {
+  animation: toast-in var(--t-enter) var(--ease) both;
   display: flex; align-items: flex-start; gap: var(--gap-tight);
   min-width: 260px; max-width: 380px;
   padding: 11px 13px;
@@ -291,7 +315,7 @@ button.tile:hover { background: var(--surface-2); }
 
 /* ── progress ──────────────────────────────────────────────────────── */
 .meter { height: 4px; background: var(--surface-3); border-radius: 4px; overflow: hidden; }
-.meter-fill { height: 100%; background: var(--accent); }
+.meter-fill { height: 100%; background: var(--accent); transition: width .3s var(--ease); }
 .meter-fill.is-good { background: var(--good); }
 .meter-fill.is-warn { background: var(--warn); }
 .meter-fill.is-bad  { background: var(--bad); }
@@ -359,10 +383,19 @@ button.tile:hover { background: var(--surface-2); }
    own background: the page shows through in a band. `min-height` below
    already fills the screen when a sheet is short, without capping a long
    one. */
-.scrim-side { padding: 0; align-items: flex-start; justify-content: flex-end; }
-.side { max-width: 660px; border-radius: 0; min-height: 100vh; }
+.scrim-side { padding: 0; align-items: stretch; justify-content: flex-end; }
+/* Exactly the screen, never more: the body scrolls within it (see .modal).
+   `stretch` is safe again now that the panel caps its own height — it was
+   only harmful while the content could grow past a fixed box. */
+.side { max-width: 660px; border-radius: 0; height: 100vh; max-height: 100vh;
+  animation: side-in var(--t-enter) var(--ease) both; }
 .side .modal-foot { position: sticky; bottom: 0; border-radius: 0; }
-@media (max-width: 720px) { .scrim-side { align-items: flex-end; } .side { min-height: auto; max-height: 92vh; border-radius: 14px 14px 0 0; } }
+/* On a phone it is a bottom sheet, not a full-height rail — `height: auto`
+   is needed to release the 100vh set above, or the sheet covers the screen. */
+@media (max-width: 720px) {
+  .scrim-side { align-items: flex-end; }
+  .side { height: auto; min-height: auto; max-height: 92vh; border-radius: 14px 14px 0 0; }
+}
 
 /* ── inline warning panel ─────────────────────────────────────────────── */
 .notice { display: flex; gap: var(--gap); padding: 11px 13px; border: 1px solid var(--rule); border-left: var(--edge) solid var(--warn); border-radius: var(--radius); background: var(--warn-weak); font-size: var(--t-body); color: var(--ink-2); }

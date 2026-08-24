@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { isMod } from "./hotkeys";
 import { Button } from "./primitives";
 
 /**
@@ -12,6 +13,14 @@ import { Button } from "./primitives";
 export interface ModalProps {
   open: boolean;
   title: ReactNode;
+  /** The primary action, so Ctrl/Cmd+S and Ctrl/Cmd+Enter can reach it from
+   *  anywhere inside the panel. Without it those keys do nothing here —
+   *  which is worse than not offering them, so a panel with a Save button
+   *  should always pass one. */
+  onSubmit?: () => void;
+  /** Blocks the shortcut while a save is in flight or the form is invalid,
+   *  exactly as the button's own `disabled` does. */
+  canSubmit?: boolean;
   /** Shown under the title. Say what this will do, especially if it is
    *  irreversible — a sent email cannot be unsent. */
   description?: ReactNode;
@@ -36,7 +45,7 @@ export interface ModalProps {
   children: ReactNode;
 }
 
-export function Modal({ open, title, description, onClose, footer, side, unsavedChanges, children }: ModalProps) {
+export function Modal({ open, title, description, onClose, footer, side, unsavedChanges, onSubmit, canSubmit = true, children }: ModalProps) {
   const panel = useRef<HTMLDivElement>(null);
   const [confirming, setConfirming] = useState(false);
 
@@ -44,10 +53,24 @@ export function Modal({ open, title, description, onClose, footer, side, unsaved
      to be town down and re-added on every keystroke that changes it. */
   const dirty = useRef(unsavedChanges);
   dirty.current = unsavedChanges;
+  const submit = useRef(onSubmit);
+  submit.current = onSubmit;
+  const allowed = useRef(canSubmit);
+  allowed.current = canSubmit;
 
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
+      /* Ctrl/Cmd+S and Ctrl/Cmd+Enter save from anywhere in the panel,
+         including mid-field: interrupting a form is exactly when Ctrl+S is
+         pressed, and the browser's own "save page" is never what was meant
+         here. */
+      if (isMod(e) && (e.key.toLowerCase() === "s" || e.key === "Enter")) {
+        if (!submit.current || !allowed.current) return;
+        e.preventDefault();
+        submit.current();
+        return;
+      }
       if (e.key !== "Escape") return;
       if (dirty.current) setConfirming(true);
       else onClose();

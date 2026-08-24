@@ -2,6 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import { Button, Card, Field, Input, Select, Tabs, Textarea } from "../../components/primitives";
 import { DocumentActions } from "./DocumentActions";
 import { AttachmentsPanel } from "../attachments/AttachmentsPanel";
+import { askBeforeSave, useConfirmedAction } from "../../components/useConfirmedAction";
+import { useHotkeys } from "../../components/hotkeys";
+import { previewPdf } from "../../documents/pdf/deliver";
 import type { DocImages } from "../../documents/pdf/render";
 import type { IntegrationsApi } from "../../integrations/api";
 import { Modal } from "../../components/Modal";
@@ -118,6 +121,26 @@ export function DocumentEditor({
   };
 
   const suggested = suggestTermsSet(doc.billCountry);
+
+  /* Saving a document is the moment a number gets committed and a customer
+     may be sent it, so this asks first — the same question the shortcut
+     reaches, since a shortcut that skipped it would make it meaningless. */
+  const save = useConfirmedAction({
+    title: `Save ${doc.number}?`,
+    body: `${totals.rows.length} line${totals.rows.length === 1 ? "" : "s"} · ${inrList(totals.grand)} grand total.`,
+    confirmLabel: "Save",
+    onConfirm: () => onSave(doc),
+    enabled: askBeforeSave(settings),
+  });
+
+  /* Ctrl/Cmd+P opens THIS document rather than the browser's print dialog,
+     which would print the editor chrome around it. Held here rather than in
+     the actions row so it works from anywhere in the editor. */
+  useHotkeys([
+    { key: "p", mod: true, run: () => previewPdf({ model, rows: totals.rows, images: docImages }) },
+    { key: "s", mod: true, run: save.ask },
+    { key: "Enter", mod: true, run: save.ask },
+  ]);
 
   return (
     <>
@@ -374,7 +397,8 @@ export function DocumentEditor({
           </Card>
 
           <div className="row-tight wrap">
-            <Button tone="primary" onClick={() => onSave(doc)}>Save</Button>
+            {save.dialog}
+            <Button tone="primary" onClick={save.ask}>Save</Button>
             <Button tone="quiet" onClick={onClose}>Cancel</Button>
             <span className="grow" />
             <span className="field-hint">

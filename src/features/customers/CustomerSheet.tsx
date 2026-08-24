@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Modal } from "../../components/Modal";
 import { AttachmentsPanel } from "../attachments/AttachmentsPanel";
+import { askBeforeSave, useConfirmedAction } from "../../components/useConfirmedAction";
 import { Button, Chip, Field, Input, Select, Textarea } from "../../components/primitives";
 import { applyCountry, applyGstin, customerLabel, type Customer } from "../../domain/customers/customer";
 import { gstinMessage, validateGSTIN } from "../../domain/gstin/validate";
@@ -31,11 +32,14 @@ export interface CustomerSheetProps {
   /** Who is looking. Their id is what a file they attach is uploaded as,
    *  and their role is what lets an Admin or Manager remove anybody's. */
   currentUser?: { id: string; name: string; role?: string };
+  /** Read for `confirmBeforeSave`. Optional so the sheet still renders
+   *  without a settings row — it simply asks, which is the default. */
+  settings?: Record<string, unknown>;
   onSave: (customer: Customer) => void;
   onClose: () => void;
 }
 
-export function CustomerSheet({ customer, users, customFields, canReassign, currentUser, onSave, onClose }: CustomerSheetProps) {
+export function CustomerSheet({ customer, users, customFields, canReassign, currentUser, settings = {}, onSave, onClose }: CustomerSheetProps) {
   const [f, setF] = useState<Customer>({ ...customer, notes: customer.notes ?? [], customFields: customer.customFields ?? {} });
   const set = <K extends keyof Customer>(k: K) => (e: { target: { value: string } }) =>
     setF((cur) => ({ ...cur, [k]: e.target.value }));
@@ -49,6 +53,16 @@ export function CustomerSheet({ customer, users, customFields, canReassign, curr
     ...customer, notes: customer.notes ?? [], customFields: customer.customFields ?? {},
   });
 
+  const commit = () => onSave({ ...f, updatedAt: Date.now() });
+
+  const save = useConfirmedAction({
+    title: "Save this customer?",
+    body: `${customerLabel(f)} will be updated for everyone.`,
+    confirmLabel: "Save customer",
+    onConfirm: commit,
+    enabled: askBeforeSave(settings),
+  });
+
   return (
     <Modal
       open
@@ -57,13 +71,18 @@ export function CustomerSheet({ customer, users, customFields, canReassign, curr
       description={customer.company ? "Editing an existing account." : "New account."}
       unsavedChanges={unsaved}
       onClose={onClose}
+      /* Ctrl/Cmd+S and Ctrl/Cmd+Enter reach the same confirmation the
+         button does — a shortcut that skipped the question would make the
+         question meaningless. */
+      onSubmit={save.ask}
       footer={
         <>
           <Button tone="quiet" onClick={onClose}>Cancel</Button>
-          <Button tone="primary" onClick={() => onSave({ ...f, updatedAt: Date.now() })}>Save customer</Button>
+          <Button tone="primary" onClick={save.ask}>Save customer</Button>
         </>
       }
     >
+      {save.dialog}
       <div className="stack-wide">
         <div className="stack">
           <Field label="Company name">

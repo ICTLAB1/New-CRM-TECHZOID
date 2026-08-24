@@ -1,4 +1,6 @@
 import { useState, type ReactNode } from "react";
+import { useHotkeys } from "../components/hotkeys";
+import { ShortcutsHelp } from "../components/ShortcutsHelp";
 import { NAV } from "./nav";
 import { Button } from "../components/primitives";
 
@@ -22,7 +24,29 @@ const initials = (name: string): string =>
 
 export function AppShell({ view, onNavigate, user, brand, onSignOut, banner, children }: AppShellProps) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
   const section = NAV.find((s) => s.items.some((i) => i.id === view));
+
+  /* The two shortcuts that belong to the whole app rather than to one panel.
+     Both are bare keys, so they stay out of the way while anyone is typing —
+     see `tagIsTyping`. */
+  useHotkeys([
+    /* No Shift requirement: on some layouts "?" is not a shifted key at all,
+       and the character arriving is the signal regardless of how it was
+       typed. */
+    { key: "?", run: () => setHelpOpen(true) },
+    /* "/" jumps to whatever this screen searches. Every list renders exactly
+       one search box, so the first one on the page is the right one; if a
+       screen has none, this does nothing rather than stealing the key. */
+    {
+      key: "/",
+      run: () => {
+        const box = document.querySelector<HTMLInputElement>('input[placeholder*="Search" i], input[type="search"]');
+        box?.focus();
+        box?.select();
+      },
+    },
+  ]);
   const current = section?.items.find((i) => i.id === view);
 
   const go = (id: string) => {
@@ -32,6 +56,7 @@ export function AppShell({ view, onNavigate, user, brand, onSignOut, banner, chi
 
   return (
     <div className="shell">
+      <ShortcutsHelp open={helpOpen} onClose={() => setHelpOpen(false)} />
       {menuOpen ? <div className="sidebar-scrim" onClick={() => setMenuOpen(false)} /> : null}
 
       <aside className={"sidebar scroll" + (menuOpen ? " is-open" : "")}>

@@ -20,12 +20,14 @@ export interface CustomersScreenProps {
   users: { id: string; name: string }[];
   customFields: { id: string; label: string }[];
   currentUser: { id: string; name: string; role: string };
+  /** Read for `confirmBeforeSave` and passed to the sheet. */
+  settings?: Record<string, unknown>;
   onChange: (customers: Customer[], workspace: Workspace) => void;
 }
 
 type Pending = { customer: Customer; duplicate: ReturnType<typeof findDuplicate<Customer>> };
 
-export function CustomersScreen({ customers, workspace, users, customFields, currentUser, onChange }: CustomersScreenProps) {
+export function CustomersScreen({ customers, workspace, users, customFields, currentUser, settings = {}, onChange }: CustomersScreenProps) {
   const toast = useToast();
   const [query, setQuery] = useState("");
   const [stageFilter, setStageFilter] = useState<string>("all");
@@ -185,6 +187,7 @@ export function CustomersScreen({ customers, workspace, users, customFields, cur
           customFields={customFields}
           canReassign={canReassign}
           currentUser={currentUser}
+          settings={settings}
           onSave={save}
           onClose={() => setEditing(null)}
         />
