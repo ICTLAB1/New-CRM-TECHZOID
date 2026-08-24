@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildEmailHtml, buildEmailText, escapeHtml, signatureHtml } from "./emailTemplate";
+import { buildEmailHtml, buildEmailText, escapeHtml, signatureHtml , type EmailQuotation } from "./emailTemplate";
 
 /**
  * What a customer receives is the one thing in this product that cannot be
@@ -165,5 +165,172 @@ describe("a half-configured company", () => {
     const html = buildEmailHtml({ body: "Hello.", sender: {}, company: {} });
     expect(html).not.toContain("undefined");
     expect(html).not.toContain("null");
+  });
+});
+
+/* ── the quotation email ───────────────────────────────────────────── */
+
+const QUOTE: EmailQuotation = {
+  label: "Quotation",
+  number: "TZ/QT/2026-27/0117",
+  date: "24 Aug 2026",
+  validLabel: "Valid until",
+  validUntil: "16 Sept 2026",
+  items: [{ desc: "HP EliteBook 840 G11", qty: "10 Nos.", rate: "Rs. 1,12,500.00", total: "Rs. 10,35,000.00" }],
+  moneyRows: [["Taxable value", "Rs. 19,99,462.50"], ["CGST", "Rs. 1,79,951.63"], ["SGST", "Rs. 1,79,951.63"]],
+  grand: "Rs. 23,59,365.75",
+  grandWords: "Twenty Three Lakh Fifty Nine Thousand Rupees Only",
+  isOffer: true,
+  confirmTo: "sales@techzoidtechnologies.com",
+};
+
+const withQuote = (over: Partial<EmailQuotation> = {}) => ({
+  body: "Dear Rajesh Kumar,\n\nPlease find attached.",
+  sender: { name: "Priyanshi Sharma", designation: "Sales Manager", email: "p@techzoid.com" },
+  company: { name: "TechZoid Technologies Private Limited", gstin: "07AAGCT9158R1Z0", pan: "AAGCT9158R", cin: "U72900DL2016PTC302635" },
+  quotation: { ...QUOTE, ...over },
+  attachmentName: "Quotation-TZ-QT-2026-27-0117.pdf",
+});
+
+describe("the header band", () => {
+  it("carries the company name and strapline as TEXT", () => {
+    // A header that is only a logo arrives as an empty box wherever images
+    // are blocked, which is most inboxes by default.
+    const html = buildEmailHtml(withQuote());
+    expect(html).toContain("TechZoid Technologies Private Limited");
+    expect(html).toContain("Connect, Communicate &amp; Collaborate");
+  });
+
+  it("ships no images at all, so nothing can fail to load", () => {
+    expect(buildEmailHtml(withQuote())).not.toContain("<img");
+  });
+});
+
+describe("what the email must never invent", () => {
+  const html = buildEmailHtml(withQuote()).toLowerCase();
+  const text = buildEmailText(withQuote()).toLowerCase();
+
+  it.each([
+    ["act now", "manufactured urgency"],
+    ["hurry", "manufactured urgency"],
+    ["expires soon", "manufactured urgency"],
+    ["limited time", "manufactured urgency"],
+    ["within 24 hours", "a response-time promise"],
+    ["delivery in", "a delivery estimate"],
+    ["award", "an unearned claim"],
+    ["unsubscribe", "an unsubscribe link on transactional mail"],
+  ])("says nothing like %s — %s", (phrase) => {
+    expect(html).not.toContain(phrase);
+    expect(text).not.toContain(phrase);
+  });
+
+  it("states the validity date as a plain fact", () => {
+    expect(buildEmailHtml(withQuote())).toContain("16 Sept 2026");
+    expect(buildEmailHtml(withQuote())).toContain("Valid until");
+  });
+});
+
+describe("what it must say", () => {
+  it("says a quotation is not an invoice, near the total", () => {
+    const html = buildEmailHtml(withQuote());
+    expect(html).toContain("not an invoice");
+    expect(html.indexOf("not an invoice")).toBeGreaterThan(html.indexOf("Rs. 23,59,365.75"));
+  });
+
+  it("does NOT say that on a tax invoice, where it would be a lie", () => {
+    const html = buildEmailHtml(withQuote({ label: "Tax invoice", isOffer: false }));
+    expect(html).not.toContain("not an invoice");
+  });
+
+  it("splits the tax rather than showing one inclusive figure", () => {
+    const html = buildEmailHtml(withQuote());
+    expect(html).toContain("CGST");
+    expect(html).toContain("SGST");
+  });
+
+  it("puts the amount in words beside the total", () => {
+    expect(buildEmailHtml(withQuote())).toContain("Twenty Three Lakh");
+  });
+
+  it("carries every line item's four facts", () => {
+    const html = buildEmailHtml(withQuote());
+    for (const fact of ["HP EliteBook 840 G11", "10 Nos.", "Rs. 1,12,500.00", "Rs. 10,35,000.00"]) {
+      expect(html, fact).toContain(fact);
+    }
+  });
+
+  it("numbers the next steps in text, not by colour alone", () => {
+    const html = buildEmailHtml(withQuote());
+    expect(html).toContain("1.");
+    expect(html).toContain("2.");
+    expect(html).toContain("3.");
+  });
+
+  it("prints every registration the company has configured", () => {
+    const html = buildEmailHtml(withQuote());
+    expect(html).toContain("07AAGCT9158R1Z0");
+    expect(html).toContain("AAGCT9158R");
+    expect(html).toContain("U72900DL2016PTC302635");
+  });
+});
+
+describe("email client constraints", () => {
+  const html = buildEmailHtml(withQuote());
+
+  it("uses no <style> block — Gmail and Outlook strip them", () => {
+    expect(html).not.toMatch(/<style[\s>]/i);
+  });
+
+  it("uses no flexbox, grid or positioning", () => {
+    expect(html).not.toContain("display:flex");
+    expect(html).not.toContain("display:grid");
+    expect(html).not.toContain("position:absolute");
+  });
+
+  it("holds a fixed 600px column that still collapses on a phone", () => {
+    expect(html).toContain("max-width:600px");
+    expect(html).toContain("width:100%");
+  });
+
+  it("never drops below 12px anywhere", () => {
+    const sizes = [...html.matchAll(/font-size:(\d+)px/g)].map((m) => Number(m[1]));
+    expect(sizes.length).toBeGreaterThan(5);
+    expect(Math.min(...sizes)).toBeGreaterThanOrEqual(12);
+  });
+
+  it("colours every link explicitly, because clients recolour bare ones", () => {
+    for (const anchor of html.match(/<a [^>]*>/g) ?? []) {
+      expect(anchor, anchor).toContain("color:");
+    }
+  });
+});
+
+describe("the plain-text alternative", () => {
+  const text = buildEmailText(withQuote());
+
+  it("is a real alternative carrying every fact, not a stripped copy", () => {
+    for (const fact of [
+      "TZ/QT/2026-27/0117", "24 Aug 2026", "16 Sept 2026", "Rs. 23,59,365.75",
+      "Twenty Three Lakh", "HP EliteBook 840 G11", "Rs. 1,12,500.00",
+      "CGST", "SGST", "WHAT HAPPENS NEXT", "sales@techzoidtechnologies.com",
+      "Quotation-TZ-QT-2026-27-0117.pdf",
+    ]) {
+      expect(text, fact).toContain(fact);
+    }
+  });
+
+  it("carries no markup", () => {
+    expect(text).not.toContain("<");
+  });
+});
+
+describe("the greeting", () => {
+  it("never falls back to an impersonal salutation", () => {
+    // "Dear Customer" announces that the sender did not know who they were
+    // writing to. The call site omits the line entirely instead.
+    const html = buildEmailHtml({ ...withQuote(), body: "Please find attached." });
+    expect(html).not.toContain("Dear Customer");
+    expect(html).not.toContain("Sir/Madam");
+    expect(html).not.toContain("Hi there");
   });
 });

@@ -734,9 +734,16 @@ export function renderDocumentPdf(opts: RenderOptions): jsPDF {
 
 /** Filename v1 produced, kept identical so saved documents match. */
 export function documentFilename(m: DocumentModel): string {
-  return (
-    m.number.replace(/[\\/:*?"<>|]/g, "-") +
-    (m.isProforma ? " - Proforma Invoice" : " - Quotation") +
-    ".pdf"
-  );
+  /* The kind first, then the customer-facing number — "Quotation-TZ-QT-...".
+     Sorting a folder of these groups them by kind, which is how anyone
+     receiving several of them wants them grouped. It carries the number the
+     customer can quote back, never an internal id.
+
+     Slashes and the rest are replaced because a document number contains
+     them and a filename cannot. */
+  const kind = m.isPurchaseOrder ? "Purchase-Order"
+    : m.isInvoice ? "Tax-Invoice"
+    : m.isProforma ? "Proforma-Invoice"
+    : "Quotation";
+  return `${kind}-${m.number.replace(/[\\/:*?"<>|\s]/g, "-")}.pdf`;
 }

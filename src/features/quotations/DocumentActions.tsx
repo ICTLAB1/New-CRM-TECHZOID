@@ -7,6 +7,7 @@ import { WhatsAppDialog } from "../integrations/WhatsAppDialog";
 import { SendForInvoicing } from "../integrations/SendForInvoicing";
 import { downloadPdf, pdfAttachment, previewPdf } from "../../documents/pdf/deliver";
 import { fmtCurrency } from "../../domain/currency/format";
+import { amountInWordsForCurrency } from "../../domain/words/amountInWords";
 import { fmtDate } from "../../domain/dates";
 import type { DocImages } from "../../documents/pdf/render";
 import type { DocType, DocumentModel } from "../../domain/documents/model";
@@ -14,11 +15,14 @@ import type { ComputedRow, DocumentTotals } from "../../domain/tax/types";
 import type { SalesDocument } from "../../domain/documents/create";
 import { IntegrationError, type IntegrationsApi } from "../../integrations/api";
 import {
-  buildEmailHtml, buildEmailText, type EmailCompany, type EmailSender,
+  buildEmailHtml, buildEmailText,
+  type EmailCompany, type EmailQuotation, type EmailSender,
 } from "../../domain/integrations/emailTemplate";
 
-/** Copied on every quotation unless an admin changes `quoteCcEmail`. */
-const DEFAULT_QUOTE_CC = "abhinav.jain@techzoidtechnologies.com";
+/* NO DEFAULT CC ADDRESS HERE. A real address baked into a template is one
+   nobody remembers to change when the person leaves, and it goes on every
+   quotation this company sends. It is configured in Settings → Integrations
+   and read from there; empty means nobody is copied, which is honest. */
 
 /**
  * Everything you can do with a finished document: keep it, send it, or hand
@@ -46,20 +50,28 @@ const label = (docType: DocType): string =>
 
 /** What we say when sending a document out. Kept short: it is read on a
  *  phone, usually while the sender is on a call. */
-function defaultMessage(doc: SalesDocument, docType: DocType, totals: DocumentTotals): string {
+function defaultMessage(doc: SalesDocument, docType: DocType): string {
+  /* The contact's name where we have one, and NO GREETING LINE AT ALL where
+     we do not. "Dear Sir/Madam" and "Dear Customer" both announce that the
+     sender did not know who they were writing to, which is a poor first line
+     on a document asking for money. */
+  const person = docType === "purchase_order"
+    ? doc.vendorContact
+    : doc.billContact;
+
   return [
-    `Dear ${(docType === "purchase_order"
-      ? doc.vendorContact || doc.vendorName
-      : doc.billContact || doc.billName) || "Sir/Madam"},`,
+    person ? `Dear ${person},` : "",
+    person ? "" : "",
+    /* The number and what is attached, in one line. The summary block below
+       repeats the figures in a form that is easier to scan; this paragraph
+       exists so the message reads as a message. */
+    `Please find attached ${label(docType)} ${doc.number}, dated ${fmtDate(doc.date)}.`,
     "",
-    `Please find attached ${label(docType)} ${doc.number} dated ${fmtDate(doc.date)} for ${fmtCurrency(totals.grand, doc.currency)}.`,
-    doc.validUntil ? `It is valid until ${fmtDate(doc.validUntil)}.` : "",
-    "",
-    "Do let me know if anything needs changing.",
+    "The headline figures are below and the attached document carries the full specification and terms.",
     "",
     "Best regards,",
     doc.preparedBy || "",
-  ].filter((l, i, all) => !(l === "" && all[i - 1] === "")).join("\n");
+  ].filter((l, i, all) => !(l === "" && (i === 0 || all[i - 1] === ""))).join("\n");
 }
 
 export function DocumentActions({
@@ -70,7 +82,7 @@ export function DocumentActions({
   const [whatsAppOpen, setWhatsAppOpen] = useState(false);
 
   const renderOpts = { model, rows, images };
-  const message = defaultMessage(doc, docType, totals);
+  const message = defaultMessage(doc, docType);
 
   const company = (settings["company"] ?? {}) as Record<string, unknown>;
 
@@ -78,7 +90,7 @@ export function DocumentActions({
      in rather than remembered — but left editable, because "always" is not
      the same as "without exception". Configurable so this does not need a
      code change the day it moves. */
-  const autoCc = String(settings["quoteCcEmail"] ?? DEFAULT_QUOTE_CC);
+  const autoCc = String(settings["quoteCcEmail"] ?? "");
 
   const emailBrand: EmailCompany = {
     name: String(company["name"] ?? ""),
@@ -114,6 +126,50 @@ export function DocumentActions({
   const toAddress = isPo ? doc.vendorEmail : doc.billEmail;
   const toPhone = isPo ? doc.vendorPhone : doc.billPhone;
   const counterparty = isPo ? doc.vendorName : doc.billName;
+
+  /* The document's own facts, formatted ONCE here and passed as strings, so
+     the email cannot round or localise differently from the PDF built from
+     the same totals.
+
+     Nothing about cost, margin or commission is included — and there is
+     nothing to exclude: no such field exists on a line item in this product
+     (see LineItem in domain/tax/types.ts). The shape is the guard if one is
+     ever added. */
+  const money = (n: number) => fmtCurrency(n, doc.currency);
+  const moneyRows: Array<[string, string]> = [
+    ["Subtotal", money(totals.gross)],
+    ...(totals.discount > 0 ? [["Discount", "- " + money(totals.discount)] as [string, string]] : []),
+    ["Taxable value", money(totals.taxable)],
+    /* Tax is ALWAYS split out. A single tax-inclusive figure tells a finance
+       team nothing and invites a phone call. */
+    ...(totals.intra
+      ? ([["CGST", money(totals.cgst)], ["SGST", money(totals.sgst)]] as Array<[string, string]>)
+      : totals.igst > 0
+        ? ([["IGST", money(totals.igst)]] as Array<[string, string]>)
+        : []),
+    ...(totals.roundDiff ? [["Rounding", money(totals.roundDiff)] as [string, string]] : []),
+  ];
+
+  const emailQuotation: EmailQuotation = {
+    label: label(docType),
+    number: doc.number,
+    date: fmtDate(doc.date),
+    validLabel: isPo ? "Required by" : docType === "invoice" ? "Payment due" : "Valid until",
+    validUntil: doc.validUntil ? fmtDate(doc.validUntil) : null,
+    items: totals.rows.map((r) => ({
+      desc: String(r.desc ?? ""),
+      qty: `${r.qty ?? ""}${r.unit ? " " + r.unit : ""}`.trim(),
+      rate: money(Number(r.rate) || 0),
+      total: money(r.total),
+    })),
+    moneyRows,
+    grand: money(totals.grand),
+    grandWords: amountInWordsForCurrency(totals.grand, doc.currency),
+    /* Only a real quotation is an offer. Saying "not an invoice" on a tax
+       invoice would be a lie. */
+    isOffer: docType === "quotation",
+    confirmTo: currentUser?.email || undefined,
+  };
 
   const download = () => {
     try {
@@ -154,6 +210,7 @@ export function DocumentActions({
         defaultMessage={message}
         sender={emailSender}
         company={emailBrand}
+        quotation={emailQuotation}
         getAttachment={async () => pdfAttachment(renderOpts)}
       />
 
@@ -182,13 +239,16 @@ interface EmailDialogProps {
   defaultMessage: string;
   sender: EmailSender;
   company: EmailCompany;
+  /** The document's facts, so the email carries a summary and the lines
+   *  rather than only whatever the sender typed. */
+  quotation?: EmailQuotation | null;
   getAttachment: () => Promise<{ base64: string; filename: string }>;
   onClose: () => void;
 }
 
 function EmailDialog({
   open, api, defaultTo = "", defaultCc = "", defaultSubject, defaultMessage,
-  sender, company, getAttachment, onClose,
+  sender, company, quotation, getAttachment, onClose,
 }: EmailDialogProps) {
   const toast = useToast();
   const [to, setTo] = useState(defaultTo);
@@ -208,6 +268,7 @@ function EmailDialog({
         body: message,
         sender,
         company,
+        quotation,
         attachmentName: attachment?.filename ?? null,
       };
       const result = await api.sendEmail({
@@ -276,7 +337,7 @@ function EmailDialog({
             <iframe
               title="Email preview"
               sandbox=""
-              srcDoc={buildEmailHtml({ body: message, sender, company, attachmentName: attach ? "quotation.pdf" : null })}
+              srcDoc={buildEmailHtml({ body: message, sender, company, quotation, attachmentName: attach ? "quotation.pdf" : null })}
               style={{ width: "100%", height: 380, border: "1px solid var(--rule)", borderRadius: 8, marginTop: 10, background: "#fff" }}
             />
           ) : null}

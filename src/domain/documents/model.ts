@@ -57,6 +57,11 @@ export interface LogoSlot {
 export interface DocumentModel {
   docType: DocType;
   isProforma: boolean;
+  /** Which kind this is. Carried on the model rather than re-derived from
+   *  the title, so a renderer or a filename never has to string-match a
+   *  heading that exists to be read by a person. */
+  isPurchaseOrder: boolean;
+  isInvoice: boolean;
   currency: string;
   taxType: string;
   number: string;
@@ -549,6 +554,8 @@ export function buildDocumentModel(input: BuildModelInput): DocumentModel {
   return {
     docType,
     isProforma,
+    isPurchaseOrder,
+    isInvoice,
     currency,
     taxType,
     number: doc.number,
