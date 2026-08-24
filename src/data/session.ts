@@ -52,6 +52,10 @@ export async function loadProfile(session: Session): Promise<SignedInUser | null
     name: (data.name as string) || (session.user.email ?? "").split("@")[0] || "You",
     email: (data.email as string) || session.user.email || "",
     role: (data.role as string) || "Sales",
+    /* Their job title. Selected above but previously dropped here, which
+       left every outgoing email with no title under the sender's name however
+       carefully it had been set on their profile. */
+    designation: (data.designation as string) || "",
   };
 }
 
