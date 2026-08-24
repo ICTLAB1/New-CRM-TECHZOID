@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Presence } from "../../components/Presence";
 import { Button, Card, Empty } from "../../components/primitives";
 import { useToast } from "../../components/Toast";
 import { Confirm, Modal } from "../../components/Modal";
@@ -270,9 +271,11 @@ export function AttachmentsPanel({
         onCancel={() => setConfirmDelete(null)}
       />
 
-      {previewing ? (
-        <AttachmentPreview attachment={previewing} onClose={() => setPreviewing(null)} />
-      ) : null}
+      <Presence value={previewing}>
+        {(file, open) => (
+          <AttachmentPreview attachment={file} open={open} onClose={() => setPreviewing(null)} />
+        )}
+      </Presence>
     </Frame>
   );
 }
@@ -290,7 +293,7 @@ export function AttachmentsPanel({
  * "Open in a new tab" stays, because a PDF in a full browser tab is a better
  * reader than any frame — this is for the glance, not for the read.
  */
-function AttachmentPreview({ attachment, onClose }: { attachment: Attachment; onClose: () => void }) {
+function AttachmentPreview({ attachment, open = true, onClose }: { attachment: Attachment; open?: boolean; onClose: () => void }) {
   const [url, setUrl] = useState("");
   const [error, setError] = useState("");
 
@@ -308,7 +311,7 @@ function AttachmentPreview({ attachment, onClose }: { attachment: Attachment; on
 
   return (
     <Modal
-      open
+      open={open}
       title={attachment.name}
       description={`${formatBytes(attachment.size)}${attachment.uploadedBy ? ` · added by ${attachment.uploadedBy}` : ""}`}
       onClose={onClose}

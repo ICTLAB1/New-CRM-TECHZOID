@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { Presence } from "../../components/Presence";
 import { PageHead } from "../../app/AppShell";
 import { Button, Card, Chip, Empty, Input, Meter, Tabs } from "../../components/primitives";
 import { useToast } from "../../components/Toast";
@@ -147,23 +148,25 @@ export function OrdersScreen({ orders, challans, settings, currentUser, onChange
         an order can be fully dispatched and still not delivered.
       </p>
 
-      {files ? (
-        <Modal
-          open
-          side
-          title={`Files — ${files.number}`}
-          description={`${files.billName || "This order"}${files.poNumber ? ` · their PO ${files.poNumber}` : ""}`}
-          onClose={() => setFiles(null)}
-        >
-          <AttachmentsPanel
-            framed={false}
-            recordType="order"
-            recordId={files.id}
-            ownerId={files.ownerId}
-            currentUser={currentUser}
-          />
-        </Modal>
-      ) : null}
+      <Presence value={files}>
+        {(order, open) => (
+          <Modal
+            open={open}
+            side
+            title={`Files — ${order.number}`}
+            description={`${order.billName || "This order"}${order.poNumber ? ` · their PO ${order.poNumber}` : ""}`}
+            onClose={() => setFiles(null)}
+          >
+            <AttachmentsPanel
+              framed={false}
+              recordType="order"
+              recordId={order.id}
+              ownerId={order.ownerId}
+              currentUser={currentUser}
+            />
+          </Modal>
+        )}
+      </Presence>
     </main>
   );
 }

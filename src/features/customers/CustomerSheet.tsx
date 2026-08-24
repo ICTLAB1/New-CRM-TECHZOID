@@ -25,6 +25,8 @@ function GstinStatus({ gstin }: { gstin: string }) {
 }
 
 export interface CustomerSheetProps {
+  /** False while the sheet is animating away. */
+  open?: boolean;
   customer: Customer;
   users: { id: string; name: string }[];
   customFields: { id: string; label: string }[];
@@ -39,7 +41,7 @@ export interface CustomerSheetProps {
   onClose: () => void;
 }
 
-export function CustomerSheet({ customer, users, customFields, canReassign, currentUser, settings = {}, onSave, onClose }: CustomerSheetProps) {
+export function CustomerSheet({ open = true, customer, users, customFields, canReassign, currentUser, settings = {}, onSave, onClose }: CustomerSheetProps) {
   const [f, setF] = useState<Customer>({ ...customer, notes: customer.notes ?? [], customFields: customer.customFields ?? {} });
   const set = <K extends keyof Customer>(k: K) => (e: { target: { value: string } }) =>
     setF((cur) => ({ ...cur, [k]: e.target.value }));
@@ -65,7 +67,7 @@ export function CustomerSheet({ customer, users, customFields, canReassign, curr
 
   return (
     <Modal
-      open
+      open={open}
       side
       title={customerLabel(f)}
       description={customer.company ? "Editing an existing account." : "New account."}

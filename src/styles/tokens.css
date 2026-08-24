@@ -92,6 +92,7 @@
   --ease:      cubic-bezier(.2, .8, .3, 1);
   --t-quick:   .12s;   /* hover, focus, a colour change */
   --t-enter:   .18s;   /* something arriving on screen */
+  --t-exit:    .14s;   /* and leaving — shorter, nobody waits to watch it */
 }
 
 /* Reduced motion is honoured everywhere; nothing here is load-bearing.

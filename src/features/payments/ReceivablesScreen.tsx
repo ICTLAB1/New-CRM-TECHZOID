@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { Presence } from "../../components/Presence";
 import { PageHead } from "../../app/AppShell";
 import { Button, Card, Chip, Empty, Field, Input, Select, StatTile, SummaryBar } from "../../components/primitives";
 import { Modal } from "../../components/Modal";
@@ -192,16 +193,19 @@ export function ReceivablesScreen({ invoices, users, currentUser, settings, onCh
         )}
       </Card>
 
-      {paying ? (
-        <RecordPayment
-          invoice={paying}
-          outstanding={
-            computePaymentInfo(paying, computeDocument(paying as never, sellerState).grand, today).outstanding
-          }
-          onSave={(entry) => recordPayment(paying, entry)}
-          onClose={() => setPaying(null)}
-        />
-      ) : null}
+      <Presence value={paying}>
+        {(invoice, open) => (
+          <RecordPayment
+            open={open}
+            invoice={invoice}
+            outstanding={
+              computePaymentInfo(invoice, computeDocument(invoice as never, sellerState).grand, today).outstanding
+            }
+            onSave={(entry) => recordPayment(invoice, entry)}
+            onClose={() => setPaying(null)}
+          />
+        )}
+      </Presence>
 
       {currentUser.role === "Sales" ? (
         <div className="field-hint" style={{ marginTop: 12 }}>
@@ -215,9 +219,10 @@ export function ReceivablesScreen({ invoices, users, currentUser, settings, onCh
 /* ── recording a payment ───────────────────────────────────────────── */
 
 function RecordPayment({
-  invoice, outstanding, onSave, onClose,
+  invoice, outstanding, open = true, onSave, onClose,
 }: {
   invoice: SalesDocument;
+  open?: boolean;
   outstanding: number;
   onSave: (entry: { amount: number; date: string; method: string; reference: string }) => void;
   onClose: () => void;
@@ -240,7 +245,7 @@ function RecordPayment({
 
   return (
     <Modal
-      open
+      open={open}
       title={`Record a payment — ${invoice.number}`}
       description={`${invoice.billName || "This customer"} owes ${inrList(outstanding)} on this invoice.`}
       unsavedChanges={value > 0}

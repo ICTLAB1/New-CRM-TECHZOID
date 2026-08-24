@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { Presence } from "../../components/Presence";
 import { PageHead } from "../../app/AppShell";
 import { ShareLinkDialog } from "../leads/ShareLinkDialog";
 import { Button, Card, Chip, Empty, Input, Select, Tabs } from "../../components/primitives";
@@ -180,9 +181,11 @@ export function CustomersScreen({ customers, workspace, users, customFields, cur
         )}
       </Card>
 
-      {editing ? (
+      <Presence value={editing}>
+        {(record, open) => (
         <CustomerSheet
-          customer={editing}
+          open={open}
+          customer={record}
           users={users}
           customFields={customFields}
           canReassign={canReassign}
@@ -191,7 +194,8 @@ export function CustomersScreen({ customers, workspace, users, customFields, cur
           onSave={save}
           onClose={() => setEditing(null)}
         />
-      ) : null}
+        )}
+      </Presence>
 
       {pending?.duplicate ? (
         <DuplicateWarning

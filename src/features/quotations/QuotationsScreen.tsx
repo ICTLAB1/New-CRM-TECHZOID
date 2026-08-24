@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { Presence } from "../../components/Presence";
 import { PageHead } from "../../app/AppShell";
 import { Button, Card, Chip, Empty, Input, Select, Tabs } from "../../components/primitives";
 import { Confirm } from "../../components/Modal";
@@ -273,15 +274,16 @@ export function QuotationsScreen({
         onCancel={() => setConfirmDelete(null)}
       />
 
-      {receiving ? (
+      <Presence value={receiving}>
+        {(order, open) => (
         <GoodsReceiptDialog
           /* Remounted whenever the delivery count changes, so the prefilled
              quantities reset to what is NOW outstanding. Without this, the
              inputs would still hold the quantities just recorded and a second
              click would double-count the same delivery. */
-          key={receiving.id + ":" + (receiving.receipts?.length ?? 0)}
-          open
-          doc={receiving}
+          key={order.id + ":" + (order.receipts?.length ?? 0)}
+          open={open}
+          doc={order}
           currentUser={currentUser}
           onSave={(next) => {
             onChange(documents.map((d) => (d.id === next.id ? next : d)), settings);
@@ -291,7 +293,8 @@ export function QuotationsScreen({
           }}
           onClose={() => setReceiving(null)}
         />
-      ) : null}
+        )}
+      </Presence>
     </main>
   );
 }

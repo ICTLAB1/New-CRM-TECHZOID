@@ -20,9 +20,17 @@
   font-weight: 500;
   white-space: nowrap;
   cursor: pointer;
-  transition: background-color .12s ease, border-color .12s ease, color .12s ease;
+  transition:
+    background-color var(--t-quick) var(--ease),
+    border-color var(--t-quick) var(--ease),
+    color var(--t-quick) var(--ease),
+    transform .06s var(--ease);
 }
-.btn:disabled { opacity: .45; cursor: not-allowed; }
+/* A press that moves confirms the click landed, which matters most on the
+   actions that then take a moment — saving, sending, rendering a PDF. Tiny
+   on purpose: a button that visibly travels reads as a toy. */
+.btn:active:not(:disabled) { transform: translateY(1px); }
+.btn:disabled { opacity: .45; cursor: not-allowed; transform: none; }
 
 .btn-primary { background: var(--accent); color: var(--on-accent); }
 .btn-primary:hover:not(:disabled) { background: var(--accent-hover); }
@@ -88,7 +96,11 @@
   background: var(--surface);
   border: 1px solid var(--rule);
   border-radius: var(--radius-card);
+  transition: border-color var(--t-quick) var(--ease), box-shadow var(--t-quick) var(--ease);
 }
+/* Only the ones you can click. A card that lifts under the cursor while
+   doing nothing when clicked is a promise the screen does not keep. */
+.card.is-clickable:hover { border-color: var(--rule-strong); box-shadow: var(--lift); }
 /* Cards sitting side by side share a bottom edge. Ragged bottoms across a
    row read as unfinished, however tidy each card is on its own. */
 .card > .card-pad { flex: 1 1 auto; }
@@ -121,7 +133,15 @@
   border-radius: var(--radius-card);
   overflow: hidden;
 }
-.tile { padding: 11px var(--gap-wide) 13px; border-left: 1px solid var(--rule); min-width: 0; }
+.tile {
+  padding: 11px var(--gap-wide) 13px; border-left: 1px solid var(--rule); min-width: 0;
+  transition: background-color var(--t-quick) var(--ease);
+}
+/* A tile rendered as a button filters the list below it. Making that
+   obvious on hover is the difference between a figure and a control. */
+button.tile { text-align: left; font: inherit; color: inherit; background: transparent; border-top: 0; border-right: 0; border-bottom: 0; cursor: pointer; }
+button.tile:hover { background: var(--surface-2); }
+button.tile:active { background: var(--surface-3); }
 .tile:first-child { border-left: 0; }
 .tile-label { font-size: var(--t-small); font-weight: 500; color: var(--ink-3); }
 .tile-value { margin-top: 5px; font-size: var(--t-xl); font-weight: 600; color: var(--ink); letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
@@ -150,6 +170,9 @@ button.tile:hover { background: var(--surface-2); }
    status column, forty tinted lozenges are the loudest thing on the
    screen and none of them means more than the others. The filled variant
    is for the one place a state is the subject rather than an attribute. */
+/* A status can change under you while somebody else edits the record.
+   Fading the colour makes that read as news rather than as a glitch. */
+.chip { transition: background-color var(--t-enter) var(--ease), color var(--t-enter) var(--ease), border-color var(--t-enter) var(--ease); }
 .chip {
   display: inline-flex; align-items: center; gap: 5px;
   font-size: var(--t-small); font-weight: 500;
@@ -185,14 +208,19 @@ button.tile:hover { background: var(--surface-2); }
   color: var(--ink-3);
   white-space: nowrap;
 }
-.table td { padding: 7px 12px; border-bottom: 1px solid var(--rule); color: var(--ink-2); vertical-align: middle; }
+.table td {
+  padding: 7px 12px; border-bottom: 1px solid var(--rule); color: var(--ink-2); vertical-align: middle;
+  transition: background-color var(--t-quick) var(--ease);
+}
 .table tbody tr:last-child td { border-bottom: 0; }
 .table tbody tr:hover td { background: var(--surface-2); }
 .table tr.is-selected td { background: var(--accent-weak); }
 .table .num { text-align: right; font-variant-numeric: tabular-nums; }
 .table .strong { color: var(--ink); font-weight: 500; }
 /* A row needing action carries the same left edge a card does. */
-.table td.edge-cell { border-left: var(--edge) solid transparent; }
+/* The status edge fades in when a row starts needing attention, rather
+   than appearing between one render and the next. */
+.table td.edge-cell { border-left: var(--edge) solid transparent; transition: border-left-color var(--t-enter) var(--ease); }
 .table tr.needs-bad  td.edge-cell { border-left-color: var(--bad); }
 .table tr.needs-warn td.edge-cell { border-left-color: var(--warn); }
 
@@ -207,6 +235,7 @@ button.tile:hover { background: var(--surface-2); }
   border-bottom: 2px solid transparent;
   margin-bottom: -1px;
 }
+.tab { transition: color var(--t-quick) var(--ease), border-bottom-color var(--t-enter) var(--ease); }
 .tab:hover { color: var(--ink); }
 .tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
 .tab-count { margin-left: 6px; font-family: var(--mono); font-size: var(--t-micro); color: var(--ink-4); }
@@ -223,7 +252,16 @@ button.tile:hover { background: var(--surface-2); }
   overflow-y: auto;
   animation: scrim-in var(--t-enter) var(--ease) both;
 }
-@keyframes scrim-in { from { opacity: 0 } to { opacity: 1 } }
+/* A dismissed dialog must stop taking clicks the instant it is dismissed,
+   not when its fade finishes. Without this the exit becomes a 140ms window
+   where the screen looks ready but every click lands on a ghost. */
+.scrim.is-leaving { animation: scrim-out var(--t-exit) var(--ease) forwards; pointer-events: none; }
+@keyframes scrim-in  { from { opacity: 0 } to { opacity: 1 } }
+@keyframes scrim-out { from { opacity: 1 } to { opacity: 0 } }
+/* Leaves the way it came, a touch faster: an exit that matches its entrance
+   in length reads as sluggish, because nobody is waiting to see it. */
+@keyframes modal-out { from { opacity: 1; transform: none } to { opacity: 0; transform: translateY(6px) scale(.99) } }
+@keyframes side-out  { from { transform: none; opacity: 1 } to { transform: translateX(24px); opacity: 0 } }
 /* Rises a little as it fades in: the movement says the panel came from the
    page rather than being pasted over it. */
 @keyframes modal-in { from { opacity: 0; transform: translateY(8px) scale(.99) } to { opacity: 1; transform: none } }
@@ -248,6 +286,7 @@ button.tile:hover { background: var(--surface-2); }
   max-height: calc(100vh - 96px);
   animation: modal-in var(--t-enter) var(--ease) both;
 }
+.modal.is-leaving { animation: modal-out var(--t-exit) var(--ease) forwards; }
 /* The one part that scrolls. */
 .modal-head, .modal-foot { flex: 0 0 auto; }
 
@@ -298,7 +337,10 @@ button.tile:hover { background: var(--surface-2); }
 
 /* ── toast ─────────────────────────────────────────────────────────── */
 .toast-dock { position: fixed; right: var(--gap-wide); bottom: var(--gap-wide); z-index: 80; display: flex; flex-direction: column; gap: var(--gap-tight); }
-@keyframes toast-in { from { opacity: 0; transform: translateY(10px) } to { opacity: 1; transform: none } }
+@keyframes toast-in  { from { opacity: 0; transform: translateY(10px) } to { opacity: 1; transform: none } }
+/* Slides toward its own corner on the way out, so the eye follows it off
+   rather than noticing a gap appear. */
+@keyframes toast-out { from { opacity: 1; transform: none } to { opacity: 0; transform: translateX(16px) } }
 .toast {
   animation: toast-in var(--t-enter) var(--ease) both;
   display: flex; align-items: flex-start; gap: var(--gap-tight);
@@ -308,6 +350,7 @@ button.tile:hover { background: var(--surface-2); }
   border-radius: var(--radius); box-shadow: var(--lift);
   font-size: var(--t-body); color: var(--ink-2);
 }
+.toast.is-leaving { animation: toast-out var(--t-exit) var(--ease) forwards; }
 .toast-good { border-left-color: var(--good); }
 .toast-bad  { border-left-color: var(--bad); }
 .toast-warn { border-left-color: var(--warn); }
@@ -389,6 +432,7 @@ button.tile:hover { background: var(--surface-2); }
    only harmful while the content could grow past a fixed box. */
 .side { max-width: 660px; border-radius: 0; height: 100vh; max-height: 100vh;
   animation: side-in var(--t-enter) var(--ease) both; }
+.side.is-leaving { animation: side-out var(--t-exit) var(--ease) forwards; }
 .side .modal-foot { position: sticky; bottom: 0; border-radius: 0; }
 /* On a phone it is a bottom sheet, not a full-height rail — `height: auto`
    is needed to release the 100vh set above, or the sheet covers the screen. */

@@ -4,6 +4,7 @@ import { Card } from "../components/primitives";
 import { CustomersScreen } from "../features/customers/CustomersScreen";
 import { PipelineBoard } from "../features/pipeline/PipelineBoard";
 import { CustomerSheet } from "../features/customers/CustomerSheet";
+import { Presence } from "../components/Presence";
 import { Showcase } from "./Showcase";
 import { QuotationsScreen } from "../features/quotations/QuotationsScreen";
 import { OrdersScreen } from "../features/orders/OrdersScreen";
@@ -166,9 +167,11 @@ export function Workbench({
             sub="Drag a deal to move it. Moving to Lost asks why — you can always skip."
           />
           <PipelineBoard customers={customers} onChange={handleCustomersChange} onOpen={setEditing} />
-          {editing ? (
+          <Presence value={editing}>
+            {(record, open) => (
             <CustomerSheet
-              customer={editing}
+              open={open}
+              customer={record}
               users={team}
               customFields={customFields}
               canReassign={isAdmin || user.role === "Manager"}
@@ -180,7 +183,8 @@ export function Workbench({
               }}
               onClose={() => setEditing(null)}
             />
-          ) : null}
+            )}
+          </Presence>
         </main>
       ) : view === "quotations" ? (
         <QuotationsScreen

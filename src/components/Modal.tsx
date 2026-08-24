@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { isMod } from "./hotkeys";
+import { usePresence } from "./usePresence";
 import { Button } from "./primitives";
 
 /**
@@ -48,6 +49,9 @@ export interface ModalProps {
 export function Modal({ open, title, description, onClose, footer, side, unsavedChanges, onSubmit, canSubmit = true, children }: ModalProps) {
   const panel = useRef<HTMLDivElement>(null);
   const [confirming, setConfirming] = useState(false);
+  /* Held in the tree through its own exit, so closing fades rather than
+     teleports. Everything below reads `mounted`, not `open`. */
+  const { mounted, className: leaving } = usePresence(open);
 
   /* Read through a ref inside the key handler so the listener does not have
      to be town down and re-added on every keystroke that changes it. */
@@ -88,7 +92,7 @@ export function Modal({ open, title, description, onClose, footer, side, unsaved
   /* A dialog reopened after being dismissed must not still be asking. */
   useEffect(() => { if (!open) setConfirming(false); }, [open]);
 
-  if (!open) return null;
+  if (!mounted) return null;
 
   const attemptClose = () => {
     if (unsavedChanges) setConfirming(true);
@@ -96,8 +100,11 @@ export function Modal({ open, title, description, onClose, footer, side, unsaved
   };
 
   return (
-    <div className={"scrim" + (side ? " scrim-side" : "")} onMouseDown={(e) => { if (e.target === e.currentTarget) attemptClose(); }}>
-      <div className={"modal" + (side ? " side" : "")} role="dialog" aria-modal="true" tabIndex={-1} ref={panel}>
+    <div
+      className={"scrim" + (side ? " scrim-side" : "") + leaving}
+      onMouseDown={(e) => { if (e.target === e.currentTarget) attemptClose(); }}
+    >
+      <div className={"modal" + (side ? " side" : "") + leaving} role="dialog" aria-modal="true" tabIndex={-1} ref={panel}>
         <header className="modal-head">
           <div>
             <div className="card-title">{title}</div>
