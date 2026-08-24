@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { PageHead } from "../../app/AppShell";
-import { Button, Card, Chip, Field, Input } from "../../components/primitives";
+import { Button, Card, Chip, Field, Input, Select } from "../../components/primitives";
 import { Confirm } from "../../components/Modal";
 import { useToast } from "../../components/Toast";
 import { diagnosticLines, isReady, nextAction, type Diagnostics } from "../../domain/integrations/diagnostics";
@@ -19,13 +19,15 @@ import { IntegrationError, type IntegrationsApi, type MailboxConnection } from "
 export interface IntegrationsScreenProps {
   api: IntegrationsApi;
   user: { id: string; name: string; role: string };
+  /** The team, for choosing who owns a lead the website creates. */
+  users: { id: string; name: string; role?: string }[];
   settings: Record<string, unknown>;
   onSettingsChange: (next: Record<string, unknown>) => void;
 }
 
 const isAdmin = (role: string) => role === "Admin";
 
-export function IntegrationsScreen({ api, user, settings, onSettingsChange }: IntegrationsScreenProps) {
+export function IntegrationsScreen({ api, user, users, settings, onSettingsChange }: IntegrationsScreenProps) {
   return (
     <main className="page">
       <PageHead
@@ -40,6 +42,7 @@ export function IntegrationsScreen({ api, user, settings, onSettingsChange }: In
         <WebhooksPanel
           api={api}
           settings={settings}
+          users={users}
           onChange={onSettingsChange}
           canEdit={isAdmin(user.role) || user.role === "Manager"}
           isAdmin={isAdmin(user.role)}
@@ -490,18 +493,34 @@ function InvoicingPanel({
   );
 }
 
-/* ── outbound webhooks ────────────────────────────────────────────── */
+/* ── two-way website sync ─────────────────────────────────────────── */
 
 interface WebhookSettings {
   endpointUrl?: string;
   enabled?: boolean;
+  inboundOwnerId?: string;
+}
+
+const EVENT_KINDS = "deal.created, deal.stage_changed, deal.won, deal.lost, activity.logged";
+
+/** A generated secret, shown once and never again. */
+function SecretOnce({ secret }: { secret: string }) {
+  return (
+    <div className="notice notice-good" style={{ marginTop: 10 }}>
+      <div className="stack" style={{ gap: 8, width: "100%" }}>
+        <span><strong>Copy this now — it won't be shown again:</strong></span>
+        <CopyRow label="Signing secret" value={secret} />
+      </div>
+    </div>
+  );
 }
 
 function WebhooksPanel({
-  api, settings, onChange, canEdit, isAdmin,
+  api, settings, users, onChange, canEdit, isAdmin,
 }: {
   api: IntegrationsApi;
   settings: Record<string, unknown>;
+  users: { id: string; name: string; role?: string }[];
   onChange: (next: Record<string, unknown>) => void;
   canEdit: boolean;
   isAdmin: boolean;
@@ -510,97 +529,160 @@ function WebhooksPanel({
   const webhook = (settings["webhook"] ?? {}) as WebhookSettings;
   const [endpointUrl, setEndpointUrl] = useState(webhook.endpointUrl ?? "");
   const [enabled, setEnabled] = useState(webhook.enabled === true);
-  const [busy, setBusy] = useState(false);
-  const [newSecret, setNewSecret] = useState<string | null>(null);
+  const [ownerId, setOwnerId] = useState(webhook.inboundOwnerId ?? "");
+  const [busy, setBusy] = useState<"outbound" | "inbound" | null>(null);
+  const [outSecret, setOutSecret] = useState<string | null>(null);
+  const [inSecret, setInSecret] = useState<string | null>(null);
   const [error, setError] = useState("");
 
-  const dirty = endpointUrl.trim() !== (webhook.endpointUrl ?? "") || enabled !== (webhook.enabled === true);
+  const dirty =
+    endpointUrl.trim() !== (webhook.endpointUrl ?? "") ||
+    enabled !== (webhook.enabled === true) ||
+    ownerId !== (webhook.inboundOwnerId ?? "");
 
   const save = () => {
-    onChange({ ...settings, webhook: { endpointUrl: endpointUrl.trim(), enabled } });
-    toast("Webhook settings saved");
+    onChange({
+      ...settings,
+      webhook: { endpointUrl: endpointUrl.trim(), enabled, inboundOwnerId: ownerId },
+    });
+    toast("Website sync settings saved");
   };
 
-  const generate = async () => {
-    setError(""); setBusy(true);
+  const generate = async (kind: "outbound" | "inbound") => {
+    setError(""); setBusy(kind);
     try {
-      setNewSecret(await api.regenerateWebhookSecret());
+      const secret = await api.regenerateWebhookSecret(kind);
+      if (kind === "outbound") setOutSecret(secret);
+      else setInSecret(secret);
     } catch (err) {
       setError(err instanceof IntegrationError ? err.message : "Couldn't generate a new secret.");
     }
-    setBusy(false);
+    setBusy(null);
   };
 
+  /* Where the website should POST to, derived from where this page is
+     actually running rather than hardcoded — a preview deploy and the live
+     site need different values and both are legitimate. */
+  const receiveUrl =
+    (typeof window === "undefined" ? "https://crm.ttpldelhi.com" : window.location.origin) +
+    "/.netlify/functions/webhook-receive";
+
   return (
-    <Card title="Webhooks" actions={dirty && canEdit ? <Button size="sm" tone="primary" onClick={save}>Save</Button> : null}>
+    <Card
+      title="Website sync"
+      actions={dirty && canEdit ? <Button size="sm" tone="primary" onClick={save}>Save</Button> : null}
+    >
       <p className="muted" style={{ marginTop: 0 }}>
-        Notify your own website the moment a deal is created, moves stage, is won or lost, or gets a new
-        activity logged. Each delivery is a signed JSON POST, retried automatically if your endpoint doesn't
-        answer.
+        Keeps this CRM and your website in step, both ways. Every delivery in either direction is signed, so
+        each side can tell a real event from anyone who guessed the address, and is retried automatically if
+        the far end doesn't answer.
       </p>
 
-      <div className="stack" style={{ marginTop: 12 }}>
-        <Field label="Endpoint URL" hint="Must be HTTPS. Your server receives a POST for every event.">
-          <Input
-            value={endpointUrl}
-            disabled={!canEdit}
-            onChange={(e) => setEndpointUrl(e.target.value)}
-            placeholder="https://example.com/webhooks/techzoid"
-          />
-        </Field>
+      {error ? <div className="notice notice-bad" style={{ marginTop: 12 }}>{error}</div> : null}
 
-        <label className="row-tight" style={{ cursor: canEdit ? "pointer" : "default" }}>
-          <input
-            type="checkbox"
-            disabled={!canEdit}
-            checked={enabled}
-            onChange={(e) => setEnabled(e.target.checked)}
-          />
-          <span>Send events</span>
-        </label>
-      </div>
-
+      {/* ── CRM → website ── */}
       <div style={{ marginTop: 16, borderTop: "1px solid var(--rule)", paddingTop: 14 }}>
-        <span className="eyebrow">Signing secret</span>
+        <span className="eyebrow">This CRM → your website</span>
         <p className="field-hint" style={{ marginTop: 4 }}>
-          Every delivery carries an <code className="mono">x-techzoid-signature</code> header — an
-          HMAC-SHA256 of the request body, using this secret — so your endpoint can verify a delivery really
-          came from here. It is shown once, at the moment it's generated, and never again: copy it into your
-          own server's configuration straight away.
+          When someone here creates a deal, moves it along, wins or loses it, or logs an activity, your
+          website is told.
         </p>
 
-        {newSecret ? (
-          <div className="notice notice-good" style={{ marginTop: 10 }}>
-            <div className="stack" style={{ gap: 8, width: "100%" }}>
-              <span><strong>Copy this now — it won't be shown again:</strong></span>
-              <CopyRow label="Signing secret" value={newSecret} />
-            </div>
-          </div>
-        ) : null}
+        <div className="stack" style={{ marginTop: 12 }}>
+          <Field label="Your website's endpoint URL" hint="Must be HTTPS. Leave blank to send nothing.">
+            <Input
+              value={endpointUrl}
+              disabled={!canEdit}
+              onChange={(e) => setEndpointUrl(e.target.value)}
+              placeholder="https://www.ttpldelhi.com/hooks/crm"
+            />
+          </Field>
 
-        {error ? <div className="notice notice-bad" style={{ marginTop: 10 }}>{error}</div> : null}
+          <label className="row-tight" style={{ cursor: canEdit ? "pointer" : "default" }}>
+            <input
+              type="checkbox"
+              disabled={!canEdit}
+              checked={enabled}
+              onChange={(e) => setEnabled(e.target.checked)}
+            />
+            <span>Send events</span>
+          </label>
+        </div>
+
+        {outSecret ? <SecretOnce secret={outSecret} /> : null}
 
         {isAdmin ? (
           <Button
             size="sm"
-            tone={newSecret ? "quiet" : "default"}
-            disabled={busy}
-            onClick={() => void generate()}
+            tone={outSecret ? "quiet" : "default"}
+            disabled={busy !== null}
+            onClick={() => void generate("outbound")}
             style={{ marginTop: 10 }}
           >
-            {busy ? "Generating…" : newSecret ? "Generate another secret" : "Generate signing secret"}
+            {busy === "outbound" ? "Generating…" : outSecret ? "Generate another" : "Generate sending secret"}
           </Button>
-        ) : (
-          <p className="field-hint" style={{ marginTop: 10 }}>Only an Admin can generate or rotate the signing secret.</p>
-        )}
+        ) : null}
+        <p className="field-hint" style={{ marginTop: 8 }}>
+          Paste that secret into your website so it can verify what this CRM sends it.
+        </p>
       </div>
 
-      <div className="notice" style={{ marginTop: 14 }}>
+      {/* ── website → CRM ── */}
+      <div style={{ marginTop: 18, borderTop: "1px solid var(--rule)", paddingTop: 14 }}>
+        <span className="eyebrow">Your website → this CRM</span>
+        <p className="field-hint" style={{ marginTop: 4 }}>
+          A new enquiry on your website becomes a real lead here, and changes made there keep it up to date.
+          Give your website these two values.
+        </p>
+
+        <div className="stack" style={{ marginTop: 12, gap: 10 }}>
+          <div>
+            <span className="field-hint">Endpoint URL — the address your website should send to:</span>
+            <CopyRow label="Receiving URL" value={receiveUrl} />
+          </div>
+
+          {inSecret ? <SecretOnce secret={inSecret} /> : null}
+
+          {isAdmin ? (
+            <div>
+              <Button
+                size="sm"
+                tone={inSecret ? "quiet" : "default"}
+                disabled={busy !== null}
+                onClick={() => void generate("inbound")}
+              >
+                {busy === "inbound" ? "Generating…" : inSecret ? "Generate another" : "Generate receiving secret"}
+              </Button>
+              <p className="field-hint" style={{ marginTop: 8 }}>
+                Paste this into your website's <strong>Signing secret</strong> box. It is a different secret
+                from the sending one above, on purpose — changing one never silently breaks the other
+                direction.
+              </p>
+            </div>
+          ) : (
+            <p className="field-hint">Only an Admin can generate or rotate a signing secret.</p>
+          )}
+
+          <Field
+            label="Website leads belong to"
+            hint="Who owns a customer record created from your website. They can always reassign it afterwards."
+          >
+            <Select value={ownerId} disabled={!canEdit} onChange={(e) => setOwnerId(e.target.value)}>
+              <option value="">— first Admin —</option>
+              {users.map((u) => (
+                <option key={u.id} value={u.id}>{u.name}{u.role ? ` (${u.role})` : ""}</option>
+              ))}
+            </Select>
+          </Field>
+        </div>
+      </div>
+
+      <div className="notice" style={{ marginTop: 16 }}>
         <span>
-          Event kinds: <code className="mono">deal.created</code>, <code className="mono">deal.stage_changed</code>,{" "}
-          <code className="mono">deal.won</code>, <code className="mono">deal.lost</code>,{" "}
-          <code className="mono">activity.logged</code>. Run <code className="mono">supabase/005_webhooks.sql</code>{" "}
-          once in Supabase → SQL Editor before turning this on.
+          Event kinds, both directions: <code className="mono">{EVENT_KINDS}</code>. Run{" "}
+          <code className="mono">supabase/005_webhooks.sql</code> and then{" "}
+          <code className="mono">supabase/006_webhooks_inbound.sql</code> once each in Supabase → SQL Editor
+          before turning this on.
         </span>
       </div>
     </Card>

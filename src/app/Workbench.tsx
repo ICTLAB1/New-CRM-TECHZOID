@@ -211,7 +211,7 @@ export function Workbench({
           onChange={(next) => onChange("subscriptions", next)}
         />
       ) : view === "integrations" ? (
-        <IntegrationsScreen api={integrations} user={user} settings={settings} onSettingsChange={onSettingsChange} />
+        <IntegrationsScreen api={integrations} user={user} users={team} settings={settings} onSettingsChange={onSettingsChange} />
       ) : view === "assistant" ? (
         <AssistantScreen api={integrations} workspace={analytics} users={team} currentUser={user} settings={settings} />
       ) : view === "activity" ? (

@@ -4,7 +4,13 @@ import { escapeHtml, resultPage } from "./html.mjs";
 import { checkAttachment, emailList, isEmail, isGstin, isPan, str } from "./validate.mjs";
 import { corsHeaders, clientIp, readJson } from "./http.mjs";
 import { tooManyMessage } from "./ratelimit.mjs";
-import { backoffMs, buildEnvelope, isValidEventKind, signBody, MAX_DELIVERY_ATTEMPTS } from "./webhookSign.mjs";
+import {
+  backoffMs, buildEnvelope, isValidEventKind, parseSignatureHeader, signBody,
+  verifySignature, MAX_DELIVERY_ATTEMPTS, SIGNATURE_TOLERANCE_SECONDS,
+} from "./webhookSign.mjs";
+import {
+  crmIdForWebsiteDeal, customerFieldsFromEvent, noteFromEvent, normaliseStage, websiteDealId,
+} from "./inboundMap.mjs";
 
 const ENV = { MS_STATE_SECRET: "a-test-secret-value" };
 const USER = "3f2a6c1e-0000-4000-8000-abcdef123456";
@@ -231,20 +237,81 @@ describe("webhook signing", () => {
     expect(a.id).not.toBe(b.id);
   });
 
-  it("signs deterministically — the same body and secret always produce the same signature", () => {
+  it("carries a version, so the far end can tell formats apart later", () => {
+    expect(buildEnvelope("deal.created", {}).version).toBe(1);
+  });
+
+  it("produces the documented t=<unix>,v1=<hex> header", () => {
+    const at = Date.parse("2026-08-24T12:00:00Z");
+    const header = signBody(JSON.stringify({ a: 1 }), "shh", at);
+    expect(header).toMatch(/^t=\d+,v1=[0-9a-f]{64}$/);
+    // `t` is whole seconds, not milliseconds — a receiver comparing it
+    // against its own clock in seconds must not be out by a factor of 1000.
+    expect(parseSignatureHeader(header)).toMatchObject({ t: Math.floor(at / 1000) });
+  });
+
+  it("signs deterministically — same body, secret and moment give the same signature", () => {
     const body = JSON.stringify({ kind: "deal.won", data: { dealId: "c1" } });
-    expect(signBody(body, "shh")).toBe(signBody(body, "shh"));
+    const at = Date.parse("2026-08-24T12:00:00Z");
+    expect(signBody(body, "shh", at)).toBe(signBody(body, "shh", at));
   });
 
-  it("a different secret or a different body changes the signature", () => {
+  it("the same body signed a second later signs differently — the timestamp is inside the signature", () => {
     const body = JSON.stringify({ kind: "deal.won" });
-    const sig = signBody(body, "shh");
-    expect(signBody(body, "different-secret")).not.toBe(sig);
-    expect(signBody(JSON.stringify({ kind: "deal.lost" }), "shh")).not.toBe(sig);
+    const at = Date.parse("2026-08-24T12:00:00Z");
+    expect(signBody(body, "shh", at)).not.toBe(signBody(body, "shh", at + 1000));
   });
 
-  it("signature is 64 lowercase hex characters — a SHA-256 HMAC", () => {
-    expect(signBody("x", "shh")).toMatch(/^[0-9a-f]{64}$/);
+  it("round-trips: a body signed here verifies here", () => {
+    const body = JSON.stringify({ kind: "deal.won", data: { dealId: "c1" } });
+    const at = Date.parse("2026-08-24T12:00:00Z");
+    expect(verifySignature(body, signBody(body, "shh", at), "shh", at)).toEqual({ ok: true });
+  });
+
+  it("rejects a body altered after signing", () => {
+    const at = Date.parse("2026-08-24T12:00:00Z");
+    const header = signBody(JSON.stringify({ amount: 100 }), "shh", at);
+    const tampered = JSON.stringify({ amount: 999999 });
+    expect(verifySignature(tampered, header, "shh", at).ok).toBe(false);
+    expect(verifySignature(tampered, header, "shh", at).reason).toBe("signature");
+  });
+
+  it("rejects a signature made with someone else's secret", () => {
+    const body = JSON.stringify({ kind: "deal.won" });
+    const at = Date.parse("2026-08-24T12:00:00Z");
+    expect(verifySignature(body, signBody(body, "guessed", at), "shh", at).ok).toBe(false);
+  });
+
+  it("rejects a replayed delivery once it is older than the tolerance", () => {
+    // The attack this stops: capture a real "deal.won" delivery and send it
+    // again later. The timestamp is inside the signed material, so it cannot
+    // be moved forward without invalidating the signature.
+    const body = JSON.stringify({ kind: "deal.won" });
+    const at = Date.parse("2026-08-24T12:00:00Z");
+    const header = signBody(body, "shh", at);
+    const justInside = at + (SIGNATURE_TOLERANCE_SECONDS - 5) * 1000;
+    const wellOutside = at + (SIGNATURE_TOLERANCE_SECONDS + 60) * 1000;
+    expect(verifySignature(body, header, "shh", justInside).ok).toBe(true);
+    expect(verifySignature(body, header, "shh", wellOutside)).toEqual({ ok: false, reason: "stale" });
+  });
+
+  it("rejects a future-dated delivery just as firmly as a stale one", () => {
+    const body = JSON.stringify({ kind: "deal.won" });
+    const at = Date.parse("2026-08-24T12:00:00Z");
+    const header = signBody(body, "shh", at + 3600_000);
+    expect(verifySignature(body, header, "shh", at).ok).toBe(false);
+  });
+
+  it("refuses everything when no secret is configured, rather than accepting anything", () => {
+    const body = JSON.stringify({ kind: "deal.won" });
+    expect(verifySignature(body, signBody(body, ""), "")).toEqual({ ok: false, reason: "unconfigured" });
+  });
+
+  it("treats a malformed or missing header as a rejection, never a partial match", () => {
+    for (const header of ["", "garbage", "t=abc,v1=xyz", "v1=deadbeef", "t=123", null, undefined]) {
+      expect(verifySignature("{}", header, "shh").ok, String(header)).toBe(false);
+    }
+    expect(parseSignatureHeader("t=123,v1=nothex!")).toBeNull();
   });
 
   it("backs off exponentially, doubling each attempt", () => {
@@ -252,5 +319,71 @@ describe("webhook signing", () => {
     expect(backoffMs(2)).toBe(2000);
     expect(backoffMs(3)).toBe(4000);
     expect(backoffMs(MAX_DELIVERY_ATTEMPTS)).toBe(128_000);
+  });
+});
+
+describe("mapping a website event onto a customer", () => {
+  it("finds the website's deal id under any of the names it might use", () => {
+    expect(websiteDealId({ dealId: "D1" })).toBe("D1");
+    expect(websiteDealId({ deal_id: "D2" })).toBe("D2");
+    expect(websiteDealId({ id: 42 })).toBe("42");
+    expect(websiteDealId({ enquiryId: "E9" })).toBe("E9");
+    expect(websiteDealId({ nothing: "here" })).toBeNull();
+  });
+
+  it("derives the same CRM row id every time, so a retry never duplicates a customer", () => {
+    expect(crmIdForWebsiteDeal("D1")).toBe(crmIdForWebsiteDeal("D1"));
+    expect(crmIdForWebsiteDeal("D1")).toBe("web-D1");
+    expect(crmIdForWebsiteDeal("D1")).not.toBe(crmIdForWebsiteDeal("D2"));
+  });
+
+  it("strips anything unexpected out of an id rather than trusting it into a key", () => {
+    expect(crmIdForWebsiteDeal("../../etc/passwd")).toBe("web-etcpasswd");
+  });
+
+  it("reads the fields a website plausibly sends, whatever it calls them", () => {
+    expect(customerFieldsFromEvent({ companyName: "Acme Ltd", emailAddress: "a@b.com", mobile: "98765" }))
+      .toMatchObject({ company: "Acme Ltd", email: "a@b.com", phone: "98765" });
+    expect(customerFieldsFromEvent({ company: "Acme", email: "a@b.com", phone: "98765" }))
+      .toMatchObject({ company: "Acme", email: "a@b.com", phone: "98765" });
+  });
+
+  it("returns only what the event supplied, so a merge cannot wipe fields it never mentioned", () => {
+    // A stage-change event carrying no phone number must not erase the
+    // phone number a salesperson typed into the CRM.
+    const fields = customerFieldsFromEvent({ dealId: "D1", stage: "won" });
+    expect(fields).not.toHaveProperty("phone");
+    expect(fields).not.toHaveProperty("company");
+    expect(fields.stage).toBe("won");
+  });
+
+  it("defaults the source to Website when the event doesn't say", () => {
+    expect(customerFieldsFromEvent({}).source).toBe("Website");
+    expect(customerFieldsFromEvent({ source: "Google Ads" }).source).toBe("Google Ads");
+  });
+
+  it("reads a money value written with symbols and separators", () => {
+    expect(customerFieldsFromEvent({ value: "₹1,25,000" }).value).toBe(125000);
+    expect(customerFieldsFromEvent({ amount: 4500 }).value).toBe(4500);
+  });
+
+  it("maps stage names onto the CRM's own, and leaves an unknown one alone", () => {
+    expect(normaliseStage("won")).toBe("won");
+    expect(normaliseStage("Closed Won")).toBe("won");
+    expect(normaliseStage("NEW")).toBe("lead");
+    expect(normaliseStage("enquiry")).toBe("lead");
+    expect(normaliseStage("something we invented")).toBeNull();
+  });
+
+  it("builds a note whose id comes from the event, so a redelivery cannot double-post it", () => {
+    const a = noteFromEvent({ text: "Called" }, "evt-1", 1000);
+    const b = noteFromEvent({ text: "Called" }, "evt-1", 2000);
+    expect(a.id).toBe(b.id);
+    expect(a.text).toBe("Called");
+  });
+
+  it("files an unrecognised activity kind as a plain Note rather than a type no filter matches", () => {
+    expect(noteFromEvent({ kind: "Call" }, "e", 0).type).toBe("Call");
+    expect(noteFromEvent({ kind: "carrier-pigeon" }, "e", 0).type).toBe("Note");
   });
 });

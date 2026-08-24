@@ -107,14 +107,23 @@ async function deliver(admin, eventKind, payload) {
     return;
   }
 
-  const headers = {
-    "Content-Type": "application/json",
-    "x-techzoid-event-id": envelope.id,
-    "x-techzoid-signature": signBody(bodyString, secret),
-  };
-
   let lastError = "";
   for (let attempt = 1; attempt <= MAX_DELIVERY_ATTEMPTS; attempt++) {
+    /* Re-signed on EVERY attempt, because the signature carries a timestamp
+       and the receiver rejects one older than its tolerance. The backoff
+       schedule plus request timeouts can run past four minutes, so a
+       signature minted once up front would be refused as stale on the last
+       retries — the delivery would then fail for a reason that has nothing
+       to do with whether the far end is healthy.
+
+       Re-signing costs nothing and breaks nothing: `x-techzoid-event-id`
+       is what the receiver deduplicates on, and that stays fixed for the
+       life of this delivery. */
+    const headers = {
+      "Content-Type": "application/json",
+      "x-techzoid-event-id": envelope.id,
+      "x-techzoid-signature": signBody(bodyString, secret),
+    };
     try {
       const resp = await postWithTimeout(url.toString(), bodyString, headers);
       if (resp.ok) {

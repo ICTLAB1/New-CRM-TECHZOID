@@ -72,8 +72,12 @@ export interface IntegrationsApi {
    *  not let a rejection here interrupt anything the user is doing. */
   sendWebhookEvent(eventKind: string, payload: Record<string, unknown>): Promise<void>;
   /** Admin-only. Generates a brand-new signing secret and returns it in
-   *  plaintext — the only moment it is ever readable again. */
-  regenerateWebhookSecret(): Promise<string>;
+   *  plaintext — the only moment it is ever readable again.
+   *
+   *  "outbound" signs what the CRM sends to the website; "inbound" is what
+   *  the CRM checks on what the website sends in. Two separate secrets, so
+   *  rotating one never silently breaks the other direction. */
+  regenerateWebhookSecret(kind?: "outbound" | "inbound"): Promise<string>;
 }
 
 /**
@@ -200,9 +204,12 @@ export function netlifyApi(): IntegrationsApi {
       await post("webhook-deliver-background", { eventKind, payload });
     },
 
-    async regenerateWebhookSecret() {
+    async regenerateWebhookSecret(kind = "outbound") {
       const { getSupabase } = await import("../data/supabase");
-      const { data, error } = await getSupabase().rpc("regenerate_webhook_secret");
+      /* 'main' is the outbound secret's stored id, kept from the original
+         migration so an existing row is not orphaned by the rename. */
+      const { data, error } = await getSupabase()
+        .rpc("regenerate_webhook_secret", { p_kind: kind === "inbound" ? "inbound" : "main" });
       if (error) throw new IntegrationError(error.message || "Couldn't generate a new secret.", 400);
       return String(data ?? "");
     },
