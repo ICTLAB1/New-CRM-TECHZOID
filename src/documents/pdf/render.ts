@@ -120,17 +120,18 @@ export function renderDocumentPdf(opts: RenderOptions): jsPDF {
       const box = fitBox(logo, 46, 12);
       pdf.addImage(logo.src, "PNG", M, y, box.w, box.h, undefined, "FAST");
       y += box.h + 3;
-    } else {
-      pdf.setFont("helvetica", "bold").setFontSize(20).setTextColor(...NAVY);
-      pdf.text("TECHZOID", M, y + 7);
-      y += 11;
     }
 
-    pdf.setFont("helvetica", "bold").setFontSize(11).setTextColor(...NAVY);
-    pdf.text(m.header.companyName.toUpperCase(), M, y + 1);
+    /* With no logo uploaded, the legal name IS the mark — set larger to
+       carry the top of the page on its own. There used to be a fixed
+       "TECHZOID" wordmark here above it, which printed the company's name
+       twice and printed the WRONG name for anyone who changes it in
+       Settings. */
+    pdf.setFont("helvetica", "bold").setFontSize(logo ? 11 : 14).setTextColor(...NAVY);
+    pdf.text(m.header.companyName.toUpperCase(), M, y + (logo ? 1 : 2));
     pdf.setFont("helvetica", "normal").setFontSize(7.4).setTextColor(...MUTED);
-    pdf.text(m.header.tagline, M, y + 6);
-    let ly = y + 11;
+    pdf.text(m.header.tagline, M, y + (logo ? 6 : 7.5));
+    let ly = y + (logo ? 11 : 12.5);
 
     pdf.setFont("helvetica", "normal").setFontSize(6.8).setTextColor(...MUTED);
     for (const line of m.header.addressLines) {
@@ -529,7 +530,12 @@ export function renderDocumentPdf(opts: RenderOptions): jsPDF {
 
   /* ─────────────────────── signature block ─────────────────────── */
   function drawSignature(): void {
-    const boxH = m.signature.acceptance ? 34 : 26;
+    /* Sized from the number of fields, not fixed: a purchase order's
+       acknowledgement asks for four (it wants the signatory's designation
+       too), and at a fixed height the last field's rule ran through the
+       "Company Seal" label. */
+    const fieldCount = m.signature.acceptance?.fields.length ?? 0;
+    const boxH = m.signature.acceptance ? 8 + fieldCount * 7 + 5 : 26;
     need(boxH);
     const top = y;
 

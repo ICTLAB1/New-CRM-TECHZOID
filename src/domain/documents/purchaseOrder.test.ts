@@ -35,11 +35,12 @@ const CUSTOMER: Customer = {
   gstin: "09AABCA1234A1Z5", pan: "AABCA1234A",
 };
 
-const build = (doc: Record<string, unknown>) => {
+const build = (doc: Record<string, unknown>, settings: Record<string, unknown> = SETTINGS) => {
   const totals = computeDocument({ ...doc, billState: doc.vendorState as string }, "Delhi");
   return buildDocumentModel({
-    doc, settings: SETTINGS, totals, docType: "purchase_order",
+    doc, settings, totals, docType: "purchase_order",
     template: DEFAULT_DOC_TEMPLATE,
+    bankAccount: { name: "HDFC Bank Ltd", account: "50200058982457", ifsc: "HDFC0000331" },
   });
 };
 
@@ -169,5 +170,80 @@ describe("what a purchase order says", () => {
     const model = build({ ...doc, vendorName: "", vendorAddress: "", vendorState: "", vendorGstin: "" });
     expect(model.parties[0]!.name).toBe("—");
     expect(JSON.stringify(model)).not.toContain("undefined");
+  });
+});
+
+describe("what a purchase order deliberately leaves off", () => {
+  const doc = {
+    number: "TZ/PO/2026-27/0007", date: "2026-08-24", validUntil: "2026-09-08",
+    vendorName: "Redington (India) Limited", vendorState: "Tamil Nadu",
+    billName: "", billState: "", shipSameAsBilling: true,
+    taxType: "gst", currency: "INR", terms: [...PURCHASE_ORDER_TERMS],
+    items: [{ id: "1", desc: "Thing", hsn: "847130", qty: 1, rate: 1000, disc: 0, gst: 18 }],
+  };
+
+  it("never prints our bank details — we are the one paying", () => {
+    // Bank details tell someone where to pay US. On an order where we are
+    // the buyer they are noise at best, and an invitation to misdirect a
+    // payment at worst. A bank account IS configured here, on purpose.
+    expect(build(doc).money.bank).toBeNull();
+  });
+
+  it("never offers 'We Accept UPI / NEFT' — that is how we take money in", () => {
+    expect(build(doc).signature.weAccept).toBeNull();
+  });
+
+  it("asks the SUPPLIER to acknowledge, not a customer to accept", () => {
+    const acceptance = build(doc).signature.acceptance;
+    expect(acceptance?.heading).toBe("Supplier Acknowledgement");
+    // The supplier is the party being asked to sign, so their designation
+    // is asked for too — a quotation's box does not.
+    expect(acceptance?.fields).toEqual(["Name", "Designation", "Signature", "Date"]);
+  });
+
+  it("shows that acknowledgement even when customer acceptance is switched off", () => {
+    // The customerAcceptance toggle is about a CUSTOMER countersigning a
+    // quotation. It has nothing to say about a supplier acknowledging an
+    // order, and must not silently remove the box.
+    const off = {
+      ...DEFAULT_DOC_TEMPLATE,
+      sections: { ...DEFAULT_DOC_TEMPLATE.sections, customerAcceptance: false },
+    };
+    const totals = computeDocument({ ...doc, billState: doc.vendorState }, "Delhi");
+    const model = buildDocumentModel({
+      doc, settings: SETTINGS, totals, docType: "purchase_order", template: off,
+    });
+    expect(model.signature.acceptance?.heading).toBe("Supplier Acknowledgement");
+  });
+
+  it("closes with the terms notice, not by thanking the supplier for quoting us", () => {
+    expect(build(doc).footer.closing).not.toContain("opportunity");
+    expect(build(doc).footer.closing).toContain("terms and conditions");
+  });
+});
+
+describe("the company logo", () => {
+  const doc = {
+    number: "TZ/PO/2026-27/0007", date: "2026-08-24", validUntil: "2026-09-08",
+    vendorName: "A Supplier", vendorState: "Delhi", billName: "", billState: "",
+    shipSameAsBilling: true, taxType: "gst", currency: "INR",
+    terms: [], items: [{ id: "1", desc: "Thing", qty: 1, rate: 100, disc: 0, gst: 18 }],
+  };
+
+  it("is carried on the model when one is uploaded, with its natural size", () => {
+    const withLogo = {
+      ...SETTINGS,
+      company: { ...SETTINGS.company, logo: "data:image/png;base64,AAA", logoW: 300, logoH: 80 },
+    };
+    expect(build(doc, withLogo).header.logo).toEqual({ src: "data:image/png;base64,AAA", w: 300, h: 80 });
+  });
+
+  it("is null without one, so a renderer leads with the company name instead", () => {
+    expect(build(doc).header.logo).toBeNull();
+  });
+
+  it("is refused without its natural size — a renderer would stretch it", () => {
+    const noDims = { ...SETTINGS, company: { ...SETTINGS.company, logo: "data:image/png;base64,AAA" } };
+    expect(build(doc, noDims).header.logo).toBeNull();
   });
 });

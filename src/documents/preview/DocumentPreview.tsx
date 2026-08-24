@@ -84,16 +84,17 @@ export function DocumentPreview({ model: m, rows, brandLogos = {}, scale = 1 }: 
       <article className="doc-page">
         <header className="doc-head">
           <div>
-            {/* The uploaded logo when there is one, the wordmark when there
-                isn't — the same choice, from the same field, that the PDF
-                makes. This used to be the literal text "TECHZOID" no matter
-                what had been uploaded. */}
+            {/* The uploaded logo when there is one. With none, the legal
+                name below carries the header on its own, set larger — the
+                same choice the PDF makes. A fixed "TECHZOID" wordmark used
+                to sit here, printing the company's name twice and printing
+                the wrong name for anyone who changes it in Settings. */}
             {m.header.logo ? (
               <img className="doc-logo" src={m.header.logo.src} alt={m.header.companyName} />
-            ) : (
-              <div className="doc-mark">TECHZOID</div>
-            )}
-            <div className="doc-legal">{m.header.companyName.toUpperCase()}</div>
+            ) : null}
+            <div className={m.header.logo ? "doc-legal" : "doc-legal doc-legal-lead"}>
+              {m.header.companyName.toUpperCase()}
+            </div>
             <div className="doc-tagline">{m.header.tagline}</div>
             {m.header.addressLines.map((line, i) => (
               <div className="doc-head-line" key={i}>{line}</div>

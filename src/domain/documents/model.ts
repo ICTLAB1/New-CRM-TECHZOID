@@ -437,8 +437,12 @@ export function buildDocumentModel(input: BuildModelInput): DocumentModel {
   /* Bank details print on a quotation too, in their own block below the
      HSN/SAC summary — not only on a proforma, where they instead share the
      terms column since a proforma prints no terms. */
+  /* Not on a purchase order. Bank details tell someone where to PAY US —
+     on a document where we are the buyer, printing our own account is at
+     best noise and at worst an invitation to misdirect a payment. The
+     supplier's details go on their invoice, not on our order. */
   const bankBlock =
-    isOn(SEC.bankDetails) && (bank.name || bank.account)
+    !isPurchaseOrder && isOn(SEC.bankDetails) && (bank.name || bank.account)
       ? {
           heading:
             (L.bankHeading || "Bank Details").toUpperCase() +
@@ -464,16 +468,31 @@ export function buildDocumentModel(input: BuildModelInput): DocumentModel {
       : [];
 
   /* ---- signature ---- */
-  const showAcceptance = !isProforma && isOn(SEC.customerAcceptance);
+  /* A purchase order ALWAYS carries an acknowledgement box, and it is the
+     supplier's — they are the party being asked to accept. Labelling it
+     "Customer Acceptance" asked the wrong person to sign, on a document
+     they were never party to as a customer. It is not behind the
+     customerAcceptance toggle either: that switch is about whether a
+     CUSTOMER countersigns a quotation, which has nothing to do with a
+     supplier acknowledging an order. */
+  const showAcceptance = isPurchaseOrder || (!isProforma && isOn(SEC.customerAcceptance));
   const signature: DocumentModel["signature"] = {
     forLine: (L.forCompanyPrefix || "For") + " " + (c.name || "TechZoid Technologies Private Limited"),
     signatoryName: s.signatoryName || "",
     signatoryDesignation: s.signatoryDesignation || "",
     acceptance: showAcceptance
-      ? { heading: L.acceptanceHeading || "Customer Acceptance", fields: ["Name", "Signature", "Date"], sealLabel: L.sealLabel || "Company Seal" }
+      ? isPurchaseOrder
+        ? {
+            heading: "Supplier Acknowledgement",
+            fields: ["Name", "Designation", "Signature", "Date"],
+            sealLabel: "Company Seal",
+          }
+        : { heading: L.acceptanceHeading || "Customer Acceptance", fields: ["Name", "Signature", "Date"], sealLabel: L.sealLabel || "Company Seal" }
       : null,
     weAccept:
-      !showAcceptance && !isProforma && (bank.name || bank.account)
+      /* "We Accept UPI / NEFT" is how WE take money. Meaningless on an order
+         where we are the one paying. */
+      !showAcceptance && !isProforma && !isPurchaseOrder && (bank.name || bank.account)
         ? { label: (L.weAcceptLabel || "We Accept").toUpperCase(), methods: ["UPI", "NEFT / RTGS", "Bank Transfer"] }
         : null,
   };
