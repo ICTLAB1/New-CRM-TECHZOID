@@ -6,7 +6,7 @@ import { stateNameForCode, STATES } from "../geo/states";
 import { buildItemColumns, type ItemColumn } from "./columns";
 import { isOn, type DocTemplate, type SectionKey } from "./template";
 
-export type DocType = "quotation" | "proforma" | "purchase_order";
+export type DocType = "quotation" | "proforma" | "purchase_order" | "invoice";
 
 /** A label/value pair, as printed with a colon between. */
 export type Pair = readonly [label: string, value: string];
@@ -190,6 +190,9 @@ export function buildDocumentModel(input: BuildModelInput): DocumentModel {
   /* A purchase order faces the other way: the company is the buyer, the
      counterparty is a supplier, and the Bill To box is the company's own. */
   const isPurchaseOrder = docType === "purchase_order";
+  /* A tax invoice asks for money: its second date is a payment due date,
+     not a validity window, and the bank details are the point of it. */
+  const isInvoice = docType === "invoice";
   const L = dt.labels;
   const SEC = dt.sections;
   const c = s.company ?? {};
@@ -232,6 +235,15 @@ export function buildDocumentModel(input: BuildModelInput): DocumentModel {
         ["Supplier Ref.", doc.referenceNo || "—"],
         ["Raised By", doc.preparedBy || "—"],
       ]
+    : isInvoice
+    ? [
+        ["Invoice No.", doc.number],
+        ["Invoice Date", fmtDate(doc.date)],
+        ["Payment Due", fmtDate(doc.validUntil)],
+        ["Customer ID", doc.customerCode || "—"],
+        ["Sales Executive", doc.preparedBy || "—"],
+        ["Against", doc.quoteNumber || "—"],
+      ]
     : isProforma
     ? [
         ["Invoice No.", doc.number],
@@ -265,7 +277,7 @@ export function buildDocumentModel(input: BuildModelInput): DocumentModel {
      page. */
   const meta: Pair[] = [
     ["Date", fmtDate(doc.date)],
-    [isPurchaseOrder ? "Required By" : "Valid Until", fmtDate(doc.validUntil)],
+    [isPurchaseOrder ? "Required By" : isInvoice ? "Payment Due" : "Valid Until", fmtDate(doc.validUntil)],
     ["Revision", String(doc.revisionNo ?? 0)],
     ["Currency", currency],
   ];
@@ -452,8 +464,8 @@ export function buildDocumentModel(input: BuildModelInput): DocumentModel {
         }
       : null;
 
-  /* Terms print on a purchase order as well as a quotation. On a proforma
-     they are replaced by the payment notes block. */
+  /* Terms print on a purchase order and a tax invoice as well as a
+     quotation. On a proforma they are replaced by the payment notes block. */
   const terms = !isProforma && isOn(SEC.terms) ? (doc.terms || []).filter(Boolean).map(String) : [];
 
   /* ---- notes (proforma only) ---- */
@@ -475,7 +487,7 @@ export function buildDocumentModel(input: BuildModelInput): DocumentModel {
      customerAcceptance toggle either: that switch is about whether a
      CUSTOMER countersigns a quotation, which has nothing to do with a
      supplier acknowledging an order. */
-  const showAcceptance = isPurchaseOrder || (!isProforma && isOn(SEC.customerAcceptance));
+  const showAcceptance = isPurchaseOrder || (!isProforma && !isInvoice && isOn(SEC.customerAcceptance));
   const signature: DocumentModel["signature"] = {
     forLine: (L.forCompanyPrefix || "For") + " " + (c.name || "TechZoid Technologies Private Limited"),
     signatoryName: s.signatoryName || "",
@@ -527,9 +539,11 @@ export function buildDocumentModel(input: BuildModelInput): DocumentModel {
          is issued TO a supplier, so that line thanked them for the chance to
          quote us — on a document telling them what to deliver. */
       ? doc.footer || "This purchase order is subject to the terms and conditions stated herein."
-      : isProforma
-        ? L.closingProforma || "This is a Proforma Invoice and not a Tax Invoice."
-        : doc.footer || L.closingQuote || "Thank you for the opportunity to submit this quotation.",
+      : isInvoice
+        ? doc.footer || "This is a computer generated tax invoice. Please quote the invoice number with your payment."
+        : isProforma
+          ? L.closingProforma || "This is a Proforma Invoice and not a Tax Invoice."
+          : doc.footer || L.closingQuote || "Thank you for the opportunity to submit this quotation.",
   };
 
   return {
@@ -538,7 +552,7 @@ export function buildDocumentModel(input: BuildModelInput): DocumentModel {
     currency,
     taxType,
     number: doc.number,
-    title: isPurchaseOrder ? "PURCHASE ORDER" : isProforma ? "PROFORMA INVOICE" : "QUOTATION",
+    title: isPurchaseOrder ? "PURCHASE ORDER" : isInvoice ? "TAX INVOICE" : isProforma ? "PROFORMA INVOICE" : "QUOTATION",
     sectionOrder: dt.sectionOrder,
     accentColor: dt.accentColor,
     header: {
@@ -553,9 +567,9 @@ export function buildDocumentModel(input: BuildModelInput): DocumentModel {
     parties,
     references,
     intro: {
-      salutation: !isProforma && !isPurchaseOrder && isOn(SEC.salutation) ? L.salutation || "Dear Sir / Madam," : null,
+      salutation: !isProforma && !isPurchaseOrder && !isInvoice && isOn(SEC.salutation) ? L.salutation || "Dear Sir / Madam," : null,
       body:
-        !isProforma && !isPurchaseOrder && isOn(SEC.salutation)
+        !isProforma && !isPurchaseOrder && !isInvoice && isOn(SEC.salutation)
           ? doc.intro ||
             "Thank you for your interest in our products and services. Please find below our best quotation as per your requirement."
           : null,

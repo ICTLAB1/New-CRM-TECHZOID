@@ -6,7 +6,7 @@ import { SignIn, NoProfile } from "./SignIn";
 import { PublicLeadForm } from "../features/leads/PublicLeadForm";
 import { useWorkspace, type WorkspaceData } from "../data/useWorkspace";
 import { isConfigured, loadProfile, onSessionChange, signOut, type SignedInUser } from "../data/session";
-import { CHALLANS, CUSTOMERS, ORDERS, PROFORMAS, PURCHASE_ORDERS, QUOTATIONS, SETTINGS, SUBSCRIPTIONS, USERS } from "./demoData";
+import { CHALLANS, CUSTOMERS, ORDERS, INVOICES, PROFORMAS, PURCHASE_ORDERS, QUOTATIONS, SETTINGS, SUBSCRIPTIONS, USERS } from "./demoData";
 import type { TeamMember } from "../features/team/TeamScreen";
 import type { Session } from "@supabase/supabase-js";
 
@@ -123,6 +123,7 @@ function DemoApp() {
     quotations: QUOTATIONS,
     proformas: PROFORMAS,
     purchaseOrders: PURCHASE_ORDERS,
+    invoices: INVOICES,
     orders: ORDERS,
     challans: CHALLANS,
     subscriptions: SUBSCRIPTIONS,

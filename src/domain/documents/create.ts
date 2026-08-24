@@ -30,6 +30,12 @@ export const PURCHASE_ORDER_STATUSES: readonly PurchaseOrderStatus[] = [
   "Draft", "Issued", "Acknowledged", "Partially Received", "Received", "Cancelled",
 ];
 
+/** An invoice's own life. Whether it is PAID is never one of these — that is
+ *  derived from the payment ledger, so a status set by hand can never
+ *  disagree with the money actually recorded. */
+export type InvoiceStatus = "Draft" | "Issued" | "Cancelled";
+export const INVOICE_STATUSES: readonly InvoiceStatus[] = ["Draft", "Issued", "Cancelled"];
+
 export interface DocSettings {
   quotePrefix?: string;
   quoteSeq?: number;
@@ -37,6 +43,10 @@ export interface DocSettings {
   proformaSeq?: number;
   purchaseOrderPrefix?: string;
   purchaseOrderSeq?: number;
+  invoicePrefix?: string;
+  invoiceSeq?: number;
+  /** Days from the invoice date until payment is due. */
+  defaultPaymentDays?: number;
   defaultCurrency?: string;
   defaultTaxType?: string;
   defaultGst?: number;
@@ -381,6 +391,68 @@ export function proformaFromQuotation(
     preparedBy: user.name,
     createdAt: Date.now(), updatedAt: Date.now(),
   };
+}
+
+/**
+ * A tax invoice, raised from a proforma or straight from a quotation.
+ *
+ * This is the document that actually asks for money, so two things differ
+ * from everything above it:
+ *
+ *   · `validUntil` is a PAYMENT DUE DATE, not a validity window. It is what
+ *     the receivables ageing is measured from, so an invoice does not
+ *     "expire" — it falls overdue.
+ *   · `paymentHistory` starts empty and is the only record of what has been
+ *     paid. Whether an invoice is paid is always derived from it, never
+ *     stored, so a status set by hand cannot disagree with the money.
+ */
+export function invoiceFrom(
+  source: SalesDocument | null,
+  settings: DocSettings,
+  user: { id: string; name: string },
+  today: string = TODAY(),
+): SalesDocument {
+  const dueDays = settings.defaultPaymentDays ?? 30;
+  const base = source
+    ? {
+        ...carryOver(source),
+        ownerId: source.ownerId,
+        /* Traceable back to what was agreed, so a customer query about a
+           figure can be answered without guessing which quotation it came
+           from. */
+        quoteId: source.id,
+        quoteNumber: source.number,
+        items: source.items.map((it) => ({ ...it, id: uid() })),
+        terms: [...(source.terms ?? [])],
+      }
+    : {
+        ...documentFieldsFrom(null, settings),
+        ...emptyShipping(),
+        ownerId: user.id,
+        quoteId: "", quoteNumber: "",
+        items: [blankItem(settings.defaultGst)],
+        terms: [...(settings.defaultTerms ?? DOMESTIC_TERMS)],
+        referenceNo: "", enquiryRef: "", customerCode: "",
+        paymentTerms: "As specified", deliveryTerms: "As specified",
+        roundOff: true,
+      };
+
+  return {
+    id: uid(),
+    number: buildDocNumber(settings.invoicePrefix ?? "TZ/INV", settings.invoiceSeq),
+    ...base,
+    ownerId: base.ownerId || user.id,
+    subject: "Tax invoice for IT products and services",
+    date: today,
+    validUntil: addDays(today, dueDays),
+    status: "Draft",
+    revisionNo: 0,
+    notes: "",
+    paymentHistory: [],
+    bankAccountId: source?.bankAccountId ?? "",
+    preparedBy: user.name,
+    createdAt: Date.now(), updatedAt: Date.now(),
+  } as SalesDocument;
 }
 
 /**

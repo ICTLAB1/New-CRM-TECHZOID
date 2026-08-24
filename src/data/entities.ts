@@ -3,7 +3,7 @@
  *  shape the app uses. */
 export const ENTITY_TABLES = [
   "customers", "quotes", "orders", "challans", "proformas", "subscriptions",
-  "purchase_orders",
+  "purchase_orders", "invoices",
 ] as const;
 
 export type EntityTable = (typeof ENTITY_TABLES)[number];
@@ -29,6 +29,9 @@ export const ENTITY_EXTRA_COLS: Record<EntityTable, (it: EntityBase) => Record<s
   /* customer_id means the DROP-SHIP destination here, not the counterparty:
      it is set only when goods go straight to an end customer. */
   purchase_orders: (it) => ({ customer_id: it.customerId || null }),
+  /* quote_id carries the proforma or quotation this invoice was raised
+     from, so a query about a figure traces back to what was agreed. */
+  invoices: (it) => ({ customer_id: it.customerId || null, quote_id: it.quoteId || null }),
 };
 
 export interface EntityRow {

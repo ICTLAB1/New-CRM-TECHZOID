@@ -13,6 +13,7 @@ describe("navigation", () => {
       "dashboard", "pipeline", "customers", "quotations", "proformas",
       "purchase-orders",
       "orders", "dispatch", "subscriptions", "renewals",
+      "invoices", "receivables",
       "reports", "activity", "assistant", "incentives",
       "catalog", "team", "integrations", "settings", "components",
     ]) {
@@ -32,6 +33,6 @@ describe("navigation", () => {
     // "Buy" sits between selling and delivering because that is the order
     // the work happens in: quote the customer, order from the distributor,
     // then despatch.
-    expect(NAV.map((s) => s.label)).toEqual(["Sell", "Buy", "Deliver", "Understand", "Administer"]);
+    expect(NAV.map((s) => s.label)).toEqual(["Sell", "Buy", "Deliver", "Get paid", "Understand", "Administer"]);
   });
 });

@@ -172,6 +172,34 @@ export const PROFORMAS: SalesDocument[] = [
   baseDoc({ id: "pf1", number: "TZ/PI/2627/0042", status: "Sent", advancePercent: 50, paymentHistory: [] }),
 ];
 
+/* Tax invoices, with real payment ledgers so the receivables ageing has
+   something to show: one paid in full, one part-paid and overdue, one not
+   yet due. */
+export const INVOICES: SalesDocument[] = [
+  baseDoc({
+    id: "in1", number: "TZ/INV/2026-27/0031", status: "Issued",
+    subject: "Tax invoice for IT products and services",
+    date: "2026-06-02", validUntil: "2026-07-02",
+    quoteId: "q2", quoteNumber: "TZ/QT/2627/0116",
+    billName: "Northline Logistics", customerId: "c2", ownerId: "u-rashmi", billState: "Maharashtra",
+    paymentHistory: [{ id: "p1", amount: 200000, date: "2026-06-20", method: "Bank Transfer / NEFT / RTGS", reference: "NEFT/8812" }],
+  }),
+  baseDoc({
+    id: "in2", number: "TZ/INV/2026-27/0030", status: "Issued",
+    subject: "Tax invoice for IT products and services",
+    date: "2026-05-10", validUntil: "2026-06-09",
+    quoteId: "q1", quoteNumber: "TZ/QT/2627/0117",
+    paymentHistory: [],
+  }),
+  baseDoc({
+    id: "in3", number: "TZ/INV/2026-27/0032", status: "Issued",
+    subject: "Tax invoice for IT products and services",
+    date: "2026-08-18", validUntil: "2026-09-17",
+    billName: "Deccan Cements Limited", customerId: "c7", billState: "Telangana",
+    paymentHistory: [],
+  }),
+];
+
 /* A purchase order faces the other way: the supplier is the counterparty,
    the Bill To box is the company's own (drawn from settings, not stored),
    and the customer is only the drop-ship destination when there is one. */

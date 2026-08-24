@@ -133,7 +133,7 @@ export function DocumentActions({
       <Button tone="default" onClick={() => setWhatsAppOpen(true)}>WhatsApp</Button>
       {/* "Send for invoicing" asks accounts to raise a tax invoice against a
           sale. A purchase order is a purchase — there is nothing to invoice. */}
-      {docType === "purchase_order" ? null : (
+      {docType === "purchase_order" || docType === "invoice" ? null : (
         <SendForInvoicing
           api={api}
           doc={doc}

@@ -22,7 +22,7 @@ export type { Profile, WorkspaceData } from "./store";
 export type LoadState = "loading" | "ready" | "failed";
 
 const EMPTY: WorkspaceData = {
-  customers: [], quotations: [], proformas: [], purchaseOrders: [],
+  customers: [], quotations: [], proformas: [], purchaseOrders: [], invoices: [],
   orders: [], challans: [], subscriptions: [],
 };
 

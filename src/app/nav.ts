@@ -38,6 +38,13 @@ export const NAV: NavSection[] = [
     ],
   },
   {
+    label: "Get paid",
+    items: [
+      { id: "invoices", label: "Tax invoices" },
+      { id: "receivables", label: "Receivables" },
+    ],
+  },
+  {
     label: "Understand",
     items: [
       { id: "reports", label: "Reports" },

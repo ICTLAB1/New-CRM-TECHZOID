@@ -34,6 +34,10 @@ export interface WorkspaceData {
    *  quotations: the two face opposite directions, and mixing them would
    *  count money owed as money owed to us on every report. */
   purchaseOrders: SalesDocument[];
+  /** Tax invoices. What is PAID is never a field here — it is derived from
+   *  each invoice's payment ledger, so a status cannot disagree with the
+   *  money. */
+  invoices: SalesDocument[];
   orders: SalesOrder[];
   challans: DeliveryChallan[];
   subscriptions: Subscription[];
@@ -46,6 +50,7 @@ export const TABLE_OF: Record<keyof WorkspaceData, EntityTable> = {
   quotations: "quotes",
   proformas: "proformas",
   purchaseOrders: "purchase_orders",
+  invoices: "invoices",
   orders: "orders",
   challans: "challans",
   subscriptions: "subscriptions",
@@ -88,12 +93,13 @@ export function createStore(client: SupabaseClient) {
    * without first asking whether it is there.
    */
   async function load(): Promise<LoadedWorkspace> {
-    const [customers, quotations, proformas, purchaseOrders, orders, challans, subscriptions, settings, profiles] =
+    const [customers, quotations, proformas, purchaseOrders, invoices, orders, challans, subscriptions, settings, profiles] =
       await Promise.all([
         fetchEntity<Customer>("customers"),
         fetchEntity<SalesDocument>("quotes"),
         fetchEntity<SalesDocument>("proformas"),
         fetchEntity<SalesDocument>("purchase_orders"),
+        fetchEntity<SalesDocument>("invoices"),
         fetchEntity<SalesOrder>("orders"),
         fetchEntity<DeliveryChallan>("challans"),
         fetchEntity<Subscription>("subscriptions"),
@@ -112,6 +118,7 @@ export function createStore(client: SupabaseClient) {
         quotations: quotations.map(asDoc),
         proformas: proformas.map(asDoc),
         purchaseOrders: purchaseOrders.map(asDoc),
+        invoices: invoices.map(asDoc),
         orders: orders.map(asDoc),
         challans,
         subscriptions,

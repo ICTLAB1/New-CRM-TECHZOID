@@ -9,6 +9,7 @@ import { QuotationsScreen } from "../features/quotations/QuotationsScreen";
 import { OrdersScreen } from "../features/orders/OrdersScreen";
 import { DispatchScreen } from "../features/orders/DispatchScreen";
 import { RenewalsScreen } from "../features/subscriptions/RenewalsScreen";
+import { ReceivablesScreen } from "../features/payments/ReceivablesScreen";
 import { DashboardScreen } from "../features/dashboard/DashboardScreen";
 import { ReportsScreen } from "../features/dashboard/ReportsScreen";
 import { IntegrationsScreen } from "../features/settings/IntegrationsScreen";
@@ -68,7 +69,7 @@ export function Workbench({
   const [view, setView] = useState("dashboard");
   const [editing, setEditing] = useState<Customer | null>(null);
 
-  const { customers, quotations, proformas, purchaseOrders, orders, challans, subscriptions } = data;
+  const { customers, quotations, proformas, purchaseOrders, invoices, orders, challans, subscriptions } = data;
   const isAdmin = user.role === "Admin";
   const canEditSettings = isAdmin || user.role === "Manager";
 
@@ -191,6 +192,7 @@ export function Workbench({
           currentUser={user}
           onChange={(docs, s) => { onChange("quotations", docs); onSettingsChange(s); }}
           onCreateProforma={(pf) => { onChange("proformas", [pf, ...proformas]); setView("proformas"); }}
+          onCreateInvoice={(inv) => { onChange("invoices", [inv, ...invoices]); setView("invoices"); }}
         />
       ) : view === "proformas" ? (
         <QuotationsScreen
@@ -204,6 +206,28 @@ export function Workbench({
           api={integrations}
           currentUser={user}
           onChange={(docs, s) => { onChange("proformas", docs); onSettingsChange(s); }}
+          onCreateInvoice={(inv) => { onChange("invoices", [inv, ...invoices]); setView("invoices"); }}
+        />
+      ) : view === "invoices" ? (
+        <QuotationsScreen
+          docType="invoice"
+          documents={invoices}
+          customers={customers}
+          catalog={catalog}
+          settings={settings}
+          brandLogos={BRAND_LOGOS}
+          docImages={DOC_IMAGES}
+          api={integrations}
+          currentUser={user}
+          onChange={(docs, s) => { onChange("invoices", docs); onSettingsChange(s); }}
+        />
+      ) : view === "receivables" ? (
+        <ReceivablesScreen
+          invoices={invoices}
+          users={team}
+          currentUser={user}
+          settings={settings}
+          onChange={(next) => onChange("invoices", next)}
         />
       ) : view === "purchase-orders" ? (
         <QuotationsScreen

@@ -5,8 +5,9 @@ import { Confirm } from "../../components/Modal";
 import { useToast } from "../../components/Toast";
 import { DocumentEditor } from "./DocumentEditor";
 import {
-  duplicateQuotation, effectiveStatus, newProforma, newPurchaseOrder, newQuotation, proformaFromQuotation,
-  PURCHASE_ORDER_STATUSES, QUOTE_STATUSES, type DocSettings, type SalesDocument,
+  duplicateQuotation, effectiveStatus, invoiceFrom, newProforma, newPurchaseOrder, newQuotation,
+  proformaFromQuotation, INVOICE_STATUSES, PURCHASE_ORDER_STATUSES, QUOTE_STATUSES,
+  type DocSettings, type SalesDocument,
 } from "../../domain/documents/create";
 import type { Customer } from "../../domain/customers/customer";
 import type { CatalogProduct } from "../../domain/catalog/types";
@@ -26,7 +27,7 @@ const STATUS_TONE: Record<string, Tone> = {
 };
 
 export interface QuotationsScreenProps {
-  docType: "quotation" | "proforma" | "purchase_order";
+  docType: "quotation" | "proforma" | "purchase_order" | "invoice";
   documents: SalesDocument[];
   customers: Customer[];
   catalog: CatalogProduct[];
@@ -38,11 +39,13 @@ export interface QuotationsScreenProps {
   onChange: (documents: SalesDocument[], settings: Record<string, unknown>) => void;
   /** Raising a proforma from a quotation hands it to the proformas screen. */
   onCreateProforma?: (proforma: SalesDocument) => void;
+  /** Raising a tax invoice hands it to the invoices screen. */
+  onCreateInvoice?: (invoice: SalesDocument) => void;
 }
 
 export function QuotationsScreen({
   docType, documents, customers, catalog, settings, brandLogos, docImages, api, currentUser,
-  onChange, onCreateProforma,
+  onChange, onCreateProforma, onCreateInvoice,
 }: QuotationsScreenProps) {
   const toast = useToast();
   const [editing, setEditing] = useState<SalesDocument | null>(null);
@@ -52,10 +55,11 @@ export function QuotationsScreen({
   const [confirmDelete, setConfirmDelete] = useState<SalesDocument | null>(null);
 
   const isPo = docType === "purchase_order";
-  const label = isPo ? "Purchase order" : docType === "proforma" ? "Proforma" : "Quotation";
+  const isInvoice = docType === "invoice";
+  const label = isPo ? "Purchase order" : isInvoice ? "Tax invoice" : docType === "proforma" ? "Proforma" : "Quotation";
   const sellerState = ((settings["company"] as { state?: string })?.state) ?? "Delhi";
 
-  const seqKey = isPo ? "purchaseOrderSeq" : docType === "proforma" ? "proformaSeq" : "quoteSeq";
+  const seqKey = isPo ? "purchaseOrderSeq" : isInvoice ? "invoiceSeq" : docType === "proforma" ? "proformaSeq" : "quoteSeq";
   const bumpSequence = (s: Record<string, unknown>) => ({ ...s, [seqKey]: (Number(s[seqKey]) || 1) + 1 });
 
   const shown = useMemo(() => {
@@ -75,7 +79,12 @@ export function QuotationsScreen({
 
   const create = () => {
     const opts = { settings: settings as DocSettings, user: currentUser };
-    setEditing(isPo ? newPurchaseOrder(opts) : docType === "proforma" ? newProforma(opts) : newQuotation(opts));
+    setEditing(
+      isPo ? newPurchaseOrder(opts)
+        : isInvoice ? invoiceFrom(null, settings as DocSettings, currentUser)
+        : docType === "proforma" ? newProforma(opts)
+        : newQuotation(opts),
+    );
   };
 
   const save = (doc: SalesDocument) => {
@@ -94,6 +103,12 @@ export function QuotationsScreen({
     const copy = duplicateQuotation(doc, settings as DocSettings);
     onChange([copy, ...documents], bumpSequence(settings));
     toast(`Duplicated as ${copy.number}, back to Draft.`, "good");
+  };
+
+  const raiseInvoice = (doc: SalesDocument) => {
+    const inv = invoiceFrom(doc, settings as DocSettings, currentUser);
+    onCreateInvoice?.(inv);
+    toast(`Tax invoice ${inv.number} raised from ${doc.number}.`, "good");
   };
 
   const raiseProforma = (doc: SalesDocument) => {
@@ -129,7 +144,7 @@ export function QuotationsScreen({
   return (
     <main className="page">
       <PageHead
-        title={isPo ? "Purchase orders" : docType === "proforma" ? "Proforma invoices" : "Quotations"}
+        title={isPo ? "Purchase orders" : isInvoice ? "Tax invoices" : docType === "proforma" ? "Proforma invoices" : "Quotations"}
         sub={`${documents.length} document${documents.length === 1 ? "" : "s"} this financial year.`}
         actions={<Button tone="primary" onClick={create}>New {label.toLowerCase()}</Button>}
       />
@@ -141,7 +156,9 @@ export function QuotationsScreen({
             onChange={setStatus}
             tabs={[
               { id: "all", label: "All", count: documents.length },
-              ...(isPo ? PURCHASE_ORDER_STATUSES : QUOTE_STATUSES.filter((s) => docType === "quotation" || s !== "Rejected")).map((s) => ({
+              ...(isPo ? PURCHASE_ORDER_STATUSES
+                : isInvoice ? INVOICE_STATUSES
+                : QUOTE_STATUSES.filter((s) => docType === "quotation" || s !== "Rejected")).map((s) => ({
                 id: s,
                 label: s,
                 count: documents.filter((d) => effectiveStatus(d) === s).length,
@@ -175,7 +192,7 @@ export function QuotationsScreen({
                   <th>Number</th>
                   <th>{isPo ? "Supplier" : "Customer"}</th>
                   <th>Date</th>
-                  <th>{isPo ? "Required by" : "Valid until"}</th>
+                  <th>{isPo ? "Required by" : isInvoice ? "Payment due" : "Valid until"}</th>
                   <th>Status</th>
                   <th className="num">Value</th>
                   <th />
@@ -207,6 +224,9 @@ export function QuotationsScreen({
                                 <Button size="sm" tone="default" onClick={() => raiseProforma(d)}>Proforma</Button>
                               )}
                             </>
+                          ) : null}
+                          {onCreateInvoice && !isPo && !isInvoice ? (
+                            <Button size="sm" tone="default" onClick={() => raiseInvoice(d)}>Invoice</Button>
                           ) : null}
                           <Button size="sm" tone="danger" onClick={() => setConfirmDelete(d)}>Delete</Button>
                         </span>
