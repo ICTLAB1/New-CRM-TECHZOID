@@ -97,6 +97,11 @@
   border: 1px solid var(--rule);
   border-radius: var(--radius-card);
   transition: border-color var(--t-quick) var(--ease), box-shadow var(--t-quick) var(--ease);
+  /* A flex item defaults to min-width: auto, which refuses to shrink below
+     its content. A 700px table inside then widened the CARD, the card
+     widened the page, and a phone scrolled the whole screen sideways instead
+     of scrolling the table inside its own frame. */
+  min-width: 0;
 }
 /* Only the ones you can click. A card that lifts under the cursor while
    doing nothing when clicked is a promise the screen does not keep. */
@@ -195,7 +200,15 @@ button.tile:hover { background: var(--surface-2); }
 .chip-dot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; flex: none; }
 
 /* ── table ─────────────────────────────────────────────────────────── */
-.table-wrap { overflow-x: auto; }
+/* The frame a wide table scrolls INSIDE. `min-width: 0` is what makes the
+   overflow actually engage — without it this box grows to the table's width
+   and there is nothing left to scroll. `-webkit-overflow-scrolling` keeps
+   that scroll smooth under a thumb on iOS. */
+.table-wrap {
+  overflow-x: auto;
+  min-width: 0;
+  -webkit-overflow-scrolling: touch;
+}
 .table { width: 100%; border-collapse: collapse; font-size: var(--t-body); }
 .table th {
   padding: 7px 12px;
@@ -225,7 +238,19 @@ button.tile:hover { background: var(--surface-2); }
 .table tr.needs-warn td.edge-cell { border-left-color: var(--warn); }
 
 /* ── tabs ──────────────────────────────────────────────────────────── */
-.tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--rule); }
+/* A filter row grows with the number of statuses — eight on the customers
+   list — and on a phone that is wider than the screen. It scrolls sideways
+   within its own rule rather than dragging the whole page with it, and the
+   tabs keep their width instead of squeezing into unreadable slivers. */
+.tabs {
+  display: flex; gap: 2px;
+  border-bottom: 1px solid var(--rule);
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.tabs::-webkit-scrollbar { display: none; }
+.tab { flex: 0 0 auto; }
 .tab {
   padding: 8px 12px 9px;
   white-space: nowrap;
@@ -570,4 +595,36 @@ button.tile:hover { background: var(--surface-2); }
    "not ready yet" rather than as broken. */
 @media (prefers-reduced-motion: reduce) {
   .loading-bar::after { width: 100%; animation: none; opacity: .5; }
+}
+
+/* ── touch ─────────────────────────────────────────────────────────────
+   Keyed on `pointer: coarse`, NOT on screen width. A finger is imprecise
+   on a 6" phone and on a 13" touchscreen laptop alike, and a narrow window
+   on a desktop with a mouse needs none of this. Width was the wrong
+   question.
+
+   Apple asks for 44pt and Android for 48dp. The controls here were built
+   for a mouse — a 26px row button is a comfortable target with a cursor and
+   a coin toss with a thumb — so every control grows to at least 40px, which
+   is the most that can be given without the dense tables this product
+   depends on turning into one row per screen. */
+@media (pointer: coarse) {
+  .btn { min-height: 40px; padding: 0 14px; }
+  /* Small buttons stop being small on touch. They are the row actions —
+     Edit, Duplicate, Delete sitting next to each other — which is exactly
+     where a mis-tap is most expensive. */
+  .btn-sm { min-height: 40px; height: auto; padding: 0 12px; }
+  .btn-icon, .btn-icon.btn-sm { min-width: 40px; }
+
+  .nav-item { min-height: 44px; }
+  .tab { min-height: 44px; }
+
+  /* 16px is the threshold below which iOS Safari zooms the page the moment
+     a field takes focus, then leaves it zoomed. Nothing else about the type
+     scale changes — this is the input's own size, on touch only. */
+  .input, .select, .textarea { min-height: 40px; font-size: 16px; }
+
+  /* Row actions stack rather than crowd: three 40px buttons will not sit
+     side by side in a table cell on a phone. */
+  .table .row-tight { flex-wrap: wrap; gap: 6px; }
 }
