@@ -4,6 +4,7 @@ import { escapeHtml, resultPage } from "./html.mjs";
 import { checkAttachment, emailList, isEmail, isGstin, isPan, str } from "./validate.mjs";
 import { corsHeaders, clientIp, readJson } from "./http.mjs";
 import { tooManyMessage } from "./ratelimit.mjs";
+import { backoffMs, buildEnvelope, isValidEventKind, signBody, MAX_DELIVERY_ATTEMPTS } from "./webhookSign.mjs";
 
 const ENV = { MS_STATE_SECRET: "a-test-secret-value" };
 const USER = "3f2a6c1e-0000-4000-8000-abcdef123456";
@@ -201,5 +202,55 @@ describe("request helpers", () => {
   it("phrases a rate limit in minutes", () => {
     expect(tooManyMessage(60)).toContain("1 minute");
     expect(tooManyMessage(600)).toContain("10 minutes");
+  });
+});
+
+describe("webhook signing", () => {
+  it("accepts only the five defined event kinds", () => {
+    expect(isValidEventKind("deal.created")).toBe(true);
+    expect(isValidEventKind("deal.stage_changed")).toBe(true);
+    expect(isValidEventKind("deal.won")).toBe(true);
+    expect(isValidEventKind("deal.lost")).toBe(true);
+    expect(isValidEventKind("activity.logged")).toBe(true);
+    expect(isValidEventKind("deal.deleted")).toBe(false);
+    expect(isValidEventKind("")).toBe(false);
+  });
+
+  it("builds an envelope carrying a fresh id, the kind, a timestamp and the payload untouched", () => {
+    const payload = { dealId: "c1", stage: "won" };
+    const envelope = buildEnvelope("deal.won", payload, Date.parse("2026-08-24T12:00:00Z"));
+    expect(envelope.kind).toBe("deal.won");
+    expect(envelope.occurredAt).toBe("2026-08-24T12:00:00.000Z");
+    expect(envelope.data).toEqual(payload);
+    expect(envelope.id).toMatch(/^[0-9a-f-]{36}$/);
+  });
+
+  it("gives two different envelopes for the same event two different ids", () => {
+    const a = buildEnvelope("deal.created", { dealId: "c1" });
+    const b = buildEnvelope("deal.created", { dealId: "c1" });
+    expect(a.id).not.toBe(b.id);
+  });
+
+  it("signs deterministically — the same body and secret always produce the same signature", () => {
+    const body = JSON.stringify({ kind: "deal.won", data: { dealId: "c1" } });
+    expect(signBody(body, "shh")).toBe(signBody(body, "shh"));
+  });
+
+  it("a different secret or a different body changes the signature", () => {
+    const body = JSON.stringify({ kind: "deal.won" });
+    const sig = signBody(body, "shh");
+    expect(signBody(body, "different-secret")).not.toBe(sig);
+    expect(signBody(JSON.stringify({ kind: "deal.lost" }), "shh")).not.toBe(sig);
+  });
+
+  it("signature is 64 lowercase hex characters — a SHA-256 HMAC", () => {
+    expect(signBody("x", "shh")).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it("backs off exponentially, doubling each attempt", () => {
+    expect(backoffMs(1)).toBe(1000);
+    expect(backoffMs(2)).toBe(2000);
+    expect(backoffMs(3)).toBe(4000);
+    expect(backoffMs(MAX_DELIVERY_ATTEMPTS)).toBe(128_000);
   });
 });

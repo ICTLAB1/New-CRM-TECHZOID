@@ -24,6 +24,7 @@ import type { CatalogProduct } from "../domain/catalog/types";
 import type { WorkspaceData } from "../data/useWorkspace";
 import type { Customer } from "../domain/customers/customer";
 import type { Workspace as OwnershipWorkspace } from "../domain/customers/cascade";
+import { detectCustomerEvents } from "../domain/integrations/webhooks";
 
 /**
  * Every screen, and the routing between them.
@@ -105,6 +106,26 @@ export function Workbench({
 
   const analytics = { customers, quotations, proformas, orders, challans, subscriptions };
 
+  /**
+   * Every place a customer record is saved funnels through here — the
+   * pipeline board drag, the customer sheet, and the customers list's inline
+   * edits. Wrapping the one choke point catches deal-created, stage-changed
+   * (including won/lost) and activity-logged for all three without any of
+   * those screens needing to know webhooks exist.
+   *
+   * Dispatch is fire-and-forget: the real write happens either way, and a
+   * webhook failing to send must never be why a salesperson's edit didn't
+   * save. `sendWebhookEvent` decides server-side whether anything is even
+   * configured — this always fires, cheaply, and the server no-ops when
+   * webhooks are off.
+   */
+  const handleCustomersChange = (next: Customer[]) => {
+    for (const { kind, payload } of detectCustomerEvents(customers, next)) {
+      integrations.sendWebhookEvent(kind, payload).catch(() => {});
+    }
+    onChange("customers", next);
+  };
+
   return (
     <AppShell view={view} onNavigate={setView} user={user} onSignOut={onSignOut} banner={banner}>
       {view === "dashboard" ? (
@@ -124,7 +145,7 @@ export function Workbench({
           users={team}
           customFields={customFields}
           currentUser={user}
-          onChange={(next, ownership) => { onChange("customers", next); applyOwnership(ownership); }}
+          onChange={(next, ownership) => { handleCustomersChange(next); applyOwnership(ownership); }}
         />
       ) : view === "pipeline" ? (
         <main className="page">
@@ -132,7 +153,7 @@ export function Workbench({
             title="Pipeline"
             sub="Drag a deal to move it. Moving to Lost asks why — you can always skip."
           />
-          <PipelineBoard customers={customers} onChange={(next) => onChange("customers", next)} onOpen={setEditing} />
+          <PipelineBoard customers={customers} onChange={handleCustomersChange} onOpen={setEditing} />
           {editing ? (
             <CustomerSheet
               customer={editing}
@@ -140,7 +161,7 @@ export function Workbench({
               customFields={customFields}
               canReassign={isAdmin || user.role === "Manager"}
               onSave={(next) => {
-                onChange("customers", customers.map((c) => (c.id === next.id ? next : c)));
+                handleCustomersChange(customers.map((c) => (c.id === next.id ? next : c)));
                 setEditing(null);
               }}
               onClose={() => setEditing(null)}

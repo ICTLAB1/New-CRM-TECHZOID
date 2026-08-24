@@ -37,6 +37,13 @@ export function IntegrationsScreen({ api, user, settings, onSettingsChange }: In
         <WhatsAppPanel />
         <AssistantPanel />
         <InvoicingPanel settings={settings} onChange={onSettingsChange} canEdit={isAdmin(user.role)} />
+        <WebhooksPanel
+          api={api}
+          settings={settings}
+          onChange={onSettingsChange}
+          canEdit={isAdmin(user.role) || user.role === "Manager"}
+          isAdmin={isAdmin(user.role)}
+        />
       </div>
     </main>
   );
@@ -479,6 +486,123 @@ function InvoicingPanel({
           <span>No address is set, so "Send for invoicing" will tell people to ask an admin rather than fail quietly.</span>
         </div>
       ) : null}
+    </Card>
+  );
+}
+
+/* ── outbound webhooks ────────────────────────────────────────────── */
+
+interface WebhookSettings {
+  endpointUrl?: string;
+  enabled?: boolean;
+}
+
+function WebhooksPanel({
+  api, settings, onChange, canEdit, isAdmin,
+}: {
+  api: IntegrationsApi;
+  settings: Record<string, unknown>;
+  onChange: (next: Record<string, unknown>) => void;
+  canEdit: boolean;
+  isAdmin: boolean;
+}) {
+  const toast = useToast();
+  const webhook = (settings["webhook"] ?? {}) as WebhookSettings;
+  const [endpointUrl, setEndpointUrl] = useState(webhook.endpointUrl ?? "");
+  const [enabled, setEnabled] = useState(webhook.enabled === true);
+  const [busy, setBusy] = useState(false);
+  const [newSecret, setNewSecret] = useState<string | null>(null);
+  const [error, setError] = useState("");
+
+  const dirty = endpointUrl.trim() !== (webhook.endpointUrl ?? "") || enabled !== (webhook.enabled === true);
+
+  const save = () => {
+    onChange({ ...settings, webhook: { endpointUrl: endpointUrl.trim(), enabled } });
+    toast("Webhook settings saved");
+  };
+
+  const generate = async () => {
+    setError(""); setBusy(true);
+    try {
+      setNewSecret(await api.regenerateWebhookSecret());
+    } catch (err) {
+      setError(err instanceof IntegrationError ? err.message : "Couldn't generate a new secret.");
+    }
+    setBusy(false);
+  };
+
+  return (
+    <Card title="Webhooks" actions={dirty && canEdit ? <Button size="sm" tone="primary" onClick={save}>Save</Button> : null}>
+      <p className="muted" style={{ marginTop: 0 }}>
+        Notify your own website the moment a deal is created, moves stage, is won or lost, or gets a new
+        activity logged. Each delivery is a signed JSON POST, retried automatically if your endpoint doesn't
+        answer.
+      </p>
+
+      <div className="stack" style={{ marginTop: 12 }}>
+        <Field label="Endpoint URL" hint="Must be HTTPS. Your server receives a POST for every event.">
+          <Input
+            value={endpointUrl}
+            disabled={!canEdit}
+            onChange={(e) => setEndpointUrl(e.target.value)}
+            placeholder="https://example.com/webhooks/techzoid"
+          />
+        </Field>
+
+        <label className="row-tight" style={{ cursor: canEdit ? "pointer" : "default" }}>
+          <input
+            type="checkbox"
+            disabled={!canEdit}
+            checked={enabled}
+            onChange={(e) => setEnabled(e.target.checked)}
+          />
+          <span>Send events</span>
+        </label>
+      </div>
+
+      <div style={{ marginTop: 16, borderTop: "1px solid var(--rule)", paddingTop: 14 }}>
+        <span className="eyebrow">Signing secret</span>
+        <p className="field-hint" style={{ marginTop: 4 }}>
+          Every delivery carries an <code className="mono">x-techzoid-signature</code> header — an
+          HMAC-SHA256 of the request body, using this secret — so your endpoint can verify a delivery really
+          came from here. It is shown once, at the moment it's generated, and never again: copy it into your
+          own server's configuration straight away.
+        </p>
+
+        {newSecret ? (
+          <div className="notice notice-good" style={{ marginTop: 10 }}>
+            <div className="stack" style={{ gap: 8, width: "100%" }}>
+              <span><strong>Copy this now — it won't be shown again:</strong></span>
+              <CopyRow label="Signing secret" value={newSecret} />
+            </div>
+          </div>
+        ) : null}
+
+        {error ? <div className="notice notice-bad" style={{ marginTop: 10 }}>{error}</div> : null}
+
+        {isAdmin ? (
+          <Button
+            size="sm"
+            tone={newSecret ? "quiet" : "default"}
+            disabled={busy}
+            onClick={() => void generate()}
+            style={{ marginTop: 10 }}
+          >
+            {busy ? "Generating…" : newSecret ? "Generate another secret" : "Generate signing secret"}
+          </Button>
+        ) : (
+          <p className="field-hint" style={{ marginTop: 10 }}>Only an Admin can generate or rotate the signing secret.</p>
+        )}
+      </div>
+
+      <div className="notice" style={{ marginTop: 14 }}>
+        <span>
+          Event kinds: <code className="mono">deal.created</code>, <code className="mono">deal.stage_changed</code>,{" "}
+          <code className="mono">deal.won</code>, <code className="mono">deal.lost</code>,{" "}
+          <code className="mono">activity.logged</code>. Run <code className="mono">supabase/005_webhooks.sql</code>{" "}
+          once in Supabase → SQL Editor before turning this on.
+        </span>
+      </div>
     </Card>
   );
 }

@@ -65,6 +65,15 @@ export interface IntegrationsApi {
   updateTeamMember(userId: string, patch: { name?: string; email?: string }): Promise<void>;
   resetTeamPassword(userId: string, newPassword: string): Promise<void>;
   deleteTeamMember(userId: string): Promise<void>;
+
+  /** Kicks off delivery of one outbound webhook event. Fire-and-forget by
+   *  design — the server decides whether webhooks are even configured, and
+   *  a failure here must never surface as an app error, so callers should
+   *  not let a rejection here interrupt anything the user is doing. */
+  sendWebhookEvent(eventKind: string, payload: Record<string, unknown>): Promise<void>;
+  /** Admin-only. Generates a brand-new signing secret and returns it in
+   *  plaintext — the only moment it is ever readable again. */
+  regenerateWebhookSecret(): Promise<string>;
 }
 
 /**
@@ -186,6 +195,17 @@ export function netlifyApi(): IntegrationsApi {
     updateTeamMember: async (userId, patch) => { await adminCall("update_user", { userId, ...patch }); },
     resetTeamPassword: async (userId, newPassword) => { await adminCall("reset_password", { userId, newPassword }); },
     deleteTeamMember: async (userId) => { await adminCall("delete_user", { userId }); },
+
+    async sendWebhookEvent(eventKind, payload) {
+      await post("webhook-deliver-background", { eventKind, payload });
+    },
+
+    async regenerateWebhookSecret() {
+      const { getSupabase } = await import("../data/supabase");
+      const { data, error } = await getSupabase().rpc("regenerate_webhook_secret");
+      if (error) throw new IntegrationError(error.message || "Couldn't generate a new secret.", 400);
+      return String(data ?? "");
+    },
   };
 }
 
@@ -212,5 +232,12 @@ export function demoApi(): IntegrationsApi {
     updateTeamMember: async () => refuse("Editing an account"),
     resetTeamPassword: async () => refuse("Resetting a password"),
     deleteTeamMember: async () => refuse("Removing an account"),
+
+    /* Nothing leaves this browser in preview — the banner says so. A silent
+       no-op is correct here (unlike `refuse`): this fires from background
+       pipeline activity nobody is watching a button for, not a deliberate
+       action whose failure needs explaining. */
+    sendWebhookEvent: async () => {},
+    regenerateWebhookSecret: async () => refuse("Generating a webhook signing secret"),
   };
 }
