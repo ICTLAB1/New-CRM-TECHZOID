@@ -163,15 +163,15 @@ export function CustomersScreen({ customers, workspace, users, customFields, cur
                   return (
                     <tr key={c.id} className={overdue ? "needs-warn" : undefined} onClick={() => setEditing(c)} style={{ cursor: "pointer" }}>
                       <td className="edge-cell" />
-                      <td className="strong">{customerLabel(c)}</td>
-                      <td>{c.contact || "—"}</td>
-                      <td className="muted">{[c.city, c.country].filter(Boolean).join(", ") || "—"}</td>
-                      <td><Chip tone={stage.tone}>{stage.label}</Chip></td>
-                      <td>{ownerName(c.ownerId)}</td>
-                      <td className={overdue ? "" : "muted"} style={overdue ? { color: "var(--warn)" } : undefined}>
+                      <td data-head className="strong">{customerLabel(c)}</td>
+                      <td data-label="Contact">{c.contact || "—"}</td>
+                      <td data-label="Location" className="muted">{[c.city, c.country].filter(Boolean).join(", ") || "—"}</td>
+                      <td data-label="Stage"><Chip tone={stage.tone}>{stage.label}</Chip></td>
+                      <td data-label="Owner">{ownerName(c.ownerId)}</td>
+                      <td data-label="Follow-up" className={overdue ? "" : "muted"} style={overdue ? { color: "var(--warn)" } : undefined}>
                         {fmtDate(c.nextFollowUp)}
                       </td>
-                      <td className="num strong">{Number(c.value) > 0 ? inrList(c.value) : "—"}</td>
+                      <td data-label="Value" className="num strong">{Number(c.value) > 0 ? inrList(c.value) : "—"}</td>
                     </tr>
                   );
                 })}

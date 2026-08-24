@@ -108,17 +108,17 @@ export function OrdersScreen({ orders, challans, settings, currentUser, onChange
                   return (
                     <tr key={o.id} className={suggest ? "needs-warn" : undefined}>
                       <td className="edge-cell" />
-                      <td className="mono strong">{o.number}</td>
-                      <td className="strong">{o.billName}</td>
-                      <td className="muted">{o.poNumber || "—"}</td>
-                      <td className="muted">{fmtDate(o.date)}</td>
-                      <td><Chip tone={stageInfo.tone}>{stageInfo.label}</Chip></td>
-                      <td>
+                      <td data-head className="mono strong">{o.number}</td>
+                      <td data-label="Customer" className="strong">{o.billName}</td>
+                      <td data-label="PO" className="muted">{o.poNumber || "—"}</td>
+                      <td data-label="Date" className="muted">{fmtDate(o.date)}</td>
+                      <td data-label="Stage"><Chip tone={stageInfo.tone}>{stageInfo.label}</Chip></td>
+                      <td data-label="Dispatched" data-block>
                         <Meter pct={f.pct} tone={f.pct === 100 ? "good" : undefined} />
                         <div className="field-hint">{f.dispatched} of {f.ordered} units</div>
                       </td>
-                      <td className="num strong">{inrList(totals.grand)}</td>
-                      <td>
+                      <td data-label="Value" className="num strong">{inrList(totals.grand)}</td>
+                      <td data-actions>
                         <span className="row-tight">
                           {suggest ? (
                             <Button size="sm" tone="default" onClick={() => setStageOf(o, suggest)}>

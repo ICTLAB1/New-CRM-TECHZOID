@@ -217,16 +217,16 @@ export function QuotationsScreen({
                   return (
                     <tr key={d.id} className={stale ? "needs-warn" : undefined}>
                       <td className="edge-cell" />
-                      <td className="mono strong" style={{ cursor: "pointer" }} onClick={() => setEditing(d)}>{d.number}</td>
-                      <td className="strong">{(isPo ? d.vendorName : d.billName) || "—"}</td>
-                      <td className="muted">{fmtDate(d.date)}</td>
-                      <td className={isOverdue(d.validUntil) ? "" : "muted"} style={isOverdue(d.validUntil) ? { color: "var(--warn)" } : undefined}>
+                      <td data-head className="mono strong" style={{ cursor: "pointer" }} onClick={() => setEditing(d)}>{d.number}</td>
+                      <td data-label={isPo ? "Supplier" : "Customer"} className="strong">{(isPo ? d.vendorName : d.billName) || "—"}</td>
+                      <td data-label="Date" className="muted">{fmtDate(d.date)}</td>
+                      <td data-label={isPo ? "Required by" : isInvoice ? "Payment due" : "Valid until"} className={isOverdue(d.validUntil) ? "" : "muted"} style={isOverdue(d.validUntil) ? { color: "var(--warn)" } : undefined}>
                         {fmtDate(d.validUntil)}
                       </td>
-                      <td><Chip tone={STATUS_TONE[live] ?? "neutral"}>{live}</Chip></td>
-                      {isPo ? <td><ReceiptCell doc={d} /></td> : null}
-                      <td className="num strong">{inrList(totals.grand)}</td>
-                      <td>
+                      <td data-label="Status"><Chip tone={STATUS_TONE[live] ?? "neutral"}>{live}</Chip></td>
+                      {isPo ? <td data-label="Received"><ReceiptCell doc={d} /></td> : null}
+                      <td data-label="Value" className="num strong">{inrList(totals.grand)}</td>
+                      <td data-actions>
                         <span className="row-tight">
                           <Button size="sm" tone="quiet" onClick={() => setEditing(d)}>Edit</Button>
                           {isPo && d.status !== "Cancelled" && d.status !== "Draft" ? (

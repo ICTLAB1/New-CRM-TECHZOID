@@ -152,13 +152,13 @@ export function CatalogScreen({ catalog, canEdit, onChange }: CatalogScreenProps
                       <div className="truncate" style={{ maxWidth: 340 }}>{p.name}</div>
                       {!p.active ? <Chip tone="neutral">Inactive</Chip> : null}
                     </td>
-                    <td>{p.publisher || "—"}</td>
-                    <td className="mono">{p.skuId || p.productId || "—"}</td>
-                    <td>{p.termDuration || "—"}</td>
+                    <td data-label="Publisher">{p.publisher || "—"}</td>
+                    <td data-label="SKU" className="mono">{p.skuId || p.productId || "—"}</td>
+                    <td data-label="Term">{p.termDuration || "—"}</td>
                     {/* A product with no price shows a dash, not a zero. Zero
                         is a price; "quote on request" is not. */}
-                    <td className="num">{p.costPrice ? inrList(p.costPrice) : "—"}</td>
-                    <td className="num">{p.sellPrice ? inrList(p.sellPrice) : "—"}</td>
+                    <td data-label="Cost" className="num">{p.costPrice ? inrList(p.costPrice) : "—"}</td>
+                    <td data-label="Sell" className="num">{p.sellPrice ? inrList(p.sellPrice) : "—"}</td>
                     <td>
                       {canEdit ? (
                         <span className="row-tight">

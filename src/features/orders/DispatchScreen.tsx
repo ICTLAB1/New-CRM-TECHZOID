@@ -46,14 +46,14 @@ export function DispatchScreen({
                   return (
                     <tr key={c.id} className={late ? "needs-warn" : undefined}>
                       <td className="edge-cell" />
-                      <td className="mono strong">{c.number}</td>
-                      <td className="mono">{c.orderNumber}</td>
-                      <td className="strong">{c.shipName}</td>
-                      <td>{c.courier}</td>
-                      <td className="mono">{c.trackingNo || "—"}</td>
-                      <td className="muted">{fmtDate(c.dispatchDate)}</td>
-                      <td><Chip tone={DISPATCH_TONE[c.status]}>{c.status}</Chip></td>
-                      <td><Button size="sm" tone="quiet" onClick={() => setEditing(c)}>Update</Button></td>
+                      <td data-head className="mono strong">{c.number}</td>
+                      <td data-label="Order" className="mono">{c.orderNumber}</td>
+                      <td data-label="Ship to" className="strong">{c.shipName}</td>
+                      <td data-label="Courier">{c.courier}</td>
+                      <td data-label="Tracking" className="mono">{c.trackingNo || "—"}</td>
+                      <td data-label="Dispatched" className="muted">{fmtDate(c.dispatchDate)}</td>
+                      <td data-label="Status"><Chip tone={DISPATCH_TONE[c.status]}>{c.status}</Chip></td>
+                      <td data-actions><Button size="sm" tone="quiet" onClick={() => setEditing(c)}>Update</Button></td>
                     </tr>
                   );
                 })}

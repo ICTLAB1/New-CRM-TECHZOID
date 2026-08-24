@@ -628,3 +628,85 @@ button.tile:hover { background: var(--surface-2); }
      side by side in a table cell on a phone. */
   .table .row-tight { flex-wrap: wrap; gap: 6px; }
 }
+
+/* ── tables become cards on a narrow screen ────────────────────────────
+   Width, NOT pointer, decides this one — unlike the tap-target sizes
+   above. A table is unreadable in 390px whatever is pointing at it, and a
+   tablet in landscape reads a table perfectly well with a finger. The two
+   media queries answer different questions on purpose.
+
+   Each row becomes a stacked card: the first cell is the headline, and
+   every other cell carries its column name from `data-label`, because a
+   value with no header above it is just a number nobody can identify.
+   Cells with no label — the status stripe, the actions — are handled
+   individually below.
+
+   A cell that has no `data-label` prints nothing rather than an empty
+   gap: `attr()` on a missing attribute yields "", which would otherwise
+   reserve space for a label that does not exist. */
+@media (max-width: 720px) {
+  .table-wrap { overflow-x: visible; }
+
+  .table, .table tbody, .table tr, .table td { display: block; width: auto; }
+  .table thead { display: none; }
+
+  .table tbody tr {
+    position: relative;
+    border: 1px solid var(--rule);
+    border-radius: var(--radius);
+    background: var(--surface);
+    padding: 10px 12px;
+    margin-bottom: 8px;
+  }
+  .table tbody tr:last-child { margin-bottom: 0; }
+
+  .table td {
+    padding: 4px 0;
+    border-bottom: 0;
+    display: flex; gap: var(--gap); align-items: baseline; justify-content: space-between;
+    text-align: right;
+  }
+  .table td::before {
+    content: attr(data-label);
+    flex: 0 0 auto;
+    font-size: var(--t-small);
+    font-weight: 500;
+    color: var(--ink-3);
+    text-align: left;
+  }
+  .table td:not([data-label])::before { content: none; }
+
+  /* The headline: the number or the name you scan for. Full width, no
+     label, sitting above the rest like a card title. */
+  .table td[data-head] {
+    display: block; text-align: left;
+    font-size: var(--t-mid); font-weight: 600; color: var(--ink);
+    padding-bottom: 6px;
+  }
+
+  /* The status stripe moves from a cell to the card's own left edge —
+     a 2px sliver in a stacked layout would read as a stray rule. */
+  .table td.edge-cell { display: none; }
+  .table tbody tr.needs-warn { border-left: var(--edge) solid var(--warn); }
+  .table tbody tr.needs-bad  { border-left: var(--edge) solid var(--bad); }
+
+  /* A cell whose value is a BLOCK — a progress bar, a stacked pair — cannot
+     sit on one line beside its label: the bar has no intrinsic width and
+     collapses to nothing in a flex row. These put the label above and give
+     the value the full width. */
+  .table td[data-block] { display: block; text-align: left; }
+  .table td[data-block]::before { display: block; margin-bottom: 4px; }
+
+  /* Actions get their own full-width row under the facts, wrapping rather
+     than crowding — three 40px buttons will not sit side by side here. */
+  .table td[data-actions] { display: block; padding-top: 10px; }
+  .table td[data-actions] .row-tight { flex-wrap: wrap; gap: 8px; }
+  /* Natural widths, NOT flex: 1. Stretching to fill made whichever action
+     landed alone on the last line the biggest thing on the card — which was
+     reliably Delete, since it is always last. A destructive action should
+     never be the loudest button in a row by accident of wrapping. */
+  .table td[data-actions] .btn { flex: 0 0 auto; }
+
+  /* A row that is only a spacer or an empty cell should not leave a gap. */
+  .table td:empty { display: none; }
+}

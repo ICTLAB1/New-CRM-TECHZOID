@@ -165,21 +165,21 @@ export function ReceivablesScreen({ invoices, users, currentUser, settings, onCh
                   return (
                     <tr key={row.invoice.id} className={row.daysOverdue > 60 ? "needs-warn" : undefined}>
                       <td className="edge-cell" />
-                      <td className="mono strong">{row.invoice.number}</td>
-                      <td className="strong">{row.invoice.billName || "—"}</td>
-                      <td className={overdue ? "" : "muted"} style={overdue ? { color: "var(--warn)" } : undefined}>
+                      <td data-head className="mono strong">{row.invoice.number}</td>
+                      <td data-label="Customer" className="strong">{row.invoice.billName || "—"}</td>
+                      <td data-label="Due" className={overdue ? "" : "muted"} style={overdue ? { color: "var(--warn)" } : undefined}>
                         {fmtDate(row.invoice.validUntil ?? "")}
                       </td>
-                      <td>
+                      <td data-label="Age">
                         <Chip tone={BUCKET_TONE[row.bucket]}>
                           {row.daysOverdue > 0 ? `${row.daysOverdue}d overdue` : "Not due"}
                         </Chip>
                       </td>
-                      <td className="num muted">{inrList(row.grand)}</td>
-                      <td className="num muted">{row.amountPaid > 0 ? inrList(row.amountPaid) : "—"}</td>
-                      <td className="num strong">{inrList(row.outstanding)}</td>
-                      <td className="muted">{nameOf.get(row.invoice.ownerId ?? "") ?? "—"}</td>
-                      <td>
+                      <td data-label="Invoiced" className="num muted">{inrList(row.grand)}</td>
+                      <td data-label="Paid" className="num muted">{row.amountPaid > 0 ? inrList(row.amountPaid) : "—"}</td>
+                      <td data-label="Outstanding" className="num strong">{inrList(row.outstanding)}</td>
+                      <td data-label="Owner" className="muted">{nameOf.get(row.invoice.ownerId ?? "") ?? "—"}</td>
+                      <td data-actions>
                         <Button size="sm" tone="primary" onClick={() => setPaying(row.invoice as SalesDocument)}>
                           Record payment
                         </Button>

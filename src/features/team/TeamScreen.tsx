@@ -101,8 +101,8 @@ export function TeamScreen({ api, members, currentUser, onChange }: TeamScreenPr
                       {m.name}
                       {m.id === currentUser.id ? <> <Chip tone="accent" dot={false}>You</Chip></> : null}
                     </td>
-                    <td>{m.designation || <span className="muted">—</span>}</td>
-                    <td className="mono">{m.email || "—"}</td>
+                    <td data-label="Designation">{m.designation || <span className="muted">—</span>}</td>
+                    <td data-label="Email" className="mono">{m.email || "—"}</td>
                     <td>
                       {isAdmin ? (
                         <Select

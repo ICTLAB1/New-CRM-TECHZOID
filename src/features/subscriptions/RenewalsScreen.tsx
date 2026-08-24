@@ -110,14 +110,14 @@ export function RenewalsScreen({
                   return (
                     <tr key={s.id} className={tone === "bad" ? "needs-bad" : tone === "warn" ? "needs-warn" : undefined}>
                       <td className="edge-cell" />
-                      <td className="strong">{s.customerName || "—"}</td>
-                      <td>{s.product || "—"}</td>
-                      <td className="muted">{s.vendor || "—"}</td>
-                      <td className="muted">{fmtDate(s.expiryDate)}</td>
-                      <td><Chip tone={tone}>{expiryLabel(s)}</Chip></td>
-                      <td className="muted">{s.renewalStage || "—"}</td>
-                      <td className="num strong">{s.sellPrice ? inrList(s.sellPrice) : "—"}</td>
-                      <td><Button size="sm" tone="quiet" onClick={() => setEditing(s)}>Edit</Button></td>
+                      <td data-head className="strong">{s.customerName || "—"}</td>
+                      <td data-label="Product">{s.product || "—"}</td>
+                      <td data-label="Vendor" className="muted">{s.vendor || "—"}</td>
+                      <td data-label="Expires" className="muted">{fmtDate(s.expiryDate)}</td>
+                      <td data-label="Status"><Chip tone={tone}>{expiryLabel(s)}</Chip></td>
+                      <td data-label="Stage" className="muted">{s.renewalStage || "—"}</td>
+                      <td data-label="Value" className="num strong">{s.sellPrice ? inrList(s.sellPrice) : "—"}</td>
+                      <td data-actions><Button size="sm" tone="quiet" onClick={() => setEditing(s)}>Edit</Button></td>
                     </tr>
                   );
                 })}
