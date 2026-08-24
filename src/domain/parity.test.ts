@@ -227,19 +227,29 @@ describe("GSTIN parity", () => {
   });
 });
 
-describe("document numbering parity", () => {
-  it("matches v1 for a range of prefixes and sequences", () => {
-    for (const prefix of ["TZ/QT", "TZ/PI", "SO", "DC"]) {
-      for (const seq of [0, 1, 9, 10, 999, 1000, 12345]) {
-        expect(buildDocNumber(prefix, seq)).toBe(v1.buildDocNumber(prefix, seq));
-      }
-    }
+describe("document numbering", () => {
+  /* DEVIATION FROM v1 (deliberate, client-requested): the client supplied a
+     reference quotation numbered TZ/QT/2026-27/0042 — a hyphenated,
+     four-digit starting year — and asked for that exact shape. v1 produced
+     TZ/QT/2627/0042. This is the one place the numbering format
+     intentionally does NOT match v1; everything else about it (prefix and
+     sequence configurable, FY computed from the current date, 4-digit
+     padding) is unchanged. Only new documents are affected — a stored
+     number is just text. */
+  it("does not match v1's compressed year — the new hyphenated format is deliberate", () => {
+    expect(buildDocNumber("TZ/QT", 42, new Date("2026-05-10T00:00:00"))).not.toBe(
+      v1.buildDocNumber("TZ/QT", 42),
+    );
   });
 
-  it("pads to four digits and carries the Indian financial year", () => {
-    expect(buildDocNumber("TZ/QT", 7, new Date("2026-05-10T00:00:00"))).toBe("TZ/QT/2627/0007");
+  it("pads to four digits and carries the Indian financial year, hyphenated in full", () => {
+    expect(buildDocNumber("TZ/QT", 7, new Date("2026-05-10T00:00:00"))).toBe("TZ/QT/2026-27/0007");
     // January falls in the previous financial year.
-    expect(buildDocNumber("TZ/QT", 7, new Date("2026-01-10T00:00:00"))).toBe("TZ/QT/2526/0007");
+    expect(buildDocNumber("TZ/QT", 7, new Date("2026-01-10T00:00:00"))).toBe("TZ/QT/2025-26/0007");
+  });
+
+  it("matches the reference quotation exactly", () => {
+    expect(buildDocNumber("TZ/QT", 42, new Date("2026-08-17T00:00:00"))).toBe("TZ/QT/2026-27/0042");
   });
 });
 
@@ -275,7 +285,12 @@ describe("document totals parity", () => {
       const sellerState = pick(STATES);
       const mine = computeDocument(doc, sellerState);
       const theirs = v1.computeQuote(doc, sellerState);
-      expect(mine, JSON.stringify(doc)).toEqual(theirs);
+      // hsnGroups is new in v2 — the generated items above carry no HSN/SAC,
+      // so it is always empty here and has nothing to compare against v1,
+      // which never had this field at all.
+      const { hsnGroups, ...mineWithoutHsn } = mine;
+      expect(hsnGroups).toEqual([]);
+      expect(mineWithoutHsn, JSON.stringify(doc)).toEqual(theirs);
     }
   });
 });

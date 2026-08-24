@@ -1,6 +1,5 @@
 import type { CSSProperties } from "react";
 import type { DocumentModel, LogoSlot, Pair } from "../../domain/documents/model";
-import { medallionNumber } from "../../domain/documents/model";
 import type { ComputedRow } from "../../domain/tax/types";
 import { CONTENT_WIDTH_MM, splitDescription } from "../../domain/documents/columns";
 
@@ -46,7 +45,7 @@ function Rows({ pairs }: { pairs: readonly Pair[] }) {
   );
 }
 
-function Slot({ slot }: { slot: LogoSlot }) {
+function Slot({ slot, isCert }: { slot: LogoSlot; isCert?: boolean }) {
   if (slot.src) {
     return (
       <div className="doc-slot">
@@ -54,19 +53,14 @@ function Slot({ slot }: { slot: LogoSlot }) {
       </div>
     );
   }
-  if (slot.medallion) {
+  if (isCert) {
+    /* Plain, text-only presentation — the standard's name and its
+       licence/certificate number beneath, centred. No ring: the approved
+       reference shows certifications this way, not as a medallion. */
     return (
       <div className="doc-slot doc-cert">
-        <span className="doc-medal" aria-hidden>
-          <span className="doc-medal-inner">
-            <b>ISO</b>
-            <i>{medallionNumber(slot.text)}</i>
-          </span>
-        </span>
-        <span>
-          <span className="doc-cert-title">{slot.text}</span>
-          {slot.caption ? <span className="doc-cert-scope" style={{ display: "block" }}>{slot.caption}</span> : null}
-        </span>
+        <span className="doc-cert-title">{slot.text}</span>
+        {slot.certNo ? <span className="doc-cert-no">{slot.certNo}</span> : null}
       </div>
     );
   }
@@ -93,6 +87,13 @@ export function DocumentPreview({ model: m, rows, brandLogos = {}, scale = 1 }: 
             <div className="doc-mark">TECHZOID</div>
             <div className="doc-legal">{m.header.companyName.toUpperCase()}</div>
             <div className="doc-tagline">{m.header.tagline}</div>
+            {m.header.addressLines.map((line, i) => (
+              <div className="doc-head-line" key={i}>{line}</div>
+            ))}
+            {m.header.contactLine ? <div className="doc-head-line">{m.header.contactLine}</div> : null}
+            {m.header.registration.length ? (
+              <div className="doc-head-reg">{m.header.registration.join("     ")}</div>
+            ) : null}
           </div>
           <div style={{ width: "74mm", flex: "none" }}>
             <div className="doc-title">{m.title}</div>
@@ -102,6 +103,18 @@ export function DocumentPreview({ model: m, rows, brandLogos = {}, scale = 1 }: 
         </header>
 
         <hr className="doc-rule-navy" />
+
+        {m.header.uaeOffice ? (
+          <div className="doc-uae">
+            <span className="doc-uae-label">UAE OFFICE</span>
+            <span className="doc-uae-body">
+              <span className="doc-uae-address">{m.header.uaeOffice.addressLine}</span>
+              {m.header.uaeOffice.regParts.length ? (
+                <span className="doc-uae-reg">{m.header.uaeOffice.regParts.join("     ")}</span>
+              ) : null}
+            </span>
+          </div>
+        ) : null}
 
         <section className="doc-parties">
           <div>
@@ -224,35 +237,83 @@ export function DocumentPreview({ model: m, rows, brandLogos = {}, scale = 1 }: 
           </div>
         </section>
 
+        {m.hsnSummary ? (
+          <section className="doc-hsn">
+            <div className="doc-block-title">HSN / SAC SUMMARY</div>
+            <table className="doc-hsn-table">
+              <thead>
+                <tr>
+                  {m.hsnSummary.columns.map((c, i) => (
+                    <th key={c} className={i === 0 ? "a-left" : i === 2 ? "a-center" : "a-right"}>{c}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {m.hsnSummary.rows.map((row, ri) => (
+                  <tr key={ri}>
+                    {row.map((cell, ci) => (
+                      <td key={ci} className={ci === 0 ? "a-left" : ci === 2 ? "a-center" : "a-right"}>{cell}</td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr>
+                  {m.hsnSummary.totalRow.map((cell, ci) => (
+                    <td key={ci} className={ci === 0 ? "a-left" : ci === 2 ? "a-center" : "a-right"}>{cell}</td>
+                  ))}
+                </tr>
+              </tfoot>
+            </table>
+          </section>
+        ) : null}
+
+        {!m.isProforma && m.money.bank ? (
+          <section className="doc-bank">
+            <div className="doc-block-title">{m.money.bank.heading}</div>
+            <Rows pairs={m.money.bank.rows} />
+          </section>
+        ) : null}
+
         {strips.length ? (
           <section className="doc-strips" style={{ gridTemplateColumns: `repeat(${strips.length}, 1fr)` }}>
             {strips.map((strip) => (
               <div className="doc-strip" key={strip.title}>
                 <div className="doc-strip-title">{strip.title}</div>
                 <div className="doc-slots">
-                  {strip.slots.map((slot, i) => <Slot slot={slot} key={slot.text || i} />)}
+                  {strip.slots.map((slot, i) => (
+                    <Slot slot={slot} isCert={strip.title === "CERTIFIED MANAGEMENT SYSTEMS"} key={slot.text || i} />
+                  ))}
                 </div>
               </div>
             ))}
           </section>
         ) : null}
 
-        <hr className="doc-foot-rule" />
-        <footer className="doc-foot">
-          <div>
-            <div className="doc-foot-name">{m.footer.companyName.toUpperCase()}</div>
-            {m.footer.addressLines.map((line, i) => (
-              <div className="doc-foot-line" key={i}>{line}</div>
-            ))}
+        <section className="doc-signature">
+          {m.signature.acceptance ? (
+            <div className="doc-acceptance">
+              <div className="doc-block-title">{m.signature.acceptance.heading.toUpperCase()}</div>
+              {m.signature.acceptance.fields.map((f) => (
+                <div className="doc-acceptance-field" key={f}>
+                  <span>{f}:</span>
+                  <span className="doc-acceptance-line" />
+                </div>
+              ))}
+              <div className="doc-acceptance-seal">{m.signature.acceptance.sealLabel}</div>
+            </div>
+          ) : <div />}
+          <div className="doc-for-company">
+            <div className="doc-for-line">{m.signature.forLine}</div>
+            <div className="doc-sig-line" />
+            <div className="doc-sig-name">{m.signature.signatoryName || "Authorised Signatory"}</div>
+            {m.signature.signatoryName && m.signature.signatoryDesignation ? (
+              <div className="doc-sig-designation">{m.signature.signatoryDesignation}</div>
+            ) : null}
           </div>
-          <div>
-            {m.footer.contactBits.map((bit, i) => (
-              <div className="doc-foot-line" key={i}>{bit}</div>
-            ))}
-          </div>
-          <Rows pairs={m.footer.registration} />
-        </footer>
+        </section>
 
+        <hr className="doc-foot-rule" />
         <div className="doc-closing">
           <span>{m.footer.closing}</span>
           <span>Page 1</span>

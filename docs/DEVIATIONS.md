@@ -596,3 +596,94 @@ effects and timers, which needs a DOM test environment (jsdom or similar)
 this project doesn't have installed yet — adding one is a real dependency
 and config decision, left for a session where that's asked for rather than
 assumed.
+
+---
+
+## 16. The quotation redesign: matching the client's reference document
+
+The client supplied a definitive reference quotation (`TZ/QT/2026-27/0042`)
+and asked for its format exactly, superseding the design pack in §4 wherever
+the two disagree. Both renderers changed together, per the shared
+`DocumentModel` architecture; nothing here is PDF-only or preview-only.
+
+### 16a. Document number: full four-digit year, hyphenated
+
+v1 and the design pack both produced `PREFIX/2627/0001` — both financial
+years compressed to two digits, no separator. The reference shows
+`TZ/QT/2026-27/0042`: the full starting year, a hyphen, then the closing
+year's two digits. `buildDocNumber` now produces the reference's format.
+
+This only affects documents created from here on — a document number already
+stored is just text, so existing quotations keep their old-format numbers.
+Pinned by `parity.test.ts` → "document numbering", including an explicit
+assertion that the new format does **not** match v1's.
+
+### 16b. Company details moved from the footer into the header
+
+v1 and the design pack printed the company's address, contact line and
+GSTIN/PAN/CIN in the footer, repeated on every page. The reference prints
+them once, directly under the company name in the header, and keeps the
+footer to the closing line and page number. `DocumentModel.footer` is now
+just `{ closing }`; the header carries `addressLines`, `contactLine` and
+`registration` instead.
+
+Found and fixed in the same pass: `header.tagline` read `s.tagline`, but the
+company's tagline is stored at `settings.company.tagline` — every other
+company field. The tagline silently fell back to its default before this fix.
+
+### 16c. A UAE office banner, with real settings behind it
+
+The reference carries a highlighted banner under the header rule: office
+address, phone, business licence number and tax registration number. The
+`uaeOffice` section toggle already existed, but nothing in Settings could
+ever populate `settings.uaeOffice` — the banner was unreachable dead code.
+`CompanyPanel` now has a UAE office card (address, phone, business licence,
+tax registration number), and the header renders it when either the address
+or phone is filled in.
+
+### 16d. An HSN/SAC summary table, computed once
+
+The reference adds a table grouping every line by its HSN/SAC code, showing
+each group's taxable value, rate, tax (CGST+SGST or IGST, matching the
+document's actual tax split) and total. `computeDocument()` now returns
+`hsnGroups`, grouped and summed the same way `slabs` already groups by rate —
+lines with no HSN/SAC set are left out of every group rather than bucketed
+under `""`. `DocumentModel.hsnSummary` formats it for display; the total row
+reads `t.taxable`/`t.cgst`/`t.sgst`/`t.igst`/`t.taxTotal` directly rather than
+re-summing, so it can never disagree with the SUMMARY box above it.
+
+### 16e. Certifications print as plain text, not a drawn medallion ring
+
+§5b's drawn ISO ring — standard on the left, title and scope beside it — does
+not appear in the reference at all. Each certification there is just its name
+and a licence/certificate number, centred, no ring, no scope line.
+`medallionNumber()` and the ring-drawing code are gone; `LogoSlot.medallion`
+is replaced with `LogoSlot.certNo`, printed under the name when configured.
+Never fabricated: `DEFAULT_CERTIFICATIONS` carries no `certNo`, same as it
+has always carried no artwork, and prints just the name until an admin fills
+the real number in.
+
+### 16f. The signature block is drawn — it never was
+
+`DocumentModel.signature` (`forLine`, `signatoryName`, `signatoryDesignation`)
+was fully computed since the original build but never drawn by either
+renderer — a genuine missing feature, not a design choice. Both renderers now
+draw "For {company}", a blank band for a physical signature, then the
+signatory's name and designation — falling back to "Authorised Signatory"
+when neither is configured, which is what the reference itself shows.
+
+The customer-acceptance box and "We Accept" payment-methods line, also
+computed but never drawn, are still not drawn: the reference carries neither,
+so `DEFAULT_DOC_TEMPLATE.sections.customerAcceptance` is now off by default
+to match it. The acceptance box now renders (both renderers) when a business
+explicitly turns the toggle back on; "We Accept" remains a further gap, left
+for when it is actually asked for.
+
+### 16g. Bank details print on a quotation too, not only a proforma
+
+The reference's page 2 carries a BANK DETAILS block below the HSN/SAC
+summary, on a *quotation*. v1 and the design pack showed bank details only on
+a proforma, sharing the terms column. `bankBlock` in the model is no longer
+gated to `isProforma`; each renderer draws it in its own block, after the
+HSN/SAC summary, only for a quotation (a proforma keeps showing it beside its
+summary, where there is no terms column to share the space with, unchanged).

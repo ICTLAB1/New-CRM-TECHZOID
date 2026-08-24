@@ -41,24 +41,17 @@ export interface RefCell { label: string; value: string }
  *  `src` is present only when an approved asset is configured; otherwise the
  *  renderer prints `text`, and never fabricates a badge.
  *
- *  `medallion` marks a certification the renderer draws natively — the ring
- *  with the standard number inside it, the title beside it. The supplied ISO
- *  PNGs had the number overflowing its circle and colliding with the caption,
- *  and drawing it is both crisp at any size and correctable without new
- *  artwork. */
+ *  `certNo` is the certificate/licence number under a certification's name —
+ *  left blank when none is configured rather than invented, same as every
+ *  other supplied-or-omitted asset in this model. */
 export interface LogoSlot {
   text: string;
   src?: string | null;
   caption?: string;
-  medallion?: string;
+  certNo?: string;
   /** Natural pixel size, so the renderer can preserve the aspect ratio. */
   w?: number;
   h?: number;
-}
-
-/** "ISO/IEC 27001:2022" -> "27001:2022", for the ring. */
-export function medallionNumber(label: string): string {
-  return label.replace(/^ISO(\/IEC)?\s*/i, "").trim();
 }
 
 export interface DocumentModel {
@@ -76,13 +69,18 @@ export interface DocumentModel {
     companyName: string;
     /** "Technology Procurement | Licensing | Hardware | Enterprise Solutions" */
     tagline: string;
-    addressLine: string;
-    contactLines: string[];
-    uaeOffice: { name: string; lines: string } | null;
-    isoLines: string[];
-    /** Date / Valid Until / Currency, beside the title block. */
+    /** Each element is one printed line: street, then city/state/pincode,
+     *  then country. */
+    addressLines: string[];
+    /** Phone, email and website, already joined into the single line the
+     *  design shows — "+91 ... · sales@... · https://...". */
+    contactLine: string;
+    /** "GSTIN ...", "PAN ...", "CIN ..." — already labelled, printed on one
+     *  line under the address. */
+    registration: string[];
+    uaeOffice: { addressLine: string; regParts: string[] } | null;
+    /** Date / Valid Until / Revision / Currency, beside the title block. */
     meta: Pair[];
-    registrationParts: string[];
   };
 
   /** Left column of the details grid: quotation no, date, valid until,
@@ -111,6 +109,12 @@ export interface DocumentModel {
 
   notes: string[];
 
+  /** HSN/SAC summary table. Every column after "HSN / SAC" is already
+   *  formatted for display; `columns` names them so a renderer draws
+   *  whatever is there without knowing CGST/SGST from IGST itself. Null when
+   *  there is nothing to group — no GST, or no line carries an HSN/SAC. */
+  hsnSummary: { columns: string[]; rows: string[][]; totalRow: string[] } | null;
+
   signature: {
     forLine: string;
     signatoryName: string;
@@ -127,11 +131,9 @@ export interface DocumentModel {
     certifications: LogoSlot[];
   };
 
+  /** Company details now live in the header banner, not repeated down here —
+   *  the design keeps the footer to the closing line and page number. */
   footer: {
-    companyName: string;
-    addressLines: string[];
-    contactBits: string[];
-    registration: Pair[];
     closing: string;
   };
 }
@@ -187,18 +189,29 @@ export function buildDocumentModel(input: BuildModelInput): DocumentModel {
   const bank = input.bankAccount ?? {};
 
   /* ---- header ---- */
-  const addressLine = [c.address, c.city, c.state, c.pincode].filter(Boolean).join(", ");
-  const contactLines = [hasRealPhone(c.phone) ? c.phone : null, c.email, c.website].filter(Boolean).map(String);
+  const addressBlock = String(c.address ?? "").split("\n").map((l: string) => l.trim()).filter(Boolean);
+  const cityLine = [c.city, [c.state, c.pincode].filter(Boolean).join(" ")].filter(Boolean).join(", ");
+  const headerAddressLines = [...addressBlock, cityLine, c.country || "India"].filter(Boolean) as string[];
+
+  const contactLine = [hasRealPhone(c.phone) ? c.phone : null, c.email, c.website].filter(Boolean).join(" · ");
+
+  const registration = [
+    c.gstin && "GSTIN " + c.gstin,
+    c.pan && "PAN " + c.pan,
+    c.cin && "CIN " + c.cin,
+  ].filter(Boolean) as string[];
 
   const uae = s.uaeOffice ?? {};
   const uaeOffice =
-    isOn(SEC.uaeOffice) && (uae.address || uae.city)
-      ? { name: uae.name || "UAE Office", lines: [uae.address, uae.city, uae.country].filter(Boolean).join(", ") }
+    isOn(SEC.uaeOffice) && (uae.address || uae.phone)
+      ? {
+          addressLine: [uae.address, hasRealPhone(uae.phone) ? uae.phone : null].filter(Boolean).join(" · "),
+          regParts: [
+            uae.businessLicense && "Business License " + uae.businessLicense,
+            uae.taxRegistrationNumber && "Tax Registration Number " + uae.taxRegistrationNumber,
+          ].filter(Boolean) as string[],
+        }
       : null;
-
-  const isoLines = isOn(SEC.isoCerts)
-    ? String(s.isoCertText || "").split("\n").map((x: string) => x.trim()).filter(Boolean)
-    : [];
 
   const details: Pair[] = isProforma
     ? [
@@ -227,20 +240,16 @@ export function buildDocumentModel(input: BuildModelInput): DocumentModel {
     { label: "Delivery Terms", value: doc.deliveryTerms || "As specified" },
   ];
 
-  /* Beside the title: date, validity, currency. Nothing more — the details
-     column directly below already carries the number, customer id, sales
-     executive and references, and printing them twice cost 20mm of page. */
+  /* Beside the title: date, validity, revision, currency. Nothing more — the
+     details column directly below already carries the number, customer id,
+     sales executive and references, and printing them twice cost 20mm of
+     page. */
   const meta: Pair[] = [
     ["Date", fmtDate(doc.date)],
     ["Valid Until", fmtDate(doc.validUntil)],
+    ["Revision", String(doc.revisionNo ?? 0)],
     ["Currency", currency],
   ];
-
-  const registrationParts = [
-    c.cin && "CIN: " + c.cin,
-    c.gstin && "GSTIN: " + c.gstin,
-    c.pan && "PAN: " + c.pan,
-  ].filter(Boolean) as string[];
 
   /* ---- parties ---- */
   const stateCode = STATES.find(([n]) => n === doc.billState)?.[1];
@@ -329,6 +338,32 @@ export function buildDocumentModel(input: BuildModelInput): DocumentModel {
     ...(doc.roundOff ? [{ label: "Round Off", value: money(t.roundDiff) }] : []),
   ];
 
+  /* ---- HSN/SAC summary ----
+     Every figure here is read from t.hsnGroups / t.taxable / t.taxTotal —
+     already-computed, already-rounded totals — never re-derived. The per-row
+     CGST/SGST split below is the same halving computeDocument() already does
+     for t.cgst/t.sgst, just applied per group instead of once. */
+  const hsnSummary =
+    taxType === "gst" && t.hsnGroups.length
+      ? {
+          columns: ["HSN / SAC", "Taxable Value", "Rate", ...(t.intra ? ["CGST", "SGST"] : ["IGST"]), "Total Tax"],
+          rows: t.hsnGroups.map((g) => [
+            g.hsn,
+            money(g.taxable),
+            g.rate + "%",
+            ...(t.intra ? [money(g.tax / 2), money(g.tax / 2)] : [money(g.tax)]),
+            money(g.tax),
+          ]),
+          totalRow: [
+            "Total",
+            money(t.taxable),
+            "",
+            ...(t.intra ? [money(t.cgst), money(t.sgst)] : [money(t.igst)]),
+            money(t.taxTotal),
+          ],
+        }
+      : null;
+
   /* A saved label reading "Grand Total (INR)" is stale the moment the document
      is quoted in another currency — fall back to the live currency. */
   const staleInrLabel = !!L.grandTotalLabel && L.grandTotalLabel.includes("(INR)") && currency !== "INR";
@@ -354,8 +389,11 @@ export function buildDocumentModel(input: BuildModelInput): DocumentModel {
     .filter(([, v]) => v)
     .map(([k, v]) => [k, String(v)] as Pair);
 
+  /* Bank details print on a quotation too, in their own block below the
+     HSN/SAC summary — not only on a proforma, where they instead share the
+     terms column since a proforma prints no terms. */
   const bankBlock =
-    isProforma && isOn(SEC.bankDetails) && (bank.name || bank.account)
+    isOn(SEC.bankDetails) && (bank.name || bank.account)
       ? {
           heading:
             (L.bankHeading || "Bank Details").toUpperCase() +
@@ -393,8 +431,8 @@ export function buildDocumentModel(input: BuildModelInput): DocumentModel {
         : null,
   };
 
-  /* ---- footer ---- */
-  const toSlots = (list: unknown, opts: { medallion?: boolean } = {}): LogoSlot[] =>
+  /* ---- strips + footer ---- */
+  const toSlots = (list: unknown): LogoSlot[] =>
     (Array.isArray(list) ? list : [])
       .map((x) => {
         const item = x as Record<string, unknown>;
@@ -403,12 +441,10 @@ export function buildDocumentModel(input: BuildModelInput): DocumentModel {
           text,
           src: (item["logo"] as string) ?? (item["data"] as string) ?? null,
           caption: (item["caption"] as string) ?? undefined,
+          certNo: (item["certNo"] as string) || undefined,
           w: typeof item["w"] === "number" ? item["w"] : undefined,
           h: typeof item["h"] === "number" ? item["h"] : undefined,
         };
-        /* Certifications are drawn, not pasted — see LogoSlot. An explicitly
-           supplied asset still wins, so approved artwork can replace this. */
-        if (opts.medallion && !slot.src) slot.medallion = medallionNumber(text);
         return slot;
       })
       .filter((slot) => slot.text || slot.src);
@@ -416,17 +452,10 @@ export function buildDocumentModel(input: BuildModelInput): DocumentModel {
   const strips = {
     designations: toSlots(s.partnerDesignations),
     partners: toSlots(s.brandingLogos),
-    certifications: toSlots(s.certLogos, { medallion: true }),
+    certifications: toSlots(s.certLogos),
   };
 
   const footer = {
-    companyName: c.name || "",
-    addressLines: [c.address, [c.city, c.state, c.pincode].filter(Boolean).join(", "), c.country || "India"]
-      .filter(Boolean).map(String),
-    contactBits: [hasRealPhone(c.phone) ? c.phone : null, c.email, c.website].filter(Boolean).map(String),
-    registration: ([
-      ["GSTIN", c.gstin], ["PAN", c.pan], ["CIN", c.cin],
-    ] as [string, unknown][]).filter(([, v]) => v).map(([k, v]) => [k, String(v)] as Pair),
     closing: isProforma
       ? L.closingProforma || "This is a Proforma Invoice and not a Tax Invoice."
       : doc.footer || L.closingQuote || "Thank you for the opportunity to submit this quotation.",
@@ -443,8 +472,8 @@ export function buildDocumentModel(input: BuildModelInput): DocumentModel {
     accentColor: dt.accentColor,
     header: {
       companyName: c.name || "",
-      tagline: s.tagline || "Technology Procurement  |  Licensing  |  Hardware  |  Enterprise Solutions",
-      addressLine, contactLines, uaeOffice, isoLines, meta, registrationParts,
+      tagline: c.tagline || "Technology Procurement  |  Licensing  |  Hardware  |  Enterprise Solutions",
+      addressLines: headerAddressLines, contactLine, registration, uaeOffice, meta,
     },
     details,
     parties,
@@ -472,6 +501,7 @@ export function buildDocumentModel(input: BuildModelInput): DocumentModel {
       bank: bankBlock,
     },
     notes,
+    hsnSummary,
     signature,
     strips,
     footer,

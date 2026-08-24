@@ -127,9 +127,25 @@ export function renderDocumentPdf(opts: RenderOptions): jsPDF {
     pdf.text(m.header.companyName.toUpperCase(), M, y + 1);
     pdf.setFont("helvetica", "normal").setFontSize(7.4).setTextColor(...MUTED);
     pdf.text(m.header.tagline, M, y + 6);
-    const leftBottom = y + 8;
+    let ly = y + 11;
 
-    /* Title, number plaque, then the date/validity/currency rows. */
+    pdf.setFont("helvetica", "normal").setFontSize(6.8).setTextColor(...MUTED);
+    for (const line of m.header.addressLines) {
+      pdf.text(line, M, ly);
+      ly += 3.1;
+    }
+    if (m.header.contactLine) {
+      pdf.text(m.header.contactLine, M, ly);
+      ly += 3.4;
+    }
+    if (m.header.registration.length) {
+      pdf.setFont("helvetica", "bold").setFontSize(6.6).setTextColor(...INK);
+      pdf.text(m.header.registration.join("     "), M, ly);
+      ly += 3.4;
+    }
+    const leftBottom = ly;
+
+    /* Title, number plaque, then the date/validity/revision/currency rows. */
     pdf.setFont("helvetica", "bold").setFontSize(19).setTextColor(...NAVY);
     pdf.text(m.title, M + CW, top + 6, { align: "right" });
 
@@ -143,7 +159,27 @@ export function renderDocumentPdf(opts: RenderOptions): jsPDF {
 
     y = Math.max(leftBottom, metaEnd) + 3;
     rule(y, M, M + CW, NAVY, 0.7);
-    y += 5;
+    y += 4;
+
+    /* UAE office banner — a highlighted strip spanning the full width,
+       directly under the navy rule, exactly as the reference shows it. */
+    if (m.header.uaeOffice) {
+      const hasReg = m.header.uaeOffice.regParts.length > 0;
+      const bandH = hasReg ? 11 : 7;
+      const textY = y + (hasReg ? 4.6 : 4.4);
+      pdf.setFillColor(...HEAD_BG);
+      pdf.rect(M, y, CW, bandH, "F");
+      pdf.setDrawColor(...BORDER).setLineWidth(0.2).rect(M, y, CW, bandH, "S");
+      pdf.setFont("helvetica", "bold").setFontSize(6.6).setTextColor(...NAVY);
+      pdf.text("UAE OFFICE", M + 3, textY);
+      pdf.setFont("helvetica", "normal").setFontSize(7).setTextColor(...INK);
+      pdf.text(m.header.uaeOffice.addressLine, M + 26, textY);
+      if (hasReg) {
+        pdf.setFont("helvetica", "normal").setFontSize(6.6).setTextColor(...MUTED);
+        pdf.text(m.header.uaeOffice.regParts.join("     "), M + 26, y + 8.6);
+      }
+      y += bandH + 4;
+    }
   }
 
   /* ──────────────── details + bill to + ship to ──────────────── */
@@ -424,29 +460,94 @@ export function renderDocumentPdf(opts: RenderOptions): jsPDF {
     y = Math.max(sy, ly) + 4;
   }
 
-  /* ─────────────────── partner / ISO strips ─────────────────── */
-  /** The ISO ring, drawn rather than pasted: the supplied badge PNGs had the
-   *  number overflowing its circle and colliding with the caption. */
-  function drawMedallion(cx: number, cy: number, r: number, number: string): void {
-    pdf.setDrawColor(...NAVY).setLineWidth(0.45);
-    pdf.circle(cx, cy, r, "S");
-    pdf.setLineWidth(0.18);
-    pdf.circle(cx, cy, r - 0.7, "S");
-    pdf.setFont("helvetica", "bold").setFontSize(r * 1.5).setTextColor(...NAVY);
-    pdf.text("ISO", cx, cy - r * 0.05, { align: "center" });
-    /* The number has to live inside the ring — shrink until it does. */
-    let size = r * 0.78;
-    while (size > 2) {
-      pdf.setFontSize(size);
-      /* The chord available at the number's height, not the full diameter —
-         measuring against the diameter let the widest standard touch the
-         inner ring. */
-      if (pdf.getTextWidth(number) <= (r - 0.7) * 1.35) break;
-      size -= 0.15;
-    }
-    pdf.text(number, cx, cy + r * 0.55, { align: "center" });
+  /* ─────────────────── HSN / SAC summary ─────────────────── */
+  function drawHsnSummary(): void {
+    if (!m.hsnSummary) return;
+    const { columns, rows, totalRow } = m.hsnSummary;
+
+    need(10 + (rows.length + 1) * 6);
+    pdf.setFont("helvetica", "bold").setFontSize(7.6).setTextColor(...NAVY);
+    pdf.text("HSN / SAC SUMMARY", M, y + 4.4);
+    y += 8;
+
+    const columnStyles: Record<number, Record<string, unknown>> = {};
+    columns.forEach((_, i) => {
+      columnStyles[i] = { halign: i === 0 ? "left" : i === 2 ? "center" : "right" };
+    });
+
+    (pdf as PdfWithAutoTable).autoTable({
+      startY: y,
+      head: [columns],
+      body: rows,
+      foot: [totalRow],
+      margin: { left: M, right: M, bottom: FOOT_RESERVE },
+      showHead: "everyPage",
+      theme: "grid",
+      styles: {
+        font: "helvetica", fontSize: 7, cellPadding: 1.6,
+        lineColor: BORDER, lineWidth: 0.15, textColor: INK, valign: "middle",
+      },
+      headStyles: { fillColor: HEAD_BG, textColor: NAVY, fontStyle: "bold", fontSize: 6.6 },
+      footStyles: { fillColor: HEAD_BG, textColor: INK, fontStyle: "bold", fontSize: 7 },
+      columnStyles,
+    });
+    y = (pdf as PdfWithAutoTable).lastAutoTable.finalY + 5;
   }
 
+  /* ─────────────────── bank details (quotation only) ─────────────────── *
+   * A proforma already carries these beside its terms column, inside
+   * drawMoneyBlock — this is only for a quotation, which has no terms
+   * column to share the space with. */
+  function drawBankDetails(): void {
+    if (m.isProforma || !m.money.bank) return;
+    const bank = m.money.bank;
+    need(10 + bank.rows.length * 5);
+    pdf.setFont("helvetica", "bold").setFontSize(7.6).setTextColor(...NAVY);
+    pdf.text(bank.heading, M, y + 4.4);
+    y = colonRows(bank.rows, M, CW * 0.5, y + 10, 30, 7) + 4;
+  }
+
+  /* ─────────────────────── signature block ─────────────────────── */
+  function drawSignature(): void {
+    const boxH = m.signature.acceptance ? 34 : 26;
+    need(boxH);
+    const top = y;
+
+    if (m.signature.acceptance) {
+      const accW = CW * 0.55;
+      pdf.setDrawColor(...BORDER).setLineWidth(0.2).rect(M, top, accW, boxH, "S");
+      pdf.setFont("helvetica", "bold").setFontSize(7.2).setTextColor(...NAVY);
+      pdf.text(m.signature.acceptance.heading.toUpperCase(), M + 3, top + 5);
+      let fy = top + 11;
+      pdf.setFont("helvetica", "normal").setFontSize(6.8).setTextColor(...MUTED);
+      for (const field of m.signature.acceptance.fields) {
+        pdf.text(field + ":", M + 3, fy);
+        rule(fy + 1, M + 20, M + accW - 3);
+        fy += 7;
+      }
+      pdf.setFont("helvetica", "italic").setFontSize(6.2).setTextColor(...MUTED);
+      pdf.text(m.signature.acceptance.sealLabel, M + accW - 3, top + boxH - 3, { align: "right" });
+    }
+
+    /* "For {company}", a blank band for a physical signature and seal, then
+       the signatory's line — drawn unconditionally, since a document leaves
+       the building without ever having had this printed at all. */
+    pdf.setFont("helvetica", "bold").setFontSize(7.6).setTextColor(...NAVY);
+    pdf.text(m.signature.forLine, M + CW, top + 5, { align: "right" });
+
+    const lineY = top + boxH - 8;
+    rule(lineY, M + CW - 62, M + CW);
+    pdf.setFont("helvetica", "bold").setFontSize(7).setTextColor(...INK);
+    pdf.text(m.signature.signatoryName || "Authorised Signatory", M + CW, lineY + 4, { align: "right" });
+    if (m.signature.signatoryName && m.signature.signatoryDesignation) {
+      pdf.setFont("helvetica", "normal").setFontSize(6.4).setTextColor(...MUTED);
+      pdf.text(m.signature.signatoryDesignation, M + CW, lineY + 7.4, { align: "right" });
+    }
+
+    y = top + boxH + 4;
+  }
+
+  /* ─────────────────── partner / ISO strips ─────────────────── */
   /**
    * Shrink a string until it fits.
    *
@@ -477,10 +578,7 @@ export function renderDocumentPdf(opts: RenderOptions): jsPDF {
     if (!groups.length) return;
 
     const stripH = 20;
-    /* The design pack asks for the partner, certification and footer blocks
-       to stay together. Reserving only the strip's own height left a page
-       carrying nothing but the company footer. */
-    need(stripH + 3 + measureFooter().height);
+    need(stripH + 3);
     const top = y;
     const totalFlex = groups.reduce((a, g) => a + g.flex, 0);
 
@@ -497,6 +595,7 @@ export function renderDocumentPdf(opts: RenderOptions): jsPDF {
       const slotW = w / group.slots.length;
       const bandTop = top + 6;
       const bandH = stripH - 7;
+      const isCertGroup = group.title === "CERTIFIED MANAGEMENT SYSTEMS";
 
       group.slots.forEach((slot: LogoSlot, si) => {
         const sx = x + si * slotW;
@@ -516,33 +615,19 @@ export function renderDocumentPdf(opts: RenderOptions): jsPDF {
           return;
         }
 
-        if (slot.medallion) {
-          /* Ring on the left, standard and scope to its right. */
-          const r = 3.1;
-          const textX = sx + 2 + r * 2 + 1.5;
-          const textW = slotW - (textX - sx) - 2;
-          drawMedallion(sx + 2 + r, bandTop + bandH / 2, r, slot.medallion);
-
+        if (isCertGroup) {
+          /* Plain, text-only presentation — the standard's name, and its
+             licence/certificate number beneath, centred. No ring: the
+             approved reference shows certifications this way, not as a
+             medallion. */
           pdf.setFont("helvetica", "bold").setTextColor(...NAVY);
-          pdf.setFontSize(fitFont(slot.text, textW, 5.6, "line"));
-          pdf.text(slot.text, textX, bandTop + 4.6);
-
-          if (slot.caption) {
-            /* The scope must print in full. Truncating it turns "Quality
-               Management System" into "Quality Management", which names a
-               different thing from the certificate. Shrink and use the whole
-               band rather than dropping the last word. */
-            pdf.setFont("helvetica", "normal").setTextColor(...MUTED);
-            let capSize = 4.4;
-            let lines: string[] = [];
-            const maxLines = 3;
-            while (capSize > 3) {
-              pdf.setFontSize(capSize);
-              lines = pdf.splitTextToSize(slot.caption, textW) as string[];
-              if (lines.length <= maxLines) break;
-              capSize -= 0.15;
-            }
-            pdf.text(lines.slice(0, maxLines), textX, bandTop + 8);
+          pdf.setFontSize(fitFont(slot.text, slotW - 3, 6.2, "wrap", 4.2));
+          const titleLines = (pdf.splitTextToSize(slot.text, slotW - 3) as string[]).slice(0, 2);
+          const titleY = bandTop + bandH / 2 + (slot.certNo ? -1.4 : 0.8) - (titleLines.length > 1 ? 1 : 0);
+          pdf.text(titleLines, cx, titleY, { align: "center" });
+          if (slot.certNo) {
+            pdf.setFont("helvetica", "normal").setFontSize(5.6).setTextColor(...MUTED);
+            pdf.text(slot.certNo, cx, titleY + titleLines.length * 2.6 + 1.8, { align: "center" });
           }
           return;
         }
@@ -560,77 +645,16 @@ export function renderDocumentPdf(opts: RenderOptions): jsPDF {
     y = top + stripH + 3;
   }
 
-  /* ─────────────────────────── footer ─────────────────────────── */
-  /** Column geometry and measured height of the footer, computed before
-   *  anything is placed so the strips can reserve room for both. */
-  function measureFooter() {
-    const nameW = CW * 0.44;
-    const contactX = M + nameW + 4;
-    const contactW = CW * 0.26;
-    const regX = contactX + contactW + 4;
-    const regW = M + CW - regX - (images.qr ? 20 : 0);
-
-    pdf.setFont("helvetica", "bold").setFontSize(7.6);
-    const nameLines = pdf.splitTextToSize(m.footer.companyName.toUpperCase(), nameW) as string[];
-    pdf.setFont("helvetica", "normal").setFontSize(6.6);
-    const addressWrapped = m.footer.addressLines.map((l) => pdf.splitTextToSize(l, nameW) as string[]);
-    const contactWrapped = m.footer.contactBits.map((b) => pdf.splitTextToSize(b, contactW) as string[]);
-
-    const leftH = nameLines.length * 3.4 + 1 + addressWrapped.reduce((a, w) => a + w.length * 2.9, 0);
-    const contactH = contactWrapped.reduce((a, w) => a + w.length * 3.2, 0);
-    const regH = m.footer.registration.length * 3.9;
-    const height = 5 + Math.max(leftH, contactH, regH, images.qr ? 17 : 0) + 2;
-
-    return { nameW, contactX, contactW, regX, regW, nameLines, addressWrapped, contactWrapped, height };
-  }
-
-  function drawFooter(): void {
-    /* Explicit column widths. Drawing the legal name from the left margin
-       with no bound ran it straight through the phone number in the next
-       column — the company name is long and the columns were even thirds. */
-    const { contactX, regX, regW, nameLines, addressWrapped, contactWrapped, height } = measureFooter();
-
-    need(height);
-    rule(y, M, M + CW, NAVY, 0.5);
-    y += 5;
-    const top = y;
-
-    pdf.setFont("helvetica", "bold").setFontSize(7.6).setTextColor(...NAVY);
-    pdf.text(nameLines, M, top);
-    let ay = top + nameLines.length * 3.4 + 1;
-
-    pdf.setFont("helvetica", "normal").setFontSize(6.6).setTextColor(...MUTED);
-    for (const wrapped of addressWrapped) {
-      pdf.text(wrapped, M, ay);
-      ay += wrapped.length * 2.9;
-    }
-
-    let cy = top;
-    for (const wrapped of contactWrapped) {
-      pdf.text(wrapped, contactX, cy);
-      cy += wrapped.length * 3.2;
-    }
-
-    /* A CIN is 21 characters and must not wrap: give the value the room it
-       needs and keep the label narrow. */
-    const regEnd = colonRows(m.footer.registration, regX, regW, top, 10, 6.6);
-
-    if (images.qr) {
-      const box = fitBox(images.qr, 17, 17);
-      pdf.addImage(images.qr.src, "PNG", M + CW - box.w, top - 3, box.w, box.h, undefined, "FAST");
-    }
-
-    y = Math.max(ay, cy, regEnd) + 2;
-  }
-
   /* ───────────────────────── compose ───────────────────────── */
   drawHeader();
   drawParties();
   drawReferences();
   drawItems();
   drawMoneyBlock();
+  drawHsnSummary();
+  drawBankDetails();
   drawStrips();
-  drawFooter();
+  drawSignature();
 
   /* Closing line and page numbers, stamped on every page at a fixed height
      so they cannot collide with content. */

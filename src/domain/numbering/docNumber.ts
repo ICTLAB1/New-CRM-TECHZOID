@@ -4,13 +4,24 @@ export function fyShortPair(date: Date = new Date()): { fy: number; next: number
   return { fy, next: fy + 1 };
 }
 
-/** Document number: PREFIX/2526/0001.
- *  Prefix and sequence are configurable in settings; the FY segment and the
- *  4-digit zero padding are not — existing documents in the live database
- *  carry this exact shape. */
+/**
+ * Document number: PREFIX/2026-27/0001.
+ *
+ * DEVIATION FROM v1 (deliberate, client-requested): v1 produced
+ * PREFIX/2627/0001 — both years compressed to two digits with no
+ * separator. The client supplied a reference quotation with the full
+ * four-digit starting year and a hyphen (2026-27) and asked for it
+ * exactly. This only affects documents created from here on — a document
+ * number already stored is just text; changing this function does not
+ * touch it.
+ *
+ * Prefix and sequence stay configurable in settings; the FY segment and
+ * the 4-digit zero padding do not.
+ */
 export function buildDocNumber(prefix: string, seq: number | null | undefined, date: Date = new Date()): string {
-  const { fy, next } = fyShortPair(date);
-  return `${prefix}/${fy}${next}/${String(seq || 1).padStart(4, "0")}`;
+  const fyStart = date.getMonth() >= 3 ? date.getFullYear() : date.getFullYear() - 1;
+  const fyLabel = `${fyStart}-${String((fyStart + 1) % 100).padStart(2, "0")}`;
+  return `${prefix}/${fyLabel}/${String(seq || 1).padStart(4, "0")}`;
 }
 
 export function fyBounds(date: Date = new Date()): { startMs: number; endMs: number; label: string } {

@@ -30,7 +30,7 @@ describe("order from a paid proforma", () => {
   const order = orderFromProforma(pf, SETTINGS, TODAY);
 
   it("numbers from the order sequence", () => {
-    expect(order.number).toBe("TZ/SO/2627/0012");
+    expect(order.number).toBe("TZ/SO/2026-27/0012");
   });
 
   it("keeps the link back, so the pair can never be raised twice", () => {
@@ -100,7 +100,7 @@ describe("delivery challan", () => {
   const order: SalesOrder = orderFromProforma(proforma(), SETTINGS, TODAY);
 
   it("numbers from the dispatch sequence", () => {
-    expect(newChallan(order, [], SETTINGS, TODAY).number).toBe("TZ/DC/2627/0005");
+    expect(newChallan(order, [], SETTINGS, TODAY).number).toBe("TZ/DC/2026-27/0005");
   });
 
   it("pre-fills the full order when nothing has shipped", () => {

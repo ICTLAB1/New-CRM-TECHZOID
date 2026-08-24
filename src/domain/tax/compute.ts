@@ -1,5 +1,5 @@
 import { round2 } from "../money";
-import type { ComputedRow, DocumentTotals, TaxSlab, TaxableDocument } from "./types";
+import type { ComputedRow, DocumentTotals, HsnGroup, TaxSlab, TaxableDocument } from "./types";
 
 /**
  * The single source of truth for document totals. The on-screen preview, the
@@ -59,6 +59,21 @@ export function computeDocument(doc: TaxableDocument, sellerState: string): Docu
     slab.tax = round2(slab.tax + r.tax);
   });
 
+  /* HSN/SAC summary: every line grouped by its code. Lines with no code set
+     are left out of every group — there is nothing to group them under, and
+     silently bucketing them under "" would understate every other group's
+     share of the real total. */
+  const hsnMap = new Map<string, HsnGroup>();
+  rows.forEach((r) => {
+    const hsn = String(r.hsn ?? "").trim();
+    if (!hsn) return;
+    const group = hsnMap.get(hsn) ?? { hsn, rate: Number(r.gst) || 0, taxable: 0, tax: 0 };
+    group.taxable = round2(group.taxable + r.taxable);
+    group.tax = round2(group.tax + r.tax);
+    hsnMap.set(hsn, group);
+  });
+  const hsnGroups = Array.from(hsnMap.values()).sort((a, b) => a.hsn.localeCompare(b.hsn));
+
   return {
     rows,
     gross,
@@ -69,6 +84,7 @@ export function computeDocument(doc: TaxableDocument, sellerState: string): Docu
     grand,
     roundDiff,
     slabs,
+    hsnGroups,
     cgst: round2(taxTotal / 2),
     sgst: round2(taxTotal / 2),
     igst: taxTotal,

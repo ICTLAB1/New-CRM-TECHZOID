@@ -43,6 +43,18 @@ export interface TaxSlab {
   tax: number;
 }
 
+/** One row of the HSN/SAC summary: every line sharing an HSN/SAC code,
+ *  folded into its taxable value and tax. Rows with no HSN/SAC set are left
+ *  out — there is nothing to group them under. */
+export interface HsnGroup {
+  hsn: string;
+  /** The tax rate this code's lines carry. Lines under one HSN/SAC share a
+   *  rate in practice, so the first line's rate stands for the group. */
+  rate: number;
+  taxable: number;
+  tax: number;
+}
+
 /** The minimum a document must supply to be totalled. Deliberately narrow:
  *  totals must never depend on anything but these. */
 export interface TaxableDocument {
@@ -64,6 +76,8 @@ export interface DocumentTotals {
   grand: number;
   roundDiff: number;
   slabs: Record<number, TaxSlab>;
+  /** Sorted by HSN/SAC code, ascending — the order the summary prints in. */
+  hsnGroups: HsnGroup[];
   cgst: number;
   sgst: number;
   igst: number;

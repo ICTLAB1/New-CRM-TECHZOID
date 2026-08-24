@@ -61,16 +61,18 @@ describe("header meta", () => {
   });
 
   it("builds the registration bar from what is configured", () => {
-    expect(build().header.registrationParts).toEqual([
-      "CIN: U72900DL2015PTC000000",
-      "GSTIN: 07AAXXXXXXXXXZX",
-      "PAN: AAXXXXXXXX",
+    expect(build().header.registration).toEqual([
+      "GSTIN 07AAXXXXXXXXXZX",
+      "PAN AAXXXXXXXX",
+      "CIN U72900DL2015PTC000000",
     ]);
   });
 
   it("omits a blank phone rather than printing an empty contact line", () => {
-    expect(build().header.contactLines).not.toContain("");
-    expect(build({}, "quotation", { company: { ...SETTINGS.company, phone: "-" } }).header.contactLines)
+    // A blank or punctuation-only phone must not survive as a leading " · "
+    // or a bare "-" among the real contact details.
+    expect(build().header.contactLine).not.toMatch(/^\s*·/);
+    expect(build({}, "quotation", { company: { ...SETTINGS.company, phone: "-" } }).header.contactLine)
       .not.toContain("-");
   });
 });
@@ -173,10 +175,12 @@ describe("proforma specifics", () => {
     expect(build({ advancePercent: 0 }, "proforma").money.advance).toBeNull();
   });
 
-  it("carries bank details, and never on a quotation", () => {
+  it("carries bank details on a proforma and on a quotation", () => {
+    // The approved reference prints bank details on a quotation too, in its
+    // own block below the HSN/SAC summary — not only on a proforma.
     const bank = { name: "HDFC Bank", account: "50200012345678", ifsc: "HDFC0001234" };
     expect(build({}, "proforma", {}, bank).money.bank?.rows).toContainEqual(["Bank Name", "HDFC Bank"]);
-    expect(build({}, "quotation", {}, bank).money.bank).toBeNull();
+    expect(build({}, "quotation", {}, bank).money.bank?.rows).toContainEqual(["Bank Name", "HDFC Bank"]);
   });
 
   it("prints notes instead of terms", () => {
@@ -240,10 +244,10 @@ describe("party grid", () => {
 });
 
 describe("header and details", () => {
-  it("keeps the header block to date, validity and currency", () => {
+  it("keeps the header block to date, validity, revision and currency", () => {
     // Printing the number, customer id and sales executive here too cost
     // 20mm of page and said everything twice.
-    expect(build().header.meta.map(([k]) => k)).toEqual(["Date", "Valid Until", "Currency"]);
+    expect(build().header.meta.map(([k]) => k)).toEqual(["Date", "Valid Until", "Revision", "Currency"]);
   });
 
   it("carries the rest in the details column", () => {
@@ -293,8 +297,14 @@ describe("partner, certification and footer strips", () => {
     expect(m.strips.certifications).toEqual([]);
   });
 
-  it("carries the registration numbers in the footer", () => {
-    expect(build().footer.registration.map(([k]) => k)).toEqual(["GSTIN", "PAN", "CIN"]);
+  it("carries the registration numbers in the header, not the footer", () => {
+    // Company details moved to the header banner in the redesign — the
+    // footer keeps only the closing line and page number.
+    expect(build().header.registration).toEqual([
+      "GSTIN 07AAXXXXXXXXXZX",
+      "PAN AAXXXXXXXX",
+      "CIN U72900DL2015PTC000000",
+    ]);
   });
 
   it("closes with the design's line", () => {

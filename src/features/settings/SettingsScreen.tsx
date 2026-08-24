@@ -110,70 +110,110 @@ interface Company {
   phone?: string; email?: string; website?: string; tagline?: string;
 }
 
+interface UaeOffice {
+  address?: string; phone?: string; businessLicense?: string; taxRegistrationNumber?: string;
+}
+
 function CompanyPanel({ settings, canEdit, onChange }: { settings: Record<string, unknown>; canEdit: boolean; onChange: (s: Record<string, unknown>) => void }) {
   const company = (settings["company"] ?? {}) as Company;
+  const uaeOffice = (settings["uaeOffice"] ?? {}) as UaeOffice;
   const { draft, setDraft, dirty, save, reset } = useDraft(
-    { company, signatoryName: String(settings["signatoryName"] ?? ""), signatoryDesignation: String(settings["signatoryDesignation"] ?? "") },
+    {
+      company, uaeOffice,
+      signatoryName: String(settings["signatoryName"] ?? ""),
+      signatoryDesignation: String(settings["signatoryDesignation"] ?? ""),
+    },
     (next) => onChange({ ...settings, ...next }),
     "Company details saved",
   );
 
   const set = (key: keyof Company) => (e: { target: { value: string } }) =>
     setDraft((d) => ({ ...d, company: { ...d.company, [key]: e.target.value } }));
+  const setUae = (key: keyof UaeOffice) => (e: { target: { value: string } }) =>
+    setDraft((d) => ({ ...d, uaeOffice: { ...d.uaeOffice, [key]: e.target.value } }));
 
   return (
-    <Card title="Who we are" >
-      <p className="muted" style={{ marginTop: 0 }}>
-        This is what prints at the top and bottom of every quotation, proforma and delivery challan. The
-        seller's state also decides CGST + SGST versus IGST on every document.
-      </p>
+    <div className="stack">
+      <Card title="Who we are">
+        <p className="muted" style={{ marginTop: 0 }}>
+          This is what prints at the top of every quotation and proforma. The seller's state also decides
+          CGST + SGST versus IGST on every document.
+        </p>
 
-      <div className="stack" style={{ marginTop: 14 }}>
-        <Field label="Legal name" hint="Exactly as registered — this goes on documents a customer may present to their auditor.">
-          <Input value={draft.company.name ?? ""} disabled={!canEdit} onChange={set("name")} />
-        </Field>
-        <Field label="Address">
-          <Textarea rows={2} value={draft.company.address ?? ""} disabled={!canEdit} onChange={set("address")} />
-        </Field>
-        <div className="grid grid-3">
-          <Field label="City"><Input value={draft.company.city ?? ""} disabled={!canEdit} onChange={set("city")} /></Field>
-          <Field label="State" hint="Decides CGST+SGST versus IGST.">
-            <Select value={draft.company.state ?? ""} disabled={!canEdit} onChange={set("state")}>
-              <option value="">—</option>
-              {STATE_NAMES.map((name) => <option key={name} value={name}>{name}</option>)}
-            </Select>
+        <div className="stack" style={{ marginTop: 14 }}>
+          <Field label="Legal name" hint="Exactly as registered — this goes on documents a customer may present to their auditor.">
+            <Input value={draft.company.name ?? ""} disabled={!canEdit} onChange={set("name")} />
           </Field>
-          <Field label="PIN code"><Input value={draft.company.pincode ?? ""} disabled={!canEdit} onChange={set("pincode")} /></Field>
-        </div>
-        <div className="grid grid-3">
-          <Field label="GSTIN"><Input className="mono" value={draft.company.gstin ?? ""} disabled={!canEdit} onChange={set("gstin")} /></Field>
-          <Field label="PAN"><Input className="mono" value={draft.company.pan ?? ""} disabled={!canEdit} onChange={set("pan")} /></Field>
-          <Field label="CIN"><Input className="mono" value={draft.company.cin ?? ""} disabled={!canEdit} onChange={set("cin")} /></Field>
-        </div>
-        <div className="grid grid-3">
-          <Field label="Phone"><Input value={draft.company.phone ?? ""} disabled={!canEdit} onChange={set("phone")} /></Field>
-          <Field label="Email"><Input type="email" value={draft.company.email ?? ""} disabled={!canEdit} onChange={set("email")} /></Field>
-          <Field label="Website"><Input value={draft.company.website ?? ""} disabled={!canEdit} onChange={set("website")} /></Field>
-        </div>
-        <div className="grid grid-2">
-          <Field label="Signatory" hint="Printed under the signature block.">
-            <Input value={draft.signatoryName} disabled={!canEdit} onChange={(e) => setDraft((d) => ({ ...d, signatoryName: e.target.value }))} />
+          <Field label="Tagline" hint={'Printed under the legal name, e.g. "One procurement partner. Multiple technology brands."'}>
+            <Input value={draft.company.tagline ?? ""} disabled={!canEdit} onChange={set("tagline")} />
           </Field>
-          <Field label="Designation">
-            <Input value={draft.signatoryDesignation} disabled={!canEdit} onChange={(e) => setDraft((d) => ({ ...d, signatoryDesignation: e.target.value }))} />
+          <Field label="Address">
+            <Textarea rows={2} value={draft.company.address ?? ""} disabled={!canEdit} onChange={set("address")} />
           </Field>
+          <div className="grid grid-3">
+            <Field label="City"><Input value={draft.company.city ?? ""} disabled={!canEdit} onChange={set("city")} /></Field>
+            <Field label="State" hint="Decides CGST+SGST versus IGST.">
+              <Select value={draft.company.state ?? ""} disabled={!canEdit} onChange={set("state")}>
+                <option value="">—</option>
+                {STATE_NAMES.map((name) => <option key={name} value={name}>{name}</option>)}
+              </Select>
+            </Field>
+            <Field label="PIN code"><Input value={draft.company.pincode ?? ""} disabled={!canEdit} onChange={set("pincode")} /></Field>
+          </div>
+          <div className="grid grid-3">
+            <Field label="GSTIN"><Input className="mono" value={draft.company.gstin ?? ""} disabled={!canEdit} onChange={set("gstin")} /></Field>
+            <Field label="PAN"><Input className="mono" value={draft.company.pan ?? ""} disabled={!canEdit} onChange={set("pan")} /></Field>
+            <Field label="CIN"><Input className="mono" value={draft.company.cin ?? ""} disabled={!canEdit} onChange={set("cin")} /></Field>
+          </div>
+          <div className="grid grid-3">
+            <Field label="Phone"><Input value={draft.company.phone ?? ""} disabled={!canEdit} onChange={set("phone")} /></Field>
+            <Field label="Email"><Input type="email" value={draft.company.email ?? ""} disabled={!canEdit} onChange={set("email")} /></Field>
+            <Field label="Website"><Input value={draft.company.website ?? ""} disabled={!canEdit} onChange={set("website")} /></Field>
+          </div>
+          <div className="grid grid-2">
+            <Field label="Signatory" hint="Printed under the signature block.">
+              <Input value={draft.signatoryName} disabled={!canEdit} onChange={(e) => setDraft((d) => ({ ...d, signatoryName: e.target.value }))} />
+            </Field>
+            <Field label="Designation">
+              <Input value={draft.signatoryDesignation} disabled={!canEdit} onChange={(e) => setDraft((d) => ({ ...d, signatoryDesignation: e.target.value }))} />
+            </Field>
+          </div>
         </div>
-      </div>
 
-      <SaveBar dirty={dirty} canEdit={canEdit} onSave={save} onReset={reset} />
-    </Card>
+        <SaveBar dirty={dirty} canEdit={canEdit} onSave={save} onReset={reset} />
+      </Card>
+
+      <Card title="UAE office">
+        <p className="muted" style={{ marginTop: 0 }}>
+          Printed as a banner under the header on every quotation and proforma. Leave blank to hide it —
+          also controlled by the "UAE office" toggle on the Document tab.
+        </p>
+
+        <div className="stack" style={{ marginTop: 14 }}>
+          <Field label="Address" hint={'Free text, e.g. "Office C1-1F-SF2571, Ajman Free Zone C1 Building, Ajman Free Zone, Ajman".'}>
+            <Textarea rows={2} value={draft.uaeOffice.address ?? ""} disabled={!canEdit} onChange={setUae("address")} />
+          </Field>
+          <div className="grid grid-3">
+            <Field label="Phone"><Input value={draft.uaeOffice.phone ?? ""} disabled={!canEdit} onChange={setUae("phone")} /></Field>
+            <Field label="Business licence number">
+              <Input className="mono" value={draft.uaeOffice.businessLicense ?? ""} disabled={!canEdit} onChange={setUae("businessLicense")} />
+            </Field>
+            <Field label="Tax registration number">
+              <Input className="mono" value={draft.uaeOffice.taxRegistrationNumber ?? ""} disabled={!canEdit} onChange={setUae("taxRegistrationNumber")} />
+            </Field>
+          </div>
+        </div>
+
+        <SaveBar dirty={dirty} canEdit={canEdit} onSave={save} onReset={reset} />
+      </Card>
+    </div>
   );
 }
 
 /* ── document appearance ───────────────────────────────────────────── */
 
 const TOGGLE_LABELS: Record<string, string> = {
-  uaeOffice: "UAE office address in the footer",
+  uaeOffice: "UAE office banner in the header",
   isoCerts: "ISO certification badges",
   terms: "Terms & conditions block",
   bankDetails: "Bank details (proforma)",

@@ -97,8 +97,11 @@ export const DEFAULT_DOC_TEMPLATE: DocTemplate = {
   accentColor: "#2563EB",
   sectionOrder: DEFAULT_SECTION_ORDER,
   sections: {
+    /* Off by default: the approved reference quotation carries neither a
+       customer-acceptance box nor "We Accept" payment icons — just the plain
+       "For {company} / Authorised signatory" block, which always prints. */
     uaeOffice: true, isoCerts: true, terms: true, bankDetails: true,
-    customerAcceptance: true, partnerLogos: true, yearsOfExcellence: true,
+    customerAcceptance: false, partnerLogos: true, yearsOfExcellence: true,
     notes: true, salutation: true, amountInWords: true,
   },
   columns: { subDesc: true, brand: true, sku: true, hsn: true },

@@ -32,10 +32,19 @@
 .doc-mark { font-size: 7mm; font-weight: 800; color: #0D2B55; letter-spacing: -0.02em; line-height: 1; }
 .doc-legal { margin-top: 2.5mm; font-size: 3.4mm; font-weight: 700; color: #0D2B55; }
 .doc-tagline { margin-top: 1.2mm; font-size: 2.5mm; color: #64748B; }
+.doc-head-line { margin-top: 0.8mm; font-size: 2.2mm; color: #64748B; }
+.doc-head-reg { margin-top: 0.8mm; font-size: 2.2mm; font-weight: 700; color: #18202A; }
 .doc-title { font-size: 6.6mm; font-weight: 700; color: #0D2B55; text-align: right; line-height: 1; }
 .doc-plaque { margin-top: 2.5mm; padding: 1.6mm 3mm; background: #0D2B55; color: #fff; font-weight: 700; font-size: 3.4mm; text-align: center; }
 .doc-headmeta { margin-top: 2.5mm; }
-.doc-rule-navy { border: 0; border-top: 0.7mm solid #0D2B55; margin: 3mm 0 4mm; }
+.doc-rule-navy { border: 0; border-top: 0.7mm solid #0D2B55; margin: 3mm 0 3mm; }
+
+/* ── UAE office banner ── */
+.doc-uae { display: flex; align-items: baseline; gap: 4mm; background: #F1F4F8; border: 0.2mm solid #D7DCE2; padding: 1.8mm 3mm; margin-bottom: 4mm; }
+.doc-uae-label { flex: none; font-size: 2.2mm; font-weight: 700; color: #0D2B55; }
+.doc-uae-body { display: flex; flex-direction: column; gap: 0.6mm; }
+.doc-uae-address { font-size: 2.4mm; color: #18202A; }
+.doc-uae-reg { font-size: 2.2mm; color: #64748B; }
 
 /* ── label : value rows ── */
 .doc-rows { display: grid; grid-template-columns: auto 2mm 1fr; row-gap: 1.1mm; column-gap: 0; align-items: baseline; }
@@ -90,6 +99,20 @@
 .doc-words-label { font-size: 2.4mm; font-weight: 700; color: #0D2B55; }
 .doc-words-value { font-size: 2.4mm; color: #18202A; }
 
+/* ── HSN / SAC summary ── */
+.doc-hsn { margin-top: 5mm; }
+.doc-hsn-table { width: 100%; border-collapse: collapse; margin-top: 2mm; }
+.doc-hsn-table th, .doc-hsn-table td { border: 0.15mm solid #D7DCE2; padding: 1.6mm 2.4mm; font-size: 2.4mm; }
+.doc-hsn-table th { background: #F1F4F8; color: #0D2B55; font-weight: 700; text-transform: uppercase; font-size: 2.1mm; }
+.doc-hsn-table td { font-family: var(--mono); }
+.doc-hsn-table tfoot td { font-weight: 700; background: #F1F4F8; color: #18202A; }
+.doc-hsn-table .a-left { text-align: left; font-family: var(--sans); }
+.doc-hsn-table .a-center { text-align: center; }
+.doc-hsn-table .a-right { text-align: right; }
+
+/* ── bank details (quotation) ── */
+.doc-bank { margin-top: 5mm; }
+
 /* ── strips ── */
 .doc-strips { display: grid; border: 0.2mm solid #D7DCE2; margin-top: 5mm; }
 .doc-strip { border-left: 0.2mm solid #D7DCE2; padding: 1.6mm 2mm 2.4mm; }
@@ -99,17 +122,24 @@
 .doc-slot { flex: 1 1 0; min-width: 0; text-align: center; }
 .doc-slot img { max-width: 100%; max-height: 8.5mm; object-fit: contain; display: block; margin: 0 auto; }
 .doc-slot-text { font-size: 2.3mm; font-weight: 700; color: #18202A; }
-.doc-cert { display: flex; align-items: center; gap: 1.5mm; text-align: left; }
-.doc-medal { width: 6.2mm; height: 6.2mm; flex: none; border: 0.45mm solid #0D2B55; border-radius: 50%; display: grid; place-items: center; line-height: 1; }
-.doc-medal-inner { width: 4.8mm; height: 4.8mm; border: 0.18mm solid #0D2B55; border-radius: 50%; display: grid; place-items: center; align-content: center; }
-.doc-medal b { font-size: 2.1mm; color: #0D2B55; display: block; }
-.doc-medal i { font-size: 1.1mm; color: #0D2B55; font-style: normal; display: block; }
-.doc-cert-title { font-size: 2.1mm; font-weight: 700; color: #0D2B55; }
-.doc-cert-scope { font-size: 1.8mm; color: #64748B; }
+/* Certifications: plain text, no ring — name and licence number, centred. */
+.doc-cert { display: flex; flex-direction: column; align-items: center; gap: 0.6mm; text-align: center; }
+.doc-cert-title { font-size: 2.2mm; font-weight: 700; color: #0D2B55; }
+.doc-cert-no { font-size: 1.9mm; color: #64748B; font-family: var(--mono); }
+
+/* ── signature block ── */
+.doc-signature { display: grid; grid-template-columns: 1fr 1fr; gap: 7mm; margin-top: 6mm; align-items: end; }
+.doc-acceptance { border: 0.2mm solid #D7DCE2; padding: 2.5mm 3mm; }
+.doc-acceptance-field { display: flex; align-items: baseline; gap: 2mm; margin-top: 3mm; font-size: 2.3mm; color: #64748B; }
+.doc-acceptance-field span:first-child { flex: none; }
+.doc-acceptance-line { flex: 1 1 auto; border-bottom: 0.15mm solid #D7DCE2; }
+.doc-acceptance-seal { margin-top: 4mm; text-align: right; font-size: 2.1mm; font-style: italic; color: #64748B; }
+.doc-for-company { text-align: right; }
+.doc-for-line { font-size: 2.7mm; font-weight: 700; color: #0D2B55; }
+.doc-sig-line { margin: 8mm 0 1.5mm auto; width: 55mm; border-bottom: 0.2mm solid #18202A; }
+.doc-sig-name { font-size: 2.5mm; font-weight: 700; color: #18202A; }
+.doc-sig-designation { font-size: 2.2mm; color: #64748B; }
 
 /* ── footer ── */
-.doc-foot-rule { border: 0; border-top: 0.5mm solid #0D2B55; margin: 5mm 0 3mm; }
-.doc-foot { display: grid; grid-template-columns: 44% 26% 1fr; gap: 4mm; }
-.doc-foot-name { font-size: 2.9mm; font-weight: 700; color: #0D2B55; }
-.doc-foot-line { font-size: 2.5mm; color: #64748B; }
-.doc-closing { margin-top: 6mm; padding-top: 2mm; border-top: 0.2mm solid #D7DCE2; display: flex; justify-content: space-between; font-size: 2.4mm; color: #64748B; }
+.doc-foot-rule { border: 0; border-top: 0.5mm solid #0D2B55; margin: 5mm 0 0; }
+.doc-closing { margin-top: 2mm; padding-top: 2mm; display: flex; justify-content: space-between; font-size: 2.4mm; color: #64748B; }

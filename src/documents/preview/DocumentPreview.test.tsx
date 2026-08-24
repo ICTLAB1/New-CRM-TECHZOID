@@ -119,17 +119,25 @@ describe("the preview shows everything the model carries", () => {
     }
   });
 
-  it("prints the footer registration and closing line", () => {
-    for (const [label, value] of model.footer.registration) {
-      expect(text, label).toContain(value);
+  it("prints the header registration and the closing line", () => {
+    // Company registration details moved to the header banner in the
+    // redesign — the footer keeps only the closing line and page number.
+    for (const value of model.header.registration) {
+      expect(text, value).toContain(value);
     }
     expect(text).toContain(model.footer.closing);
   });
 
   it("prints every strip slot", () => {
-    for (const slot of [...model.strips.designations, ...model.strips.partners, ...model.strips.certifications]) {
+    // Certifications print as plain text — name and licence number, no
+    // caption/scope line — since the approved reference drops it.
+    for (const slot of [...model.strips.designations, ...model.strips.partners]) {
       expect(text, slot.text).toContain(slot.text);
       if (slot.caption) expect(text, slot.caption).toContain(slot.caption);
+    }
+    for (const slot of model.strips.certifications) {
+      expect(text, slot.text).toContain(slot.text);
+      if (slot.certNo) expect(text, slot.certNo).toContain(slot.certNo);
     }
   });
 });

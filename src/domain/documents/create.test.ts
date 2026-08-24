@@ -106,7 +106,7 @@ describe("new quotation", () => {
   const q = newQuotation({ settings: SETTINGS, user: USER, customer: domestic(), today: TODAY });
 
   it("numbers from the configured prefix and sequence", () => {
-    expect(q.number).toBe("TZ/QT/2627/0007");
+    expect(q.number).toBe("TZ/QT/2026-27/0007");
   });
 
   it("starts as a draft, valid for the configured period", () => {
@@ -169,7 +169,7 @@ describe("proforma from a quotation", () => {
   });
 
   it("takes a fresh proforma number and keeps the link back", () => {
-    expect(pf.number).toBe("TZ/PI/2627/0003");
+    expect(pf.number).toBe("TZ/PI/2026-27/0003");
     expect(pf.quoteId).toBe(quote.id);
     expect(pf.quoteNumber).toBe(quote.number);
     expect(pf.id).not.toBe(quote.id);
@@ -199,7 +199,7 @@ describe("duplicating a quotation", () => {
 
   it("takes a fresh number", () => {
     // Two live documents claiming to be the same one is worse than no copy.
-    expect(copy.number).toBe("TZ/QT/2627/0007");
+    expect(copy.number).toBe("TZ/QT/2026-27/0007");
     expect(copy.id).not.toBe(quote.id);
   });
 

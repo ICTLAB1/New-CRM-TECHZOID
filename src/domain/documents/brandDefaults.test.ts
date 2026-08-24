@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_CERTIFICATIONS, DEFAULT_PARTNER_DESIGNATIONS, DEFAULT_TECHNOLOGY_PARTNERS } from "./brandDefaults";
-import { medallionNumber } from "./model";
 
 describe("supplied partner assets", () => {
   it("carries the two official badges as designations", () => {
@@ -65,16 +64,12 @@ describe("certifications", () => {
       expect(c).not.toHaveProperty("logo");
     }
   });
-});
 
-describe("medallion number", () => {
-  it("strips the ISO prefix for the ring", () => {
-    expect(medallionNumber("ISO 9001:2015")).toBe("9001:2015");
-    expect(medallionNumber("ISO/IEC 27001:2022")).toBe("27001:2022");
-    expect(medallionNumber("ISO/IEC 20000-1:2018")).toBe("20000-1:2018");
-  });
-
-  it("leaves an unrecognised label alone rather than mangling it", () => {
-    expect(medallionNumber("CMMI Level 3")).toBe("CMMI Level 3");
+  it("leaves the licence/certificate number blank rather than inventing one", () => {
+    // Never fabricate: an admin fills this in once the real registrar
+    // numbers are known.
+    for (const c of DEFAULT_CERTIFICATIONS) {
+      expect(c).not.toHaveProperty("certNo");
+    }
   });
 });

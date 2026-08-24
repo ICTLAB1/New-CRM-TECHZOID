@@ -59,12 +59,19 @@ export const CATALOG: CatalogProduct[] = [
 export const SETTINGS: Record<string, unknown> = {
   company: {
     name: "TechZoid Technologies Private Limited",
+    tagline: "One procurement partner. Multiple technology brands.",
     address: "407, 4th Floor, Pearl Business Park, Netaji Subhash Place, Pitampura",
     city: "New Delhi", state: "Delhi", pincode: "110034", country: "India",
     gstin: "07AAGCT9158R1Z0", pan: "AAGCT9158R", cin: "U72900DL2016PTC302635",
     phone: "+91 97114 92098",
     email: "sales@techzoidtechnologies.com",
     website: "www.techzoidtechnologies.com",
+  },
+  uaeOffice: {
+    address: "Office C1-1F-SF2571, Ajman Free Zone C1 Building, Ajman Free Zone, Ajman",
+    phone: "+971 58 939 7239",
+    businessLicense: "42287",
+    taxRegistrationNumber: "105122230300001",
   },
   quotePrefix: "TZ/QT", quoteSeq: 118,
   proformaPrefix: "TZ/PI", proformaSeq: 43,
