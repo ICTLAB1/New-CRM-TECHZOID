@@ -2,6 +2,8 @@ import { useMemo, useState } from "react";
 import { PageHead } from "../../app/AppShell";
 import { Button, Card, Chip, Empty, Input, Meter, Tabs } from "../../components/primitives";
 import { useToast } from "../../components/Toast";
+import { Modal } from "../../components/Modal";
+import { AttachmentsPanel } from "../attachments/AttachmentsPanel";
 import { ORDER_STAGES, orderStageOf, type OrderStageId } from "../../domain/orders/stages";
 import { orderFulfilment, type Challan } from "../../domain/orders/fulfilment";
 import { newChallan, suggestedStage, type DeliveryChallan, type SalesOrder } from "../../domain/orders/create";
@@ -13,13 +15,16 @@ export interface OrdersScreenProps {
   orders: SalesOrder[];
   challans: DeliveryChallan[];
   settings: Record<string, unknown>;
+  /** Who is looking — a file they attach is uploaded as them. */
+  currentUser: { id: string; name: string; role?: string };
   onChange: (orders: SalesOrder[], challans: DeliveryChallan[], settings: Record<string, unknown>) => void;
 }
 
-export function OrdersScreen({ orders, challans, settings, onChange }: OrdersScreenProps) {
+export function OrdersScreen({ orders, challans, settings, currentUser, onChange }: OrdersScreenProps) {
   const toast = useToast();
   const [stage, setStage] = useState<string>("open");
   const [query, setQuery] = useState("");
+  const [files, setFiles] = useState<SalesOrder | null>(null);
   const sellerState = ((settings["company"] as { state?: string })?.state) ?? "Delhi";
 
   const shown = useMemo(() => {
@@ -122,6 +127,10 @@ export function OrdersScreen({ orders, challans, settings, onChange }: OrdersScr
                           {f.remaining > 0 && stageInfo.open ? (
                             <Button size="sm" tone="quiet" onClick={() => raiseChallan(o)}>New challan</Button>
                           ) : null}
+                          {/* The customer's own PO, the signed delivery note,
+                              the site photo — the paperwork an order collects
+                              that is not a document this CRM produced. */}
+                          <Button size="sm" tone="quiet" onClick={() => setFiles(o)}>Files</Button>
                         </span>
                       </td>
                     </tr>
@@ -137,6 +146,24 @@ export function OrdersScreen({ orders, challans, settings, onChange }: OrdersScr
         Stage changes are suggested from what has actually shipped, never applied on their own —
         an order can be fully dispatched and still not delivered.
       </p>
+
+      {files ? (
+        <Modal
+          open
+          side
+          title={`Files — ${files.number}`}
+          description={`${files.billName || "This order"}${files.poNumber ? ` · their PO ${files.poNumber}` : ""}`}
+          onClose={() => setFiles(null)}
+        >
+          <AttachmentsPanel
+            framed={false}
+            recordType="order"
+            recordId={files.id}
+            ownerId={files.ownerId}
+            currentUser={currentUser}
+          />
+        </Modal>
+      ) : null}
     </main>
   );
 }

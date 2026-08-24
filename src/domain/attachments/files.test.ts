@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-  ALLOWED_TYPES, MAX_ATTACHMENT_BYTES, checkFile, extensionOf, formatBytes, isPreviewable,
-  mimeFor, safeName, sortAttachments, storagePath, totalBytes, type Attachment,
+  ALLOWED_TYPES, MAX_ATTACHMENT_BYTES, canRemove, checkFile, extensionOf, formatBytes,
+  isPreviewable, mimeFor, safeName, sortAttachments, storagePath, totalBytes, type Attachment,
 } from "./files";
 
 /**
@@ -125,10 +125,23 @@ describe("sanitising a filename", () => {
 describe("where the bytes go", () => {
   const OWNER = "11111111-2222-3333-4444-555555555555";
 
-  it("puts the owner first, because the storage policy reads that segment", () => {
+  it("puts the uploader first, because the storage policy reads that segment", () => {
     const p = storagePath(OWNER, "quotation", "q1", "quote.pdf", "abc123");
     expect(p.split("/")[0]).toBe(OWNER);
     expect(p).toBe(`${OWNER}/quotation/q1/abc123-quote.pdf`);
+  });
+
+  it("is the UPLOADER's folder, not the record owner's", () => {
+    // A salesperson attaching a file to a colleague's customer is still
+    // writing inside their own folder — the storage policy accepts nothing
+    // else, and keying the path off the record owner would reject it.
+    const uploader = "99999999-8888-7777-6666-555555555555";
+    expect(storagePath(uploader, "customer", "c1", "po.pdf", "u1").split("/")[0]).toBe(uploader);
+  });
+
+  it("handles a sales order like any other record", () => {
+    expect(storagePath(OWNER, "order", "o1", "signed-dc.pdf", "u1"))
+      .toBe(`${OWNER}/order/o1/u1-signed-dc.pdf`);
   });
 
   it("sanitises the filename on the way into the path", () => {
@@ -208,5 +221,42 @@ describe("listing", () => {
     expect(totalBytes([at({ size: 100 }), at({ size: 250 })])).toBe(350);
     expect(totalBytes([at({ size: Number("x") })])).toBe(0);
     expect(totalBytes([])).toBe(0);
+  });
+});
+
+describe("who may remove a file", () => {
+  const file = (over: Partial<Attachment> = {}): Attachment => ({
+    id: "a", ownerId: "owner", uploadedById: "uploader",
+    recordType: "customer", recordId: "c1", path: "p", name: "f.pdf",
+    mime: "application/pdf", size: 1, uploadedBy: "Raj",
+    createdAt: "2026-08-01T00:00:00Z",
+    ...over,
+  });
+
+  it("lets the person who uploaded it remove it", () => {
+    expect(canRemove(file(), { id: "uploader", role: "Sales" })).toBe(true);
+  });
+
+  it("does not let a colleague remove somebody else's file", () => {
+    // Adding is open to the whole team; removing a signed contract is not
+    // the kind of mistake a shared folder should make easy.
+    expect(canRemove(file(), { id: "someone-else", role: "Sales" })).toBe(false);
+  });
+
+  it("does not let the record owner remove a file a colleague added", () => {
+    expect(canRemove(file(), { id: "owner", role: "Sales" })).toBe(false);
+  });
+
+  it("lets an Admin or Manager remove anybody's", () => {
+    expect(canRemove(file(), { id: "boss", role: "Admin" })).toBe(true);
+    expect(canRemove(file(), { id: "boss", role: "Manager" })).toBe(true);
+  });
+
+  it("falls back to the record owner for files that predate shared uploads", () => {
+    // Those rows carry no uploader. The owner could delete them before this
+    // change, and still can — nobody loses access to their own file.
+    const legacy = file({ uploadedById: "" });
+    expect(canRemove(legacy, { id: "owner", role: "Sales" })).toBe(true);
+    expect(canRemove(legacy, { id: "someone-else", role: "Sales" })).toBe(false);
   });
 });

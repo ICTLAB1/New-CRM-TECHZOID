@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button, Card, Empty } from "../../components/primitives";
 import { useToast } from "../../components/Toast";
-import { Confirm } from "../../components/Modal";
+import { Confirm, Modal } from "../../components/Modal";
 import { fmtDate } from "../../domain/dates";
 import {
-  allowedExtensionList, formatBytes, isPreviewable, sortAttachments, totalBytes,
+  allowedExtensionList, canRemove, formatBytes, isPreviewable, sortAttachments, totalBytes,
   type Attachment, type AttachableType,
 } from "../../domain/attachments/files";
 import {
@@ -30,8 +30,13 @@ export interface AttachmentsPanelProps {
    *  to yet, and a file uploaded against an id that is about to change would
    *  be orphaned. */
   recordId: string | null;
+  /** Who owns the record. Kept on the file for provenance — it is NOT who
+   *  is allowed to see or add one. */
   ownerId: string;
-  currentUser: { name: string };
+  /** The signed-in user. `id` is what the file is uploaded as and what
+   *  decides whether they may remove one; `role` lets an Admin or Manager
+   *  remove anybody's. */
+  currentUser: { id: string; name: string; role?: string };
   /** Shown above the list. */
   title?: string;
   /** Wrapped in its own Card. Set false when this already sits inside one —
@@ -50,6 +55,7 @@ export function AttachmentsPanel({
   const [dragging, setDragging] = useState(false);
   const [error, setError] = useState("");
   const [confirmDelete, setConfirmDelete] = useState<Attachment | null>(null);
+  const [previewing, setPreviewing] = useState<Attachment | null>(null);
 
   const available = attachmentsAvailable();
 
@@ -77,7 +83,9 @@ export function AttachmentsPanel({
     for (const file of Array.from(files)) {
       try {
         await uploadAttachment({
-          file, recordType, recordId, ownerId, uploadedBy: currentUser.name,
+          file, recordType, recordId, ownerId,
+          uploaderId: currentUser.id,
+          uploadedBy: currentUser.name,
         });
         toast(`${file.name} attached.`, "good");
       } catch (err) {
@@ -91,7 +99,10 @@ export function AttachmentsPanel({
     await refresh();
   };
 
-  const open = async (row: Attachment) => {
+  /* For the types there is no sensible way to show in the page — a .xlsx, a
+     .zip. Everything previewable opens in the viewer instead, so looking at a
+     scanned PO does not mean leaving the record you were reading. */
+  const download = async (row: Attachment) => {
     try {
       const url = await attachmentUrl(row);
       /* noopener because the link is signed and short-lived, but the tab it
@@ -220,12 +231,20 @@ export function AttachmentsPanel({
                     <td className="muted">{row.uploadedBy || "—"}</td>
                     <td>
                       <span className="row-tight">
-                        <Button size="sm" tone="quiet" onClick={() => void open(row)}>
-                          {isPreviewable(row.mime) ? "View" : "Download"}
-                        </Button>
-                        <Button size="sm" tone="danger" onClick={() => setConfirmDelete(row)}>
-                          Remove
-                        </Button>
+                        {isPreviewable(row.mime) ? (
+                          <Button size="sm" tone="quiet" onClick={() => setPreviewing(row)}>Preview</Button>
+                        ) : (
+                          <Button size="sm" tone="quiet" onClick={() => void download(row)}>Download</Button>
+                        )}
+                        {/* Anyone may add a file; only the person who added it,
+                            or an Admin/Manager, may take it away. The database
+                            enforces the same rule — this hides a button that
+                            would otherwise fail when pressed. */}
+                        {canRemove(row, currentUser) ? (
+                          <Button size="sm" tone="danger" onClick={() => setConfirmDelete(row)}>
+                            Remove
+                          </Button>
+                        ) : null}
                       </span>
                     </td>
                   </tr>
@@ -250,6 +269,83 @@ export function AttachmentsPanel({
         onConfirm={() => { if (confirmDelete) void remove(confirmDelete); }}
         onCancel={() => setConfirmDelete(null)}
       />
+
+      {previewing ? (
+        <AttachmentPreview attachment={previewing} onClose={() => setPreviewing(null)} />
+      ) : null}
     </Frame>
+  );
+}
+
+/* ── looking at a file without leaving the record ──────────────────── */
+
+/**
+ * Preview an image or a PDF in place.
+ *
+ * The signed URL is fetched when the viewer opens rather than held on every
+ * row: a list of twenty files would otherwise mint twenty links, nineteen of
+ * which nobody clicks, and each one is a working way into the bucket for the
+ * next five minutes.
+ *
+ * "Open in a new tab" stays, because a PDF in a full browser tab is a better
+ * reader than any frame — this is for the glance, not for the read.
+ */
+function AttachmentPreview({ attachment, onClose }: { attachment: Attachment; onClose: () => void }) {
+  const [url, setUrl] = useState("");
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let live = true;
+    attachmentUrl(attachment)
+      .then((u) => { if (live) setUrl(u); })
+      .catch(() => { if (live) setError("Couldn't open that file."); });
+    /* The link outlives this component by minutes; the guard is against
+       setting state on something already closed, not against the URL. */
+    return () => { live = false; };
+  }, [attachment]);
+
+  const isImage = attachment.mime.startsWith("image/");
+
+  return (
+    <Modal
+      open
+      title={attachment.name}
+      description={`${formatBytes(attachment.size)}${attachment.uploadedBy ? ` · added by ${attachment.uploadedBy}` : ""}`}
+      onClose={onClose}
+      footer={
+        <>
+          <Button tone="quiet" onClick={onClose}>Close</Button>
+          <Button
+            tone="default"
+            disabled={!url}
+            onClick={() => window.open(url, "_blank", "noopener,noreferrer")}
+          >
+            Open in a new tab
+          </Button>
+        </>
+      }
+    >
+      {error ? (
+        <div className="notice notice-bad"><span>{error}</span></div>
+      ) : !url ? (
+        <p className="field-hint">Loading…</p>
+      ) : isImage ? (
+        <img
+          src={url}
+          alt={attachment.name}
+          style={{ width: "100%", maxHeight: "70vh", objectFit: "contain", borderRadius: 8, background: "var(--surface-3)" }}
+        />
+      ) : (
+        /* Sandboxed: a PDF is somebody else's file, and it renders inside the
+           app's own page. Nothing in it should be able to script or navigate
+           the window around it. */
+        <iframe
+          title={attachment.name}
+          src={url}
+          sandbox=""
+          style={{ width: "100%", height: "70vh", border: "1px solid var(--rule)", borderRadius: 8, background: "#fff" }}
+        />
+      )}
+    </Modal>
   );
 }

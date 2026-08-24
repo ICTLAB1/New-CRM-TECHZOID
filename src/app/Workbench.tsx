@@ -248,6 +248,7 @@ export function Workbench({
           orders={orders}
           challans={challans}
           settings={settings}
+          currentUser={user}
           onChange={(o, c, s) => { onChange("orders", o); onChange("challans", c); onSettingsChange(s); }}
         />
       ) : view === "dispatch" ? (

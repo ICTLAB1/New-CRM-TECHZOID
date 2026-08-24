@@ -68,7 +68,7 @@ export interface DocumentEditorProps {
   docImages?: DocImages;
   api: IntegrationsApi;
   /** Whose name and address a sent quotation carries. */
-  currentUser: { id: string; name: string; email?: string };
+  currentUser: { id: string; name: string; email?: string; role?: string };
   /** Whether this document already exists in the workspace. A file attached
    *  to a document that is then cancelled would have nothing pointing at it,
    *  so attaching waits until there is a record to attach to. */

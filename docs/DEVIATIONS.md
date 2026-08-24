@@ -823,3 +823,44 @@ a signed contract is not.
 
 In demo mode the panel says attachments need a signed-in workspace rather
 than offering an upload that would quietly lose somebody's contract.
+
+## 22. Attachments became a team resource
+
+As first shipped (§21), a file could only be read or added by the record's
+owner or an Admin/Manager. That is wrong for how this company works: a
+salesperson covering a colleague's account cannot see the signed purchase
+order sitting against it, and the file ends up emailed around instead —
+which is the outcome attachments exist to prevent.
+
+Read and add are now open to anyone signed in. **Delete is not**: it is the
+person who uploaded the file, or an Admin/Manager. Adding is additive and
+reversible; deleting somebody else's signed contract is neither.
+
+This needed a second identity on the row. `owner_id` is who owns the
+*record*; `uploaded_by_id` is who put the file there, and it is what the
+delete policy reads. The insert policy checks `uploaded_by_id = auth.uid()`,
+so a row cannot claim somebody else uploaded it — which would also hand its
+deletion to that person.
+
+The storage path changed with it, from the record owner's folder to the
+**uploader's**. The object policy accepts writes only inside your own first
+path segment, so keying the path off the record owner would have rejected
+every cross-owner upload. Files written before this keep their old path;
+read is bucket-wide so they stay visible, and they stay deletable by exactly
+who could delete them before.
+
+One consequence, accepted deliberately: deleting a record no longer
+guarantees its attachments go with it. A colleague's file survives, because
+the policies will not let you remove what you did not upload. The tidy-up
+being untidy is the better failure.
+
+Sales orders gained attachments here too. "The documents related to an
+order" are mostly the customer's own paperwork — their PO, a signed delivery
+note, a site photo — none of which this CRM produces, and all of which were
+previously only findable in somebody's inbox.
+
+Previewing moved in-app. A signed URL is minted when the viewer opens rather
+than held on every row: a list of twenty files would otherwise mint twenty
+links, nineteen of which nobody clicks, each a working way into the bucket
+for five minutes. PDFs render in a `sandbox=""` frame — the file belongs to
+somebody else and renders inside the app's own page.

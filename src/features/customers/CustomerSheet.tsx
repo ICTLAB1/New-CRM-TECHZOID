@@ -28,10 +28,9 @@ export interface CustomerSheetProps {
   users: { id: string; name: string }[];
   customFields: { id: string; label: string }[];
   canReassign: boolean;
-  /** Whose name goes against a file they attach. Optional so the sheet still
-   *  renders anywhere it is used without one — the panel simply has no name
-   *  to record rather than the sheet failing to open. */
-  currentUser?: { name: string };
+  /** Who is looking. Their id is what a file they attach is uploaded as,
+   *  and their role is what lets an Admin or Manager remove anybody's. */
+  currentUser?: { id: string; name: string; role?: string };
   onSave: (customer: Customer) => void;
   onClose: () => void;
 }
@@ -187,7 +186,7 @@ export function CustomerSheet({ customer, users, customFields, canReassign, curr
           recordType="customer"
           recordId={customer.id}
           ownerId={f.ownerId}
-          currentUser={{ name: currentUser?.name ?? "" }}
+          currentUser={{ id: currentUser?.id ?? "", name: currentUser?.name ?? "", role: currentUser?.role }}
         />
 
         {f.stage === "lost" && f.lostReason ? (

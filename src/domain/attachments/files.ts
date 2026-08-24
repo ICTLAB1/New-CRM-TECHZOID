@@ -36,12 +36,20 @@ export const ALLOWED_TYPES: Readonly<Record<string, string>> = {
   zip: "application/zip",
 };
 
-/** What a file can be attached to. */
-export type AttachableType = "customer" | "quotation" | "proforma" | "purchase_order" | "invoice";
+/** What a file can be attached to. `order` is a sales order — the record a
+ *  customer's own PO, delivery proof and acceptance note hang off. */
+export type AttachableType =
+  | "customer" | "order"
+  | "quotation" | "proforma" | "purchase_order" | "invoice";
 
 export interface Attachment {
   id: string;
+  /** Who owns the RECORD this hangs off — not who uploaded the file. */
   ownerId: string;
+  /** Who actually uploaded it. Anyone in the team may add a file, so this is
+   *  what decides who may remove it again. Empty on files added before
+   *  attachments became a team resource. */
+  uploadedById?: string;
   recordType: AttachableType;
   recordId: string;
   /** Path inside the storage bucket. */
@@ -122,21 +130,23 @@ export function safeName(filename: string): string {
 /**
  * Where a file's bytes live.
  *
- * `<owner-uuid>/<record-type>/<record-id>/<unique>-<name>` — the OWNER FIRST,
- * because the storage policies decide from the first path segment alone
- * whether somebody may write there, without joining anything.
+ * `<uploader-uuid>/<record-type>/<record-id>/<unique>-<name>` — the UPLOADER
+ * first, because the storage policies decide from the first path segment
+ * alone whether somebody may write there, without joining anything. Not the
+ * record's owner: anyone in the team may attach a file to anyone's customer,
+ * and they must still be writing inside their own folder.
  *
  * `unique` is supplied rather than generated, so a path is reproducible in a
  * test and this module keeps no source of randomness of its own.
  */
 export function storagePath(
-  ownerId: string,
+  uploaderId: string,
   recordType: AttachableType,
   recordId: string,
   filename: string,
   unique: string,
 ): string {
-  return [ownerId, recordType, recordId, `${unique}-${safeName(filename)}`].join("/");
+  return [uploaderId, recordType, recordId, `${unique}-${safeName(filename)}`].join("/");
 }
 
 /** "2.4 MB". Sizes are read at a glance, so bytes past three digits are
@@ -152,6 +162,27 @@ export function formatBytes(bytes: number): string {
     unit += 1;
   }
   return `${value >= 10 ? Math.round(value) : Math.round(value * 10) / 10} ${units[unit]}`;
+}
+
+/**
+ * May this person remove this file?
+ *
+ * Adding is open to the whole team; removing is not. Deleting somebody
+ * else's signed contract is not the kind of mistake a shared folder should
+ * make easy, so it is the uploader or an Admin/Manager. Files predating
+ * shared attachments carry no uploader, and fall back to the record's owner —
+ * exactly who could delete them before.
+ *
+ * The database enforces the same rule. This exists so the button is hidden
+ * rather than failing when pressed.
+ */
+export function canRemove(
+  attachment: Attachment,
+  user: { id: string; role?: string },
+): boolean {
+  if (user.role === "Admin" || user.role === "Manager") return true;
+  if (attachment.uploadedById) return attachment.uploadedById === user.id;
+  return attachment.ownerId === user.id;
 }
 
 /** True for the types worth previewing inline rather than downloading. */
