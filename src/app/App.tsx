@@ -90,13 +90,15 @@ function LiveWorkbench({ user }: { user: SignedInUser }) {
     );
   }
 
-  const team: TeamMember[] = ws.profiles.map((p) => ({ id: p.id, name: p.name, email: p.email, role: p.role }));
+  const team: TeamMember[] = ws.profiles.map((p) => ({
+    id: p.id, name: p.name, email: p.email, role: p.role, designation: p.designation,
+  }));
 
   return (
     <Workbench
       data={ws.data}
       settings={ws.settings}
-      team={team.length ? team : [{ id: user.id, name: user.name, email: user.email, role: user.role }]}
+      team={team.length ? team : [{ id: user.id, name: user.name, email: user.email, role: user.role, designation: user.designation }]}
       user={user}
       onChange={ws.update}
       onSettingsChange={ws.updateSettings}

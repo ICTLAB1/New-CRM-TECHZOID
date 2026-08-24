@@ -55,6 +55,7 @@ async function createUser(event, admin, body) {
   const password = String(body.password ?? "");
   const name = str(body.name, 120) || email.split("@")[0];
   const role = str(body.role, 20) || "Sales";
+  const designation = str(body.designation, 120);
 
   if (!email || !password) return fail(event, 400, "An email address and a password are both required.");
   if (!isEmail(email)) return fail(event, 400, `"${email}" doesn't look like an email address.`);
@@ -82,7 +83,7 @@ async function createUser(event, admin, body) {
   /* A trigger creates the profile row as Sales. Set the name and the chosen
      role now. If this fails the sign-in exists but is mis-labelled, which is
      confusing rather than harmless — so say so instead of reporting success. */
-  const { error: profileErr } = await admin.from("profiles").update({ name, role }).eq("id", userId);
+  const { error: profileErr } = await admin.from("profiles").update({ name, role, designation }).eq("id", userId);
   if (profileErr) {
     console.error("profile update after createUser failed:", profileErr.message);
     return json(event, 200, {
@@ -156,9 +157,13 @@ async function updateUser(event, admin, body) {
   const userId = str(body.userId, 64);
   const name = str(body.name, 120);
   const email = str(body.email, 320).toLowerCase();
+  /* Read with `in`, not truthiness: clearing a designation is a legitimate
+     edit, and "" is exactly what that looks like arriving here. */
+  const hasDesignation = Object.prototype.hasOwnProperty.call(body, "designation");
+  const designation = str(body.designation, 120);
 
   if (!userId) return fail(event, 400, "Which account? No user was given.");
-  if (!name && !email) return fail(event, 400, "Nothing to change.");
+  if (!name && !email && !hasDesignation) return fail(event, 400, "Nothing to change.");
   if (email && !isEmail(email)) return fail(event, 400, `"${email}" doesn't look like an email address.`);
 
   /* The sign-in address lives on the auth record; the name lives in both the
@@ -176,6 +181,7 @@ async function updateUser(event, admin, body) {
   const profilePatch = {};
   if (name) profilePatch.name = name;
   if (email) profilePatch.email = email;
+  if (hasDesignation) profilePatch.designation = designation;
   const { error: profileErr } = await admin.from("profiles").update(profilePatch).eq("id", userId);
   if (profileErr) {
     return fail(event, 400, "The sign-in was updated, but the team record wasn't. Reload and check the details.", profileErr.message);

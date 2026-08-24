@@ -5,10 +5,10 @@ import type { Workspace } from "../domain/customers/cascade";
  *  Not shipped: nothing imports this outside the demo app entry. */
 
 export const USERS = [
-  { id: "u-abhinav", name: "Abhinav Jain", email: "abhinav@example.com", role: "Admin" },
-  { id: "u-priyanshi", name: "Priyanshi Sharma", email: "priyanshi@example.com", role: "Sales" },
-  { id: "u-rashmi", name: "Rashmi Verma", email: "rashmi@example.com", role: "Sales" },
-  { id: "u-kuldeep", name: "Kuldeep Kumar", email: "kuldeep@example.com", role: "Accounts" },
+  { id: "u-abhinav", name: "Abhinav Jain", email: "abhinav@example.com", role: "Admin", designation: "Managing Director" },
+  { id: "u-priyanshi", name: "Priyanshi Sharma", email: "priyanshi@example.com", role: "Sales", designation: "Account Manager" },
+  { id: "u-rashmi", name: "Rashmi Verma", email: "rashmi@example.com", role: "Sales", designation: "Business Development Executive" },
+  { id: "u-kuldeep", name: "Kuldeep Kumar", email: "kuldeep@example.com", role: "Accounts", designation: "Accounts Executive" },
 ];
 
 const day = (offset: number): string => {

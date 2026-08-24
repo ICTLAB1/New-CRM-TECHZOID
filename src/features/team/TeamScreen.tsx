@@ -19,6 +19,10 @@ export interface TeamMember {
   name: string;
   email?: string;
   role: string;
+  /** Their own job title. Printed under their name on email they send to a
+   *  customer — not the company's authorised signatory, which is one shared
+   *  value in Settings and prints on the document itself. */
+  designation?: string;
 }
 
 export interface TeamScreenProps {
@@ -88,7 +92,7 @@ export function TeamScreen({ api, members, currentUser, onChange }: TeamScreenPr
           <div className="table-wrap">
             <table className="table">
               <thead>
-                <tr><th>Name</th><th>Email</th><th>Role</th><th /></tr>
+                <tr><th>Name</th><th>Designation</th><th>Email</th><th>Role</th><th /></tr>
               </thead>
               <tbody>
                 {members.map((m) => (
@@ -97,6 +101,7 @@ export function TeamScreen({ api, members, currentUser, onChange }: TeamScreenPr
                       {m.name}
                       {m.id === currentUser.id ? <> <Chip tone="accent" dot={false}>You</Chip></> : null}
                     </td>
+                    <td>{m.designation || <span className="muted">—</span>}</td>
                     <td className="mono">{m.email || "—"}</td>
                     <td>
                       {isAdmin ? (
@@ -196,6 +201,7 @@ function AddMember({
   const toast = useToast();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [designation, setDesignation] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState("Sales");
   const [busy, setBusy] = useState(false);
@@ -208,8 +214,16 @@ function AddMember({
   const create = async () => {
     setError(""); setBusy(true);
     try {
-      const result = await api.createTeamMember({ name: name.trim(), email: email.trim().toLowerCase(), password, role });
-      onAdded({ id: result.userId, name: name.trim() || email.split("@")[0] || "New member", email: email.trim().toLowerCase(), role });
+      const result = await api.createTeamMember({
+        name: name.trim(), email: email.trim().toLowerCase(), designation: designation.trim(), password, role,
+      });
+      onAdded({
+        id: result.userId,
+        name: name.trim() || email.split("@")[0] || "New member",
+        email: email.trim().toLowerCase(),
+        designation: designation.trim(),
+        role,
+      });
       if (result.emailSent) {
         toast(`${name || email} can now sign in — their details have been emailed`, "good");
       } else {
@@ -283,6 +297,9 @@ function AddMember({
             <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
           </Field>
         </div>
+        <Field label="Designation" hint={'Printed under their name when they email a customer, e.g. "Sales Manager".'}>
+          <Input value={designation} onChange={(e) => setDesignation(e.target.value)} />
+        </Field>
         <Field
           label="Starting password"
           hint="They should change it once they're in."
@@ -308,20 +325,23 @@ function EditMember({
 }: {
   api: IntegrationsApi;
   member: TeamMember;
-  onSaved: (patch: { name: string; email: string }) => void;
+  onSaved: (patch: { name: string; email: string; designation: string }) => void;
   onClose: () => void;
 }) {
   const toast = useToast();
   const [name, setName] = useState(member.name);
   const [email, setEmail] = useState(member.email ?? "");
+  const [designation, setDesignation] = useState(member.designation ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
   const save = async () => {
     setError(""); setBusy(true);
     try {
-      await api.updateTeamMember(member.id, { name: name.trim(), email: email.trim().toLowerCase() });
-      onSaved({ name: name.trim(), email: email.trim().toLowerCase() });
+      await api.updateTeamMember(member.id, {
+        name: name.trim(), email: email.trim().toLowerCase(), designation: designation.trim(),
+      });
+      onSaved({ name: name.trim(), email: email.trim().toLowerCase(), designation: designation.trim() });
       toast("Details updated", "good");
     } catch (err) {
       setError(err instanceof IntegrationError ? err.message : "Couldn't update those details.");
@@ -345,6 +365,9 @@ function EditMember({
     >
       <div className="stack">
         <Field label="Name"><Input value={name} onChange={(e) => setName(e.target.value)} /></Field>
+        <Field label="Designation" hint={'Printed under their name when they email a customer, e.g. "Sales Manager".'}>
+          <Input value={designation} onChange={(e) => setDesignation(e.target.value)} />
+        </Field>
         <Field label="Email" hint="Changing this changes what they sign in with.">
           <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
         </Field>

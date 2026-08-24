@@ -258,10 +258,10 @@ function CompanyPanel({ settings, canEdit, onChange }: { settings: Record<string
             <Field label="Website"><Input value={draft.company.website ?? ""} disabled={!canEdit} onChange={set("website")} /></Field>
           </div>
           <div className="grid grid-2">
-            <Field label="Signatory" hint="Printed under the signature block.">
+            <Field label="Authorised signatory" hint="Whoever signs on behalf of the company. Prints in the signature block on the document itself.">
               <Input value={draft.signatoryName} disabled={!canEdit} onChange={(e) => setDraft((d) => ({ ...d, signatoryName: e.target.value }))} />
             </Field>
-            <Field label="Designation">
+            <Field label="Their designation" hint="Each person's own job title, for the signature on email they send, is set on their profile in Team.">
               <Input value={draft.signatoryDesignation} disabled={!canEdit} onChange={(e) => setDraft((d) => ({ ...d, signatoryDesignation: e.target.value }))} />
             </Field>
           </div>

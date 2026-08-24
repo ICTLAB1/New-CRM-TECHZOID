@@ -37,8 +37,8 @@ export interface DocumentActionsProps {
   totals: DocumentTotals;
   settings: Record<string, unknown>;
   images?: DocImages;
-  /** Whose name and address the email carries. */
-  currentUser?: { id: string; name: string; email?: string };
+  /** Whose name, role and address the email carries. */
+  currentUser?: { id: string; name: string; email?: string; designation?: string };
 }
 
 const label = (docType: "quotation" | "proforma") =>
@@ -95,7 +95,13 @@ export function DocumentActions({
      an anonymous signature on a personal message. */
   const emailSender: EmailSender = {
     name: currentUser?.name || doc.preparedBy || "",
-    designation: String(settings["signatoryDesignation"] ?? ""),
+    /* Their own job title, from their profile in Team. NOT
+       settings.signatoryDesignation — that names whoever signs quotations on
+       behalf of the company and prints on the document itself, so using it
+       here put the same title under everybody's signature. Left blank rather
+       than borrowed when a profile has none: a wrong job title on a customer
+       email is worse than no job title. */
+    designation: currentUser?.designation || "",
     email: currentUser?.email || "",
     phone: String(company["phone"] ?? ""),
   };

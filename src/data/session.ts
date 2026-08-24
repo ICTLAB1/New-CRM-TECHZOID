@@ -15,6 +15,8 @@ export interface SignedInUser {
   name: string;
   email: string;
   role: string;
+  /** Their own job title, for the signature on email they send. */
+  designation?: string;
 }
 
 /** One definition of "is there a server behind this", used by the app to
@@ -41,7 +43,7 @@ export function onSessionChange(handler: (session: Session | null) => void): () 
 export async function loadProfile(session: Session): Promise<SignedInUser | null> {
   const { data, error } = await getSupabase()
     .from("profiles")
-    .select("id, name, email, role")
+    .select("id, name, email, role, designation")
     .eq("id", session.user.id)
     .maybeSingle();
   if (error || !data) return null;

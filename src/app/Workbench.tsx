@@ -40,9 +40,10 @@ export interface WorkbenchProps {
   data: WorkspaceData;
   settings: Record<string, unknown>;
   team: TeamMember[];
-  /** `email` is what a quotation is sent as and replied to — it already
-   *  arrives here from the profile; it simply was not declared. */
-  user: { id: string; name: string; email?: string; role: string };
+  /** `email` is what a quotation is sent as and replied to, and
+   *  `designation` is what prints under the sender's name in that email —
+   *  both already arrive here from the profile. */
+  user: { id: string; name: string; email?: string; designation?: string; role: string };
   onChange: <K extends keyof WorkspaceData>(key: K, next: WorkspaceData[K]) => void;
   onSettingsChange: (next: Record<string, unknown>) => void;
   onTeamChange: (next: TeamMember[]) => void;
