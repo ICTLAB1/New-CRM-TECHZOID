@@ -22,9 +22,11 @@ alter table public.ms_mail_accounts enable row level security;
 -- "Connected as ..." in Settings). No policy grants read access to anyone
 -- else's row, and none grants direct insert/update — those happen only
 -- through the server-side functions.
+drop policy if exists "ms_mail_select_own" on public.ms_mail_accounts;
 create policy "ms_mail_select_own" on public.ms_mail_accounts for select
   using (auth.uid() = user_id);
 
 -- Let a user disconnect their own mailbox from the UI.
+drop policy if exists "ms_mail_delete_own" on public.ms_mail_accounts;
 create policy "ms_mail_delete_own" on public.ms_mail_accounts for delete
   using (auth.uid() = user_id);

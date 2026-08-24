@@ -1,8 +1,8 @@
 -- TechZoid CRM — Supabase schema (v2: per-owner data isolation)
 -- Run this in Supabase Dashboard -> SQL Editor -> New query -> Run.
--- If you previously ran the v1 schema (a single "workspace" blob table),
--- this replaces that design entirely -- drop the old table first:
-drop table if exists public.workspace cascade;
+-- Safe to re-run: every statement below checks first, so running this
+-- against a database that already has these tables and policies changes
+-- nothing except confirming they're set up correctly. No data is deleted.
 
 -- ============================================================
 -- 1) profiles — one row per teammate: name, role, e-mail.
@@ -19,6 +19,7 @@ create table if not exists public.profiles (
 
 alter table public.profiles enable row level security;
 
+drop policy if exists "profiles_select_authenticated" on public.profiles;
 create policy "profiles_select_authenticated" on public.profiles for select
   using (auth.role() = 'authenticated');
 
@@ -61,6 +62,7 @@ create policy "profiles_update_self_or_admin" on public.profiles for update
     or role = (select p.role from public.profiles p where p.id = auth.uid())
   );
 
+drop policy if exists "profiles_insert_self" on public.profiles;
 create policy "profiles_insert_self" on public.profiles for insert
   with check (auth.uid() = id);
 
@@ -95,9 +97,11 @@ insert into public.settings (id, data) values ('main', '{}'::jsonb) on conflict 
 
 alter table public.settings enable row level security;
 
+drop policy if exists "settings_select_authenticated" on public.settings;
 create policy "settings_select_authenticated" on public.settings for select
   using (auth.role() = 'authenticated');
 
+drop policy if exists "settings_update_privileged" on public.settings;
 create policy "settings_update_privileged" on public.settings for update
   using (public.is_privileged()) with check (public.is_privileged());
 
