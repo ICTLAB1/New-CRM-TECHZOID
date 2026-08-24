@@ -54,10 +54,13 @@ export interface RenderOptions {
 const A4 = { w: 210, h: 297 };
 const M = 13;
 const CW = A4.w - M * 2;
-/* The closing line sits at A4.h-8 above a rule at A4.h-12, so content may
-   run to A4.h-14 and no further. Reserving 20mm for a 12mm band cost a whole
-   page on short quotations; reserving too little collided with the rule. */
-const FOOT_RESERVE = 14;
+/* The footer band's type. Its HEIGHT is not fixed — it is measured per
+   document from the closing line, which wraps (see the render function).
+   Reserving a fixed 20mm for a 12mm band cost a whole page on short
+   quotations; reserving too little collided with the rule. */
+const FOOT_SIZE = 6.6;
+const FOOT_LINE = 2.6;
+const FOOT_GAP = 4;
 
 /* Palette, from the design tokens. */
 const NAVY = hexToRgb("#0D2B55");
@@ -81,10 +84,36 @@ export function renderDocumentPdf(opts: RenderOptions): jsPDF {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   pdf.splitTextToSize = ((t: any, w: number, o?: any) => origSplit(pdfSafeText(t), w, o)) as typeof pdf.splitTextToSize;
 
+  /* ── the footer band, measured before anything is laid out ──────────
+     The closing line is a legal disclaimer of no fixed length, and the page
+     number shares its baseline at the right edge. Both were drawn full-width
+     — the closing centred on the page, the page number right-aligned — so a
+     long closing ran straight through "Page 1 of 1".
+     The page number's width is reserved, the closing wraps into what is
+     left, and the band's height comes from the number of lines it actually
+     takes. A FIXED reserve cannot be right for both: too small and a long
+     closing overlaps or spills off the page, too large and every short
+     document pays for space it never uses. */
+  pdf.setFont("helvetica", "normal").setFontSize(FOOT_SIZE);
+  /* Measured against a two-digit sample, because the real page count is not
+     known until every page has been laid out. */
+  const pageNoW = pdf.getTextWidth("Page 99 of 99");
+  const closingW = Math.max(40, CW - pageNoW - FOOT_GAP * 2);
+  const footLines: string[] = m.footer.closing
+    ? (pdf.splitTextToSize(m.footer.closing, closingW) as string[])
+    : [];
+  /* Baseline of the LAST line, then up. 8mm from the foot of the page for
+     one line, exactly as before, so a one-line closing is unchanged. */
+  const footBase = A4.h - 8;
+  const footTop = footBase - Math.max(0, footLines.length - 1) * FOOT_LINE;
+  const footRule = footTop - 4;
+  /* What content must stay clear of. */
+  const footReserve = A4.h - footRule + 2;
+
   let y = M;
 
   const need = (mm: number): void => {
-    if (y + mm > A4.h - FOOT_RESERVE) { pdf.addPage(); y = M; }
+    if (y + mm > A4.h - footReserve) { pdf.addPage(); y = M; }
   };
 
   const rule = (yy: number, x1 = M, x2 = M + CW, colour = BORDER, width = 0.2): void => {
@@ -305,7 +334,7 @@ export function renderDocumentPdf(opts: RenderOptions): jsPDF {
       startY: y,
       head: [cols.map((cd) => cd.head)],
       body: rows.map((row, i) => cols.map((cd) => pdfSafeText(cd.get(row, i)))),
-      margin: { left: M, right: M, bottom: FOOT_RESERVE },
+      margin: { left: M, right: M, bottom: footReserve },
       /* The header repeats on every page — a continuation page of bare
          numbers is unreadable. */
       showHead: "everyPage",
@@ -399,7 +428,7 @@ export function renderDocumentPdf(opts: RenderOptions): jsPDF {
     const wordsH = m.money.amountInWords ? 14 : 0;
     const summaryH = 6.4 + summaryRows * rowH + 9 + wordsH + 3;
 
-    const usable = A4.h - M - FOOT_RESERVE;
+    const usable = A4.h - M - footReserve;
     /* Keep the block whole when it can be: a grand total stranded alone on
        the next page is the one part of this document nobody may have to hunt
        for. When the terms alone are taller than a page they flow instead —
@@ -455,7 +484,7 @@ export function renderDocumentPdf(opts: RenderOptions): jsPDF {
       ly += 9;
       wrappedTerms.forEach((lines, i) => {
         const h = lines.length * TERM_LEAD + TERM_GAP;
-        if (ly + h > A4.h - FOOT_RESERVE) {
+        if (ly + h > A4.h - footReserve) {
           pdf.addPage();
           ly = M;
           sy = M;
@@ -501,7 +530,7 @@ export function renderDocumentPdf(opts: RenderOptions): jsPDF {
       head: [columns],
       body: rows,
       foot: [totalRow],
-      margin: { left: M, right: M, bottom: FOOT_RESERVE },
+      margin: { left: M, right: M, bottom: footReserve },
       showHead: "everyPage",
       theme: "grid",
       styles: {
@@ -682,15 +711,22 @@ export function renderDocumentPdf(opts: RenderOptions): jsPDF {
   drawStrips();
   drawSignature();
 
-  /* Closing line and page numbers, stamped on every page at a fixed height
-     so they cannot collide with content. */
+  /* Closing line and page numbers, stamped on every page inside the band
+     measured above — so they cannot collide with content, or with each
+     other. The closing is centred within ITS OWN column, which stops short
+     of the page number rather than spanning the full page. */
   const pages = pdf.getNumberOfPages();
+  const closingCx = M + closingW / 2;
   for (let i = 1; i <= pages; i++) {
     pdf.setPage(i);
-    rule(A4.h - 12);
-    pdf.setFont("helvetica", "normal").setFontSize(6.6).setTextColor(...MUTED);
-    pdf.text(m.footer.closing, A4.w / 2, A4.h - 8, { align: "center" });
-    pdf.text(`Page ${i} of ${pages}`, A4.w - M, A4.h - 8, { align: "right" });
+    rule(footRule);
+    pdf.setFont("helvetica", "normal").setFontSize(FOOT_SIZE).setTextColor(...MUTED);
+    footLines.forEach((line, li) => {
+      pdf.text(line, closingCx, footTop + li * FOOT_LINE, { align: "center" });
+    });
+    /* On the last line, so a wrapped closing does not leave it floating
+       alone at the top of the band. */
+    pdf.text(`Page ${i} of ${pages}`, A4.w - M, footBase, { align: "right" });
   }
 
   return pdf;

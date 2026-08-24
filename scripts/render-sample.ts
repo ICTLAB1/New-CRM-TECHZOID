@@ -92,5 +92,14 @@ for (const n of [1, 5, 10, 20, 50]) render(`items-${n}`, { items: items(n) });
 render("interstate-igst", { billState: "Maharashtra" });
 render("zero-tax", { taxType: "none" });
 render("export-aed", { taxType: "none", currency: "AED", billCountry: "United Arab Emirates", billState: "", billGstin: "" });
+/* The client's real closing line: a full disclaimer paragraph. It shares a
+   baseline with the page number, so this is the case that used to collide. */
+render("long-closing", {
+  footer: "This quotation is valid for 7 days from the date of issue. Prices, taxes, product availability, and promotional offers are subject to change without prior notice. Purchase Orders are subject to acceptance by TechZoid Technologies Private Limited.",
+});
+render("long-closing-50", {
+  items: items(50),
+  footer: "This quotation is valid for 7 days from the date of issue. Prices, taxes, product availability, and promotional offers are subject to change without prior notice. Purchase Orders are subject to acceptance by TechZoid Technologies Private Limited.",
+});
 render("minimal", { items: items(1), referenceNo: "", enquiryRef: "", customerCode: "", billGstin: "", billPhone: "", shipSameAsBilling: true });
 render("proforma", { advancePercent: 50 }, "proforma");

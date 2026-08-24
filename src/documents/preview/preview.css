@@ -146,4 +146,15 @@
 
 /* ── footer ── */
 .doc-foot-rule { border: 0; border-top: 0.5mm solid #0D2B55; margin: 5mm 0 0; }
-.doc-closing { margin-top: 2mm; padding-top: 2mm; display: flex; justify-content: space-between; font-size: 2.4mm; color: #64748B; }
+/* The closing is a disclaimer of no fixed length and the page marker sits
+   beside it. `gap` keeps them apart, the marker never shrinks or wraps, and
+   the closing takes the rest and wraps within it — matching the PDF, where
+   the same two ran into each other on one baseline. */
+.doc-closing {
+  margin-top: 2mm; padding-top: 2mm;
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 4mm;
+  font-size: 2.4mm; color: #64748B;
+}
+.doc-closing > span:first-child { flex: 1 1 auto; min-width: 0; }
+.doc-closing > span + span { flex: 0 0 auto; white-space: nowrap; }

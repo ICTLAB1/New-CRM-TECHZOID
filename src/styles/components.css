@@ -353,7 +353,13 @@ button.tile:hover { background: var(--surface-2); }
 /* ── detail sheet: a side panel, not a centred dialog ──────────────────
    A customer record is long. A centred modal that scrolls internally hides
    how much is left; a full-height side panel does not. */
-.scrim-side { padding: 0; align-items: stretch; justify-content: flex-end; }
+/* flex-start, NOT stretch. `stretch` pins the panel to exactly the scrim's
+   height — one viewport — while its content keeps growing past it, and with
+   `overflow: visible` everything below the fold paints outside the panel's
+   own background: the page shows through in a band. `min-height` below
+   already fills the screen when a sheet is short, without capping a long
+   one. */
+.scrim-side { padding: 0; align-items: flex-start; justify-content: flex-end; }
 .side { max-width: 660px; border-radius: 0; min-height: 100vh; }
 .side .modal-foot { position: sticky; bottom: 0; border-radius: 0; }
 @media (max-width: 720px) { .scrim-side { align-items: flex-end; } .side { min-height: auto; max-height: 92vh; border-radius: 14px 14px 0 0; } }
