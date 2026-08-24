@@ -124,9 +124,28 @@ export function DocumentPreview({ model: m, rows, brandLogos = {}, scale = 1 }: 
           </div>
         ) : null}
 
-        <section className="doc-parties">
+        {/* One column for the details, then one per party — two on a
+            quotation, three on a purchase order. Sized from the count, the
+            same way the PDF does it. */}
+        <section
+          className="doc-parties"
+          style={{
+            /* The details column takes a larger share once there are three
+               party boxes, so the document number stops wrapping mid-token —
+               the same 1.15 ratio and tighter gap the PDF uses. */
+            gridTemplateColumns:
+              m.parties.length > 2
+                ? `1.15fr ${m.parties.map(() => "1fr").join(" ")}`
+                : `repeat(${1 + m.parties.length}, 1fr)`,
+            gap: m.parties.length > 2 ? "4mm" : undefined,
+          }}
+        >
           <div>
-            <div className="doc-block-title">{m.isProforma ? "INVOICE DETAILS" : "QUOTATION DETAILS"}</div>
+            <div className="doc-block-title">
+              {m.docType === "purchase_order"
+                ? "PURCHASE ORDER DETAILS"
+                : m.isProforma ? "INVOICE DETAILS" : "QUOTATION DETAILS"}
+            </div>
             <Rows pairs={m.details} />
           </div>
           {m.parties.map((party) => (

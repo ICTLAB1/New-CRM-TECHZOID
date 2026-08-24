@@ -5,8 +5,8 @@ import { Confirm } from "../../components/Modal";
 import { useToast } from "../../components/Toast";
 import { DocumentEditor } from "./DocumentEditor";
 import {
-  duplicateQuotation, effectiveStatus, newProforma, newQuotation, proformaFromQuotation,
-  QUOTE_STATUSES, type DocSettings, type SalesDocument,
+  duplicateQuotation, effectiveStatus, newProforma, newPurchaseOrder, newQuotation, proformaFromQuotation,
+  PURCHASE_ORDER_STATUSES, QUOTE_STATUSES, type DocSettings, type SalesDocument,
 } from "../../domain/documents/create";
 import type { Customer } from "../../domain/customers/customer";
 import type { CatalogProduct } from "../../domain/catalog/types";
@@ -20,10 +20,13 @@ import type { IntegrationsApi } from "../../integrations/api";
 const STATUS_TONE: Record<string, Tone> = {
   Draft: "neutral", Sent: "accent", Accepted: "good", Paid: "good",
   Rejected: "bad", Expired: "bad",
+  /* Purchase orders track goods arriving rather than a customer agreeing. */
+  Issued: "accent", Acknowledged: "accent", "Partially Received": "warn",
+  Received: "good", Cancelled: "bad",
 };
 
 export interface QuotationsScreenProps {
-  docType: "quotation" | "proforma";
+  docType: "quotation" | "proforma" | "purchase_order";
   documents: SalesDocument[];
   customers: Customer[];
   catalog: CatalogProduct[];
@@ -48,10 +51,11 @@ export function QuotationsScreen({
   const [owner, setOwner] = useState("all");
   const [confirmDelete, setConfirmDelete] = useState<SalesDocument | null>(null);
 
-  const label = docType === "proforma" ? "Proforma" : "Quotation";
+  const isPo = docType === "purchase_order";
+  const label = isPo ? "Purchase order" : docType === "proforma" ? "Proforma" : "Quotation";
   const sellerState = ((settings["company"] as { state?: string })?.state) ?? "Delhi";
 
-  const seqKey = docType === "proforma" ? "proformaSeq" : "quoteSeq";
+  const seqKey = isPo ? "purchaseOrderSeq" : docType === "proforma" ? "proformaSeq" : "quoteSeq";
   const bumpSequence = (s: Record<string, unknown>) => ({ ...s, [seqKey]: (Number(s[seqKey]) || 1) + 1 });
 
   const shown = useMemo(() => {
@@ -60,7 +64,7 @@ export function QuotationsScreen({
       if (status !== "all" && effectiveStatus(d) !== status) return false;
       if (owner !== "all" && d.ownerId !== owner) return false;
       if (!q) return true;
-      return [d.number, d.billName, d.referenceNo, d.subject].some((v) => (v ?? "").toLowerCase().includes(q));
+      return [d.number, d.billName, d.vendorName, d.referenceNo, d.subject].some((v) => (v ?? "").toLowerCase().includes(q));
     });
   }, [documents, query, status, owner]);
 
@@ -71,7 +75,7 @@ export function QuotationsScreen({
 
   const create = () => {
     const opts = { settings: settings as DocSettings, user: currentUser };
-    setEditing(docType === "proforma" ? newProforma(opts) : newQuotation(opts));
+    setEditing(isPo ? newPurchaseOrder(opts) : docType === "proforma" ? newProforma(opts) : newQuotation(opts));
   };
 
   const save = (doc: SalesDocument) => {
@@ -103,7 +107,7 @@ export function QuotationsScreen({
       <main className="page">
         <PageHead
           title={`${label} ${editing.number}`}
-          sub={editing.billName || "No customer linked yet."}
+          sub={(isPo ? editing.vendorName : editing.billName) || (isPo ? "No supplier named yet." : "No customer linked yet.")}
         />
         <DocumentEditor
           doc={editing}
@@ -125,7 +129,7 @@ export function QuotationsScreen({
   return (
     <main className="page">
       <PageHead
-        title={docType === "proforma" ? "Proforma invoices" : "Quotations"}
+        title={isPo ? "Purchase orders" : docType === "proforma" ? "Proforma invoices" : "Quotations"}
         sub={`${documents.length} document${documents.length === 1 ? "" : "s"} this financial year.`}
         actions={<Button tone="primary" onClick={create}>New {label.toLowerCase()}</Button>}
       />
@@ -137,7 +141,7 @@ export function QuotationsScreen({
             onChange={setStatus}
             tabs={[
               { id: "all", label: "All", count: documents.length },
-              ...QUOTE_STATUSES.filter((s) => docType === "quotation" || s !== "Rejected").map((s) => ({
+              ...(isPo ? PURCHASE_ORDER_STATUSES : QUOTE_STATUSES.filter((s) => docType === "quotation" || s !== "Rejected")).map((s) => ({
                 id: s,
                 label: s,
                 count: documents.filter((d) => effectiveStatus(d) === s).length,
@@ -169,9 +173,9 @@ export function QuotationsScreen({
                 <tr>
                   <th style={{ width: 4 }} />
                   <th>Number</th>
-                  <th>Customer</th>
+                  <th>{isPo ? "Supplier" : "Customer"}</th>
                   <th>Date</th>
-                  <th>Valid until</th>
+                  <th>{isPo ? "Required by" : "Valid until"}</th>
                   <th>Status</th>
                   <th className="num">Value</th>
                   <th />
@@ -186,7 +190,7 @@ export function QuotationsScreen({
                     <tr key={d.id} className={stale ? "needs-warn" : undefined}>
                       <td className="edge-cell" />
                       <td className="mono strong" style={{ cursor: "pointer" }} onClick={() => setEditing(d)}>{d.number}</td>
-                      <td className="strong">{d.billName || "—"}</td>
+                      <td className="strong">{(isPo ? d.vendorName : d.billName) || "—"}</td>
                       <td className="muted">{fmtDate(d.date)}</td>
                       <td className={isOverdue(d.validUntil) ? "" : "muted"} style={isOverdue(d.validUntil) ? { color: "var(--warn)" } : undefined}>
                         {fmtDate(d.validUntil)}
@@ -196,10 +200,12 @@ export function QuotationsScreen({
                       <td>
                         <span className="row-tight">
                           <Button size="sm" tone="quiet" onClick={() => setEditing(d)}>Edit</Button>
-                          {docType === "quotation" ? (
+                          {docType === "quotation" || isPo ? (
                             <>
                               <Button size="sm" tone="quiet" onClick={() => duplicate(d)}>Duplicate</Button>
-                              <Button size="sm" tone="default" onClick={() => raiseProforma(d)}>Proforma</Button>
+                              {isPo ? null : (
+                                <Button size="sm" tone="default" onClick={() => raiseProforma(d)}>Proforma</Button>
+                              )}
                             </>
                           ) : null}
                           <Button size="sm" tone="danger" onClick={() => setConfirmDelete(d)}>Delete</Button>

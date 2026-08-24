@@ -5,9 +5,13 @@ import type { DocImages } from "../../documents/pdf/render";
 import type { IntegrationsApi } from "../../integrations/api";
 import { Modal } from "../../components/Modal";
 import { DocumentPreview } from "../../documents/preview/DocumentPreview";
+import type { DocType } from "../../domain/documents/model";
 import { LineItemsEditor } from "./LineItemsEditor";
 import { useDocumentModel } from "./useDocumentModel";
-import { applyCustomer, PROFORMA_STATUSES, QUOTE_STATUSES, type SalesDocument, type DocSettings } from "../../domain/documents/create";
+import {
+  applyCustomer, PROFORMA_STATUSES, PURCHASE_ORDER_STATUSES, QUOTE_STATUSES,
+  type SalesDocument, type DocSettings,
+} from "../../domain/documents/create";
 import type { Customer } from "../../domain/customers/customer";
 import { TERMS_SETS, suggestTermsSet, LEGAL_NOTICE } from "../../domain/documents/terms";
 import { CURRENCIES } from "../../domain/currency/currencies";
@@ -54,7 +58,7 @@ function useFitScale() {
 
 export interface DocumentEditorProps {
   doc: SalesDocument;
-  docType: "quotation" | "proforma";
+  docType: DocType;
   customers: Customer[];
   catalog: CatalogProduct[];
   settings: Record<string, unknown>;
@@ -84,7 +88,8 @@ export function DocumentEditor({
 
   const isIndia = !doc.billCountry || doc.billCountry === "India";
   const showTax = doc.taxType !== "none";
-  const statuses = docType === "proforma" ? PROFORMA_STATUSES : QUOTE_STATUSES;
+  const isPo = docType === "purchase_order";
+  const statuses = isPo ? PURCHASE_ORDER_STATUSES : docType === "proforma" ? PROFORMA_STATUSES : QUOTE_STATUSES;
 
   /* The customer picker is the real entry point for the party, currency and
      tax fields — new documents are always created unlinked. */
@@ -130,12 +135,45 @@ export function DocumentEditor({
               {tab === "document" ? (
                 <div className="stack-wide">
                   <div className="stack">
-                    <Field label="Customer" hint="Sets the billing party, currency and tax regime.">
-                      <Select value={doc.customerId} onChange={(e) => pickCustomer(e.target.value)}>
-                        <option value="">Not linked to a customer</option>
-                        {customers.map((c) => <option key={c.id} value={c.id}>{c.company}</option>)}
-                      </Select>
-                    </Field>
+                    {isPo ? (
+                      <Field
+                        label="Deliver to a customer"
+                        hint="Only for a drop-ship. Leave unset and the goods come to your own address."
+                      >
+                        <Select
+                          value={doc.customerId}
+                          onChange={(e) => {
+                            const c = customers.find((x) => x.id === e.target.value) ?? null;
+                            setDoc((d) => ({
+                              ...d,
+                              customerId: c?.id ?? "",
+                              /* Only the SHIPPING fields follow the customer.
+                                 Their billing details must never land on a
+                                 purchase order: the party being billed is us. */
+                              shipSameAsBilling: !c,
+                              shipName: c?.company ?? "",
+                              shipAddress: c?.address ?? "",
+                              shipState: c?.state ?? "",
+                              shipCountry: c?.country ?? "India",
+                              shipContact: c?.contact ?? "",
+                              shipPhone: c?.phone ?? "",
+                              shipEmail: c?.email ?? "",
+                              shipGstin: c?.gstin ?? "",
+                            }));
+                          }}
+                        >
+                          <option value="">Deliver to our own address</option>
+                          {customers.map((c) => <option key={c.id} value={c.id}>{c.company}</option>)}
+                        </Select>
+                      </Field>
+                    ) : (
+                      <Field label="Customer" hint="Sets the billing party, currency and tax regime.">
+                        <Select value={doc.customerId} onChange={(e) => pickCustomer(e.target.value)}>
+                          <option value="">Not linked to a customer</option>
+                          {customers.map((c) => <option key={c.id} value={c.id}>{c.company}</option>)}
+                        </Select>
+                      </Field>
+                    )}
 
                     <div className="grid grid-2">
                       <Field label="Document number"><Input value={doc.number} onChange={set("number")} /></Field>
@@ -145,8 +183,8 @@ export function DocumentEditor({
                         </Select>
                       </Field>
                       <Field label="Date"><Input type="date" value={doc.date} onChange={set("date")} /></Field>
-                      <Field label="Valid until"><Input type="date" value={doc.validUntil} onChange={set("validUntil")} /></Field>
-                      <Field label="Customer reference"><Input value={doc.referenceNo} onChange={set("referenceNo")} placeholder="PO/ABC/2425/078" /></Field>
+                      <Field label={isPo ? "Required by" : "Valid until"}><Input type="date" value={doc.validUntil} onChange={set("validUntil")} /></Field>
+                      <Field label={isPo ? "Supplier reference" : "Customer reference"}><Input value={doc.referenceNo} onChange={set("referenceNo")} placeholder={isPo ? "Their quotation number" : "PO/ABC/2425/078"} /></Field>
                       <Field label="Enquiry reference"><Input value={doc.enquiryRef ?? ""} onChange={set("enquiryRef")} placeholder="ENQ-150826-01" /></Field>
                       <Field label="Customer ID" hint="Printed on the document. Not the database id."><Input value={doc.customerCode ?? ""} onChange={set("customerCode")} placeholder="CUST-000123" /></Field>
                       <Field label="Revision"><Input numeric value={String(doc.revisionNo)} onChange={set("revisionNo")} /></Field>
@@ -157,6 +195,30 @@ export function DocumentEditor({
                     <Field label="Subject"><Input value={doc.subject} onChange={set("subject")} /></Field>
                   </div>
 
+                  {isPo ? (
+                    <div className="stack">
+                      <div className="eyebrow">Supplier</div>
+                      <p className="field-hint" style={{ marginTop: 0 }}>
+                        Who you are ordering from. The Bill To box on the document is your own company,
+                        taken from Settings — you do not type it here.
+                      </p>
+                      <div className="grid grid-2">
+                        <Field label="Supplier"><Input value={doc.vendorName ?? ""} onChange={set("vendorName")} placeholder="Distributor name" /></Field>
+                        <Field label="Contact"><Input value={doc.vendorContact ?? ""} onChange={set("vendorContact")} /></Field>
+                        <Field label="GSTIN"><Input className="mono" value={doc.vendorGstin ?? ""} onChange={set("vendorGstin")} /></Field>
+                        <Field label="Phone"><Input value={doc.vendorPhone ?? ""} onChange={set("vendorPhone")} /></Field>
+                        <Field label="Email"><Input type="email" value={doc.vendorEmail ?? ""} onChange={set("vendorEmail")} /></Field>
+                        <Field label="Country"><Input value={doc.vendorCountry ?? "India"} onChange={set("vendorCountry")} /></Field>
+                      </div>
+                      <Field label="Address"><Textarea rows={2} value={doc.vendorAddress ?? ""} onChange={set("vendorAddress")} /></Field>
+                      <Field label="State" hint="Decides CGST+SGST versus IGST on what they charge you.">
+                        <Select value={doc.vendorState ?? ""} onChange={set("vendorState")}>
+                          <option value="">Select a state…</option>
+                          {STATE_NAMES.map((st) => <option key={st}>{st}</option>)}
+                        </Select>
+                      </Field>
+                    </div>
+                  ) : (
                   <div className="stack">
                     <div className="eyebrow">Billing party</div>
                     <div className="grid grid-2">
@@ -182,6 +244,7 @@ export function DocumentEditor({
                       </Field>
                     </div>
                   </div>
+                  )}
 
                   <div className="stack">
                     <div className="eyebrow">Shipping</div>
@@ -191,7 +254,7 @@ export function DocumentEditor({
                         checked={doc.shipSameAsBilling !== false}
                         onChange={(e) => setDoc((d) => ({ ...d, shipSameAsBilling: e.target.checked }))}
                       />
-                      Ship to the billing address
+                      {isPo ? "Deliver to our own address" : "Ship to the billing address"}
                     </label>
                     {doc.shipSameAsBilling === false ? (
                       <div className="grid grid-2">

@@ -9,7 +9,7 @@ import { downloadPdf, pdfAttachment, previewPdf } from "../../documents/pdf/deli
 import { fmtCurrency } from "../../domain/currency/format";
 import { fmtDate } from "../../domain/dates";
 import type { DocImages } from "../../documents/pdf/render";
-import type { DocumentModel } from "../../domain/documents/model";
+import type { DocType, DocumentModel } from "../../domain/documents/model";
 import type { ComputedRow, DocumentTotals } from "../../domain/tax/types";
 import type { SalesDocument } from "../../domain/documents/create";
 import { IntegrationError, type IntegrationsApi } from "../../integrations/api";
@@ -31,7 +31,7 @@ const DEFAULT_QUOTE_CC = "abhinav.jain@techzoidtechnologies.com";
 export interface DocumentActionsProps {
   api: IntegrationsApi;
   doc: SalesDocument;
-  docType: "quotation" | "proforma";
+  docType: DocType;
   model: DocumentModel;
   rows: ComputedRow[];
   totals: DocumentTotals;
@@ -41,14 +41,16 @@ export interface DocumentActionsProps {
   currentUser?: { id: string; name: string; email?: string; designation?: string };
 }
 
-const label = (docType: "quotation" | "proforma") =>
-  docType === "proforma" ? "Proforma Invoice" : "Quotation";
+const label = (docType: DocType): string =>
+  docType === "purchase_order" ? "Purchase Order" : docType === "proforma" ? "Proforma Invoice" : "Quotation";
 
 /** What we say when sending a document out. Kept short: it is read on a
  *  phone, usually while the sender is on a call. */
-function defaultMessage(doc: SalesDocument, docType: "quotation" | "proforma", totals: DocumentTotals): string {
+function defaultMessage(doc: SalesDocument, docType: DocType, totals: DocumentTotals): string {
   return [
-    `Dear ${doc.billContact || doc.billName || "Sir/Madam"},`,
+    `Dear ${(docType === "purchase_order"
+      ? doc.vendorContact || doc.vendorName
+      : doc.billContact || doc.billName) || "Sir/Madam"},`,
     "",
     `Please find attached ${label(docType)} ${doc.number} dated ${fmtDate(doc.date)} for ${fmtCurrency(totals.grand, doc.currency)}.`,
     doc.validUntil ? `It is valid until ${fmtDate(doc.validUntil)}.` : "",
@@ -106,6 +108,13 @@ export function DocumentActions({
     phone: String(company["phone"] ?? ""),
   };
 
+  /* A purchase order is addressed to the supplier, and its counterparty
+     fields are the vendor's rather than the bill-to party's. */
+  const isPo = docType === "purchase_order";
+  const toAddress = isPo ? doc.vendorEmail : doc.billEmail;
+  const toPhone = isPo ? doc.vendorPhone : doc.billPhone;
+  const counterparty = isPo ? doc.vendorName : doc.billName;
+
   const download = () => {
     try {
       toast("Saved " + downloadPdf(renderOpts), "good");
@@ -117,27 +126,31 @@ export function DocumentActions({
   return (
     <>
       <Button tone="primary" onClick={() => setEmailOpen(true)}>
-        Send {docType === "proforma" ? "proforma" : "quote"} to customer
+        {isPo ? "Send purchase order to supplier" : `Send ${docType === "proforma" ? "proforma" : "quote"} to customer`}
       </Button>
       <Button tone="default" onClick={download}>Download PDF</Button>
       <Button tone="quiet" onClick={() => previewPdf(renderOpts)}>Open PDF</Button>
       <Button tone="default" onClick={() => setWhatsAppOpen(true)}>WhatsApp</Button>
-      <SendForInvoicing
-        api={api}
-        doc={doc}
-        docType={docType}
-        totals={totals}
-        settings={settings}
-        getAttachment={async () => pdfAttachment(renderOpts)}
-      />
+      {/* "Send for invoicing" asks accounts to raise a tax invoice against a
+          sale. A purchase order is a purchase — there is nothing to invoice. */}
+      {docType === "purchase_order" ? null : (
+        <SendForInvoicing
+          api={api}
+          doc={doc}
+          docType={docType}
+          totals={totals}
+          settings={settings}
+          getAttachment={async () => pdfAttachment(renderOpts)}
+        />
+      )}
 
       <EmailDialog
         open={emailOpen}
         api={api}
         onClose={() => setEmailOpen(false)}
-        defaultTo={doc.billEmail}
+        defaultTo={toAddress}
         defaultCc={autoCc}
-        defaultSubject={`${label(docType)} ${doc.number} — ${doc.billName}`}
+        defaultSubject={`${label(docType)} ${doc.number} — ${counterparty || ""}`}
         defaultMessage={message}
         sender={emailSender}
         company={emailBrand}
@@ -147,7 +160,7 @@ export function DocumentActions({
       <WhatsAppDialog
         open={whatsAppOpen}
         api={api}
-        defaultPhone={doc.billPhone}
+        defaultPhone={toPhone}
         /* WhatsApp carries no attachment: the PDF has to be added by hand in
            WhatsApp itself. Saying so here beats a customer being promised an
            attachment that never arrives. */

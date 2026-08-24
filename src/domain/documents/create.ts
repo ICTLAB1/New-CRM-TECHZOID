@@ -3,7 +3,7 @@ import { buildDocNumber } from "../numbering/docNumber";
 import type { Customer } from "../customers/customer";
 import type { LineItem } from "../tax/types";
 import type { PaymentEntry } from "../payments/ledger";
-import { DOMESTIC_TERMS, suggestTermsSet } from "./terms";
+import { DOMESTIC_TERMS, PURCHASE_ORDER_TERMS, suggestTermsSet } from "./terms";
 
 /**
  * Creating and converting documents.
@@ -20,15 +20,23 @@ import { DOMESTIC_TERMS, suggestTermsSet } from "./terms";
 
 export type DocStatus = "Draft" | "Sent" | "Accepted" | "Rejected" | "Expired";
 export type ProformaStatus = "Draft" | "Sent" | "Paid" | "Expired";
+/** A purchase order's life is about the goods arriving, not about a customer
+ *  agreeing — so it tracks despatch and receipt rather than acceptance. */
+export type PurchaseOrderStatus = "Draft" | "Issued" | "Acknowledged" | "Partially Received" | "Received" | "Cancelled";
 
 export const QUOTE_STATUSES: readonly DocStatus[] = ["Draft", "Sent", "Accepted", "Rejected", "Expired"];
 export const PROFORMA_STATUSES: readonly ProformaStatus[] = ["Draft", "Sent", "Paid", "Expired"];
+export const PURCHASE_ORDER_STATUSES: readonly PurchaseOrderStatus[] = [
+  "Draft", "Issued", "Acknowledged", "Partially Received", "Received", "Cancelled",
+];
 
 export interface DocSettings {
   quotePrefix?: string;
   quoteSeq?: number;
   proformaPrefix?: string;
   proformaSeq?: number;
+  purchaseOrderPrefix?: string;
+  purchaseOrderSeq?: number;
   defaultCurrency?: string;
   defaultTaxType?: string;
   defaultGst?: number;
@@ -54,6 +62,19 @@ export interface SalesDocument {
   billPan: string;
   billEmail: string;
   billPhone: string;
+
+  /* ── supplier, on a purchase order only ──
+     Typed on each order rather than picked from a saved list: the company
+     buys from many distributors occasionally rather than a few repeatedly.
+     Empty on a quotation or proforma, where there is no supplier. */
+  vendorName?: string;
+  vendorContact?: string;
+  vendorAddress?: string;
+  vendorState?: string;
+  vendorCountry?: string;
+  vendorGstin?: string;
+  vendorEmail?: string;
+  vendorPhone?: string;
 
   shipSameAsBilling: boolean;
   shipName: string;
@@ -232,6 +253,78 @@ export function newProforma({ settings, user, customer = null, today = TODAY() }
     notes: "",
     roundOff: true,
     paymentHistory: [],
+    preparedBy: user.name,
+    createdAt: Date.now(), updatedAt: Date.now(),
+  };
+}
+
+/**
+ * A purchase order: what the company is BUYING, from a supplier.
+ *
+ * It reuses SalesDocument because everything below the parties is identical —
+ * the same line items, the same tax arithmetic, the same totals, the same
+ * page. What differs is who the parties are, and that is expressed in the
+ * fields rather than in a second document type:
+ *
+ *   · the SUPPLIER is `vendor*`, typed on each order;
+ *   · BILL TO is the company itself and is not stored here at all — it is
+ *     read from settings at render time, so changing the company's address
+ *     does not leave old orders showing the old one;
+ *   · SHIP TO defaults to the company's own address, and is filled from a
+ *     customer only when the goods are drop-shipped to them.
+ *
+ * `customer` is therefore the DROP-SHIP destination, not the counterparty —
+ * the opposite of what it means on a quotation. The customer's BILLING
+ * fields are deliberately not carried over: on a purchase order they would
+ * put the customer's name in the box naming who pays the supplier.
+ */
+export function newPurchaseOrder({ settings, user, customer = null, today = TODAY() }: NewDocOptions): SalesDocument {
+  const dropShip = !!customer;
+  return {
+    id: uid(),
+    number: buildDocNumber(settings.purchaseOrderPrefix ?? "TZ/PO", settings.purchaseOrderSeq),
+    ownerId: user.id,
+    customerId: dropShip ? customer.id : "",
+
+    /* The counterparty here is the supplier, so these stay empty: the Bill
+       To box is the company's own, drawn from settings. */
+    billName: "", billContact: "", billAddress: "", billState: "", billCountry: "",
+    billGstin: "", billPan: "", billEmail: "", billPhone: "",
+
+    vendorName: "", vendorContact: "", vendorAddress: "", vendorState: "",
+    vendorCountry: "India", vendorGstin: "", vendorEmail: "", vendorPhone: "",
+
+    /* Drop-ship: goods go straight to the customer's site rather than coming
+       through the office first. */
+    shipSameAsBilling: !dropShip,
+    shipName: dropShip ? customer.company ?? "" : "",
+    shipAddress: dropShip ? customer.address ?? "" : "",
+    shipState: dropShip ? customer.state ?? "" : "",
+    shipCountry: dropShip ? customer.country ?? "India" : "India",
+    shipGstin: dropShip ? customer.gstin ?? "" : "",
+    shipPan: dropShip ? customer.pan ?? "" : "",
+    shipContact: dropShip ? customer.contact ?? "" : "",
+    shipPhone: dropShip ? customer.phone ?? "" : "",
+    shipEmail: dropShip ? customer.email ?? "" : "",
+
+    /* Always the company's own regime: this is a domestic purchase from a
+       supplier, whatever currency the onward sale happens to be in. */
+    currency: settings.defaultCurrency || "INR",
+    taxType: settings.defaultTaxType || "gst",
+
+    subject: "Purchase order for IT products and services",
+    referenceNo: "", enquiryRef: "", revisionNo: 0,
+    paymentTerms: "As specified", deliveryTerms: "As specified",
+    customerCode: "",
+    date: today,
+    /* Not a validity date here — it is when the goods are required by, and
+       it is what the delay clauses are measured against. */
+    validUntil: addDays(today, settings.defaultValidityDays ?? 15),
+    status: "Draft",
+    items: [blankItem(settings.defaultGst)],
+    terms: [...PURCHASE_ORDER_TERMS],
+    notes: "",
+    roundOff: true,
     preparedBy: user.name,
     createdAt: Date.now(), updatedAt: Date.now(),
   };

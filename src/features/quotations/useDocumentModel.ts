@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { buildDocumentModel } from "../../domain/documents/model";
+import { buildDocumentModel, type DocType } from "../../domain/documents/model";
 import { normalizeDocTemplate, type DocTemplate } from "../../domain/documents/template";
 import { computeDocument } from "../../domain/tax/compute";
 import type { SalesDocument } from "../../domain/documents/create";
@@ -14,11 +14,16 @@ import type { SalesDocument } from "../../domain/documents/create";
 export function useDocumentModel(
   doc: SalesDocument,
   settings: Record<string, unknown>,
-  docType: "quotation" | "proforma",
+  docType: DocType,
 ) {
   return useMemo(() => {
     const sellerState = ((settings["company"] as { state?: string } | undefined)?.state) ?? "Delhi";
-    const totals = computeDocument(doc, sellerState);
+    /* CGST+SGST versus IGST is decided by comparing the counterparty's state
+       against ours — and on a purchase order the counterparty is the
+       SUPPLIER, not the bill-to party (which is us). Passing the vendor's
+       state here is what makes an out-of-state distributor charge IGST. */
+    const forTax = docType === "purchase_order" ? { ...doc, billState: doc.vendorState ?? "" } : doc;
+    const totals = computeDocument(forTax, sellerState);
     const template: DocTemplate = normalizeDocTemplate(settings["docTemplate"] as Partial<DocTemplate>);
     const accounts = (settings["bankAccounts"] as { id?: string }[] | undefined) ?? [];
     const bankAccount =

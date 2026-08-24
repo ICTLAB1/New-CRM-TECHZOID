@@ -22,7 +22,8 @@ export type { Profile, WorkspaceData } from "./store";
 export type LoadState = "loading" | "ready" | "failed";
 
 const EMPTY: WorkspaceData = {
-  customers: [], quotations: [], proformas: [], orders: [], challans: [], subscriptions: [],
+  customers: [], quotations: [], proformas: [], purchaseOrders: [],
+  orders: [], challans: [], subscriptions: [],
 };
 
 export interface Workspace {

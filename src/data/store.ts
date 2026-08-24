@@ -30,6 +30,10 @@ export interface WorkspaceData {
   customers: Customer[];
   quotations: SalesDocument[];
   proformas: SalesDocument[];
+  /** What the company BUYS, from suppliers. Its own table, not a flag on
+   *  quotations: the two face opposite directions, and mixing them would
+   *  count money owed as money owed to us on every report. */
+  purchaseOrders: SalesDocument[];
   orders: SalesOrder[];
   challans: DeliveryChallan[];
   subscriptions: Subscription[];
@@ -41,6 +45,7 @@ export const TABLE_OF: Record<keyof WorkspaceData, EntityTable> = {
   customers: "customers",
   quotations: "quotes",
   proformas: "proformas",
+  purchaseOrders: "purchase_orders",
   orders: "orders",
   challans: "challans",
   subscriptions: "subscriptions",
@@ -83,11 +88,12 @@ export function createStore(client: SupabaseClient) {
    * without first asking whether it is there.
    */
   async function load(): Promise<LoadedWorkspace> {
-    const [customers, quotations, proformas, orders, challans, subscriptions, settings, profiles] =
+    const [customers, quotations, proformas, purchaseOrders, orders, challans, subscriptions, settings, profiles] =
       await Promise.all([
         fetchEntity<Customer>("customers"),
         fetchEntity<SalesDocument>("quotes"),
         fetchEntity<SalesDocument>("proformas"),
+        fetchEntity<SalesDocument>("purchase_orders"),
         fetchEntity<SalesOrder>("orders"),
         fetchEntity<DeliveryChallan>("challans"),
         fetchEntity<Subscription>("subscriptions"),
@@ -105,6 +111,7 @@ export function createStore(client: SupabaseClient) {
         customers: customers.map(asCustomer),
         quotations: quotations.map(asDoc),
         proformas: proformas.map(asDoc),
+        purchaseOrders: purchaseOrders.map(asDoc),
         orders: orders.map(asDoc),
         challans,
         subscriptions,

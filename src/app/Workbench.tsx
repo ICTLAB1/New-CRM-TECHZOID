@@ -68,7 +68,7 @@ export function Workbench({
   const [view, setView] = useState("dashboard");
   const [editing, setEditing] = useState<Customer | null>(null);
 
-  const { customers, quotations, proformas, orders, challans, subscriptions } = data;
+  const { customers, quotations, proformas, purchaseOrders, orders, challans, subscriptions } = data;
   const isAdmin = user.role === "Admin";
   const canEditSettings = isAdmin || user.role === "Manager";
 
@@ -204,6 +204,19 @@ export function Workbench({
           api={integrations}
           currentUser={user}
           onChange={(docs, s) => { onChange("proformas", docs); onSettingsChange(s); }}
+        />
+      ) : view === "purchase-orders" ? (
+        <QuotationsScreen
+          docType="purchase_order"
+          documents={purchaseOrders}
+          customers={customers}
+          catalog={catalog}
+          settings={settings}
+          brandLogos={BRAND_LOGOS}
+          docImages={DOC_IMAGES}
+          api={integrations}
+          currentUser={user}
+          onChange={(docs, s) => { onChange("purchaseOrders", docs); onSettingsChange(s); }}
         />
       ) : view === "orders" ? (
         <OrdersScreen

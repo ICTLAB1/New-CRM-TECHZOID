@@ -6,7 +6,7 @@ import { stateNameForCode, STATES } from "../geo/states";
 import { buildItemColumns, type ItemColumn } from "./columns";
 import { isOn, type DocTemplate, type SectionKey } from "./template";
 
-export type DocType = "quotation" | "proforma";
+export type DocType = "quotation" | "proforma" | "purchase_order";
 
 /** A label/value pair, as printed with a colon between. */
 export type Pair = readonly [label: string, value: string];
@@ -187,6 +187,9 @@ export function fitBox(dims: { w: number; h: number } | null, maxW: number, maxH
 export function buildDocumentModel(input: BuildModelInput): DocumentModel {
   const { doc, settings: s, totals: t, docType, template: dt } = input;
   const isProforma = docType === "proforma";
+  /* A purchase order faces the other way: the company is the buyer, the
+     counterparty is a supplier, and the Bill To box is the company's own. */
+  const isPurchaseOrder = docType === "purchase_order";
   const L = dt.labels;
   const SEC = dt.sections;
   const c = s.company ?? {};
@@ -219,7 +222,17 @@ export function buildDocumentModel(input: BuildModelInput): DocumentModel {
         }
       : null;
 
-  const details: Pair[] = isProforma
+  const details: Pair[] = isPurchaseOrder
+    ? [
+        ["PO No.", doc.number],
+        ["PO Date", fmtDate(doc.date)],
+        /* Not a validity date on a purchase order: it is the date the goods
+           are required by, and what the delay clauses are measured against. */
+        ["Required By", fmtDate(doc.validUntil)],
+        ["Supplier Ref.", doc.referenceNo || "—"],
+        ["Raised By", doc.preparedBy || "—"],
+      ]
+    : isProforma
     ? [
         ["Invoice No.", doc.number],
         ["Invoice Date", fmtDate(doc.date)],
@@ -240,7 +253,7 @@ export function buildDocumentModel(input: BuildModelInput): DocumentModel {
       ];
 
   const references: RefCell[] = [
-    { label: "Customer Reference", value: doc.referenceNo || "—" },
+    { label: isPurchaseOrder ? "Supplier Reference" : "Customer Reference", value: doc.referenceNo || "—" },
     { label: "Enquiry Reference", value: doc.enquiryRef || "—" },
     { label: "Payment Terms", value: doc.paymentTerms || "As specified" },
     { label: "Delivery Terms", value: doc.deliveryTerms || "As specified" },
@@ -252,7 +265,7 @@ export function buildDocumentModel(input: BuildModelInput): DocumentModel {
      page. */
   const meta: Pair[] = [
     ["Date", fmtDate(doc.date)],
-    ["Valid Until", fmtDate(doc.validUntil)],
+    [isPurchaseOrder ? "Required By" : "Valid Until", fmtDate(doc.validUntil)],
     ["Revision", String(doc.revisionNo ?? 0)],
     ["Currency", currency],
   ];
@@ -313,12 +326,38 @@ export function buildDocumentModel(input: BuildModelInput): DocumentModel {
     rows: partyRows(p, kind),
   });
 
-  /* The design carries two party boxes, not three: Bill To and Ship To. v1's
-     separate "Quoted To" column repeated the billing party verbatim. */
-  const parties: PartyModel[] = [
-    toParty("BILL TO", billParty, "bill"),
-    toParty("SHIP TO", shipParty, "ship"),
-  ];
+  /* On a PURCHASE ORDER the company is the buyer, so the boxes are:
+     the SUPPLIER being ordered from, BILL TO (the company itself, read from
+     settings rather than stored on the order so an address change does not
+     leave old orders showing the old one), and SHIP TO — the company's own
+     address unless the goods are drop-shipped to a customer. */
+  const ourParty = {
+    name: c.name ?? "",
+    lines: headerAddressLines,
+    gstin: c.gstin, pan: c.pan, contact: s.signatoryName, phone: c.phone,
+    email: c.email, state: c.state, pos: null,
+  };
+  const vendorParty = {
+    name: doc.vendorName,
+    lines: addressLines(doc.vendorAddress, doc.vendorState, doc.vendorCountry || "India"),
+    gstin: doc.vendorGstin, pan: "", contact: doc.vendorContact,
+    phone: doc.vendorPhone, email: doc.vendorEmail, state: doc.vendorState,
+    pos: placeOfSupply(doc.vendorState),
+  };
+
+  /* The design carries two party boxes on a quotation, not three: Bill To
+     and Ship To. v1's separate "Quoted To" column repeated the billing
+     party verbatim. */
+  const parties: PartyModel[] = isPurchaseOrder
+    ? [
+        toParty("SUPPLIER", vendorParty as typeof billParty, "bill"),
+        toParty("BILL TO", ourParty as typeof billParty, "bill"),
+        toParty("SHIP TO", doc.shipSameAsBilling === false ? shipParty : (ourParty as typeof billParty), "ship"),
+      ]
+    : [
+        toParty("BILL TO", billParty, "bill"),
+        toParty("SHIP TO", shipParty, "ship"),
+      ];
 
   /* ---- money ---- */
   const gstPct = t.rows.length ? Number(t.rows[0]?.gst ?? 18) : 18;
@@ -409,6 +448,8 @@ export function buildDocumentModel(input: BuildModelInput): DocumentModel {
         }
       : null;
 
+  /* Terms print on a purchase order as well as a quotation. On a proforma
+     they are replaced by the payment notes block. */
   const terms = !isProforma && isOn(SEC.terms) ? (doc.terms || []).filter(Boolean).map(String) : [];
 
   /* ---- notes (proforma only) ---- */
@@ -462,9 +503,14 @@ export function buildDocumentModel(input: BuildModelInput): DocumentModel {
   };
 
   const footer = {
-    closing: isProforma
-      ? L.closingProforma || "This is a Proforma Invoice and not a Tax Invoice."
-      : doc.footer || L.closingQuote || "Thank you for the opportunity to submit this quotation.",
+    closing: isPurchaseOrder
+      /* A quotation thanks the reader for the opportunity. A purchase order
+         is issued TO a supplier, so that line thanked them for the chance to
+         quote us — on a document telling them what to deliver. */
+      ? doc.footer || "This purchase order is subject to the terms and conditions stated herein."
+      : isProforma
+        ? L.closingProforma || "This is a Proforma Invoice and not a Tax Invoice."
+        : doc.footer || L.closingQuote || "Thank you for the opportunity to submit this quotation.",
   };
 
   return {
@@ -473,7 +519,7 @@ export function buildDocumentModel(input: BuildModelInput): DocumentModel {
     currency,
     taxType,
     number: doc.number,
-    title: isProforma ? "PROFORMA INVOICE" : "QUOTATION",
+    title: isPurchaseOrder ? "PURCHASE ORDER" : isProforma ? "PROFORMA INVOICE" : "QUOTATION",
     sectionOrder: dt.sectionOrder,
     accentColor: dt.accentColor,
     header: {
@@ -488,9 +534,9 @@ export function buildDocumentModel(input: BuildModelInput): DocumentModel {
     parties,
     references,
     intro: {
-      salutation: !isProforma && isOn(SEC.salutation) ? L.salutation || "Dear Sir / Madam," : null,
+      salutation: !isProforma && !isPurchaseOrder && isOn(SEC.salutation) ? L.salutation || "Dear Sir / Madam," : null,
       body:
-        !isProforma && isOn(SEC.salutation)
+        !isProforma && !isPurchaseOrder && isOn(SEC.salutation)
           ? doc.intro ||
             "Thank you for your interest in our products and services. Please find below our best quotation as per your requirement."
           : null,

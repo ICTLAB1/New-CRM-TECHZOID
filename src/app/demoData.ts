@@ -44,7 +44,7 @@ export const WORKSPACE: Workspace = {
 import { DEFAULT_CERTIFICATIONS, DEFAULT_PARTNER_DESIGNATIONS, DEFAULT_TECHNOLOGY_PARTNERS } from "../domain/documents/brandDefaults";
 import { BRAND_ASSETS } from "../assets/brandAssets";
 import type { DocImages } from "../documents/pdf/render";
-import { DOMESTIC_TERMS } from "../domain/documents/terms";
+import { DOMESTIC_TERMS, PURCHASE_ORDER_TERMS } from "../domain/documents/terms";
 import type { SalesDocument } from "../domain/documents/create";
 import type { CatalogProduct } from "../domain/catalog/types";
 
@@ -170,6 +170,32 @@ export const QUOTATIONS: SalesDocument[] = [
 
 export const PROFORMAS: SalesDocument[] = [
   baseDoc({ id: "pf1", number: "TZ/PI/2627/0042", status: "Sent", advancePercent: 50, paymentHistory: [] }),
+];
+
+/* A purchase order faces the other way: the supplier is the counterparty,
+   the Bill To box is the company's own (drawn from settings, not stored),
+   and the customer is only the drop-ship destination when there is one. */
+export const PURCHASE_ORDERS: SalesDocument[] = [
+  baseDoc({
+    id: "po1", number: "TZ/PO/2026-27/0007", status: "Issued",
+    subject: "Purchase order for IT products and services",
+    referenceNo: "RDGT/QT/88214",
+    billName: "", billAddress: "", billState: "", billContact: "", billPhone: "", billEmail: "", billGstin: "",
+    vendorName: "Redington (India) Limited",
+    vendorContact: "Sales Desk",
+    vendorAddress: "SPL Guindy House, 95 Mount Road\nGuindy",
+    vendorState: "Tamil Nadu", vendorCountry: "India",
+    vendorGstin: "33AAACR0977P1ZL",
+    vendorEmail: "orders@example-distributor.in", vendorPhone: "+91 44 4224 3111",
+    /* Drop-shipped to the end customer's site rather than through the
+       office — which is why customerId is set. */
+    customerId: "c1",
+    shipSameAsBilling: false,
+    shipName: "Acme Manufacturing India Pvt Ltd",
+    shipAddress: "Plot 88, Sector 63", shipState: "Delhi", shipCountry: "India",
+    shipContact: "Rajesh Kumar", shipPhone: "+91 98100 12345",
+    terms: [...PURCHASE_ORDER_TERMS],
+  }),
 ];
 
 import type { SalesOrder, DeliveryChallan } from "../domain/orders/create";

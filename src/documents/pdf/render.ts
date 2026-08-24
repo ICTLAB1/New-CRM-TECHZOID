@@ -187,18 +187,35 @@ export function renderDocumentPdf(opts: RenderOptions): jsPDF {
 
   /* ──────────────── details + bill to + ship to ──────────────── */
   function drawParties(): void {
-    const gap = 5;
-    const colW = (CW - gap * 2) / 3;
+    /* One column for the details, then one per party — two on a quotation
+       (Bill To, Ship To), three on a purchase order (Supplier, Bill To,
+       Ship To). Sized from the count rather than fixed at three, so adding
+       a box narrows the grid instead of running off the page.
+
+       The details column is the widest: at four columns of equal width its
+       longest value, the document number, wrapped mid-token as
+       "TZ/PO/2026-27/0 007". Parties wrap gracefully at a line ending; a
+       reference number does not. The gap tightens too, which buys back
+       another 3mm across the row. */
+    const wide = m.parties.length > 2;
+    const gap = wide ? 4 : 5;
+    const detailsShare = wide ? 1.15 : 1;
+    const unit = (CW - gap * m.parties.length) / (detailsShare + m.parties.length);
+    const detailsW = unit * detailsShare;
+    const colW = unit;
     const top = y;
 
+    const detailsHeading = m.docType === "purchase_order"
+      ? "PURCHASE ORDER DETAILS"
+      : m.isProforma ? "INVOICE DETAILS" : "QUOTATION DETAILS";
     pdf.setFont("helvetica", "bold").setFontSize(7.6).setTextColor(...NAVY);
-    pdf.text(m.isProforma ? "INVOICE DETAILS" : "QUOTATION DETAILS", M, top + 4);
-    const detailsEnd = colonRows(m.details, M, colW, top + 10, colW * 0.45, 7.2);
+    pdf.text(detailsHeading, M, top + 4);
+    const detailsEnd = colonRows(m.details, M, detailsW, top + 10, detailsW * 0.4, 7.2);
 
-    /* Bill To / Ship To: navy header bar over a bordered box. */
+    /* Each party: navy header bar over a bordered box. */
     const boxEnds: number[] = [];
-    m.parties.slice(0, 2).forEach((party, i) => {
-      const x = M + (i + 1) * (colW + gap);
+    m.parties.forEach((party, i) => {
+      const x = M + detailsW + gap + i * (colW + gap);
       pdf.setFillColor(...NAVY);
       pdf.rect(x, top, colW, 6.4, "F");
       pdf.setFont("helvetica", "bold").setFontSize(7.4).setTextColor(255, 255, 255);
@@ -223,8 +240,8 @@ export function renderDocumentPdf(opts: RenderOptions): jsPDF {
 
     const boxBottom = Math.max(...boxEnds, top + 24) + 2;
     pdf.setDrawColor(...BORDER).setLineWidth(0.2);
-    m.parties.slice(0, 2).forEach((_, i) => {
-      const x = M + (i + 1) * (colW + gap);
+    m.parties.forEach((_, i) => {
+      const x = M + detailsW + gap + i * (colW + gap);
       pdf.rect(x, top, colW, boxBottom - top, "S");
     });
 

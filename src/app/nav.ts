@@ -23,6 +23,12 @@ export const NAV: NavSection[] = [
     ],
   },
   {
+    label: "Buy",
+    items: [
+      { id: "purchase-orders", label: "Purchase orders" },
+    ],
+  },
+  {
     label: "Deliver",
     items: [
       { id: "orders", label: "Sales orders" },
