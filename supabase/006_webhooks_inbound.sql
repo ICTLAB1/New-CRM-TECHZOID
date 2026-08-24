@@ -20,11 +20,18 @@
 -- means the outbound one.
 drop function if exists public.regenerate_webhook_secret();
 
+-- `extensions` is in the search path as well as `public` because Supabase
+-- installs pgcrypto there rather than into public, and gen_random_bytes()
+-- below lives in it. Without it this function raises "function
+-- gen_random_bytes(integer) does not exist" the first time an admin presses
+-- Generate. The path stays pinned rather than inherited: this is a
+-- security-definer function, so leaving the caller's search_path in place
+-- would let them decide which schema's is_admin() runs.
 create or replace function public.regenerate_webhook_secret(p_kind text default 'main')
 returns text
 language plpgsql
 security definer
-set search_path = public
+set search_path = public, extensions
 as $$
 declare
   v_secret text;

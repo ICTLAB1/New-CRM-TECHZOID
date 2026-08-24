@@ -60,11 +60,14 @@ create extension if not exists pgcrypto;
 -- including the admin who just generated it. Calling it again immediately
 -- invalidates the previous secret, exactly like rotating an API key
 -- anywhere else: the old one stops working the moment a new one exists.
+-- `extensions` is in the search path as well as `public` because Supabase
+-- installs pgcrypto there rather than into public, and gen_random_bytes()
+-- below lives in it.
 create or replace function public.regenerate_webhook_secret()
 returns text
 language plpgsql
 security definer
-set search_path = public
+set search_path = public, extensions
 as $$
 declare
   v_secret text;
