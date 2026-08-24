@@ -1,11 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { fetchEntity, fetchProfiles, fetchSettings, subscribeAll, syncEntity, syncSettings } from "./store";
-import { normalizeCustomer, normalizeDocument } from "./normalize";
-import type { EntityTable } from "./entities";
-import type { Customer } from "../domain/customers/customer";
-import type { SalesDocument } from "../domain/documents/create";
-import type { SalesOrder, DeliveryChallan } from "../domain/orders/create";
-import type { Subscription } from "../domain/subscriptions/expiry";
+import { store, TABLE_OF, type Profile, type Store, type WorkspaceData } from "./store";
 
 /**
  * The workspace, loaded once and kept in step.
@@ -23,72 +17,13 @@ import type { Subscription } from "../domain/subscriptions/expiry";
  *      rows back over what was just typed.
  */
 
-export interface WorkspaceData {
-  customers: Customer[];
-  quotations: SalesDocument[];
-  proformas: SalesDocument[];
-  orders: SalesOrder[];
-  challans: DeliveryChallan[];
-  subscriptions: Subscription[];
-}
-
-export interface Profile {
-  id: string;
-  name: string;
-  email?: string;
-  role: string;
-}
+export type { Profile, WorkspaceData } from "./store";
 
 export type LoadState = "loading" | "ready" | "failed";
-
-/** App-side name to database table. The table is called `quotes`; every
- *  screen calls them quotations. */
-const TABLE_OF: Record<keyof WorkspaceData, EntityTable> = {
-  customers: "customers",
-  quotations: "quotes",
-  proformas: "proformas",
-  orders: "orders",
-  challans: "challans",
-  subscriptions: "subscriptions",
-};
 
 const EMPTY: WorkspaceData = {
   customers: [], quotations: [], proformas: [], orders: [], challans: [], subscriptions: [],
 };
-
-async function loadAll(): Promise<{ data: WorkspaceData; settings: Record<string, unknown>; profiles: Profile[] }> {
-  const [customers, quotations, proformas, orders, challans, subscriptions, settings, profiles] = await Promise.all([
-    fetchEntity<Customer>("customers"),
-    fetchEntity<SalesDocument>("quotes"),
-    fetchEntity<SalesDocument>("proformas"),
-    fetchEntity<SalesOrder>("orders"),
-    fetchEntity<DeliveryChallan>("challans"),
-    fetchEntity<Subscription>("subscriptions"),
-    fetchSettings(),
-    fetchProfiles(),
-  ]);
-
-  /* Normalisation takes a bag of unknown fields and gives one back, so each
-     call is cast at the boundary rather than the normaliser being widened to
-     know about every record type. */
-  const fixCustomer = (c: Customer): Customer =>
-    normalizeCustomer(c as unknown as Record<string, unknown>) as unknown as Customer;
-  const fixDoc = <T>(d: T): T =>
-    normalizeDocument(d as unknown as Record<string, unknown>) as unknown as T;
-
-  return {
-    data: {
-      customers: customers.map(fixCustomer),
-      quotations: quotations.map(fixDoc),
-      proformas: proformas.map(fixDoc),
-      orders: orders.map(fixDoc),
-      challans,
-      subscriptions,
-    },
-    settings,
-    profiles: profiles as unknown as Profile[],
-  };
-}
 
 export interface Workspace {
   state: LoadState;
@@ -107,7 +42,7 @@ export interface Workspace {
   dismissSaveError: () => void;
 }
 
-export function useWorkspace(enabled: boolean): Workspace {
+export function useWorkspace(enabled: boolean, db: Store = store()): Workspace {
   const [state, setState] = useState<LoadState>(enabled ? "loading" : "ready");
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<WorkspaceData>(EMPTY);
@@ -124,7 +59,7 @@ export function useWorkspace(enabled: boolean): Workspace {
 
   const reload = useCallback(async () => {
     try {
-      const loaded = await loadAll();
+      const loaded = await db.load();
       committed.current = loaded.data;
       committedSettings.current = loaded.settings;
       setData(loaded.data);
@@ -137,7 +72,7 @@ export function useWorkspace(enabled: boolean): Workspace {
       setState("failed");
       setError("Couldn't load your workspace. Check your connection and try again.");
     }
-  }, []);
+  }, [db]);
 
   useEffect(() => {
     if (!enabled) return;
@@ -150,7 +85,7 @@ export function useWorkspace(enabled: boolean): Workspace {
   useEffect(() => {
     if (!enabled || state !== "ready") return;
     let timer: ReturnType<typeof setTimeout> | null = null;
-    const channel = subscribeAll(() => {
+    const channel = db.subscribeAll(() => {
       if (timer) clearTimeout(timer);
       timer = setTimeout(() => {
         /* Never pull the server's rows back over a save still in flight. */
@@ -162,7 +97,7 @@ export function useWorkspace(enabled: boolean): Workspace {
       if (timer) clearTimeout(timer);
       void channel.unsubscribe();
     };
-  }, [enabled, state, reload]);
+  }, [enabled, state, reload, db]);
 
   const update = useCallback(<K extends keyof WorkspaceData>(key: K, next: WorkspaceData[K]) => {
     /* Optimistic: the screen updates now, the write follows. If it fails the
@@ -174,12 +109,12 @@ export function useWorkspace(enabled: boolean): Workspace {
     inFlight.current += 1;
     setSaving(true);
     const previous = committed.current[key];
-    void syncEntity(TABLE_OF[key], previous as never, next as never)
+    void db.syncEntity(TABLE_OF[key], previous as never, next as never)
       .then(() => {
         committed.current = { ...committed.current, [key]: next };
         setSaveError(null);
       })
-      .catch((err) => {
+      .catch((err: unknown) => {
         console.error("save failed:", err);
         setSaveError("That change couldn't be saved. Your workspace has been reloaded — please try again.");
         void reload();
@@ -188,7 +123,7 @@ export function useWorkspace(enabled: boolean): Workspace {
         inFlight.current -= 1;
         if (inFlight.current === 0) setSaving(false);
       });
-  }, [enabled, reload]);
+  }, [enabled, reload, db]);
 
   const updateSettings = useCallback((next: Record<string, unknown>) => {
     setSettings(next);
@@ -196,12 +131,12 @@ export function useWorkspace(enabled: boolean): Workspace {
 
     inFlight.current += 1;
     setSaving(true);
-    void syncSettings(committedSettings.current, next)
+    void db.syncSettings(committedSettings.current, next)
       .then(() => {
         committedSettings.current = next;
         setSaveError(null);
       })
-      .catch((err) => {
+      .catch((err: unknown) => {
         console.error("settings save failed:", err);
         setSaveError("Those settings couldn't be saved — only an admin or manager may change them.");
         void reload();
@@ -210,7 +145,7 @@ export function useWorkspace(enabled: boolean): Workspace {
         inFlight.current -= 1;
         if (inFlight.current === 0) setSaving(false);
       });
-  }, [enabled, reload]);
+  }, [enabled, reload, db]);
 
   return {
     state, error, data, settings, profiles, saving, saveError,

@@ -557,3 +557,42 @@ cannot see a style, so it could not see this.
 The fix is the same shape as the rest of this architecture: the decision moved
 out of both renderers into `splitDescription`, which they now both call, and
 which is tested — including the single-line case that broke.
+
+---
+
+## 15. The write path had no tests
+
+`syncEntity` and `syncSettings` — the code that diffs the app's state against
+what the server holds and issues the actual writes — had never run against
+anything, fake or real. Everything else in this codebase is wrong-and-caught;
+this was wrong-and-silent, because a bad diff here doesn't fail loudly, it
+rewrites or deletes rows nobody asked it to touch.
+
+`store.ts` is now built around an injectable Supabase client (`createStore`),
+with the app's own instance created lazily from the real one on first use.
+17 tests drive it against a fake client that records every operation:
+
+- an unchanged record writes nothing — the guarantee that saving one screen
+  does not rewrite the whole table, and does not wake every other browser
+  through realtime for nothing;
+- `id` and `owner_id` are lifted out of the record and never duplicated
+  inside the stored blob, where they could drift from the columns RLS
+  actually reads;
+- the promoted columns (`customer_id`, `order_id`, `quote_id`) are correct
+  per table, and an empty relation is written as `null`, not `""`;
+- an add, a change and a delete in the same save each produce exactly the
+  right operation;
+- a write the database refuses — row-level security rejecting a record that
+  isn't the caller's — surfaces as a thrown error rather than being
+  swallowed;
+- loading fills in the fields legacy records were written without, takes the
+  id and owner from the columns rather than the jsonb blob even when they
+  disagree, and a failed read rejects rather than returning half a
+  workspace.
+
+Not yet covered: the realtime guard in `useWorkspace` that skips a refetch
+while a save is in flight. Testing that means driving a React hook through
+effects and timers, which needs a DOM test environment (jsdom or similar)
+this project doesn't have installed yet — adding one is a real dependency
+and config decision, left for a session where that's asked for rather than
+assumed.
