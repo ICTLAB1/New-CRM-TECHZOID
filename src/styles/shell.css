@@ -39,6 +39,12 @@
   font: inherit; font-size: var(--t-body); font-weight: 500;
   color: var(--ink-3); text-align: left; cursor: pointer;
 }
+.nav-item {
+  transition:
+    background-color var(--t-quick) var(--ease),
+    color var(--t-quick) var(--ease),
+    border-left-color var(--t-enter) var(--ease);
+}
 .nav-item:hover { background: var(--surface-3); color: var(--ink); }
 .nav-item[aria-current="page"] { border-left-color: var(--accent); color: var(--ink); font-weight: 600; }
 .nav-item[aria-current="page"]:hover { background: var(--surface-3); }
@@ -89,7 +95,19 @@
 .topsearch:focus { outline: none; background: var(--surface); border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-weak); }
 @media (max-width: 760px) { .topsearch { display: none; } }
 
-.page { padding: var(--gap-wide) var(--gap-page) 56px; }
+/* Each screen arrives rather than replacing the last one between frames.
+   Keyed on the view in AppShell so it re-runs on every navigation; a shift
+   of a few pixels is enough to say "this is a different screen" without
+   making the app feel slow to get to. */
+@keyframes page-in { from { opacity: 0; transform: translateY(6px) } to { opacity: 1; transform: none } }
+/* A transparent wrapper whose only job is to carry the view key. It must add
+   no box of its own, or every screen gains a layout it was not designed
+   around. */
+.view { display: contents; }
+.page {
+  padding: var(--gap-wide) var(--gap-page) 56px;
+  animation: page-in var(--t-enter) var(--ease) both;
+}
 /* The title may shrink; the actions may not. A long subtitle was squeezing
    the action row until its buttons stacked vertically. */
 .page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--gap-wide); margin-bottom: var(--gap-wide); flex-wrap: wrap; }
@@ -121,7 +139,12 @@
     box-shadow: var(--lift);
   }
   .sidebar.is-open { transform: none; }
-  .sidebar-scrim { position: fixed; inset: 0; z-index: 65; background: rgba(16,21,31,.38); }
+  /* Fades in with the drawer. Appearing instantly under a sliding panel
+     is the detail that makes a drawer feel bolted on. */
+  .sidebar-scrim {
+    position: fixed; inset: 0; z-index: 65; background: rgba(16,21,31,.38);
+    animation: scrim-in var(--t-enter) var(--ease) both;
+  }
   .mobile-only { display: inline-flex; }
   .page { padding: var(--gap-wide) var(--gap-wide) 72px; }
   .tile { padding: 11px 13px 13px; }

@@ -192,7 +192,10 @@ function Splash({ message, action }: { message: string; action?: React.ReactNode
         <Card>
           <div className="stack">
             <p style={{ margin: 0 }}>{message}</p>
-            {action}
+            {/* An indeterminate bar while there is nothing to act on. Once
+                there is an action the wait has ended — showing both would
+                say "still working" over a button asking you to retry. */}
+            {action ? action : <div className="loading-bar" aria-hidden />}
           </div>
         </Card>
       </div>

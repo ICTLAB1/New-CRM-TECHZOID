@@ -118,7 +118,11 @@ export function AppShell({ view, onNavigate, user, brand, onSignOut, banner, chi
           <span className="topbar-crumb">FY 2026-27</span>
         </header>
         {banner}
-        {children}
+        {/* Keyed on the view so React replaces the subtree on navigation and
+            the page's entrance animation re-runs. Without the key, moving
+            between two screens that happen to share a root element would
+            swap the content with no transition at all. */}
+        <div key={view} className="view">{children}</div>
       </div>
     </div>
   );
