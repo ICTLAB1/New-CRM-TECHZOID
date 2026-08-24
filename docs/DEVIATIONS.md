@@ -687,3 +687,139 @@ a proforma, sharing the terms column. `bankBlock` in the model is no longer
 gated to `isProforma`; each renderer draws it in its own block, after the
 HSN/SAC summary, only for a quotation (a proforma keeps showing it beside its
 summary, where there is no terms column to share the space with, unchanged).
+
+---
+
+## 17. Two-way sync with the company website
+
+v1 had no integration with the marketing site at all. Leads captured on
+`ttpldelhi.com` were retyped.
+
+**Outbound** — `netlify/functions/webhook-dispatch-background.mjs` posts
+`deal.created`, `deal.stage_changed`, `deal.won`, `deal.lost` and
+`activity.logged` to a configured endpoint. Signed Stripe-style,
+`t=<unix>,v1=<hex>` HMAC-SHA256 over `"<t>.<body>"`, matching the scheme the
+website already expected. **The body is re-signed on every retry attempt**,
+not once before the loop: the backoff schedule (8 attempts, 255s total) plus
+per-attempt timeouts can exceed the receiver's 300-second replay window, and
+a signature that ages out mid-retry fails as though the secret were wrong.
+The event id stays fixed across attempts so the receiver still dedupes.
+
+**Inbound** — `netlify/functions/webhook-receive.mjs` takes the same events
+back from the website. It carries **no bearer token**: the signature is the
+authentication, and a second secret in the URL would only be a second thing
+to leak. Exactly-once is enforced by inserting the event id into
+`webhook_received` as a lock rather than by checking-then-inserting.
+
+**No echo loop, structurally.** Inbound writes reach the browser through
+Supabase realtime → `useWorkspace.reload()` → `setData()`. The outbound
+dispatcher is called only from `Workbench.handleCustomersChange`, which
+realtime never goes through. This is a property of the wiring, not a flag
+somebody has to remember to set.
+
+Signing secrets have **no client-facing RLS policy at all** — not a
+restrictive one, none. `webhook_secrets` is readable only by the service
+role, and a secret is shown exactly once, at generation.
+
+## 18. Purchase orders
+
+New in v2: v1 recorded only what the company sold.
+
+Its own table rather than a flag on `quotes`, because the two face opposite
+directions — mixing them would put suppliers in the sales pipeline and count
+money owed as money owed *to* us on every dashboard. It reuses
+`SalesDocument` and the shared `DocumentModel`, so it renders through the
+same renderer and preview as a quotation and cannot drift from the format the
+client signed off. Three party boxes instead of two (SUPPLIER / BILL TO /
+SHIP TO), sized from the party count rather than at a fixed four columns —
+equal columns wrapped the document number mid-token.
+
+Three things a PO deliberately does **not** carry, all confirmed against the
+client's own reference: bank details (we are paying, not being paid), the
+customer-acceptance box, and a "thank you for the opportunity" closing.
+Acceptance is instead a **Supplier Acknowledgement** block, and its height is
+derived from the field count — at the fixed height it was, the fourth field's
+rule ran straight through "Company Seal".
+
+BILL TO is **not stored on the order**. It is read from settings at render
+time, so changing the company's registered address does not leave old orders
+showing the old one.
+
+## 19. Goods receipt
+
+Deliveries are stored as **events**, never as a `receivedQty` accumulated on
+each line. A running total loses the delivery history the moment anyone
+corrects a number and cannot answer "which delivery was short"; with events,
+a mistyped delivery is fixed by removing it rather than by reverse-engineering
+what the number used to be.
+
+Completion is decided **per line, never by summed quantity**: an order where
+one item arrived twice over and another never arrived is not complete, and
+comparing totals says it is. Over-delivery is its own status rather than a
+negative outstanding, which reads as a shortage at a glance. A negative
+receipt quantity is treated as a keying error and ignored — honouring it
+would silently increase what the supplier still owes, and returns are their
+own document.
+
+`impliedStatus` never revives a cancelled order and never touches a draft.
+It reports; the caller applies.
+
+Receipts live in the order's existing `data` column, so this needed no
+migration.
+
+## 20. Tax invoices and receivables
+
+v1 stopped at the proforma. A won quotation had nowhere to go.
+
+The invoice is a fourth document type on the shared model. It differs from a
+quotation only where the document genuinely differs: `validUntil` is a
+**payment due date**, not a validity window — an invoice does not expire, it
+falls overdue — there is no customer-acceptance block (an invoice is a
+demand, not an offer), and bank details stay, because that is how the
+customer pays.
+
+**Receivables is derived, never stored.** Outstanding and age are computed
+from each invoice's payment ledger and its due date on every read, which is
+what stops a "paid" flag set by hand from disagreeing with the money actually
+recorded. The grand total is **injected** into `buildReceivables` rather than
+re-derived inside it, so the figure being chased is the figure the invoice
+prints — a receivables screen with its own idea of what an invoice is worth
+is the first place the two could diverge. Drafts and cancelled invoices are
+excluded: issuing is what creates the debt.
+
+## 21. Attachments
+
+New in v2. Two halves kept in step: the bytes in a **private** Supabase
+Storage bucket, and a row in `attachments` saying what they are and what they
+belong to.
+
+`upload` deletes the object it just wrote if the row insert fails, and
+`remove` drops the row only *after* the object is gone — the other order can
+leave bytes nobody can see, because with the row gone nothing names the path
+any more.
+
+`storage.objects` carries its own policies. A private bucket is not a policy;
+it only means there is no public URL. Objects live under
+`<owner-uuid>/<record-type>/<record-id>/<unique>-<name>`, owner first, so the
+policies decide from the first path segment without joining anything. Read is
+deliberately wider than write: any signed-in user may read, but only the
+file's owner or an Admin/Manager may write or delete.
+
+**There is no update policy on `attachments`, on purpose.** A row describes
+bytes that already exist; repointing it after the fact is how an approved
+document quietly becomes a different one. Replacing a file means deleting and
+uploading again.
+
+File type is decided by **extension, not by the MIME the browser reports**. A
+browser calls `.docx` "application/zip" and `.exe` "application/octet-stream";
+the extension is what the operating system acts on when somebody
+double-clicks the download.
+
+`record_type` + `record_id` is loose rather than five foreign keys, since a
+file can hang off a customer or any of four document types. The trade is that
+a deleted record would leave orphan rows, which the app clears on delete —
+the safer failure, because an orphaned row is tidy-up and a cascade that ate
+a signed contract is not.
+
+In demo mode the panel says attachments need a signed-in workspace rather
+than offering an upload that would quietly lose somebody's contract.

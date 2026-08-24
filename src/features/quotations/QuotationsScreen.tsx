@@ -3,6 +3,7 @@ import { PageHead } from "../../app/AppShell";
 import { Button, Card, Chip, Empty, Input, Select, Tabs } from "../../components/primitives";
 import { Confirm } from "../../components/Modal";
 import { GoodsReceiptDialog } from "../purchasing/GoodsReceiptDialog";
+import { removeAttachmentsFor } from "../../data/attachments";
 import { useToast } from "../../components/Toast";
 import { DocumentEditor } from "./DocumentEditor";
 import {
@@ -137,6 +138,9 @@ export function QuotationsScreen({
           docImages={docImages}
           api={api}
           currentUser={currentUser}
+          /* Attaching a file needs a record that exists. A document the
+             editor has only just built is not in the workspace yet. */
+          saved={documents.some((d) => d.id === editing.id)}
           onSave={save}
           onClose={() => setEditing(null)}
         />
@@ -257,6 +261,11 @@ export function QuotationsScreen({
         confirmLabel="Delete"
         tone="danger"
         onConfirm={() => {
+          /* Nothing cascades from the attachments table to the five tables a
+             file can hang off, so the files go with the document here.
+             Fire-and-forget: failing to tidy up must never be why a delete
+             the user asked for does not happen. */
+          if (confirmDelete) void removeAttachmentsFor(docType, confirmDelete.id).catch(() => {});
           onChange(documents.filter((d) => d.id !== confirmDelete?.id), settings);
           toast(`${confirmDelete?.number} deleted.`, "good");
           setConfirmDelete(null);

@@ -184,6 +184,7 @@ export function CustomersScreen({ customers, workspace, users, customFields, cur
           users={users}
           customFields={customFields}
           canReassign={canReassign}
+          currentUser={currentUser}
           onSave={save}
           onClose={() => setEditing(null)}
         />

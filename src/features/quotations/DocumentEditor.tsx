@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Button, Card, Field, Input, Select, Tabs, Textarea } from "../../components/primitives";
 import { DocumentActions } from "./DocumentActions";
+import { AttachmentsPanel } from "../attachments/AttachmentsPanel";
 import type { DocImages } from "../../documents/pdf/render";
 import type { IntegrationsApi } from "../../integrations/api";
 import { Modal } from "../../components/Modal";
@@ -68,14 +69,18 @@ export interface DocumentEditorProps {
   api: IntegrationsApi;
   /** Whose name and address a sent quotation carries. */
   currentUser: { id: string; name: string; email?: string };
+  /** Whether this document already exists in the workspace. A file attached
+   *  to a document that is then cancelled would have nothing pointing at it,
+   *  so attaching waits until there is a record to attach to. */
+  saved?: boolean;
   onSave: (doc: SalesDocument) => void;
   onClose: () => void;
 }
 
-type Tab = "document" | "items" | "terms";
+type Tab = "document" | "items" | "terms" | "files";
 
 export function DocumentEditor({
-  doc: initial, docType, customers, catalog, settings, brandLogos, docImages, api, currentUser, onSave, onClose,
+  doc: initial, docType, customers, catalog, settings, brandLogos, docImages, api, currentUser, saved = false, onSave, onClose,
 }: DocumentEditorProps) {
   const [doc, setDoc] = useState<SalesDocument>(initial);
   const [tab, setTab] = useState<Tab>("document");
@@ -127,6 +132,9 @@ export function DocumentEditor({
                   { id: "document", label: "Document" },
                   { id: "items", label: "Items", count: doc.items.length },
                   { id: "terms", label: "Terms", count: doc.terms.length },
+                  /* Supplier quotes, signed copies, spec sheets — the paper
+                     trail behind a document, kept with it. */
+                  { id: "files", label: "Files" },
                 ]}
               />
             </div>
@@ -303,7 +311,7 @@ export function DocumentEditor({
                   onChange={(items) => setDoc((d) => ({ ...d, items }))}
                   onPickFromCatalog={() => setShowCatalog(true)}
                 />
-              ) : (
+              ) : tab === "terms" ? (
                 <div className="stack-wide">
                   <div className="stack">
                     <div className="row-tight wrap">
@@ -348,7 +356,20 @@ export function DocumentEditor({
 
                   <div className="notice">{LEGAL_NOTICE}</div>
                 </div>
-              )}
+              ) : null}
+
+              {tab === "files" ? (
+                <AttachmentsPanel
+                  framed={false}
+                  recordType={docType}
+                  /* Null until the document has been saved once: the id is
+                     stable, but a file attached to a document that is then
+                     cancelled would be left with nothing pointing at it. */
+                  recordId={saved ? doc.id : null}
+                  ownerId={doc.ownerId}
+                  currentUser={currentUser}
+                />
+              ) : null}
             </div>
           </Card>
 

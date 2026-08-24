@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Modal } from "../../components/Modal";
+import { AttachmentsPanel } from "../attachments/AttachmentsPanel";
 import { Button, Chip, Field, Input, Select, Textarea } from "../../components/primitives";
 import { applyCountry, applyGstin, customerLabel, type Customer } from "../../domain/customers/customer";
 import { gstinMessage, validateGSTIN } from "../../domain/gstin/validate";
@@ -27,11 +28,15 @@ export interface CustomerSheetProps {
   users: { id: string; name: string }[];
   customFields: { id: string; label: string }[];
   canReassign: boolean;
+  /** Whose name goes against a file they attach. Optional so the sheet still
+   *  renders anywhere it is used without one — the panel simply has no name
+   *  to record rather than the sheet failing to open. */
+  currentUser?: { name: string };
   onSave: (customer: Customer) => void;
   onClose: () => void;
 }
 
-export function CustomerSheet({ customer, users, customFields, canReassign, onSave, onClose }: CustomerSheetProps) {
+export function CustomerSheet({ customer, users, customFields, canReassign, currentUser, onSave, onClose }: CustomerSheetProps) {
   const [f, setF] = useState<Customer>({ ...customer, notes: customer.notes ?? [], customFields: customer.customFields ?? {} });
   const set = <K extends keyof Customer>(k: K) => (e: { target: { value: string } }) =>
     setF((cur) => ({ ...cur, [k]: e.target.value }));
@@ -173,6 +178,17 @@ export function CustomerSheet({ customer, users, customFields, canReassign, onSa
             </div>
           </div>
         ) : null}
+
+        {/* Signed POs, credit applications, GST certificates — the paperwork
+            a customer record acquires. Kept outside the form's own state:
+            files are stored the moment they are dropped, so they survive
+            closing this sheet without saving. */}
+        <AttachmentsPanel
+          recordType="customer"
+          recordId={customer.id}
+          ownerId={f.ownerId}
+          currentUser={{ name: currentUser?.name ?? "" }}
+        />
 
         {f.stage === "lost" && f.lostReason ? (
           <div className="row-tight">

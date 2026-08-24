@@ -171,6 +171,7 @@ export function Workbench({
               users={team}
               customFields={customFields}
               canReassign={isAdmin || user.role === "Manager"}
+              currentUser={user}
               onSave={(next) => {
                 handleCustomersChange(customers.map((c) => (c.id === next.id ? next : c)));
                 setEditing(null);
