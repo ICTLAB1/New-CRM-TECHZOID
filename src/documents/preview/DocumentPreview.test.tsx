@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { DocumentPreview } from "./DocumentPreview";
-import { buildDocumentModel } from "../../domain/documents/model";
+import { buildDocumentModel, STRIP_TITLES } from "../../domain/documents/model";
 import { DEFAULT_DOC_TEMPLATE } from "../../domain/documents/template";
 import { DOMESTIC_TERMS } from "../../domain/documents/terms";
 import { computeDocument } from "../../domain/tax/compute";
@@ -209,5 +209,25 @@ describe("document variants", () => {
     const html = renderToStaticMarkup(<DocumentPreview model={model} rows={totals.rows} />);
     expect(html).not.toContain("undefined");
     expect(html).not.toContain("NaN");
+  });
+});
+
+describe("the strip headings", () => {
+  const { html } = build();
+
+  it("prints the shared titles, so the PDF and the preview cannot drift", () => {
+    for (const title of Object.values(STRIP_TITLES)) {
+      expect(html, title).toContain(title);
+    }
+  });
+
+  it("never calls an accreditation and a brand the same thing", () => {
+    // Both headings once read "technology partner", which flattened two
+    // different relationships: Microsoft Solutions Partner and Adobe
+    // Certified Reseller are accreditations this company HOLDS; Cisco, HP
+    // and Acer are brands it SELLS. Claiming a partner relationship that was
+    // never granted is a false statement on a document that binds.
+    expect(STRIP_TITLES.designations).not.toBe(STRIP_TITLES.partners);
+    expect(STRIP_TITLES.partners.toUpperCase()).not.toContain("PARTNER");
   });
 });

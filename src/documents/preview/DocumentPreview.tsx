@@ -1,5 +1,6 @@
 import type { CSSProperties } from "react";
 import type { DocumentModel, LogoSlot, Pair } from "../../domain/documents/model";
+import { STRIP_TITLES } from "../../domain/documents/model";
 import type { ComputedRow } from "../../domain/tax/types";
 import { CONTENT_WIDTH_MM, splitDescription } from "../../domain/documents/columns";
 
@@ -81,9 +82,9 @@ function Slot({ slot, isCert }: { slot: LogoSlot; isCert?: boolean }) {
 export function DocumentPreview({ model: m, rows, brandLogos = {}, scale = 1 }: DocumentPreviewProps) {
   const cols = m.items.columns;
   const strips = [
-    { title: "TECHNOLOGY PARTNER DESIGNATIONS", slots: m.strips.designations },
-    { title: "OUR TECHNOLOGY PARTNERS", slots: m.strips.partners },
-    { title: "CERTIFIED MANAGEMENT SYSTEMS", slots: m.strips.certifications },
+    { key: "designations" as const, title: STRIP_TITLES.designations, slots: m.strips.designations },
+    { key: "partners" as const, title: STRIP_TITLES.partners, slots: m.strips.partners },
+    { key: "certifications" as const, title: STRIP_TITLES.certifications, slots: m.strips.certifications },
   ].filter((s) => s.slots.length);
 
   return (
@@ -317,7 +318,7 @@ export function DocumentPreview({ model: m, rows, brandLogos = {}, scale = 1 }: 
                 <div className="doc-strip-title">{strip.title}</div>
                 <div className="doc-slots">
                   {strip.slots.map((slot, i) => (
-                    <Slot slot={slot} isCert={strip.title === "CERTIFIED MANAGEMENT SYSTEMS"} key={slot.text || i} />
+                    <Slot slot={slot} isCert={strip.key === "certifications"} key={slot.text || i} />
                   ))}
                 </div>
               </div>

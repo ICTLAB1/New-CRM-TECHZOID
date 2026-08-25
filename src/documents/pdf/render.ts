@@ -1,6 +1,7 @@
 import { jsPDF } from "jspdf";
 import { applyPlugin } from "jspdf-autotable";
 import type { DocumentModel, LogoSlot, Pair } from "../../domain/documents/model";
+import { STRIP_TITLES } from "../../domain/documents/model";
 import { fitBox } from "../../domain/documents/model";
 import type { ComputedRow } from "../../domain/tax/types";
 import { BASE_FONT_PT, PADDING_MM } from "../../domain/documents/columns";
@@ -626,9 +627,9 @@ export function renderDocumentPdf(opts: RenderOptions): jsPDF {
 
   function drawStrips(): void {
     const groups = [
-      { title: "TECHNOLOGY PARTNER DESIGNATIONS", slots: m.strips.designations, flex: 1.05 },
-      { title: "OUR TECHNOLOGY PARTNERS", slots: m.strips.partners, flex: 1.15 },
-      { title: "CERTIFIED MANAGEMENT SYSTEMS", slots: m.strips.certifications, flex: 1.5 },
+      { key: "designations" as const, title: STRIP_TITLES.designations, slots: m.strips.designations, flex: 1.05 },
+      { key: "partners" as const, title: STRIP_TITLES.partners, slots: m.strips.partners, flex: 1.15 },
+      { key: "certifications" as const, title: STRIP_TITLES.certifications, slots: m.strips.certifications, flex: 1.5 },
     ].filter((g) => g.slots.length);
     if (!groups.length) return;
 
@@ -655,7 +656,9 @@ export function renderDocumentPdf(opts: RenderOptions): jsPDF {
       const slotW = w / group.slots.length;
       const bandTop = top + 6;
       const bandH = stripH - 7;
-      const isCertGroup = group.title === "CERTIFIED MANAGEMENT SYSTEMS";
+      /* Keyed, not matched on the heading text. A string match here meant
+         renaming a heading silently changed how its slots were drawn. */
+      const isCertGroup = group.key === "certifications";
 
       group.slots.forEach((slot: LogoSlot, si) => {
         const sx = x + si * slotW;

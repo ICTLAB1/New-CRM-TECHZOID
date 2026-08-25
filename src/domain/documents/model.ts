@@ -158,6 +158,26 @@ export function hasRealPhone(v: unknown): boolean {
   return /[0-9]/.test(s);
 }
 
+/**
+ * The three strip headings, in one place because BOTH renderers print them
+ * and a title that drifts between the PDF and the preview is a difference
+ * the customer sees and nobody notices.
+ *
+ * "AUTHORISED PARTNER" and "PRODUCTS WE SUPPLY" say different things on
+ * purpose. Microsoft Solutions Partner and Adobe Certified Reseller are
+ * accreditations this company holds and is licensed to display; Cisco, HP
+ * and Acer are brands it sells. Both headings previously read "technology
+ * partner", which flattened the two — and claiming a partner relationship
+ * that has not been granted is a false statement on a document that binds.
+ */
+export const STRIP_TITLES = {
+  designations: "AUTHORISED PARTNER",
+  partners: "PRODUCTS WE SUPPLY",
+  certifications: "CERTIFIED MANAGEMENT SYSTEMS",
+} as const;
+
+export type StripKey = keyof typeof STRIP_TITLES;
+
 export interface BuildModelInput {
   doc: Record<string, any>;
   settings: Record<string, any>;
