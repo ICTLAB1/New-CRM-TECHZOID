@@ -29,9 +29,15 @@ import { stopReason, TABLE_FOR } from "../lib/followupRules.mjs";
  *   nobody able to tell which half went.
  */
 
-/* 04:00 UTC is 09:30 in India — the start of a working day, which is when a
-   chaser should land rather than overnight. */
-export const config = { schedule: "0 4 * * *" };
+/* THE SCHEDULE IS DECLARED IN netlify.toml, NOT HERE, and that is not a
+   preference. `export const config` is Netlify's v2 function format, which
+   also requires a default export; every function in this repo is v1
+   (`export async function handler`). A file carrying the v2 marker with no
+   default export can be classified as a broken v2 function and take the
+   whole deploy down with it — every unrelated change included.
+
+   netlify.toml says 0 4 * * *, which is 09:30 in India: a chaser should
+   land at the start of a working day rather than overnight. */
 
 /** Enough for any real day's backlog; small enough to finish inside a
  *  function's time budget with room to spare. */
