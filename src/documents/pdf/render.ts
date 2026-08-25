@@ -633,36 +633,60 @@ export function renderDocumentPdf(opts: RenderOptions): jsPDF {
     ].filter((g) => g.slots.length);
     if (!groups.length) return;
 
-    /* 27, not 20. A certification mark is a CIRCLE: capped by height it is
-       also capped in width, so it rendered at a third the optical size of
-       the wide logos beside it and its ring text — the words that say what
-       the certification is for — was unreadable. The band has to be tall
-       enough for a round mark to earn its place. */
-    const stripH = 27;
+    const totalFlex = groups.reduce((a, g) => a + g.flex, 0);
+
+    /* Slots WRAP. A company that supplies a dozen brands cannot show them in
+       one row: nine names across a 57mm column is 6mm each, which is not a
+       logo, it is a smudge. Each group lays its slots out in a grid whose
+       columns are however many fit at a legible width. */
+    const MIN_SLOT_W = 15;
+    /* One row keeps 20mm, which is what a circular certification mark needs
+       to stay readable. Extra rows are wordmarks and wide logos, which do
+       not. */
+    const SINGLE_ROW_H = 20;
+    const EXTRA_ROW_H = 9.5;
+
+    const laid = groups.map((g) => {
+      const w = (CW * g.flex) / totalFlex;
+      const perRow = Math.max(1, Math.min(g.slots.length, Math.floor(w / MIN_SLOT_W)));
+      const rows = Math.ceil(g.slots.length / perRow);
+      return { ...g, w, perRow, rows, needH: rows === 1 ? SINGLE_ROW_H : rows * EXTRA_ROW_H };
+    });
+
+    const bandH = Math.max(...laid.map((g) => g.needH));
+    const stripH = bandH + 7;
     need(stripH + 3);
     const top = y;
-    const totalFlex = groups.reduce((a, g) => a + g.flex, 0);
 
     pdf.setDrawColor(...BORDER).setLineWidth(0.2).rect(M, top, CW, stripH, "S");
 
     let x = M;
-    groups.forEach((group, gi) => {
-      const w = (CW * group.flex) / totalFlex;
+    laid.forEach((group, gi) => {
+      const w = group.w;
       if (gi > 0) pdf.line(x, top, x, top + stripH);
 
       pdf.setFont("helvetica", "bold").setFontSize(5.8).setTextColor(...NAVY);
       pdf.text(group.title, x + w / 2, top + 4, { align: "center" });
 
-      const slotW = w / group.slots.length;
+      const slotW = w / group.perRow;
       const bandTop = top + 6;
-      const bandH = stripH - 7;
+      /* Rows share the band evenly, so a wrapped group stays centred in it
+         rather than hanging from the top. */
+      const rowH = bandH / group.rows;
       /* Keyed, not matched on the heading text. A string match here meant
          renaming a heading silently changed how its slots were drawn. */
       const isCertGroup = group.key === "certifications";
 
       group.slots.forEach((slot: LogoSlot, si) => {
-        const sx = x + si * slotW;
+        const row = Math.floor(si / group.perRow);
+        const col = si % group.perRow;
+        /* A short last row is centred under the ones above, not left-aligned
+           with a gap beside it. */
+        const inRow = Math.min(group.perRow, group.slots.length - row * group.perRow);
+        const rowW = inRow * slotW;
+        const sx = x + (w - rowW) / 2 + col * slotW;
         const cx = sx + slotW / 2;
+        const cellTop = bandTop + row * rowH;
 
         if (slot.src) {
           /* Approved artwork, fitted with its aspect ratio preserved. */
@@ -678,9 +702,9 @@ export function renderDocumentPdf(opts: RenderOptions): jsPDF {
              wide one (Acer) beside it, which reads as favouritism rather
              than as aspect ratio being preserved. */
           const ratio = natural ? natural.w / natural.h : 3;
-          const capH = ratio < 1.4 ? bandH - 1 : 8.5;
-          const box = fitBox(natural, slotW - 5, Math.min(bandH - 1, capH));
-          pdf.addImage(slot.src, "PNG", cx - box.w / 2, bandTop + (bandH - box.h) / 2, box.w, box.h, undefined, "FAST");
+          const capH = ratio < 1.4 ? rowH - 1 : 8.5;
+          const box = fitBox(natural, slotW - 5, Math.min(rowH - 1, capH));
+          pdf.addImage(slot.src, "PNG", cx - box.w / 2, cellTop + (rowH - box.h) / 2, box.w, box.h, undefined, "FAST");
           return;
         }
 
@@ -692,7 +716,7 @@ export function renderDocumentPdf(opts: RenderOptions): jsPDF {
           pdf.setFont("helvetica", "bold").setTextColor(...NAVY);
           pdf.setFontSize(fitFont(slot.text, slotW - 3, 6.2, "wrap", 4.2));
           const titleLines = (pdf.splitTextToSize(slot.text, slotW - 3) as string[]).slice(0, 2);
-          const titleY = bandTop + bandH / 2 + (slot.certNo ? -1.4 : 0.8) - (titleLines.length > 1 ? 1 : 0);
+          const titleY = cellTop + rowH / 2 + (slot.certNo ? -1.4 : 0.8) - (titleLines.length > 1 ? 1 : 0);
           pdf.text(titleLines, cx, titleY, { align: "center" });
           if (slot.certNo) {
             pdf.setFont("helvetica", "normal").setFontSize(5.6).setTextColor(...MUTED);
@@ -706,7 +730,7 @@ export function renderDocumentPdf(opts: RenderOptions): jsPDF {
         pdf.setFont("helvetica", "bold").setTextColor(...INK);
         pdf.setFontSize(fitFont(slot.text, slotW - 3, 6.4, "wrap", 4.2));
         const lines = pdf.splitTextToSize(slot.text, slotW - 3) as string[];
-        pdf.text(lines.slice(0, 2), cx, bandTop + bandH / 2 + (lines.length > 1 ? -0.8 : 0.8), { align: "center" });
+        pdf.text(lines.slice(0, 2), cx, cellTop + rowH / 2 + (lines.length > 1 ? -0.8 : 0.8), { align: "center" });
       });
       x += w;
     });

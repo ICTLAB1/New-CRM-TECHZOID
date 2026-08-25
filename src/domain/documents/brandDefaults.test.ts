@@ -10,11 +10,39 @@ describe("supplied partner assets", () => {
   });
 
   it("embeds real artwork with its natural size, so aspect ratio survives", () => {
-    for (const a of [...DEFAULT_PARTNER_DESIGNATIONS, ...DEFAULT_TECHNOLOGY_PARTNERS]) {
+    /* Only where there IS artwork. A brand supplied without approved
+       artwork carries its name and nothing else — see below. */
+    const withArt = [...DEFAULT_PARTNER_DESIGNATIONS, ...DEFAULT_TECHNOLOGY_PARTNERS]
+      .filter((a): a is typeof a & { data: string; w: number; h: number } => "data" in a);
+    expect(withArt.length).toBeGreaterThan(3);
+    for (const a of withArt) {
       expect(a.data.startsWith("data:image/png;base64,"), a.label).toBe(true);
       expect(a.w, a.label).toBeGreaterThan(0);
       expect(a.h, a.label).toBeGreaterThan(0);
     }
+  });
+
+  it("carries a NAME, never invented artwork, for a brand with no approved logo", () => {
+    // A brand logo is a trademark. Drawing an approximation of one is not
+    // the logo — it is a forgery that happens to be bad. The name is a true
+    // statement about what this company sells and prints perfectly well.
+    const nameOnly = DEFAULT_TECHNOLOGY_PARTNERS.filter((a) => !("data" in a));
+    expect(nameOnly.map((a) => a.label)).toEqual([
+      "Dell", "Lenovo", "Autodesk", "Zoho", "Kaspersky", "Quick Heal",
+    ]);
+    for (const a of nameOnly) {
+      expect(a, a.label).not.toHaveProperty("data");
+    }
+  });
+
+  it("labels nothing but Cisco a partner in the brands strip", () => {
+    // No partner badge was supplied for any of the others, and claiming a
+    // partner relationship that was never granted is a false statement on a
+    // document that binds.
+    const partnerLabels = DEFAULT_TECHNOLOGY_PARTNERS
+      .filter((a) => a.label.toLowerCase().includes("partner"))
+      .map((a) => a.label);
+    expect(partnerLabels).toEqual(["Cisco Partner"]);
   });
 
   it("never labels HP or Acer as a partner", () => {

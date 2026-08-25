@@ -24,10 +24,31 @@ export const DEFAULT_PARTNER_DESIGNATIONS = [
 
 /** Brand logos. Cisco carries an approved "Cisco Partner" badge; HP and Acer
  *  are plain logos and must not be captioned as partner designations. */
+/**
+ * Brands supplied.
+ *
+ * The first three ship with approved artwork. THE REST ARE NAMES, NOT
+ * LOGOS, and that is deliberate: a brand logo is a trademark, and drawing
+ * an approximation of one is not the logo — it is a forgery that happens to
+ * be bad. The names are true statements about what this company sells and
+ * print perfectly well; real artwork can be dropped in whenever the vendor
+ * supplies it, through Settings → Document, without a code change.
+ *
+ * Cisco carries an approved "Cisco Partner" badge and is captioned as such.
+ * Nothing else here is labelled a partner: no partner badge was supplied
+ * for any of them, and claiming a partner relationship that was never
+ * granted is a false statement on a document that binds.
+ */
 export const DEFAULT_TECHNOLOGY_PARTNERS = [
   asset(BRAND_ASSETS.ciscoPartner, "Cisco Partner"),
   asset(BRAND_ASSETS.hp, "HP"),
   asset(BRAND_ASSETS.acer, "Acer"),
+  { label: "Dell" },
+  { label: "Lenovo" },
+  { label: "Autodesk" },
+  { label: "Zoho" },
+  { label: "Kaspersky" },
+  { label: "Quick Heal" },
 ];
 
 /**

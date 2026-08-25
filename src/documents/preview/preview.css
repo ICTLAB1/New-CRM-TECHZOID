@@ -123,9 +123,18 @@
 .doc-strip:first-child { border-left: 0; }
 .doc-strip-title { text-align: center; font-size: 2.1mm; font-weight: 700; color: #0D2B55; margin-bottom: 2mm; }
 /* Taller now that the certification marks are real artwork: the PDF strip
-   grew from 20mm to 27mm for the same reason. */
-.doc-slots { display: flex; align-items: center; justify-content: space-around; gap: 2mm; min-height: 18mm; }
-.doc-slot { flex: 1 1 0; min-width: 0; text-align: center; }
+   grew from 20mm to 27mm for the same reason.
+
+   WRAPS, like the PDF. A company that supplies a dozen brands cannot show
+   them in one row — nine across this column is a few millimetres each,
+   which is not a logo, it is a smudge. `flex-basis` is the same minimum
+   slot width the PDF uses, so both wrap at the same point. */
+.doc-slots {
+  display: flex; flex-wrap: wrap;
+  align-items: center; justify-content: space-around;
+  gap: 2mm; min-height: 18mm;
+}
+.doc-slot { flex: 1 1 15mm; min-width: 0; text-align: center; }
 .doc-slot img { max-width: 100%; max-height: 8.5mm; object-fit: contain; display: block; margin: 0 auto; }
 /* A round mark needs the height a wide logo does not — see Slot(). */
 .doc-slot-mark img { max-height: 17mm; }

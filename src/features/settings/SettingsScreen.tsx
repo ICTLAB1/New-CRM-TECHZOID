@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { BrandStripsPanel } from "./BrandStripsPanel";
 import { PageHead } from "../../app/AppShell";
 import { Button, Card, Chip, Empty, Field, Input, Select, Tabs, Textarea } from "../../components/primitives";
 import { Confirm } from "../../components/Modal";
@@ -33,7 +34,7 @@ export interface SettingsScreenProps {
   onChange: (next: Record<string, unknown>) => void;
 }
 
-type Tab = "company" | "document" | "numbering" | "terms" | "incentives" | "fields" | "backup";
+type Tab = "company" | "document" | "numbering" | "terms" | "incentives" | "fields" | "backup" | "brands";
 
 const uid = (): string => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
 
@@ -51,6 +52,7 @@ export function SettingsScreen({ settings, canEdit, workspaceForBackup, onRestor
         tabs={[
           { id: "company", label: "Company" },
           { id: "document", label: "Document" },
+          { id: "brands", label: "Logos & brands" },
           { id: "numbering", label: "Numbering & tax" },
           { id: "terms", label: "Default terms" },
           { id: "incentives", label: "Incentives" },
@@ -64,6 +66,7 @@ export function SettingsScreen({ settings, canEdit, workspaceForBackup, onRestor
       <div style={{ marginTop: 16 }}>
         {tab === "company" ? <CompanyPanel settings={settings} canEdit={canEdit} onChange={onChange} /> : null}
         {tab === "document" ? <DocumentPanel settings={settings} canEdit={canEdit} onChange={onChange} /> : null}
+        {tab === "brands" ? <BrandStripsPanel settings={settings} canEdit={canEdit} onChange={onChange} /> : null}
         {tab === "numbering" ? <NumberingPanel settings={settings} canEdit={canEdit} onChange={onChange} /> : null}
         {tab === "terms" ? <TermsPanel settings={settings} canEdit={canEdit} onChange={onChange} /> : null}
         {tab === "incentives" ? <IncentivesPanel settings={settings} canEdit={canEdit} onChange={onChange} /> : null}
