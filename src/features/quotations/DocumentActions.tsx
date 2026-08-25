@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Button } from "../../components/primitives";
 import { useToast } from "../../components/Toast";
-import { Modal } from "../../components/Modal";
+import { Confirm, Modal } from "../../components/Modal";
 import { Field, Input, Textarea } from "../../components/primitives";
 import { WhatsAppDialog } from "../integrations/WhatsAppDialog";
 import { SendForInvoicing } from "../integrations/SendForInvoicing";
@@ -18,6 +18,10 @@ import {
   buildEmailHtml, buildEmailText,
   type EmailCompany, type EmailQuotation, type EmailSender,
 } from "../../domain/integrations/emailTemplate";
+import {
+  followUpBody, followUpSubject, TONE_LABELS,
+  type FollowUpFacts, type FollowUpTone,
+} from "../../domain/followups/followups";
 
 /* NO DEFAULT CC ADDRESS HERE. A real address baked into a template is one
    nobody remembers to change when the person leaves, and it goes on every
@@ -79,6 +83,7 @@ export function DocumentActions({
 }: DocumentActionsProps) {
   const toast = useToast();
   const [emailOpen, setEmailOpen] = useState(false);
+  const [followUpOpen, setFollowUpOpen] = useState(false);
   const [whatsAppOpen, setWhatsAppOpen] = useState(false);
 
   const renderOpts = { model, rows, images };
@@ -176,6 +181,21 @@ export function DocumentActions({
     confirmTo: currentUser?.email || undefined,
   };
 
+  /* A follow-up chases a document the customer already has, so it is offered
+     on the two that ask them for a decision. A purchase order chases a
+     supplier and an invoice chases money — both are different conversations
+     with their own screens. */
+  const canFollowUp = docType === "quotation" || docType === "proforma";
+
+  const followUpFacts: FollowUpFacts = {
+    label: label(docType),
+    number: doc.number,
+    date: fmtDate(doc.date),
+    validUntil: doc.validUntil ? fmtDate(doc.validUntil) : null,
+    contact: doc.billContact || undefined,
+    senderName: currentUser?.name || doc.preparedBy || "",
+  };
+
   const download = () => {
     try {
       toast("Saved " + downloadPdf(renderOpts), "good");
@@ -191,6 +211,9 @@ export function DocumentActions({
       </Button>
       <Button tone="default" onClick={download}>Download PDF</Button>
       <Button tone="quiet" onClick={() => previewPdf(renderOpts)}>Open PDF</Button>
+      {canFollowUp ? (
+        <Button tone="default" onClick={() => setFollowUpOpen(true)}>Follow up</Button>
+      ) : null}
       <Button tone="default" onClick={() => setWhatsAppOpen(true)}>WhatsApp</Button>
       {/* "Send for invoicing" asks accounts to raise a tax invoice against a
           sale. A purchase order is a purchase — there is nothing to invoice. */}
@@ -218,6 +241,30 @@ export function DocumentActions({
         quotation={emailQuotation}
         getAttachment={async () => pdfAttachment(renderOpts)}
       />
+
+      {canFollowUp ? (
+        <EmailDialog
+          open={followUpOpen}
+          api={api}
+          onClose={() => setFollowUpOpen(false)}
+          defaultTo={toAddress}
+          defaultCc={autoCc}
+          defaultSubject={followUpSubject("nudge", followUpFacts)}
+          defaultMessage={followUpBody("nudge", followUpFacts)}
+          sender={emailSender}
+          company={emailBrand}
+          quotation={emailQuotation}
+          /* A follow-up carries the figures but not the file by default: the
+             customer already has the PDF, and a second copy of a 300 KB
+             attachment is how a chaser lands in a spam folder. The tick box
+             is still there for the case where they say they never got it. */
+          attachByDefault={false}
+          followUp={followUpFacts}
+          title="Follow up"
+          description="Pick how this should read, then edit it. It goes out now, from your mailbox."
+          getAttachment={async () => pdfAttachment(renderOpts)}
+        />
+      ) : null}
 
       <WhatsAppDialog
         open={whatsAppOpen}
@@ -247,23 +294,55 @@ interface EmailDialogProps {
   /** The document's facts, so the email carries a summary and the lines
    *  rather than only whatever the sender typed. */
   quotation?: EmailQuotation | null;
+  /** Present on a follow-up: turns on the tone picker, which rewrites the
+   *  subject and message from the document's own facts. */
+  followUp?: FollowUpFacts;
+  /** False where the customer already has the file. */
+  attachByDefault?: boolean;
+  title?: string;
+  description?: string;
   getAttachment: () => Promise<{ base64: string; filename: string }>;
   onClose: () => void;
 }
 
 function EmailDialog({
   open, api, defaultTo = "", defaultCc = "", defaultSubject, defaultMessage,
-  sender, company, quotation, getAttachment, onClose,
+  sender, company, quotation, followUp, attachByDefault = true, title, description,
+  getAttachment, onClose,
 }: EmailDialogProps) {
   const toast = useToast();
   const [to, setTo] = useState(defaultTo);
   const [cc, setCc] = useState(defaultCc);
   const [subject, setSubject] = useState(defaultSubject);
   const [message, setMessage] = useState(defaultMessage);
-  const [attach, setAttach] = useState(true);
+  const [tone, setTone] = useState<FollowUpTone>("nudge");
+  const [attach, setAttach] = useState(attachByDefault);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [showPreview, setShowPreview] = useState(false);
+
+  /* What the current tone would have written. Kept so switching tone can
+     tell "untouched" from "typed into" without asking every time. */
+  const written = followUp ? followUpBody(tone, followUp) : defaultMessage;
+
+  const [pendingTone, setPendingTone] = useState<FollowUpTone | null>(null);
+
+  const applyTone = (next: FollowUpTone) => {
+    if (!followUp) return;
+    setTone(next);
+    setSubject(followUpSubject(next, followUp));
+    setMessage(followUpBody(next, followUp));
+    setPendingTone(null);
+  };
+
+  /* Switching tone rewrites the message, so anything typed would go with it.
+     Asked rather than assumed — the same rule as closing a form with unsaved
+     edits, and for the same reason. */
+  const pickTone = (next: FollowUpTone) => {
+    if (!followUp || next === tone) return;
+    if (message !== written) { setPendingTone(next); return; }
+    applyTone(next);
+  };
 
   const send = async () => {
     setError(""); setBusy(true);
@@ -293,16 +372,16 @@ function EmailDialog({
     setBusy(false);
   };
 
-  const edited = message !== defaultMessage || subject !== defaultSubject || to !== defaultTo;
+  const edited = message !== written || subject !== defaultSubject || to !== defaultTo;
 
   return (
     <Modal
       open={open}
-      title="Send to customer"
+      title={title ?? "Send to customer"}
       description={
-        sender.email
+        description ?? (sender.email
           ? `Goes out as ${sender.email}, with your signature. Replies come back to you.`
-          : "Sent from your own mailbox when one is connected, otherwise from the company address."
+          : "Sent from your own mailbox when one is connected, otherwise from the company address.")
       }
       unsavedChanges={edited && !busy}
       onClose={onClose}
@@ -316,6 +395,34 @@ function EmailDialog({
       }
     >
       <div className="stack">
+        {followUp ? (
+          <Field label="How this should read" hint={TONE_LABELS[tone].what}>
+            <div className="row-tight" role="group">
+              {(Object.keys(TONE_LABELS) as FollowUpTone[]).map((t) => (
+                <Button
+                  key={t}
+                  size="sm"
+                  tone={t === tone ? "default" : "quiet"}
+                  aria-pressed={t === tone}
+                  onClick={() => pickTone(t)}
+                >
+                  {TONE_LABELS[t].name}
+                </Button>
+              ))}
+            </div>
+          </Field>
+        ) : null}
+
+        <Confirm
+          open={!!pendingTone}
+          title="Replace what you have written?"
+          body="Switching how this reads rewrites the subject and the message. What you have typed is lost."
+          confirmLabel="Replace"
+          tone="danger"
+          onConfirm={() => { if (pendingTone) applyTone(pendingTone); }}
+          onCancel={() => setPendingTone(null)}
+        />
+
         <div className="grid grid-2">
           <Field label="To"><Input type="email" value={to} onChange={(e) => setTo(e.target.value)} /></Field>
           <Field label="Copy to" hint="Filled in automatically. Comma-separate more than one, or clear it.">
