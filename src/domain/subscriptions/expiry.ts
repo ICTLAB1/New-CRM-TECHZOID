@@ -50,6 +50,67 @@ export interface Subscription {
 }
 
 /**
+ * A licence bought outright, with no term to run out.
+ *
+ * TWO FIELDS CAN SAY THIS AND BOTH ARE HONOURED. `type` is what a
+ * salesperson picks when they enter the record; `status` carried the same
+ * meaning in v1 and in every row already stored. Reading only one of them is
+ * how a perpetual licence ended up reporting "340 days left" from a stray
+ * expiry date nobody could see was being used.
+ *
+ * A perpetual licence has no expiry, so it has no countdown, no renewal and
+ * no place in a renewal window — whatever date is sitting in the row.
+ */
+export function isPerpetual(sub: Pick<Subscription, "type" | "status">): boolean {
+  return sub.type === "Perpetual" || sub.status === "Perpetual License";
+}
+
+/** Statuses that only mean anything against a term: each one is a statement
+ *  about where the record sits between its start and its expiry. */
+const TERM_STATUSES: readonly string[] = ["Upcoming Renewal", "Renewed", "Expired"];
+
+/**
+ * Strip the term off a licence that has none.
+ *
+ * Applied on save rather than on read so the stored row means what it says:
+ * a record that reaches the database with both "Perpetual" and an expiry
+ * date is a contradiction waiting to be read by something that only checks
+ * one of them — a report, an export, the next feature.
+ *
+ * "Expired" goes with the date. A licence bought outright cannot have run
+ * out, and leaving that word on the row would put the contradiction straight
+ * back on screen in a field nothing else looks at.
+ */
+export function normalizeSubscription(sub: Subscription): Subscription {
+  if (!isPerpetual(sub)) return sub;
+  return {
+    ...sub,
+    expiryDate: "",
+    renewalStage: "",
+    /* Active and Cancelled both stay true of a perpetual licence and are
+       left exactly as someone set them. */
+    status: TERM_STATUSES.includes(sub.status ?? "") ? "Perpetual License" : sub.status,
+  };
+}
+
+/**
+ * Change the licence type, and take the rest of the record with it.
+ *
+ * Both directions, because a field that greys itself out and cannot be
+ * ungreyed is a worse bug than the one it fixes: picking Perpetual drops the
+ * term, and picking anything else drops the status that said there was none.
+ */
+export function setSubscriptionType(sub: Subscription, type: string): Subscription {
+  if (type === "Perpetual") return normalizeSubscription({ ...sub, type });
+  const next = { ...sub, type };
+  /* Naming a type with a term overrules a status left saying otherwise —
+     that status is the only thing that could hold the record perpetual, and
+     it is what someone has just contradicted. Clearing the type to "—" says
+     nothing either way, so it changes nothing. */
+  return type && next.status === "Perpetual License" ? { ...next, status: "Active" } : next;
+}
+
+/**
  * Days until expiry, counted in CALENDAR days. Today is 0; yesterday is -1.
  *
  * DEVIATION FROM v1 (deliberate): v1 measured to 23:59:59 on the expiry date
@@ -61,7 +122,13 @@ export interface Subscription {
  * A subscription with no expiry date never expires; a perpetual licence is
  * the usual case and must not read as overdue.
  */
-export function daysLeft(sub: Pick<Subscription, "expiryDate">, now: Date = new Date()): number {
+export function daysLeft(
+  sub: Pick<Subscription, "expiryDate" | "type" | "status">,
+  now: Date = new Date(),
+): number {
+  /* Before the date is even looked at: a perpetual licence does not expire,
+     and a date left behind on one is stale data, not a deadline. */
+  if (isPerpetual(sub)) return Infinity;
   if (!sub.expiryDate) return Infinity;
   const end = new Date(sub.expiryDate + "T00:00:00");
   if (isNaN(end.getTime())) return Infinity;
@@ -77,7 +144,7 @@ export function daysLeft(sub: Pick<Subscription, "expiryDate">, now: Date = new 
  */
 export function expiryTone(sub: Subscription, now: Date = new Date()): Tone {
   if (sub.status === "Cancelled") return "neutral";
-  if (sub.status === "Perpetual License") return "accent";
+  if (isPerpetual(sub)) return "accent";
   if (sub.status === "Renewed") return "good";
   const d = daysLeft(sub, now);
   /* DEVIATION FROM v1: v1 greyed an expired subscription out. A lapsed
@@ -93,9 +160,8 @@ export function expiryTone(sub: Subscription, now: Date = new Date()): Tone {
 
 /** Human phrasing for the same thing. */
 export function expiryLabel(sub: Subscription, now: Date = new Date()): string {
-  if (sub.status === "Cancelled" || sub.status === "Perpetual License" || sub.status === "Renewed") {
-    return sub.status;
-  }
+  if (sub.status === "Cancelled" || sub.status === "Renewed") return sub.status;
+  if (isPerpetual(sub)) return "Perpetual licence";
   const d = daysLeft(sub, now);
   if (d === Infinity) return "No expiry date";
   if (d < 0) return `Expired ${Math.abs(d)} day${Math.abs(d) === 1 ? "" : "s"} ago`;
@@ -110,7 +176,8 @@ export function dueForRenewal(
   now: Date = new Date(),
 ): Subscription[] {
   return subs
-    .filter((s) => s.status !== "Cancelled" && s.status !== "Renewed" && s.status !== "Perpetual License")
+    .filter((s) => s.status !== "Cancelled" && s.status !== "Renewed")
+    .filter((s) => !isPerpetual(s))
     /* Someone has explicitly given up on a Lost renewal; leaving it on the
        due list means the list stops being a to-do. */
     .filter((s) => s.renewalStage !== "Lost")

@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { daysLeft, dueForRenewal, expiryLabel, expiryTone, valueAtRisk, type Subscription } from "./expiry";
+import {
+  daysLeft, dueForRenewal, expiryLabel, expiryTone, isPerpetual, normalizeSubscription,
+  setSubscriptionType, valueAtRisk, type Subscription,
+} from "./expiry";
 
 const NOW = new Date("2026-08-24T10:00:00");
 const sub = (o: Partial<Subscription> = {}): Subscription => ({ id: "s1", ownerId: "u1", ...o });
@@ -116,5 +119,86 @@ describe("what is due", () => {
 
   it("reports zero at risk when nothing is due", () => {
     expect(valueAtRisk([], 30, NOW)).toBe(0);
+  });
+});
+
+describe("a perpetual licence", () => {
+  /* THE BUG THIS PINS. A licence entered as Type "Perpetual" was saved with
+     an expiry date sitting in the row, and every countdown in the product
+     read that date: the sheet said "340 days left", the list showed a
+     renewal window, and the report put a renewal in front of a salesperson
+     that is never going to happen. A perpetual licence has no term. */
+  const stale = { expiryDate: "2027-07-31", sellPrice: 500000 };
+
+  it("is recognised from the type a salesperson picks", () => {
+    expect(isPerpetual(sub({ type: "Perpetual" }))).toBe(true);
+  });
+
+  it("is recognised from the status every already-stored row carries", () => {
+    // v1 said it here, so rows in the database say it here.
+    expect(isPerpetual(sub({ status: "Perpetual License" }))).toBe(true);
+  });
+
+  it("is not claimed by an ordinary subscription", () => {
+    expect(isPerpetual(sub({ type: "Subscription", status: "Active" }))).toBe(false);
+    expect(isPerpetual(sub({}))).toBe(false);
+  });
+
+  it("never counts down, whatever date the row is carrying", () => {
+    expect(daysLeft(sub({ ...stale, type: "Perpetual" }), NOW)).toBe(Infinity);
+    expect(daysLeft(sub({ ...stale, status: "Perpetual License" }), NOW)).toBe(Infinity);
+  });
+
+  it("does not read as expiring, even with a date inside the week", () => {
+    const soon = sub({ expiryDate: "2026-08-26", type: "Perpetual" });
+    expect(expiryTone(soon, NOW)).toBe("accent");
+    expect(expiryLabel(soon, NOW)).toBe("Perpetual licence");
+  });
+
+  it("stays cancelled when someone has cancelled it", () => {
+    // Cancelled is a decision about the record; perpetual is a fact about
+    // the licence. The decision is the more recent thing said.
+    expect(expiryTone(sub({ type: "Perpetual", status: "Cancelled" }), NOW)).toBe("neutral");
+  });
+
+  it("is kept out of every renewal window and off the value at risk", () => {
+    const subs = [
+      sub({ id: "real", expiryDate: "2026-08-26", sellPrice: 100000 }),
+      sub({ id: "perp", ...stale, type: "Perpetual" }),
+    ];
+    expect(dueForRenewal(subs, 30, NOW).map((x) => x.id)).toEqual(["real"]);
+    expect(valueAtRisk(subs, 400, NOW)).toBe(100000);
+  });
+
+  it("cannot be Expired — there was nothing to run out", () => {
+    const saved = normalizeSubscription(sub({ ...stale, type: "Perpetual", status: "Expired" }));
+    expect(saved.status).toBe("Perpetual License");
+  });
+
+  it("keeps a status that is still true of it", () => {
+    expect(normalizeSubscription(sub({ type: "Perpetual", status: "Active" })).status).toBe("Active");
+    expect(normalizeSubscription(sub({ type: "Perpetual", status: "Cancelled" })).status).toBe("Cancelled");
+  });
+
+  it("lets go again when the type is changed back", () => {
+    // A field that greys itself out and cannot be ungreyed is worse than the
+    // bug it fixes.
+    const perp = normalizeSubscription(sub({ type: "Perpetual", status: "Expired" }));
+    const back = setSubscriptionType(perp, "Subscription");
+    expect(isPerpetual(back)).toBe(false);
+    expect(back.status).toBe("Active");
+  });
+
+  it("loses its term and its renewal stage when saved", () => {
+    const saved = normalizeSubscription(sub({ ...stale, type: "Perpetual", renewalStage: "Upcoming" }));
+    expect(saved.expiryDate).toBe("");
+    expect(saved.renewalStage).toBe("");
+    // Everything else about the record is left exactly as entered.
+    expect(saved.sellPrice).toBe(500000);
+  });
+
+  it("leaves an ordinary subscription untouched on the way through", () => {
+    const term = sub({ expiryDate: "2027-07-31", renewalStage: "Upcoming", type: "Subscription" });
+    expect(normalizeSubscription(term)).toEqual(term);
   });
 });

@@ -4,7 +4,7 @@ import { effectiveStatus } from "../documents/create";
 import { STAGES, stageOf } from "../pipeline/stages";
 import { orderStageOf } from "../orders/stages";
 import { orderFulfilment } from "../orders/fulfilment";
-import { daysLeft, expiryLabel } from "../subscriptions/expiry";
+import { daysLeft, expiryLabel, isPerpetual } from "../subscriptions/expiry";
 import { trailingRevenue, type Workspace } from "../analytics/dashboard";
 import { fmtDate } from "../dates";
 
@@ -186,7 +186,10 @@ export function buildReports(
 
   /* ── subscription expiry ── */
   const expiry = [...ws.subscriptions]
-    .filter((s) => s.expiryDate)
+    /* A perpetual licence has no expiry to report, even where an old row
+       still carries a date. Listing one here would put a renewal in front of
+       a salesperson that is never going to happen. */
+    .filter((s) => !isPerpetual(s) && s.expiryDate)
     .sort((a, b) => daysLeft(a, now) - daysLeft(b, now))
     .map((s) => ({
       customer: s.customerName, product: s.product, vendor: s.vendor,

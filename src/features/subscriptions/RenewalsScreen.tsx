@@ -5,8 +5,9 @@ import { Modal } from "../../components/Modal";
 import { Field, Select } from "../../components/primitives";
 import { useToast } from "../../components/Toast";
 import {
-  daysLeft, dueForRenewal, expiryLabel, expiryTone, RENEWAL_STAGES, SUB_BILLING,
-  SUB_STATUSES, SUB_TYPES, SUB_VENDORS, valueAtRisk, type Subscription,
+  daysLeft, dueForRenewal, expiryLabel, expiryTone, isPerpetual, normalizeSubscription,
+  RENEWAL_STAGES, setSubscriptionType, SUB_BILLING, SUB_STATUSES, SUB_TYPES, SUB_VENDORS,
+  valueAtRisk, type Subscription,
 } from "../../domain/subscriptions/expiry";
 import { inrList, inrShort } from "../../domain/currency/format";
 import { fmtDate } from "../../domain/dates";
@@ -43,7 +44,11 @@ export function RenewalsScreen({
     return base.filter((s) => [s.customerName, s.product, s.vendor].some((v) => (v ?? "").toLowerCase().includes(q)));
   }, [subscriptions, window, query]);
 
-  const save = (sub: Subscription) => {
+  const save = (raw: Subscription) => {
+    /* A perpetual licence loses its term here, not in the form: an old row
+       edited for something else must not keep a countdown it should never
+       have had. */
+    const sub = normalizeSubscription(raw);
     const exists = subscriptions.some((s) => s.id === sub.id);
     onChange(exists ? subscriptions.map((s) => (s.id === sub.id ? sub : s)) : [sub, ...subscriptions]);
     setEditing(null);
@@ -67,7 +72,7 @@ export function RenewalsScreen({
           <StatTile label="Due in 7 days" value={String(dueForRenewal(subscriptions, 7).length)} meta={inrShort(valueAtRisk(subscriptions, 7))} tone="bad" />
           <StatTile label="Due in 30 days" value={String(dueForRenewal(subscriptions, 30).length)} meta={inrShort(valueAtRisk(subscriptions, 30))} tone="warn" />
           <StatTile label="Due in 90 days" value={String(dueForRenewal(subscriptions, 90).length)} meta={inrShort(valueAtRisk(subscriptions, 90))} />
-          <StatTile label="Under management" value={String(subscriptions.length)} meta={`${subscriptions.filter((s) => s.status === "Perpetual License").length} perpetual`} />
+          <StatTile label="Under management" value={String(subscriptions.length)} meta={`${subscriptions.filter(isPerpetual).length} perpetual`} />
         </SummaryBar>
       </div>
 
@@ -113,9 +118,9 @@ export function RenewalsScreen({
                       <td data-head className="strong">{s.customerName || "—"}</td>
                       <td data-label="Product">{s.product || "—"}</td>
                       <td data-label="Vendor" className="muted">{s.vendor || "—"}</td>
-                      <td data-label="Expires" className="muted">{fmtDate(s.expiryDate)}</td>
+                      <td data-label="Expires" className="muted">{isPerpetual(s) ? "—" : fmtDate(s.expiryDate)}</td>
                       <td data-label="Status"><Chip tone={tone}>{expiryLabel(s)}</Chip></td>
-                      <td data-label="Stage" className="muted">{s.renewalStage || "—"}</td>
+                      <td data-label="Stage" className="muted">{isPerpetual(s) ? "—" : s.renewalStage || "—"}</td>
                       <td data-label="Value" className="num strong">{s.sellPrice ? inrList(s.sellPrice) : "—"}</td>
                       <td data-actions><Button size="sm" tone="quiet" onClick={() => setEditing(s)}>Edit</Button></td>
                     </tr>
@@ -151,12 +156,20 @@ function SubscriptionModal({
   const set = <K extends keyof Subscription>(k: K) => (e: { target: { value: string } }) =>
     setS((cur) => ({ ...cur, [k]: e.target.value }));
 
+  /* Either field can say "bought outright", so both are asked. Whichever one
+     it was, the term fields below stop being answerable — and go with it. */
+  const perpetual = isPerpetual(s);
+
   return (
     <Modal
       open
       side
       title={s.product || "New subscription"}
-      description={s.expiryDate ? expiryLabel(s) : "No expiry date yet."}
+      description={
+        perpetual
+          ? "Bought outright. No expiry, no renewal."
+          : s.expiryDate ? expiryLabel(s) : "No expiry date yet."
+      }
       onClose={onClose}
       footer={<><Button tone="quiet" onClick={onClose}>Cancel</Button><Button tone="primary" onClick={() => onSave(s)}>Save</Button></>}
     >
@@ -182,7 +195,10 @@ function SubscriptionModal({
             </Select>
           </Field>
           <Field label="Type">
-            <Select value={s.type ?? ""} onChange={set("type")}>
+            <Select
+              value={s.type ?? ""}
+              onChange={(e) => setS((cur) => setSubscriptionType(cur, e.target.value))}
+            >
               <option value="">—</option>
               {SUB_TYPES.map((v) => <option key={v}>{v}</option>)}
             </Select>
@@ -195,17 +211,33 @@ function SubscriptionModal({
           </Field>
           <Field label="Seats"><Input numeric value={String(s.seats ?? "")} onChange={set("seats")} /></Field>
           <Field label="Starts"><Input type="date" value={s.startDate ?? ""} onChange={set("startDate")} /></Field>
-          <Field label="Expires" hint="Leave blank for a perpetual licence.">
-            <Input type="date" value={s.expiryDate ?? ""} onChange={set("expiryDate")} />
+          <Field
+            label="Expires"
+            hint={
+              perpetual
+                ? "A perpetual licence does not expire. Change Type or Status to give it a term."
+                : "Leave blank for a perpetual licence."
+            }
+          >
+            <Input
+              type="date"
+              value={perpetual ? "" : s.expiryDate ?? ""}
+              disabled={perpetual}
+              onChange={set("expiryDate")}
+            />
           </Field>
           <Field label="Selling price"><Input numeric value={String(s.sellPrice ?? "")} onChange={set("sellPrice")} /></Field>
           <Field label="Status">
-            <Select value={s.status ?? "Active"} onChange={set("status")}>
+            <Select
+              value={s.status ?? "Active"}
+              onChange={(e) => setS((cur) => normalizeSubscription({ ...cur, status: e.target.value }))}
+            >
               {SUB_STATUSES.map((v) => <option key={v}>{v}</option>)}
             </Select>
           </Field>
-          <Field label="Renewal stage">
-            <Select value={s.renewalStage ?? "Upcoming"} onChange={set("renewalStage")}>
+          <Field label="Renewal stage" hint={perpetual ? "Nothing to renew." : undefined}>
+            <Select value={s.renewalStage ?? "Upcoming"} disabled={perpetual} onChange={set("renewalStage")}>
+              <option value="">—</option>
               {RENEWAL_STAGES.map((v) => <option key={v}>{v}</option>)}
             </Select>
           </Field>
