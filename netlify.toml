@@ -6,6 +6,15 @@
 [functions]
   node_bundler = "esbuild"
 
+# Automatic quotation follow-ups. 04:00 UTC is 09:30 in India — a chaser
+# should land at the start of a working day, not overnight.
+#
+# Declared here as well as in the function file: the schedule is the whole
+# feature, and a scheduled function that silently is not scheduled looks
+# exactly like one that has nothing to send.
+[functions."followups-run"]
+  schedule = "0 4 * * *"
+
 [[redirects]]
   from = "/*"
   to = "/index.html"

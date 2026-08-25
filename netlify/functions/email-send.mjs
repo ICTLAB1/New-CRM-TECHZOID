@@ -1,23 +1,22 @@
-import { fail, guard, json, readJson, clientIp } from "../lib/http.mjs";
+import { fail, guard, json, readJson } from "../lib/http.mjs";
 import { adminClient, signedInUser } from "../lib/auth.mjs";
 import { checkAttachment, emailList, isEmail, str } from "../lib/validate.mjs";
 import { consume, tooManyMessage } from "../lib/ratelimit.mjs";
+import { sendMail } from "../lib/mailer.mjs";
 
 /**
- * Send a quotation, proforma or reminder.
+ * Send a quotation, proforma or reminder, on behalf of a signed-in person.
  *
- * Two transports, in order of preference:
+ * This function is the DOOR: it decides whether the caller may send at all —
+ * signed in, within their rate limit, with a recipient and a body that pass
+ * validation — and then hands the message to ../lib/mailer.mjs, which is the
+ * only place that knows how to actually send one.
  *
- *   1. The sender's OWN Microsoft 365 mailbox, when they have connected one.
- *      The customer sees it from the actual salesperson, replies go straight
- *      back to them, and a copy lands in that person's Sent Items.
- *   2. The shared Resend sender, when no mailbox is linked.
- *
- * Swapping provider means changing the URL, auth header and body in
- * `sendViaResend` and nothing else.
+ * The split is not tidiness. Automatic follow-ups go out from a scheduler
+ * with no signed-in user and no HTTP request to answer, and they must render
+ * through the same transports as the quotation they chase. One mailer, two
+ * doors.
  */
-
-const SCOPES = "openid profile offline_access User.Read Mail.Send";
 
 export async function handler(event) {
   const stop = guard(event);
@@ -69,133 +68,13 @@ export async function handler(event) {
   const rl = await consume(admin, "email-send", user.id);
   if (!rl.allowed) return fail(event, 429, tooManyMessage(rl.retryAfterSeconds));
 
-  /* ── the sender's own mailbox, if connected ── */
-  let mailbox = null;
-  try {
-    const { data } = await admin.from("ms_mail_accounts").select("*").eq("user_id", user.id).maybeSingle();
-    mailbox = data ?? null;
-  } catch (err) {
-    console.warn("mailbox lookup failed, falling back:", err?.message ?? err);
-  }
+  const result = await sendMail({
+    admin, userId: user.id, to, cc, subject, message, html, replyTo, attachment: att.attachment,
+  });
 
-  if (mailbox?.refresh_token && process.env.MS_CLIENT_ID && process.env.MS_CLIENT_SECRET) {
-    return sendViaMicrosoft(event, { admin, user, mailbox, to, cc, subject, message, html, replyTo, attachment: att.attachment });
-  }
-  return sendViaResend(event, { to, cc, subject, message, html, replyTo, attachment: att.attachment, ip: clientIp(event) });
+  if (result.ok) return json(event, 200, { success: true, via: result.via, from: result.from });
+  /* A transport that never handed the message over is a 502 — the caller may
+     try again. Anything else is a refusal, and retrying sends it twice. */
+  return fail(event, result.retryable ? 502 : 400, result.error);
 }
 
-async function sendViaMicrosoft(event, { admin, user, mailbox, to, cc, subject, message, html, replyTo, attachment }) {
-  const tenant = process.env.MS_TENANT_ID || "common";
-  try {
-    const tokenResp = await fetch("https://login.microsoftonline.com/" + encodeURIComponent(tenant) + "/oauth2/v2.0/token", {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        client_id: process.env.MS_CLIENT_ID,
-        client_secret: process.env.MS_CLIENT_SECRET,
-        refresh_token: mailbox.refresh_token,
-        grant_type: "refresh_token",
-        scope: SCOPES,
-      }).toString(),
-    });
-    const tok = await tokenResp.json().catch(() => ({}));
-
-    if (!tokenResp.ok || !tok.access_token) {
-      console.error("ms refresh failed:", tokenResp.status, tok?.error);
-      return fail(event, 400, "Your Microsoft 365 connection has expired. Reconnect it in Settings → Integrations.");
-    }
-
-    /* Microsoft ROTATES refresh tokens. Store the new one or the next send
-       fails with an expired-token error that looks like a broken setup. */
-    if (tok.refresh_token && tok.refresh_token !== mailbox.refresh_token) {
-      const { error } = await admin.from("ms_mail_accounts")
-        .update({ refresh_token: tok.refresh_token, updated_at: new Date().toISOString() })
-        .eq("user_id", user.id);
-      if (error) console.error("could not store rotated refresh token:", error.message);
-    }
-
-    const graphMessage = {
-      subject,
-      /* Graph carries ONE body. With a designed version, that is the HTML —
-         Outlook and Gmail both render it, and Graph generates the plain-text
-         alternative itself. */
-      body: html ? { contentType: "HTML", content: html } : { contentType: "Text", content: message },
-      toRecipients: [{ emailAddress: { address: to } }],
-    };
-    if (cc.length) graphMessage.ccRecipients = cc.map((a) => ({ emailAddress: { address: a } }));
-    /* Sending from their own mailbox already puts their address on it, so a
-       Reply-To only earns its place when it points somewhere else. */
-    if (replyTo && replyTo !== mailbox.ms_email) {
-      graphMessage.replyTo = [{ emailAddress: { address: replyTo } }];
-    }
-    if (attachment) {
-      graphMessage.attachments = [{
-        "@odata.type": "#microsoft.graph.fileAttachment",
-        name: attachment.name,
-        contentType: "application/pdf",
-        contentBytes: attachment.base64,
-      }];
-    }
-
-    const sendResp = await fetch("https://graph.microsoft.com/v1.0/me/sendMail", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: "Bearer " + tok.access_token },
-      body: JSON.stringify({ message: graphMessage, saveToSentItems: true }),
-    });
-
-    if (sendResp.status === 202 || sendResp.ok) {
-      return json(event, 200, { success: true, via: "microsoft", from: mailbox.ms_email });
-    }
-
-    const errBody = await sendResp.json().catch(() => ({}));
-    console.error("graph sendMail refused:", sendResp.status, errBody?.error?.code);
-    return fail(event, 400, "Microsoft 365 refused to send that message. " +
-      (errBody?.error?.message ? "It said: " + str(errBody.error.message, 300) : "Check the mailbox is still active."));
-  } catch (err) {
-    return fail(event, 502, "Could not reach Microsoft 365. Try again in a moment.", err?.message);
-  }
-}
-
-async function sendViaResend(event, { to, cc, subject, message, html, replyTo, attachment }) {
-  const apiKey = process.env.RESEND_API_KEY;
-  const fromAddress = process.env.EMAIL_FROM || "sales@techzoidtechnologies.com";
-
-  if (!apiKey) {
-    return fail(event, 400,
-      "Email isn't connected yet. Either connect your own Microsoft 365 mailbox in Settings → Integrations, or ask an admin to add RESEND_API_KEY in Netlify.");
-  }
-
-  try {
-    const payload = {
-      from: "TechZoid Technologies <" + fromAddress + ">",
-      to: [to],
-      subject,
-      /* Both versions, so the recipient's client picks. Sending HTML alone
-         scores worse with spam filters and leaves nothing for a client that
-         refuses to render it. */
-      text: message,
-    };
-    if (html) payload.html = html;
-    if (cc.length) payload.cc = cc;
-    /* This one matters most on this path: the message goes out from the
-       shared company address, so without it a customer's reply never reaches
-       the salesperson who actually quoted them. */
-    if (replyTo) payload.reply_to = replyTo;
-    if (attachment) payload.attachments = [{ filename: attachment.name, content: attachment.base64 }];
-
-    const resp = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: "Bearer " + apiKey },
-      body: JSON.stringify(payload),
-    });
-    const result = await resp.json().catch(() => ({}));
-
-    if (!resp.ok) {
-      console.error("resend refused:", resp.status, result?.name);
-      return fail(event, 400, "The email provider refused that message. " + str(result?.message ?? "", 300));
-    }
-    return json(event, 200, { success: true, via: "resend" });
-  } catch (err) {
-    return fail(event, 502, "Could not reach the email provider. Try again in a moment.", err?.message);
-  }
-}

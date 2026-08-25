@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Button, Card, Field, Input, Select, Tabs, Textarea } from "../../components/primitives";
 import { DocumentActions } from "./DocumentActions";
+import { FollowUpStrip } from "./FollowUpStrip";
 import { AttachmentsPanel } from "../attachments/AttachmentsPanel";
 import { askBeforeSave, useConfirmedAction } from "../../components/useConfirmedAction";
 import { useHotkeys } from "../../components/hotkeys";
@@ -423,6 +424,10 @@ export function DocumentEditor({
               currentUser={currentUser}
             />
           </div>
+
+          {docType === "quotation" || docType === "proforma" ? (
+            <FollowUpStrip docId={doc.id} />
+          ) : null}
         </div>
 
         {/* The preview updates as you type, at true A4 proportions. It is

@@ -95,11 +95,16 @@ export interface FollowUp {
 /**
  * The days a sequence would land on.
  *
- * `validUntil` is a ceiling, not a suggestion: a step falling on or after
- * the day the quotation lapses is dropped rather than moved, because moving
- * it would make the sequence say something the person arming it did not
- * choose. Dropping it can leave nothing at all, and that is the honest
- * answer — a quotation valid for two days has no room to be chased.
+ * `validUntil` is a ceiling, not a suggestion: a step falling AFTER the last
+ * valid day is dropped rather than moved, because moving it would make the
+ * sequence say something the person arming it did not choose. Dropping can
+ * leave nothing at all, and that is the honest answer — a quotation valid
+ * for two days has no room to be chased.
+ *
+ * The last valid day itself is kept. A chaser that says "this expires today"
+ * is the most useful one in the sequence, and the scheduler agrees about
+ * that boundary — see stopReason, which does not call a quotation expired
+ * until its validity is behind it.
  */
 export function planFollowUps(
   sentOn: string,
@@ -110,7 +115,7 @@ export function planFollowUps(
     .filter((s) => Number.isFinite(s.afterDays) && s.afterDays >= MIN_STEP_DAYS)
     .slice(0, MAX_STEPS)
     .map((s) => ({ tone: s.tone, dueOn: addDays(sentOn, Math.round(s.afterDays)) }))
-    .filter((s) => !validUntil || s.dueOn < validUntil)
+    .filter((s) => !validUntil || s.dueOn <= validUntil)
     /* Two steps on one day would send the customer two emails in a morning.
        Whichever was configured first wins. */
     .filter((s, i, all) => all.findIndex((o) => o.dueOn === s.dueOn) === i)

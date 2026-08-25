@@ -21,11 +21,18 @@ describe("planning a sequence", () => {
     expect(planFollowUps(SENT).map((s) => s.step)).toEqual([1, 2, 3]);
   });
 
-  it("stops at the validity date rather than moving a step onto it", () => {
+  it("drops a step that would land after the quotation has lapsed", () => {
     // A chaser arriving after validity asks the customer to accept a
     // quotation that has expired.
     expect(planFollowUps(SENT, DEFAULT_FOLLOWUP_STEPS, "2026-09-01").map((s) => s.dueOn))
       .toEqual(["2026-08-27", "2026-08-31"]);
+  });
+
+  it("keeps a step landing on the last valid day", () => {
+    // "This expires today" is the most useful message in the sequence, and
+    // the scheduler draws the line in the same place.
+    expect(planFollowUps(SENT, DEFAULT_FOLLOWUP_STEPS, "2026-09-07").map((s) => s.dueOn))
+      .toEqual(["2026-08-27", "2026-08-31", "2026-09-07"]);
   });
 
   it("plans nothing at all when the quotation has no room to be chased", () => {

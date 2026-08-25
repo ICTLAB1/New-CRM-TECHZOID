@@ -11,6 +11,7 @@ import {
 import {
   crmIdForWebsiteDeal, customerFieldsFromEvent, noteFromEvent, normaliseStage, websiteDealId,
 } from "./inboundMap.mjs";
+import { stopReason, TABLE_FOR } from "./followupRules.mjs";
 
 const ENV = { MS_STATE_SECRET: "a-test-secret-value" };
 const USER = "3f2a6c1e-0000-4000-8000-abcdef123456";
@@ -385,5 +386,50 @@ describe("mapping a website event onto a customer", () => {
   it("files an unrecognised activity kind as a plain Note rather than a type no filter matches", () => {
     expect(noteFromEvent({ kind: "Call" }, "e", 0).type).toBe("Call");
     expect(noteFromEvent({ kind: "carrier-pigeon" }, "e", 0).type).toBe("Note");
+  });
+});
+
+describe("whether the scheduler should still chase a document", () => {
+  /* This rule is a deliberate second copy of `stopReason` in
+     src/domain/followups/followups.ts — the scheduler is plain JavaScript
+     and cannot import the app's TypeScript. Both are tested, so a change to
+     one shows up as a failure on the other side. */
+  const TODAY = "2026-08-24";
+
+  it("carries on while the document is out with the customer", () => {
+    expect(stopReason({ status: "Sent" }, TODAY)).toBeNull();
+    expect(stopReason({ status: "Sent", validUntil: "2026-09-23" }, TODAY)).toBeNull();
+    expect(stopReason({ status: "Issued" }, TODAY)).toBeNull();
+  });
+
+  it("stops the moment the customer has decided", () => {
+    // The worst thing this feature could do is chase somebody for a decision
+    // they already gave.
+    expect(stopReason({ status: "Accepted" }, TODAY)).toBe("the customer accepted it");
+    expect(stopReason({ status: "Rejected" }, TODAY)).toBe("the customer turned it down");
+  });
+
+  it("treats a lapsed validity as expired however the row is marked", () => {
+    // A quotation still marked "Sent" whose validity ran out yesterday has
+    // expired. Chasing it asks the customer to accept something that is gone.
+    expect(stopReason({ status: "Sent", validUntil: "2026-08-23" }, TODAY)).toBe("it has expired");
+  });
+
+  it("does not call a quotation expired on its last valid day", () => {
+    expect(stopReason({ status: "Sent", validUntil: "2026-08-24" }, TODAY)).toBeNull();
+  });
+
+  it("stops on a status it does not recognise rather than guessing", () => {
+    expect(stopReason({ status: "Cancelled" }, TODAY)).toBe("its status is now Cancelled");
+    expect(stopReason({}, TODAY)).toBe("it is back to a draft");
+    expect(stopReason(null, TODAY)).toBe("it is back to a draft");
+  });
+
+  it("knows which table each kind of document lives in", () => {
+    expect(TABLE_FOR.quotation).toBe("quotes");
+    expect(TABLE_FOR.proforma).toBe("proformas");
+    // Anything else is not followed up, and the scheduler stops rather than
+    // reading a table that does not exist.
+    expect(TABLE_FOR.invoice).toBeUndefined();
   });
 });

@@ -19,9 +19,11 @@ import {
   type EmailCompany, type EmailQuotation, type EmailSender,
 } from "../../domain/integrations/emailTemplate";
 import {
-  followUpBody, followUpSubject, TONE_LABELS,
+  autoFollowUpsOn, followUpBody, followUpSubject, planFollowUps, readSteps, TONE_LABELS,
   type FollowUpFacts, type FollowUpTone,
 } from "../../domain/followups/followups";
+import { armFollowUps, followUpsAvailable, type ArmedStep } from "../../data/followups";
+import { TODAY } from "../../domain/dates";
 
 /* NO DEFAULT CC ADDRESS HERE. A real address baked into a template is one
    nobody remembers to change when the person leaves, and it goes on every
@@ -196,6 +198,26 @@ export function DocumentActions({
     senderName: currentUser?.name || doc.preparedBy || "",
   };
 
+  /* What arming would schedule, worked out here so the send dialog can show
+     the actual dates rather than "we'll follow up" — the person pressing
+     Send is the last human who sees these emails before a customer does. */
+  const plannedFollowUps = canFollowUp
+    ? planFollowUps(TODAY(), readSteps(settings["followUpSteps"]), doc.validUntil || null)
+    : [];
+
+  const armable = canFollowUp && followUpsAvailable() && autoFollowUpsOn(settings) && plannedFollowUps.length > 0
+    ? {
+        ownerId: doc.ownerId,
+        docType: docType as "quotation" | "proforma",
+        docId: doc.id,
+        docNumber: doc.number,
+        customerId: doc.customerId || undefined,
+        customerName: doc.billName || "",
+        facts: followUpFacts,
+        plan: plannedFollowUps,
+      }
+    : null;
+
   const download = () => {
     try {
       toast("Saved " + downloadPdf(renderOpts), "good");
@@ -239,6 +261,7 @@ export function DocumentActions({
         sender={emailSender}
         company={emailBrand}
         quotation={emailQuotation}
+        armable={armable}
         getAttachment={async () => pdfAttachment(renderOpts)}
       />
 
@@ -299,6 +322,19 @@ interface EmailDialogProps {
   followUp?: FollowUpFacts;
   /** False where the customer already has the file. */
   attachByDefault?: boolean;
+  /** Present when this send can also arm an automatic sequence. Null when
+   *  the workspace has it switched off, when there is nowhere to store one,
+   *  or when the quotation's validity leaves no room for a chaser. */
+  armable?: {
+    ownerId: string;
+    docType: "quotation" | "proforma";
+    docId: string;
+    docNumber: string;
+    customerId?: string;
+    customerName: string;
+    facts: FollowUpFacts;
+    plan: Array<{ step: number; tone: FollowUpTone; dueOn: string }>;
+  } | null;
   title?: string;
   description?: string;
   getAttachment: () => Promise<{ base64: string; filename: string }>;
@@ -307,8 +343,8 @@ interface EmailDialogProps {
 
 function EmailDialog({
   open, api, defaultTo = "", defaultCc = "", defaultSubject, defaultMessage,
-  sender, company, quotation, followUp, attachByDefault = true, title, description,
-  getAttachment, onClose,
+  sender, company, quotation, followUp, attachByDefault = true, armable = null,
+  title, description, getAttachment, onClose,
 }: EmailDialogProps) {
   const toast = useToast();
   const [to, setTo] = useState(defaultTo);
@@ -317,6 +353,7 @@ function EmailDialog({
   const [message, setMessage] = useState(defaultMessage);
   const [tone, setTone] = useState<FollowUpTone>("nudge");
   const [attach, setAttach] = useState(attachByDefault);
+  const [arm, setArm] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [showPreview, setShowPreview] = useState(false);
@@ -365,6 +402,46 @@ function EmailDialog({
         attachment,
       });
       toast(result.via === "microsoft" && result.from ? "Sent from " + result.from : "Email sent", "good");
+
+      /* After the send, never instead of it, and never allowed to fail it.
+         The customer has the quotation either way; a sequence that could not
+         be stored is worth a warning, not an error on a message that went. */
+      if (armable && arm) {
+        try {
+          const steps: ArmedStep[] = armable.plan.map((p) => ({
+            step: p.step,
+            steps: armable.plan.length,
+            tone: p.tone,
+            dueOn: p.dueOn,
+            subject: followUpSubject(p.tone, armable.facts),
+            message: buildEmailText({
+              body: followUpBody(p.tone, armable.facts),
+              sender, company, quotation, attachmentName: null,
+            }),
+            /* Rendered NOW, from the same builder the preview uses, and
+               stored. What goes out weeks later is this exact markup — not
+               something re-templated by code nobody watched. */
+            html: buildEmailHtml({
+              body: followUpBody(p.tone, armable.facts),
+              sender, company, quotation, attachmentName: null,
+            }),
+          }));
+          await armFollowUps({
+            ownerId: armable.ownerId,
+            docType: armable.docType,
+            docId: armable.docId,
+            docNumber: armable.docNumber,
+            customerId: armable.customerId,
+            customerName: armable.customerName,
+            to, cc, replyTo: sender.email || undefined,
+            steps,
+          });
+          toast(`${steps.length} follow-up${steps.length === 1 ? "" : "s"} scheduled.`, "good");
+        } catch {
+          toast("Sent — but the follow-ups could not be scheduled. Send them by hand, or try arming again.", "warn");
+        }
+      }
+
       onClose();
     } catch (err) {
       setError(err instanceof IntegrationError ? err.message : "Couldn't send that email.");
@@ -437,6 +514,23 @@ function EmailDialog({
           <input type="checkbox" checked={attach} onChange={(e) => setAttach(e.target.checked)} />
           <span>Attach the PDF</span>
         </label>
+
+        {/* The dates, not a promise. These emails leave with nobody
+            watching, so the last person who can stop them is looking at
+            exactly when they will go. */}
+        {armable ? (
+          <div>
+            <label className="row-tight" style={{ cursor: "pointer" }}>
+              <input type="checkbox" checked={arm} onChange={(e) => setArm(e.target.checked)} />
+              <span>Follow up automatically</span>
+            </label>
+            <p className="field-hint" style={{ margin: "4px 0 0 24px" }}>
+              {arm
+                ? `${armable.plan.length} email${armable.plan.length === 1 ? "" : "s"} to ${to || "this customer"}, on ${armable.plan.map((p) => fmtDate(p.dueOn)).join(", ")}. They stop by themselves the moment this ${armable.docType === "proforma" ? "proforma" : "quotation"} is accepted, turned down or expires — and you can stop them from this document at any time.`
+                : "Nothing will be sent on its own. You can still follow up by hand from this document."}
+            </p>
+          </div>
+        ) : null}
 
         <div>
           <Button size="sm" tone="quiet" onClick={() => setShowPreview((v) => !v)}>
