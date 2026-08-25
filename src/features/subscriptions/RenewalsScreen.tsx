@@ -35,14 +35,23 @@ export function RenewalsScreen({
 
   const windows = [7, 30, 90] as const;
 
+  /* A licence bought outright is not a subscription and never lapses, so it
+     has no business in a list whose whole job is what runs out and when. It
+     is not hidden either — a record nobody can reach is a record nobody can
+     correct — it gets its own tab, and the count in the tile points at it. */
+  const perpetual = useMemo(() => subscriptions.filter(isPerpetual), [subscriptions]);
+  const termed = useMemo(() => subscriptions.filter((s) => !isPerpetual(s)), [subscriptions]);
+
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const base = window === "all"
-      ? [...subscriptions].sort((a, b) => daysLeft(a) - daysLeft(b))
-      : dueForRenewal(subscriptions, Number(window));
+    const base = window === "perpetual"
+      ? [...perpetual].sort((a, b) => (a.customerName ?? "").localeCompare(b.customerName ?? ""))
+      : window === "all"
+        ? [...termed].sort((a, b) => daysLeft(a) - daysLeft(b))
+        : dueForRenewal(subscriptions, Number(window));
     if (!q) return base;
     return base.filter((s) => [s.customerName, s.product, s.vendor].some((v) => (v ?? "").toLowerCase().includes(q)));
-  }, [subscriptions, window, query]);
+  }, [subscriptions, perpetual, termed, window, query]);
 
   const save = (raw: Subscription) => {
     /* A perpetual licence loses its term here, not in the form: an old row
@@ -72,7 +81,7 @@ export function RenewalsScreen({
           <StatTile label="Due in 7 days" value={String(dueForRenewal(subscriptions, 7).length)} meta={inrShort(valueAtRisk(subscriptions, 7))} tone="bad" />
           <StatTile label="Due in 30 days" value={String(dueForRenewal(subscriptions, 30).length)} meta={inrShort(valueAtRisk(subscriptions, 30))} tone="warn" />
           <StatTile label="Due in 90 days" value={String(dueForRenewal(subscriptions, 90).length)} meta={inrShort(valueAtRisk(subscriptions, 90))} />
-          <StatTile label="Under management" value={String(subscriptions.length)} meta={`${subscriptions.filter(isPerpetual).length} perpetual`} />
+          <StatTile label="Under management" value={String(subscriptions.length)} meta={`${termed.length} with a term · ${perpetual.length} perpetual`} />
         </SummaryBar>
       </div>
 
@@ -83,7 +92,8 @@ export function RenewalsScreen({
             onChange={setWindow}
             tabs={[
               ...windows.map((w) => ({ id: String(w), label: `Next ${w} days`, count: dueForRenewal(subscriptions, w).length })),
-              { id: "all", label: "Everything", count: subscriptions.length },
+              { id: "all", label: "All subscriptions", count: termed.length },
+              { id: "perpetual", label: "Perpetual licences", count: perpetual.length },
             ]}
           />
         </div>
@@ -96,8 +106,12 @@ export function RenewalsScreen({
 
         {shown.length === 0 ? (
           <Empty
-            title="Nothing due in this window"
-            body="Widen the window, or add the subscriptions you manage so they start appearing here before they lapse."
+            title={window === "perpetual" ? "No perpetual licences" : "Nothing due in this window"}
+            body={
+              window === "perpetual"
+                ? "Licences bought outright appear here. Set a subscription's Type to Perpetual and it moves off the renewal windows."
+                : "Widen the window, or add the subscriptions you manage so they start appearing here before they lapse."
+            }
           />
         ) : (
           <div className="table-wrap">
