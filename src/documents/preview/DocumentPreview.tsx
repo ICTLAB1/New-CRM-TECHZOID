@@ -47,8 +47,15 @@ function Rows({ pairs }: { pairs: readonly Pair[] }) {
 
 function Slot({ slot, isCert }: { slot: LogoSlot; isCert?: boolean }) {
   if (slot.src) {
+    /* A near-square mark gets the full band; a wide one stays capped. The
+       SAME rule the PDF renderer applies, for the same reason: capped by
+       height, a circular certification mark is also capped in width and
+       renders at a third the optical size of the wide logos beside it, with
+       its ring text unreadable. The two renderers must agree — see
+       DocumentPreview.test.tsx, the drift guard. */
+    const ratio = slot.w && slot.h ? slot.w / slot.h : 3;
     return (
-      <div className="doc-slot">
+      <div className={"doc-slot" + (ratio < 1.4 ? " doc-slot-mark" : "")}>
         <img src={slot.src} alt={slot.text} />
       </div>
     );

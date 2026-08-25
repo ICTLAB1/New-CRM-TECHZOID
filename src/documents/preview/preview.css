@@ -122,9 +122,13 @@
 .doc-strip { border-left: 0.2mm solid #D7DCE2; padding: 1.6mm 2mm 2.4mm; }
 .doc-strip:first-child { border-left: 0; }
 .doc-strip-title { text-align: center; font-size: 2.1mm; font-weight: 700; color: #0D2B55; margin-bottom: 2mm; }
-.doc-slots { display: flex; align-items: center; justify-content: space-around; gap: 2mm; min-height: 11mm; }
+/* Taller now that the certification marks are real artwork: the PDF strip
+   grew from 20mm to 27mm for the same reason. */
+.doc-slots { display: flex; align-items: center; justify-content: space-around; gap: 2mm; min-height: 18mm; }
 .doc-slot { flex: 1 1 0; min-width: 0; text-align: center; }
 .doc-slot img { max-width: 100%; max-height: 8.5mm; object-fit: contain; display: block; margin: 0 auto; }
+/* A round mark needs the height a wide logo does not — see Slot(). */
+.doc-slot-mark img { max-height: 17mm; }
 .doc-slot-text { font-size: 2.3mm; font-weight: 700; color: #18202A; }
 /* Certifications: plain text, no ring — name and licence number, centred. */
 .doc-cert { display: flex; flex-direction: column; align-items: center; gap: 0.6mm; text-align: center; }

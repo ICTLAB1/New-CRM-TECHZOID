@@ -334,3 +334,34 @@ describe("the greeting", () => {
     expect(html).not.toContain("Hi there");
   });
 });
+
+describe("certifications in the email", () => {
+  const certs = ["ISO 9001:2015", "ISO/IEC 27001:2022", "ISO/IEC 20000-1:2018"];
+  const content = () => {
+    const c = withQuote();
+    return { ...c, company: { ...c.company, certifications: certs } };
+  };
+
+  it("names them in the HTML footer", () => {
+    const html = buildEmailHtml(content());
+    for (const c of certs) expect(html, c).toContain(c);
+    expect(html).toContain("Certified to");
+  });
+
+  it("names them in the plain text too", () => {
+    const text = buildEmailText(content());
+    for (const c of certs) expect(text, c).toContain(c);
+  });
+
+  it("adds NO badge images, whatever else changes", () => {
+    // Every mainstream client blocks remote images by default and Gmail
+    // strips base64 ones. A row of certification badges would be a row of
+    // broken boxes, and a broken certification mark is worse than none.
+    expect(buildEmailHtml(content())).not.toContain("<img");
+    expect(buildEmailHtml(content())).not.toContain("data:image");
+  });
+
+  it("says nothing at all when none are configured", () => {
+    expect(buildEmailHtml(withQuote())).not.toContain("Certified to");
+  });
+});

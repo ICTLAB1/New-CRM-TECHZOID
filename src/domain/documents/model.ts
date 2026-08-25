@@ -5,6 +5,7 @@ import type { DocumentTotals } from "../tax/types";
 import { stateNameForCode, STATES } from "../geo/states";
 import { buildItemColumns, type ItemColumn } from "./columns";
 import { isOn, type DocTemplate, type SectionKey } from "./template";
+import { DEFAULT_CERTIFICATIONS } from "./brandDefaults";
 
 export type DocType = "quotation" | "proforma" | "purchase_order" | "invoice";
 
@@ -532,10 +533,29 @@ export function buildDocumentModel(input: BuildModelInput): DocumentModel {
       })
       .filter((slot) => slot.text || slot.src);
 
+  /**
+   * Certification marks stored before the badge artwork existed carry a
+   * label and no image. A workspace saved its `certLogos` the first time an
+   * admin opened Settings, so every LIVE install has those text-only rows
+   * and would never see the marks — the new defaults only reach a fresh
+   * install.
+   *
+   * So a stored row with no artwork borrows it from the default of the same
+   * name. Matching on the LABEL, not on position: an admin may have
+   * reordered them or removed one, and lending the 27001 badge to whatever
+   * happens to sit third would be worse than showing no badge at all.
+   */
+  const withDefaultMarks = (slots: LogoSlot[]): LogoSlot[] =>
+    slots.map((slot) => {
+      if (slot.src) return slot;
+      const known = DEFAULT_CERTIFICATIONS.find((c) => c.label === slot.text);
+      return known ? { ...slot, src: known.data, w: known.w, h: known.h } : slot;
+    });
+
   const strips = {
     designations: toSlots(s.partnerDesignations),
     partners: toSlots(s.brandingLogos),
-    certifications: toSlots(s.certLogos),
+    certifications: withDefaultMarks(toSlots(s.certLogos)),
   };
 
   const footer = {

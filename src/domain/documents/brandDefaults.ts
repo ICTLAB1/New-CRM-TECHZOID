@@ -31,11 +31,17 @@ export const DEFAULT_TECHNOLOGY_PARTNERS = [
 ];
 
 /**
- * Certifications, drawn natively by the renderer rather than pasted.
+ * Certifications, as the supplied badge artwork.
  *
- * The supplied badge PNGs had the standard number overflowing its ring and
- * colliding with the caption, so the renderer draws them instead — crisp at
- * any size, and correctable without new artwork.
+ * These were drawn natively as text for a while because the earlier badge
+ * PNGs had the standard number overflowing its ring and colliding with the
+ * caption. The marks supplied since are clean, so the real artwork is used —
+ * a certification mark is a controlled logo and a hand-drawn approximation
+ * of one is not the mark.
+ *
+ * `label` is retained beside each image. It is what the plain-text email and
+ * any images-off client show, and it is the only place the YEAR of the
+ * 27001 certification appears — the supplied 27001 mark does not carry one.
  *
  * The supplied reference strip named the third certification
  * "ISO 22000-1:2018 — Food Safety Management System". That is a different
@@ -44,7 +50,7 @@ export const DEFAULT_TECHNOLOGY_PARTNERS = [
  * quotation would be a false claim. Confirmed as IT Service Management.
  */
 export const DEFAULT_CERTIFICATIONS = [
-  { label: "ISO 9001:2015", caption: "Quality Management System" },
-  { label: "ISO/IEC 27001:2022", caption: "Information Security Management System" },
-  { label: "ISO/IEC 20000-1:2018", caption: "IT Service Management System" },
+  { ...asset(BRAND_ASSETS.iso9001, "ISO 9001:2015"), caption: "Quality Management System" },
+  { ...asset(BRAND_ASSETS.iso27001, "ISO/IEC 27001:2022"), caption: "Information Security Management System" },
+  { ...asset(BRAND_ASSETS.iso20000, "ISO/IEC 20000-1:2018"), caption: "IT Service Management System" },
 ];

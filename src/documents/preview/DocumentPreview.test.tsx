@@ -67,7 +67,7 @@ function build(docOverrides = {}, docType: "quotation" | "proforma" = "quotation
 }
 
 describe("the preview shows everything the model carries", () => {
-  const { model, text } = build();
+  const { model, text, html } = build();
 
   it("prints every header meta value", () => {
     for (const [label, value] of model.header.meta) {
@@ -135,8 +135,14 @@ describe("the preview shows everything the model carries", () => {
       expect(text, slot.text).toContain(slot.text);
       if (slot.caption) expect(text, slot.caption).toContain(slot.caption);
     }
+    /* A certification now prints as its supplied MARK, and the mark itself
+       carries the standard's name. So the label reaches a reader through the
+       image's alt text rather than as a separate line — which is where it
+       belongs, and what a screen reader announces. The guard checks both
+       routes rather than insisting on the one that used to be true. */
     for (const slot of model.strips.certifications) {
-      expect(text, slot.text).toContain(slot.text);
+      const shown = text.includes(slot.text) || html.includes(`alt="${slot.text}"`);
+      expect(shown, `${slot.text} reaches the reader`).toBe(true);
       if (slot.certNo) expect(text, slot.certNo).toContain(slot.certNo);
     }
   });

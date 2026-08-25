@@ -56,12 +56,35 @@ describe("certifications", () => {
     }
   });
 
-  it("carries no artwork — the renderer draws these", () => {
-    // The supplied badge PNGs had the number overflowing its ring, clipped at
-    // the image edge and colliding with the caption.
+  it("carries the supplied badge artwork", () => {
+    // These were drawn as text for a while because the EARLIER badge PNGs had
+    // the number overflowing its ring. The marks supplied since are clean, and
+    // a certification mark is a controlled logo — a hand-drawn approximation
+    // of one is not the mark.
     for (const c of DEFAULT_CERTIFICATIONS) {
-      expect(c).not.toHaveProperty("data");
-      expect(c).not.toHaveProperty("logo");
+      expect(c, c.label).toHaveProperty("data");
+      expect(c.data, c.label).toMatch(/^data:image\/png;base64,/);
+      expect(c.w, c.label).toBeGreaterThan(0);
+      expect(c.h, c.label).toBeGreaterThan(0);
+    }
+  });
+
+  it("keeps a text label beside every mark", () => {
+    // It is what an images-off client and the plain-text email show, and it
+    // is the only place the YEAR of the 27001 certification appears — the
+    // supplied 27001 artwork does not carry one.
+    for (const c of DEFAULT_CERTIFICATIONS) {
+      expect(c.label.length, c.label).toBeGreaterThan(5);
+    }
+    expect(DEFAULT_CERTIFICATIONS[1]!.label).toContain("2022");
+  });
+
+  it("keeps every mark close to square, which the strip relies on", () => {
+    // A near-square mark is given the full band height by the renderer; a
+    // wide one is capped. A badge that arrived letterboxed would silently
+    // render at a third of its intended size.
+    for (const c of DEFAULT_CERTIFICATIONS) {
+      expect(c.w / c.h, c.label).toBeLessThan(1.4);
     }
   });
 

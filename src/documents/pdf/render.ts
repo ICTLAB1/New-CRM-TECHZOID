@@ -632,7 +632,12 @@ export function renderDocumentPdf(opts: RenderOptions): jsPDF {
     ].filter((g) => g.slots.length);
     if (!groups.length) return;
 
-    const stripH = 20;
+    /* 27, not 20. A certification mark is a CIRCLE: capped by height it is
+       also capped in width, so it rendered at a third the optical size of
+       the wide logos beside it and its ring text — the words that say what
+       the certification is for — was unreadable. The band has to be tall
+       enough for a round mark to earn its place. */
+    const stripH = 27;
     need(stripH + 3);
     const top = y;
     const totalFlex = groups.reduce((a, g) => a + g.flex, 0);
@@ -665,7 +670,13 @@ export function renderDocumentPdf(opts: RenderOptions): jsPDF {
              a square mark (HP) render at twice the optical weight of a wide
              one (Acer) beside it, which reads as favouritism rather than as
              aspect ratio being preserved. */
-          const box = fitBox(natural, slotW - 5, Math.min(bandH - 2, 8.5));
+          /* A near-square mark gets the full band; a wide one stays capped,
+             or a square logo (HP) renders at twice the optical weight of a
+             wide one (Acer) beside it, which reads as favouritism rather
+             than as aspect ratio being preserved. */
+          const ratio = natural ? natural.w / natural.h : 3;
+          const capH = ratio < 1.4 ? bandH - 1 : 8.5;
+          const box = fitBox(natural, slotW - 5, Math.min(bandH - 1, capH));
           pdf.addImage(slot.src, "PNG", cx - box.w / 2, bandTop + (bandH - box.h) / 2, box.w, box.h, undefined, "FAST");
           return;
         }

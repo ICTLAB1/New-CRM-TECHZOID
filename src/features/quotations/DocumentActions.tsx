@@ -101,7 +101,12 @@ export function DocumentActions({
     logo: String(company["logo"] ?? "") || undefined,
     addressLines: model.header.addressLines,
     gstin: String(company["gstin"] ?? ""),
+    pan: String(company["pan"] ?? ""),
     cin: String(company["cin"] ?? ""),
+    /* The certification NAMES, taken from the same strip the document
+       prints, so the two can never disagree about what this company is
+       certified to. Text, not the badges — see EmailCompany. */
+    certifications: model.strips.certifications.map((c) => c.text).filter(Boolean),
   };
 
   /* The person actually sending, falling back to whoever prepared the

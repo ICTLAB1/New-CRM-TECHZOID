@@ -29,13 +29,43 @@ const USE = {
   "Cisco_Partner_Supplied_Reference.png": "ciscoPartner",
   "HP_Logo.png": "hp",
   "Acer_Logo.png": "acer",
+  /* The three ISO certification marks, supplied as artwork. They were
+     previously drawn as text because the earlier PNGs overflowed their own
+     ring; these are clean, so the real marks are used. */
+  "ISO_9001_2015.png": "iso9001",
+  "ISO_27001_2022.png": "iso27001",
+  "ISO_IEC_20000-1_2018.png": "iso20000",
 };
+
+/* The ISO marks arrive on an off-white field (#f7f7f7 to #fdfdfd), not on
+   white and not on transparency. Trimming cannot remove it — on the 9001
+   mark the ring touches the edge, so there is no margin to trim — and left
+   alone it prints as a faint grey square behind the badge on an otherwise
+   white page.
+
+   So near-white is snapped to pure white. The threshold is deliberately
+   high: the palest thing inside any of these marks is the silver ring of
+   the 27001 badge at about 190, well clear of 245, and the artwork's own
+   whites are already 255. Nothing in the mark itself is altered. */
+const WHITE_SNAP = 245;
+async function flattenNearWhite(input) {
+  const { data, info } = await sharp(input).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  for (let i = 0; i < data.length; i += info.channels) {
+    if (data[i] >= WHITE_SNAP && data[i + 1] >= WHITE_SNAP && data[i + 2] >= WHITE_SNAP) {
+      data[i] = 255; data[i + 1] = 255; data[i + 2] = 255;
+    }
+  }
+  return sharp(data, { raw: { width: info.width, height: info.height, channels: info.channels } }).png().toBuffer();
+}
 
 const entries = [];
 for (const file of readdirSync(SRC).filter((f) => f.endsWith(".png")).sort()) {
   const key = USE[file];
   if (!key) continue;
-  const img = sharp(join(SRC, file));
+  /* Only the certification marks need it; the partner logos already ship
+     on transparency. */
+  const source = key.startsWith("iso") ? await flattenNearWhite(join(SRC, file)) : join(SRC, file);
+  const img = sharp(source);
   const before = await img.metadata();
   const buf = await img
     .trim({ threshold: 10 })

@@ -36,6 +36,12 @@ export interface EmailCompany {
   gstin?: string;
   pan?: string;
   cin?: string;
+  /** Certification names, as TEXT. Deliberately not the badge artwork:
+   *  every mainstream client blocks remote images by default and Gmail
+   *  strips base64 ones, so a row of certification badges in an email is a
+   *  row of broken boxes for most readers — and a broken certification mark
+   *  is worse than none. The words always render. */
+  certifications?: string[];
 }
 
 /** One line on the summary table. Everything is PRE-FORMATTED: the template
@@ -364,6 +370,8 @@ export function buildEmailHtml(content: EmailContent): string {
     company.website ? (() => { const w = websiteLink(company.website); return `<a href="${escapeHtml(w.href)}" style="color:${MUTED};text-decoration:underline;">${escapeHtml(w.label)}</a>`; })() : "",
   ].filter(Boolean).join(" · ");
 
+  const certifications = (company.certifications ?? []).filter(Boolean);
+
   const registration = [
     company.gstin ? "GSTIN " + escapeHtml(company.gstin) : "",
     company.pan ? "PAN " + escapeHtml(company.pan) : "",
@@ -412,6 +420,9 @@ export function buildEmailHtml(content: EmailContent): string {
               ${addressLine ? `<div>${escapeHtml(addressLine)}</div>` : ""}
               ${footerFacts ? `<div>${footerFacts}</div>` : ""}
               ${registration ? `<div>${registration}</div>` : ""}
+              ${certifications.length
+                ? `<div style="margin-top:6px;">Certified to ${certifications.map(escapeHtml).join(" &middot; ")}</div>`
+                : ""}
             </td>
           </tr>
         </table>
@@ -510,6 +521,9 @@ export function buildEmailText(content: EmailContent): string {
 
   const footer = [
     (company.addressLines ?? []).filter(Boolean).join(", "),
+    (company.certifications ?? []).filter(Boolean).length
+      ? "Certified to " + (company.certifications ?? []).filter(Boolean).join(" | ")
+      : "",
     [
       company.gstin ? "GSTIN " + company.gstin : "",
       company.pan ? "PAN " + company.pan : "",
