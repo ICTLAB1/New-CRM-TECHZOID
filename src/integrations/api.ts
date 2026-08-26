@@ -89,7 +89,7 @@ export interface IntegrationsApi {
    *  "outbound" signs what the CRM sends to the website; "inbound" is what
    *  the CRM checks on what the website sends in. Two separate secrets, so
    *  rotating one never silently breaks the other direction. */
-  regenerateWebhookSecret(kind?: "outbound" | "inbound"): Promise<string>;
+  regenerateWebhookSecret(kind?: "outbound" | "inbound" | "whatsapp"): Promise<string>;
 }
 
 /**
@@ -222,8 +222,11 @@ export function netlifyApi(): IntegrationsApi {
       const { getSupabase } = await import("../data/supabase");
       /* 'main' is the outbound secret's stored id, kept from the original
          migration so an existing row is not orphaned by the rename. */
+      /* 'whatsapp' is the key in the Interakt callback URL; the URL itself
+         is the credential there, because Interakt does not sign. */
+      const p_kind = kind === "inbound" ? "inbound" : kind === "whatsapp" ? "whatsapp" : "main";
       const { data, error } = await getSupabase()
-        .rpc("regenerate_webhook_secret", { p_kind: kind === "inbound" ? "inbound" : "main" });
+        .rpc("regenerate_webhook_secret", { p_kind });
       if (error) throw new IntegrationError(error.message || "Couldn't generate a new secret.", 400);
       return String(data ?? "");
     },

@@ -12,6 +12,9 @@ import {
   crmIdForWebsiteDeal, customerFieldsFromEvent, noteFromEvent, normaliseStage, websiteDealId,
 } from "./inboundMap.mjs";
 import { stopReason, TABLE_FOR } from "./followupRules.mjs";
+import {
+  readCallbackData, readFailureDetail, readMessageId, readStatus,
+} from "./interaktStatus.mjs";
 
 const ENV = { MS_STATE_SECRET: "a-test-secret-value" };
 const USER = "3f2a6c1e-0000-4000-8000-abcdef123456";
@@ -438,5 +441,53 @@ describe("whether the scheduler should still chase a document", () => {
     // Anything else is not followed up, and the scheduler stops rather than
     // reading a table that does not exist.
     expect(TABLE_FOR.invoice).toBeUndefined();
+  });
+});
+
+describe("reading a WhatsApp delivery status", () => {
+  /* Interakt documents the shape in prose rather than field by field, so
+     this reads the places the status could plausibly be. The cost of being
+     wrong is a follow-up showing "sent" instead of "delivered"; the cost of
+     being brittle is nothing ever updating and nobody knowing why. */
+
+  it("reads the status wherever the provider puts it", () => {
+    expect(readStatus({ type: "message_api_delivered" })).toBe("delivered");
+    expect(readStatus({ data: { message: { message_status: "Read" } } })).toBe("read");
+    expect(readStatus({ status: "FAILED" })).toBe("failed");
+    expect(readStatus({ data: { status: "sent" } })).toBe("sent");
+  });
+
+  it("calls a payload that mentions both a send and a failure a failure", () => {
+    // Reading this as a send would show a customer as reached when they
+    // were not.
+    expect(readStatus({ type: "message_api_sent", data: { status: "failed" } })).toBe("failed");
+  });
+
+  it("says nothing for a payload that is not about delivery", () => {
+    // Incoming customer messages arrive on the same webhook.
+    expect(readStatus({ type: "message_received" })).toBe("");
+    expect(readStatus({})).toBe("");
+    expect(readStatus(null)).toBe("");
+  });
+
+  it("finds the follow-up id we sent as callback data", () => {
+    const id = "5f2a1c3e-0000-4000-8000-abcdef123456";
+    expect(readCallbackData({ callback_data: id })).toBe(id);
+    expect(readCallbackData({ data: { message: { callbackData: id } } })).toBe(id);
+    expect(readCallbackData({ callback_data: "  " })).toBe("");
+    expect(readCallbackData({})).toBe("");
+  });
+
+  it("finds the provider's own message id as a fallback match", () => {
+    expect(readMessageId({ data: { message: { id: "abc123" } } })).toBe("abc123");
+    expect(readMessageId({ id: "xyz" })).toBe("xyz");
+    expect(readMessageId({})).toBe("");
+  });
+
+  it("keeps a failure reason short enough for a table cell", () => {
+    expect(readFailureDetail({ data: { message: { failure_reason: "Number not on WhatsApp" } } }))
+      .toBe("Number not on WhatsApp");
+    expect(readFailureDetail({ error: "x".repeat(500) })).toHaveLength(300);
+    expect(readFailureDetail({})).toBe("");
   });
 });

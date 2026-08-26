@@ -1,5 +1,7 @@
+import { useState } from "react";
 import { Button, Card, Field, Input, Select } from "../../components/primitives";
 import { useToast } from "../../components/Toast";
+import { IntegrationError, type IntegrationsApi } from "../../integrations/api";
 import {
   DEFAULT_FOLLOWUP_STEPS, MAX_STEP_DAYS, MAX_STEPS, MIN_STEP_DAYS, readSteps, TONE_LABELS,
   type FollowUpStep, type FollowUpTone,
@@ -15,13 +17,30 @@ import { DEFAULT_TEMPLATE_NAMES, TEMPLATE_SETTING } from "../../domain/integrati
  * rather than as a form with a Save button.
  */
 export function FollowUpPanel({
-  settings, canEdit, onChange,
+  settings, canEdit, api, onChange,
 }: {
   settings: Record<string, unknown>;
   canEdit: boolean;
+  api?: IntegrationsApi;
   onChange: (next: Record<string, unknown>) => void;
 }) {
   const toast = useToast();
+  const [callbackKey, setCallbackKey] = useState("");
+  const [keyBusy, setKeyBusy] = useState(false);
+  const [keyError, setKeyError] = useState("");
+
+  const origin = typeof window === "undefined" ? "https://crm.ttpldelhi.com" : window.location.origin;
+
+  const makeKey = async () => {
+    if (!api) return;
+    setKeyError(""); setKeyBusy(true);
+    try {
+      setCallbackKey(await api.regenerateWebhookSecret("whatsapp"));
+    } catch (err) {
+      setKeyError(err instanceof IntegrationError ? err.message : "Couldn't generate a callback URL.");
+    }
+    setKeyBusy(false);
+  };
   const on = settings["autoFollowUps"] !== false;
   const steps = readSteps(settings["followUpSteps"]);
 
@@ -97,7 +116,48 @@ export function FollowUpPanel({
           ))}
         </div>
 
-        <p className="field-hint" style={{ marginBottom: 0 }}>
+        {/* ── delivery status back from Interakt ── */}
+        <div style={{ marginTop: 18, borderTop: "1px solid var(--rule)", paddingTop: 14 }}>
+          <span className="eyebrow">Delivery status</span>
+          <p className="field-hint" style={{ marginTop: 4 }}>
+            Interakt answers the moment it has <em>accepted</em> a message, not when WhatsApp delivered it.
+            Give Interakt this callback URL and each follow-up will show Delivered, Read, or why it failed,
+            instead of only "Sent".
+          </p>
+
+          {callbackKey ? (
+            <div className="notice notice-good" style={{ marginTop: 10 }}>
+              <span>
+                <strong>Copy this now — it is shown once.</strong> Paste it into Interakt as the webhook URL:
+                <br />
+                <code className="mono" style={{ wordBreak: "break-all" }}>
+                  {`${origin}/.netlify/functions/whatsapp-status?k=${callbackKey}`}
+                </code>
+                <br />
+                The key in that address is what proves a caller is Interakt — Interakt does not sign its
+                webhooks, so the URL itself is the credential. Treat it like a password, and generate
+                another if it is ever pasted somewhere it should not be.
+              </span>
+            </div>
+          ) : null}
+
+          {canEdit ? (
+            <Button
+              size="sm"
+              tone={callbackKey ? "quiet" : "default"}
+              disabled={keyBusy || !api}
+              onClick={() => void makeKey()}
+            >
+              {keyBusy ? "Generating…" : callbackKey ? "Generate another" : "Generate the callback URL"}
+            </Button>
+          ) : (
+            <p className="field-hint">An admin can generate this.</p>
+          )}
+
+          {keyError ? <div className="notice notice-bad" style={{ marginTop: 8 }}><span>{keyError}</span></div> : null}
+        </div>
+
+        <p className="field-hint" style={{ marginBottom: 0, marginTop: 14 }}>
           A customer is only messaged where they have agreed to it — the tick on their record, or on the
           registration form. Without it the WhatsApp option is switched off for that customer, whatever is
           set here.

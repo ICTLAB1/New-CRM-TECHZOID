@@ -102,6 +102,11 @@ export interface FollowUp {
   message: string;
   html?: string;
   sentAt?: string;
+  /* WHAT HAPPENED TO THE MESSAGE, as opposed to what this CRM did with it.
+     Kept apart from `state` deliberately: `state` drives the scheduler, and
+     nothing a delivery report says may change what gets sent next. */
+  deliveryState?: "sent" | "delivered" | "read" | "failed";
+  deliveryDetail?: string;
   /** Why it did not go, in words a salesperson can act on. */
   error?: string;
 }

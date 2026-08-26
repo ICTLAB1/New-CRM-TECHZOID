@@ -40,6 +40,8 @@ interface FollowUpRow {
   message: string;
   html: string | null;
   sent_at: string | null;
+  delivery_state: string | null;
+  delivery_detail: string | null;
   error: string | null;
 }
 
@@ -69,6 +71,8 @@ const toFollowUp = (r: FollowUpRow): FollowUp => ({
   message: r.message ?? "",
   html: r.html ?? undefined,
   sentAt: r.sent_at ?? undefined,
+  deliveryState: (r.delivery_state || undefined) as FollowUp["deliveryState"],
+  deliveryDetail: r.delivery_detail ?? undefined,
   error: r.error ?? undefined,
 });
 

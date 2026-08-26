@@ -298,6 +298,7 @@ export function Workbench({
           settings={settings}
           canEdit={canEditSettings}
           onChange={onSettingsChange}
+          api={integrations}
           workspaceForBackup={() => ({ ...analytics, settings })}
           onRestore={onRestore}
         />

@@ -78,7 +78,7 @@ export function FollowUpStrip({ docId }: { docId: string }) {
                 <td data-label="How" className="muted">{r.channel === "whatsapp" ? "WhatsApp" : "Email"}</td>
                 <td data-label="To" className="muted">{r.channel === "whatsapp" ? (r.toPhone || "—") : r.to}</td>
                 <td data-actions>
-                  <Chip tone={stateTone(r.state)}>{stateLabel(r)}</Chip>
+                  <Chip tone={stateTone(r)}>{stateLabel(r)}</Chip>
                 </td>
               </tr>
             ))}
@@ -99,13 +99,22 @@ export function FollowUpStrip({ docId }: { docId: string }) {
   );
 }
 
-const stateTone = (state: FollowUp["state"]) =>
-  state === "sent" ? "good" : state === "failed" ? "bad" : state === "cancelled" ? "neutral" : "accent";
+const stateTone = (r: FollowUp) => {
+  if (r.state === "sent") return r.deliveryState === "failed" ? "bad" : "good";
+  return r.state === "failed" ? "bad" : r.state === "cancelled" ? "neutral" : "accent";
+};
 
 /* The reason a follow-up did not go belongs next to the follow-up, not in a
    server log the salesperson cannot reach. */
 function stateLabel(r: FollowUp): string {
-  if (r.state === "sent") return r.sentAt ? `Sent ${fmtDate(r.sentAt.slice(0, 10))}` : "Sent";
+  if (r.state === "sent") {
+    /* What happened to the message beats what we did with it: "Read" is the
+       answer to the question somebody is actually asking. */
+    if (r.deliveryState === "failed") return r.deliveryDetail ? `Not delivered — ${r.deliveryDetail}` : "Not delivered";
+    if (r.deliveryState === "read") return "Read";
+    if (r.deliveryState === "delivered") return "Delivered";
+    return r.sentAt ? `Sent ${fmtDate(r.sentAt.slice(0, 10))}` : "Sent";
+  }
   if (r.state === "failed") return r.error ? `Failed — ${r.error}` : "Failed";
   if (r.state === "cancelled") return r.error ? `Stopped — ${r.error}` : "Stopped";
   return "Scheduled";

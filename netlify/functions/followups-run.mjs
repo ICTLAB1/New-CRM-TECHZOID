@@ -99,7 +99,11 @@ export async function handler() {
           to: row.send_to_phone,
           templateName: row.template_name,
           bodyValues: Array.isArray(row.template_values) ? row.template_values : [],
-          callbackData: row.doc_number || "",
+          /* THE ROW'S OWN ID. Interakt echoes callbackData back on every
+             status webhook, and it is the only thing that ties a delivery
+             report to one follow-up with no ambiguity — a document number
+             would match every step in the sequence. */
+          callbackData: row.id,
         })
       : await sendMail({
           admin,
@@ -115,7 +119,14 @@ export async function handler() {
     if (result.ok) {
       tally.sent += 1;
       if (row.channel === "whatsapp") tally.whatsapp += 1;
-      await mark(admin, row.id, { state: "sent", sent_at: new Date().toISOString(), error: null });
+      await mark(admin, row.id, {
+        state: "sent",
+        sent_at: new Date().toISOString(),
+        error: null,
+        /* ACCEPTED, not delivered. Whether WhatsApp got it to the phone
+           arrives later on the status webhook — see whatsapp-status.mjs. */
+        ...(result.id ? { provider_message_id: String(result.id) } : {}),
+      });
     } else {
       tally.failed += 1;
       /* Recorded on the row, so it shows on the document the salesperson is

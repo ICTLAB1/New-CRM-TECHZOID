@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { BrandStripsPanel } from "./BrandStripsPanel";
 import { FollowUpPanel } from "./FollowUpPanel";
+import type { IntegrationsApi } from "../../integrations/api";
 import { PageHead } from "../../app/AppShell";
 import { Button, Card, Chip, Empty, Field, Input, Select, Tabs, Textarea } from "../../components/primitives";
 import { Confirm } from "../../components/Modal";
@@ -33,13 +34,15 @@ export interface SettingsScreenProps {
   workspaceForBackup: () => Record<string, unknown>;
   onRestore: (data: Record<string, unknown>) => void;
   onChange: (next: Record<string, unknown>) => void;
+  /** Lets the Follow-ups tab mint the Interakt callback URL. */
+  api?: IntegrationsApi;
 }
 
 type Tab = "company" | "document" | "numbering" | "terms" | "incentives" | "fields" | "backup" | "brands" | "followups";
 
 const uid = (): string => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
 
-export function SettingsScreen({ settings, canEdit, workspaceForBackup, onRestore, onChange }: SettingsScreenProps) {
+export function SettingsScreen({ settings, canEdit, workspaceForBackup, api, onRestore, onChange }: SettingsScreenProps) {
   const [tab, setTab] = useState<Tab>("company");
 
   return (
@@ -71,7 +74,7 @@ export function SettingsScreen({ settings, canEdit, workspaceForBackup, onRestor
         {tab === "brands" ? <BrandStripsPanel settings={settings} canEdit={canEdit} onChange={onChange} /> : null}
         {tab === "numbering" ? <NumberingPanel settings={settings} canEdit={canEdit} onChange={onChange} /> : null}
         {tab === "terms" ? <TermsPanel settings={settings} canEdit={canEdit} onChange={onChange} /> : null}
-        {tab === "followups" ? <FollowUpPanel settings={settings} canEdit={canEdit} onChange={onChange} /> : null}
+        {tab === "followups" ? <FollowUpPanel settings={settings} canEdit={canEdit} api={api} onChange={onChange} /> : null}
         {tab === "incentives" ? <IncentivesPanel settings={settings} canEdit={canEdit} onChange={onChange} /> : null}
         {tab === "fields" ? <FieldsPanel settings={settings} canEdit={canEdit} onChange={onChange} /> : null}
         {tab === "backup" ? (
