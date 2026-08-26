@@ -158,6 +158,7 @@ export function Workbench({
           customFields={customFields}
           currentUser={user}
           settings={settings}
+          api={integrations}
           onChange={(next, ownership) => { handleCustomersChange(next); applyOwnership(ownership); }}
         />
       ) : view === "pipeline" ? (

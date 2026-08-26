@@ -87,6 +87,15 @@ export function CustomerSheet({ open = true, customer, users, customFields, canR
       {save.dialog}
       <div className="stack-wide">
         <div className="stack">
+          {/* Allocated by the database when the record is first saved, and
+              never edited: it prints on every document raised for this
+              customer, and two people typing their own would be two
+              customers as far as any report is concerned. */}
+          {f.code ? (
+            <Field label="Customer ID" hint="Allocated automatically. Prints on this customer's documents.">
+              <Input className="mono" value={f.code} readOnly disabled />
+            </Field>
+          ) : null}
           <Field label="Company name">
             <Input value={f.company ?? ""} onChange={set("company")} placeholder="Acme Industries Pvt Ltd" />
           </Field>

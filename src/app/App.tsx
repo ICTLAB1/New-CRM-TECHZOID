@@ -4,6 +4,7 @@ import { Button, Card } from "../components/primitives";
 import { Workbench } from "./Workbench";
 import { SignIn, NoProfile } from "./SignIn";
 import { PublicLeadForm } from "../features/leads/PublicLeadForm";
+import { readLeadRef } from "../domain/leads/link";
 import { useWorkspace, type WorkspaceData } from "../data/useWorkspace";
 import { isConfigured, loadProfile, onSessionChange, signOut, type SignedInUser } from "../data/session";
 import { CHALLANS, CUSTOMERS, ORDERS, INVOICES, PROFORMAS, PURCHASE_ORDERS, QUOTATIONS, SETTINGS, SUBSCRIPTIONS, USERS } from "./demoData";
@@ -21,10 +22,11 @@ import type { Session } from "@supabase/supabase-js";
  */
 
 export function App() {
-  /* ?lead=<salesperson-id> is the public registration form: no sign-in, no
-     shell, nothing of the CRM around it. Checked before anything else so a
-     customer with the link never sees a sign-in screen. */
-  const leadRef = new URLSearchParams(window.location.search).get("lead");
+  /* /r/<code> — and the ?lead=<uuid> links already shared — are the public
+     registration form: no sign-in, no shell, nothing of the CRM around it.
+     Checked before anything else so a customer with the link never sees a
+     sign-in screen. */
+  const leadRef = readLeadRef(window.location);
   if (leadRef) {
     return (
       <ToastProvider>

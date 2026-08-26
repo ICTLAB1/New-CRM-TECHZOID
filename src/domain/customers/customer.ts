@@ -6,6 +6,11 @@ import type { StageId } from "../pipeline/stages";
 export interface Customer {
   id: string;
   ownerId: string;
+  /** The customer ID a person reads — CUST-000124 — as opposed to `id`,
+   *  which is a database key nobody should ever be shown. Allocated once
+   *  when the record is created and never reused; it prints on every
+   *  document raised for this customer. */
+  code?: string;
   company?: string;
   contact?: string;
   designation?: string;
@@ -46,6 +51,9 @@ export interface CustomerNote {
   nextAction?: string;
 }
 
+/** `code` is deliberately absent: it is allocated when the record is first
+ *  SAVED, not when a blank form is opened, so cancelling out of "New
+ *  customer" does not burn a number and leave a gap in the sequence. */
 export function blankCustomer(ownerId: string, id: string): Customer {
   return {
     id, ownerId,

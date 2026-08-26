@@ -11,7 +11,9 @@ import { STAGES, stageOf } from "../../domain/pipeline/stages";
 import { inrList } from "../../domain/currency/format";
 import { fmtDate, isOverdue } from "../../domain/dates";
 import { CustomerSheet } from "./CustomerSheet";
+import { nextCustomerCode } from "../../data/customerCode";
 import { DuplicateWarning } from "./DuplicateWarning";
+import type { IntegrationsApi } from "../../integrations/api";
 
 const uid = (): string => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
 
@@ -20,7 +22,10 @@ export interface CustomersScreenProps {
   workspace: Workspace;
   users: { id: string; name: string }[];
   customFields: { id: string; label: string }[];
-  currentUser: { id: string; name: string; role: string };
+  currentUser: { id: string; name: string; role: string; email?: string; designation?: string };
+  /** Lets the registration link be emailed from here rather than handed to
+   *  whatever mail client the machine happens to have. */
+  api?: IntegrationsApi;
   /** Read for `confirmBeforeSave` and passed to the sheet. */
   settings?: Record<string, unknown>;
   onChange: (customers: Customer[], workspace: Workspace) => void;
@@ -28,7 +33,7 @@ export interface CustomersScreenProps {
 
 type Pending = { customer: Customer; duplicate: ReturnType<typeof findDuplicate<Customer>> };
 
-export function CustomersScreen({ customers, workspace, users, customFields, currentUser, settings = {}, onChange }: CustomersScreenProps) {
+export function CustomersScreen({ customers, workspace, users, customFields, currentUser, settings = {}, api, onChange }: CustomersScreenProps) {
   const toast = useToast();
   const [query, setQuery] = useState("");
   const [stageFilter, setStageFilter] = useState<string>("all");
@@ -51,9 +56,16 @@ export function CustomersScreen({ customers, workspace, users, customFields, cur
   }, [customers, query, stageFilter, owner]);
 
   /** Commit a save, cascading ownership if the owner changed. */
-  const commit = (next: Customer) => {
-    const previous = customers.find((c) => c.id === next.id);
-    const reassigned = !!previous && previous.ownerId !== next.ownerId;
+  const commit = async (raw: Customer) => {
+    const previous = customers.find((c) => c.id === raw.id);
+    const reassigned = !!previous && previous.ownerId !== raw.ownerId;
+
+    /* The customer ID is taken here, at the first save, rather than when the
+       blank form opened — cancelling out of "New customer" must not burn a
+       number and leave a hole in the sequence. */
+    const next = !previous && !raw.code
+      ? { ...raw, code: await nextCustomerCode(customers.length + 1, String(settings["customerPrefix"] ?? "CUST-")) }
+      : raw;
 
     const list = previous
       ? customers.map((c) => (c.id === next.id ? next : c))
@@ -83,7 +95,7 @@ export function CustomersScreen({ customers, workspace, users, customFields, cur
       const duplicate = findDuplicate(next, customers, next.id);
       if (duplicate) { setPending({ customer: next, duplicate }); return; }
     }
-    commit(next);
+    void commit(next);
   };
 
   return (
@@ -204,10 +216,10 @@ export function CustomersScreen({ customers, workspace, users, customFields, cur
           matchOwner={ownerName(pending.duplicate.match.ownerId)}
           byGstin={pending.duplicate.byGstin}
           onEdit={() => setPending(null)}
-          onContinue={() => commit(pending.customer)}
+          onContinue={() => void commit(pending.customer)}
         />
       ) : null}
-      <ShareLinkDialog open={sharing} user={currentUser} onClose={() => setSharing(false)} />
+      <ShareLinkDialog open={sharing} user={currentUser} api={api} settings={settings} onClose={() => setSharing(false)} />
     </main>
   );
 }

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Button, Card, Field, Input, Select, Textarea } from "../../components/primitives";
 import { STATE_NAMES } from "../../domain/geo/states";
+import { SEGMENTS } from "../../domain/pipeline/stages";
 import { COUNTRIES } from "../../domain/geo/countries";
 import { gstinMessage, validateGSTIN } from "../../domain/gstin/validate";
 
@@ -22,6 +23,10 @@ interface Branding {
   repName?: string;
   company?: { name?: string; logo?: string | null; tagline?: string; website?: string };
   accentColor?: string;
+  /** Whatever this workspace has added to its own customer record. Asked
+   *  here so a lead arrives complete rather than needing a phone call to
+   *  fill in the fields somebody thought were worth adding. */
+  customFields?: { id: string; label: string }[];
 }
 
 type Status = "loading" | "invalid" | "ready" | "sending" | "sent";
@@ -29,7 +34,7 @@ type Status = "loading" | "invalid" | "ready" | "sending" | "sent";
 const BLANK = {
   company: "", contact: "", designation: "", email: "", phone: "",
   country: "India", state: "Delhi", city: "", address: "", pincode: "",
-  gstin: "", pan: "", message: "",
+  gstin: "", pan: "", segment: "", message: "",
   /* The honeypot. Never shown to a person; a value here means a bot. */
   website: "",
 };
@@ -38,6 +43,7 @@ export function PublicLeadForm({ refId }: { refId: string }) {
   const [status, setStatus] = useState<Status>("loading");
   const [branding, setBranding] = useState<Branding | null>(null);
   const [form, setForm] = useState({ ...BLANK });
+  const [extra, setExtra] = useState<Record<string, string>>({});
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -69,7 +75,7 @@ export function PublicLeadForm({ refId }: { refId: string }) {
       const resp = await fetch("/.netlify/functions/submit-lead", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ refId, ...form }),
+        body: JSON.stringify({ refId, ...form, customFields: extra }),
       });
       const data = await resp.json().catch(() => ({}));
       if (!resp.ok || data.error) {
@@ -150,11 +156,11 @@ export function PublicLeadForm({ refId }: { refId: string }) {
                 <Field label="Your role" hint="Optional.">
                   <Input value={form.designation} onChange={set("designation")} />
                 </Field>
-                <Field label="Email">
-                  <Input type="email" value={form.email} onChange={set("email")} />
+                <Field label="Email" hint="Where the quotation is sent.">
+                  <Input type="email" required value={form.email} onChange={set("email")} />
                 </Field>
                 <Field label="Phone">
-                  <Input value={form.phone} onChange={set("phone")} placeholder="+91 98100 12345" />
+                  <Input required value={form.phone} onChange={set("phone")} placeholder="+91 98100 12345" />
                 </Field>
                 <Field label="Country">
                   <Select value={form.country} onChange={set("country")}>
@@ -162,17 +168,16 @@ export function PublicLeadForm({ refId }: { refId: string }) {
                   </Select>
                 </Field>
               </div>
-              <div className="field-hint">An email or a phone number — either is enough to reach you.</div>
 
               <div className="grid grid-2">
-                <Field label="Address" hint="Optional.">
-                  <Textarea rows={2} value={form.address} onChange={set("address")} />
+                <Field label="Billing address" hint="As it should appear on your invoice.">
+                  <Textarea rows={2} required value={form.address} onChange={set("address")} />
                 </Field>
                 <div className="stack">
                   <div className="grid grid-2">
-                    <Field label="City"><Input value={form.city} onChange={set("city")} /></Field>
+                    <Field label="City"><Input required value={form.city} onChange={set("city")} /></Field>
                     <Field label={isIndia ? "PIN code" : "Post code"}>
-                      <Input value={form.pincode} onChange={set("pincode")} />
+                      <Input required value={form.pincode} onChange={set("pincode")} />
                     </Field>
                   </div>
                   {isIndia ? (
@@ -213,6 +218,28 @@ export function PublicLeadForm({ refId }: { refId: string }) {
                 </div>
               ) : null}
 
+              <Field label="Type of organisation" hint="Optional — it helps us quote the right way.">
+                <Select value={form.segment} onChange={set("segment")}>
+                  <option value="">Select…</option>
+                  {SEGMENTS.map((seg) => <option key={seg} value={seg}>{seg}</option>)}
+                </Select>
+              </Field>
+
+              {/* Whatever this workspace decided its customer record needs.
+                  Asked here rather than chased on the phone afterwards. */}
+              {branding?.customFields?.length ? (
+                <div className="grid grid-2">
+                  {branding.customFields.map((cf) => (
+                    <Field key={cf.id} label={cf.label} hint="Optional.">
+                      <Input
+                        value={extra[cf.id] ?? ""}
+                        onChange={(e) => setExtra((cur) => ({ ...cur, [cf.id]: e.target.value }))}
+                      />
+                    </Field>
+                  ))}
+                </div>
+              ) : null}
+
               <Field label="Anything we should know" hint="Optional — what you're looking for, quantities, timing.">
                 <Textarea rows={3} value={form.message} onChange={set("message")} />
               </Field>
@@ -230,7 +257,12 @@ export function PublicLeadForm({ refId }: { refId: string }) {
                 <Button
                   type="submit"
                   tone="primary"
-                  disabled={sending || !form.company.trim() || !form.contact.trim() || (!form.email.trim() && !form.phone.trim()) || gstinBad}
+                  disabled={
+                    sending || gstinBad
+                    || !form.company.trim() || !form.contact.trim()
+                    || !form.email.trim() || !form.phone.trim()
+                    || !form.address.trim() || !form.city.trim() || !form.pincode.trim()
+                  }
                 >
                   {sending ? "Sending…" : "Send my details"}
                 </Button>

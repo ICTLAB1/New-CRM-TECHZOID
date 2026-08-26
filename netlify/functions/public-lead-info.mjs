@@ -1,6 +1,7 @@
 import { clientIp, fail, guard, json } from "../lib/http.mjs";
 import { adminClient } from "../lib/auth.mjs";
 import { consume, tooManyMessage } from "../lib/ratelimit.mjs";
+import { resolveRef } from "../lib/leadRef.mjs";
 import { str } from "../lib/validate.mjs";
 
 /**
@@ -34,8 +35,13 @@ export async function handler(event) {
   if (!rl.allowed) return fail(event, 429, tooManyMessage(rl.retryAfterSeconds), null, "GET, OPTIONS");
 
   try {
+    /* Either shape of link — a short code or the uuid links already
+       shared. See ../lib/leadRef.mjs. */
+    const ownerId = await resolveRef(admin, refId);
+    if (!ownerId) return json(event, 200, { valid: false }, "GET, OPTIONS");
+
     const [{ data: profile }, { data: settingsRow }] = await Promise.all([
-      admin.from("profiles").select("id, name").eq("id", refId).maybeSingle(),
+      admin.from("profiles").select("id, name").eq("id", ownerId).maybeSingle(),
       admin.from("settings").select("data").eq("id", "main").maybeSingle(),
     ]);
 
@@ -57,6 +63,15 @@ export async function handler(event) {
         website: company.website ?? "",
       },
       accentColor: template.accentColor ?? "#2563EB",
+      /* Labels and ids only. These are this workspace's own additions to a
+         customer record, and asking for them on the form is the difference
+         between a lead that is ready to quote and one that needs a phone
+         call to complete. Capped so a workspace with fifty of them cannot
+         turn a registration form into a questionnaire. */
+      customFields: (Array.isArray(s.customFields) ? s.customFields : [])
+        .filter((f) => f && typeof f.id === "string" && typeof f.label === "string" && f.label.trim())
+        .slice(0, 8)
+        .map((f) => ({ id: String(f.id).slice(0, 64), label: String(f.label).slice(0, 80) })),
     }, "GET, OPTIONS");
   } catch (err) {
     return fail(event, 500, "The form isn't available just now. Please try again in a moment.", err?.message, "GET, OPTIONS");

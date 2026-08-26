@@ -141,7 +141,7 @@ const uid = (): string => Math.random().toString(36).slice(2, 10) + Date.now().t
  * is the only way a customer reaches a document.
  */
 export const CUSTOMER_DERIVED_FIELDS = [
-  "customerId", "ownerId",
+  "customerId", "customerCode", "ownerId",
   "billName", "billContact", "billAddress", "billState", "billCountry",
   "billGstin", "billPan", "billEmail", "billPhone",
   "currency", "taxType",
@@ -159,7 +159,7 @@ export function taxTypeFor(customer: Customer | null, settings: DocSettings): st
 export function documentFieldsFrom(customer: Customer | null, settings: DocSettings) {
   if (!customer) {
     return {
-      customerId: "", ownerId: "",
+      customerId: "", customerCode: "", ownerId: "",
       billName: "", billContact: "", billAddress: "", billState: "Delhi", billCountry: "India",
       billGstin: "", billPan: "", billEmail: "", billPhone: "",
       currency: settings.defaultCurrency || "INR",
@@ -168,6 +168,10 @@ export function documentFieldsFrom(customer: Customer | null, settings: DocSetti
   }
   return {
     customerId: customer.id,
+    /* The customer's own ID, printed on the document as "Customer ID". It
+       comes from the customer record rather than being typed per document,
+       which is how the same customer used to end up with three of them. */
+    customerCode: customer.code ?? "",
     ownerId: customer.ownerId,
     billName: customer.company ?? "",
     billContact: customer.contact ?? "",
@@ -231,7 +235,6 @@ export function newQuotation({ settings, user, customer = null, today = TODAY() 
     subject: "Quotation for IT products and services",
     referenceNo: "", enquiryRef: "", revisionNo: 0,
     paymentTerms: "As specified", deliveryTerms: "As specified",
-    customerCode: "",
     date: today,
     validUntil: addDays(today, settings.defaultValidityDays ?? 15),
     status: "Draft",
@@ -259,7 +262,6 @@ export function newProforma({ settings, user, customer = null, today = TODAY() }
     subject: "Proforma invoice for IT products and services",
     referenceNo: "", enquiryRef: "", revisionNo: 0, bankAccountId: "",
     paymentTerms: "As specified", deliveryTerms: "As specified",
-    customerCode: "",
     date: today,
     validUntil: addDays(today, settings.defaultValidityDays ?? 15),
     status: "Draft",
@@ -331,7 +333,6 @@ export function newPurchaseOrder({ settings, user, customer = null, today = TODA
     subject: "Purchase order for IT products and services",
     referenceNo: "", enquiryRef: "", revisionNo: 0,
     paymentTerms: "As specified", deliveryTerms: "As specified",
-    customerCode: "",
     date: today,
     /* Not a validity date here — it is when the goods are required by, and
        it is what the delay clauses are measured against. */

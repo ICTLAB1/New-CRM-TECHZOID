@@ -3,6 +3,7 @@ import { clientIp, fail, guard, json, readJson } from "../lib/http.mjs";
 import { adminClient } from "../lib/auth.mjs";
 import { isEmail, isGstin, isPan, str } from "../lib/validate.mjs";
 import { consume, tooManyMessage } from "../lib/ratelimit.mjs";
+import { resolveRef } from "../lib/leadRef.mjs";
 
 /**
  * The public customer registration form.
@@ -15,6 +16,25 @@ import { consume, tooManyMessage } from "../lib/ratelimit.mjs";
  * salesperson, the enquiry lands in their pipeline, and it is checked against
  * a real profile so a made-up id cannot plant rows.
  */
+
+/** Matches SEGMENTS in src/domain/pipeline/stages.ts. Anything else is
+ *  ignored rather than stored: this field feeds reports, and a segment
+ *  nobody recognises quietly becomes its own category. */
+const SEGMENTS = ["SMB", "Mid-Market", "Enterprise", "Government / PSU", "Education"];
+
+/** The workspace's own fields, as answered. Ids are matched loosely and
+ *  values bounded — this is an unauthenticated endpoint, and the shape of
+ *  what arrives is entirely up to whoever posts it. */
+function cleanCustomFields(raw) {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const out = {};
+  for (const [key, value] of Object.entries(raw).slice(0, 8)) {
+    const id = str(key, 64);
+    const text = str(value, 300);
+    if (id && text) out[id] = text;
+  }
+  return out;
+}
 
 const MAX = {
   company: 200, contact: 120, designation: 100, email: 200, phone: 40,
@@ -71,10 +91,12 @@ export async function handler(event) {
     return fail(event, 429, tooManyMessage(rl.retryAfterSeconds) + " If this is urgent, please email us directly.");
   }
 
-  /* Only a real, current profile may receive leads. */
+  /* Only a real, current profile may receive leads — resolved from either
+     shape of link. See ../lib/leadRef.mjs. */
+  let ownerId;
   try {
-    const { data: owner } = await admin.from("profiles").select("id").eq("id", refId).maybeSingle();
-    if (!owner) return fail(event, 400, "This link is no longer valid. Please ask for a fresh one.");
+    ownerId = await resolveRef(admin, refId);
+    if (!ownerId) return fail(event, 400, "This link is no longer valid. Please ask for a fresh one.");
   } catch (err) {
     return fail(event, 500, "Something went wrong submitting your details. Please try again in a moment.", err?.message);
   }
@@ -83,20 +105,44 @@ export async function handler(event) {
   const now = Date.now();
   const message = str(body.message, MAX.message);
 
+  /* The same allocator the app uses, for the same reason: this runs on a
+     server with nobody watching, and a customer ID handed out twice here is
+     one that would never be noticed. Postgres settles it. A failure is not
+     fatal — a customer who has just filled in a form must not be turned away
+     because a counter would not advance. */
+  let code = "";
+  try {
+    const { data } = await admin.rpc("next_customer_code");
+    code = data ? String(data) : "";
+  } catch (err) {
+    console.error("could not allocate a customer code:", err?.message ?? err);
+  }
+
   /* The shape here is the customer record the whole CRM reads. Every field
      the app expects is written, including the empty ones: a record missing
      `customFields` or `notes` is the "legacy record" problem being created
      fresh rather than inherited. */
+  const country = str(body.country, MAX.country) || "India";
+  const isIndia = country === "India";
+
   const record = {
+    code,
     company, contact,
     designation: str(body.designation, MAX.designation),
     email, phone, gstin, pan,
     address: str(body.address, MAX.address),
     city: str(body.city, MAX.city),
     state: str(body.state, MAX.state),
-    country: str(body.country, MAX.country) || "India",
+    country,
     pincode: str(body.pincode, MAX.pincode),
-    segment: "SMB",
+    segment: SEGMENTS.includes(str(body.segment, 40)) ? str(body.segment, 40) : "SMB",
+    /* NEVER SET BEFORE, AND IT SHOWED. Without these a lead from the form
+       reached the app with no currency and no tax regime, so the first
+       quotation raised for an overseas customer carried the workspace
+       default — Indian rupees and GST — until somebody noticed. They are
+       derived from the country here, exactly as the app derives them. */
+    currency: isIndia ? "INR" : "",
+    taxType: isIndia ? "gst" : "none",
     source: "Customer Registration Form",
     stage: "lead",
     value: "",
@@ -105,7 +151,7 @@ export async function handler(event) {
     notes: message
       ? [{ id: randomUUID(), ts: now, user: "Registration form", text: message, type: "Note" }]
       : [],
-    customFields: {},
+    customFields: cleanCustomFields(body.customFields),
     createdAt: now,
     updatedAt: now,
   };
@@ -113,7 +159,7 @@ export async function handler(event) {
   try {
     const { error } = await admin.from("customers").insert({
       id,
-      owner_id: refId,
+      owner_id: ownerId,
       data: record,
       updated_at: new Date().toISOString(),
     });
