@@ -136,6 +136,9 @@ export async function handler(event) {
     country,
     pincode: str(body.pincode, MAX.pincode),
     altPhone: str(body.altPhone, MAX.phone),
+    /* Only an explicit yes. Anything else — absent, empty, a bot posting
+       junk — is not consent, and Meta's rules turn on consent. */
+    whatsappOptIn: body.whatsappOptIn === "yes" || body.whatsappOptIn === true,
     /* Sent as `companyWebsite`, NOT `website`: `website` is the honeypot
        above, and a real field sharing its name would mark every honest
        submission as a bot. */

@@ -1,5 +1,6 @@
 import { adminClient } from "../lib/auth.mjs";
 import { sendMail } from "../lib/mailer.mjs";
+import { sendWhatsAppTemplate } from "../lib/whatsapp.mjs";
 import { stopReason, TABLE_FOR } from "../lib/followupRules.mjs";
 
 /**
@@ -68,7 +69,7 @@ export async function handler() {
   }
 
   const rows = data ?? [];
-  const tally = { due: rows.length, sent: 0, stopped: 0, failed: 0, skipped: 0 };
+  const tally = { due: rows.length, sent: 0, stopped: 0, failed: 0, skipped: 0, whatsapp: 0 };
 
   /* One document is read once per run however many of its steps are due, and
      one stopped document takes its whole sequence with it. */
@@ -89,19 +90,31 @@ export async function handler() {
       continue;
     }
 
-    const result = await sendMail({
-      admin,
-      userId: row.owner_id,
-      to: row.send_to,
-      cc: splitList(row.cc),
-      subject: row.subject,
-      message: row.message,
-      html: row.html || null,
-      replyTo: row.reply_to || "",
-    });
+    /* Whichever channel this row was queued on. A WhatsApp row carries a
+       template name and its placeholder values rather than words: outside
+       Meta's 24-hour window only an approved template may be sent, and the
+       words live in Meta's library. See ../lib/whatsapp.mjs. */
+    const result = row.channel === "whatsapp"
+      ? await sendWhatsAppTemplate({
+          to: row.send_to_phone,
+          templateName: row.template_name,
+          bodyValues: Array.isArray(row.template_values) ? row.template_values : [],
+          callbackData: row.doc_number || "",
+        })
+      : await sendMail({
+          admin,
+          userId: row.owner_id,
+          to: row.send_to,
+          cc: splitList(row.cc),
+          subject: row.subject,
+          message: row.message,
+          html: row.html || null,
+          replyTo: row.reply_to || "",
+        });
 
     if (result.ok) {
       tally.sent += 1;
+      if (row.channel === "whatsapp") tally.whatsapp += 1;
       await mark(admin, row.id, { state: "sent", sent_at: new Date().toISOString(), error: null });
     } else {
       tally.failed += 1;

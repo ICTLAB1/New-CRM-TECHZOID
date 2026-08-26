@@ -68,14 +68,15 @@ export function FollowUpStrip({ docId }: { docId: string }) {
       <div className="table-wrap">
         <table className="table">
           <thead>
-            <tr><th>When</th><th>Reads as</th><th>To</th><th /></tr>
+            <tr><th>When</th><th>Reads as</th><th>How</th><th>To</th><th /></tr>
           </thead>
           <tbody>
             {rows.map((r) => (
               <tr key={r.id}>
                 <td data-head className="strong">{fmtDate(r.dueOn)}</td>
                 <td data-label="Reads as" className="muted">{TONE_LABELS[r.tone]?.name ?? r.tone}</td>
-                <td data-label="To" className="muted">{r.to}</td>
+                <td data-label="How" className="muted">{r.channel === "whatsapp" ? "WhatsApp" : "Email"}</td>
+                <td data-label="To" className="muted">{r.channel === "whatsapp" ? (r.toPhone || "—") : r.to}</td>
                 <td data-actions>
                   <Chip tone={stateTone(r.state)}>{stateLabel(r)}</Chip>
                 </td>

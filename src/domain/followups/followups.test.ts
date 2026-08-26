@@ -9,7 +9,7 @@ const SENT = "2026-08-24";
 const row = (o: Partial<FollowUp> = {}): FollowUp => ({
   id: "f1", docType: "quotation", docId: "q1", docNumber: "TZ/QT/2627/0117",
   ownerId: "u1", step: 1, steps: 3, tone: "nudge", dueOn: "2026-08-27",
-  state: "scheduled", to: "buyer@example.com", subject: "s", message: "m", ...o,
+  state: "scheduled", channel: "email", to: "buyer@example.com", subject: "s", message: "m", ...o,
 });
 
 describe("planning a sequence", () => {

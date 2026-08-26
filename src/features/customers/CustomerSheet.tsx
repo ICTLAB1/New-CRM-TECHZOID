@@ -107,6 +107,22 @@ export function CustomerSheet({ open = true, customer, users, customFields, canR
             <Field label="Alternate phone" hint="For when the first one doesn't answer."><Input value={f.altPhone ?? ""} onChange={set("altPhone")} /></Field>
             <Field label="Website"><Input value={f.website ?? ""} onChange={set("website")} placeholder="www.example.com" /></Field>
           </div>
+
+          {/* CONSENT, NOT A PREFERENCE. Meta requires opt-in before a
+              business sends the first WhatsApp message, so this gates the
+              automated channel entirely. Tick it only once the customer has
+              actually agreed — on the registration form, on a call, or in
+              writing. */}
+          <label className="row-tight" style={{ cursor: "pointer" }}>
+            <input
+              type="checkbox"
+              checked={f.whatsappOptIn === true}
+              onChange={(e) => setF((cur) => ({ ...cur, whatsappOptIn: e.target.checked }))}
+            />
+            <span>They have agreed to be contacted on WhatsApp</span>
+          </label>
+          <div className="grid grid-2">
+          </div>
         </div>
 
         <div className="stack">

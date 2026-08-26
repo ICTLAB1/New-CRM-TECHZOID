@@ -60,6 +60,16 @@ export const MAX_STEPS = 5;
 
 export type FollowUpState = "scheduled" | "sent" | "failed" | "cancelled";
 
+/**
+ * How a follow-up reaches the customer.
+ *
+ * Email carries the words we wrote. WhatsApp carries a template approved by
+ * Meta in advance, because a chaser sent days later is outside the 24-hour
+ * window where free-form messages are allowed — so the row holds a template
+ * name and its placeholder values instead of a message.
+ */
+export type FollowUpChannel = "email" | "whatsapp";
+
 export interface FollowUp {
   id: string;
   /** Which document this chases, and who owns it. */
@@ -78,7 +88,13 @@ export interface FollowUp {
    *  scheduled is a day's work, not an instant. */
   dueOn: string;
   state: FollowUpState;
+  channel: FollowUpChannel;
   to: string;
+  /** "<country code> <national number>", split when the row was queued so
+   *  the sender needs no opinion about phone numbers. */
+  toPhone?: string;
+  templateName?: string;
+  templateValues?: string[];
   cc?: string;
   replyTo?: string;
   subject: string;

@@ -1,5 +1,5 @@
 import { getSupabase, isSupabaseConfigured } from "./supabase";
-import type { FollowUp, FollowUpTone } from "../domain/followups/followups";
+import type { FollowUp, FollowUpChannel, FollowUpTone } from "../domain/followups/followups";
 
 /**
  * Reading, arming and stopping automatic follow-up sequences.
@@ -29,7 +29,11 @@ interface FollowUpRow {
   tone: string;
   due_on: string;
   state: string;
+  channel: string;
   send_to: string;
+  send_to_phone: string | null;
+  template_name: string | null;
+  template_values: unknown;
   cc: string;
   reply_to: string;
   subject: string;
@@ -52,7 +56,13 @@ const toFollowUp = (r: FollowUpRow): FollowUp => ({
   tone: r.tone as FollowUpTone,
   dueOn: r.due_on,
   state: r.state as FollowUp["state"],
+  /* Rows written before WhatsApp existed carry no channel; they are all
+     email, which is what the column defaults to server-side too. */
+  channel: r.channel === "whatsapp" ? "whatsapp" : "email",
   to: r.send_to,
+  toPhone: r.send_to_phone ?? undefined,
+  templateName: r.template_name ?? undefined,
+  templateValues: Array.isArray(r.template_values) ? (r.template_values as string[]) : undefined,
   cc: r.cc ?? "",
   replyTo: r.reply_to ?? "",
   subject: r.subject ?? "",
@@ -81,9 +91,16 @@ export interface ArmedStep {
   steps: number;
   tone: FollowUpTone;
   dueOn: string;
-  subject: string;
-  message: string;
+  channel: FollowUpChannel;
+  /* Email rows carry the words. WhatsApp rows carry the template approved
+     by Meta and what goes in its placeholders — see
+     src/domain/integrations/interakt.ts. */
+  subject?: string;
+  message?: string;
   html?: string;
+  toPhone?: string;
+  templateName?: string;
+  templateValues?: string[];
 }
 
 /**
@@ -128,12 +145,16 @@ export async function armFollowUps(opts: {
     tone: s.tone,
     due_on: s.dueOn,
     state: "scheduled",
+    channel: s.channel,
     send_to: opts.to,
+    send_to_phone: s.toPhone ?? "",
     cc: opts.cc ?? "",
     reply_to: opts.replyTo ?? "",
-    subject: s.subject,
-    message: s.message,
+    subject: s.subject ?? "",
+    message: s.message ?? "",
     html: s.html ?? null,
+    template_name: s.templateName ?? "",
+    template_values: s.templateValues ?? [],
   }));
 
   const { data, error } = await client.from("follow_ups").insert(rows).select("*");

@@ -13,6 +13,7 @@ import type { DocImages } from "../../documents/pdf/render";
 import type { DocType, DocumentModel } from "../../domain/documents/model";
 import type { ComputedRow, DocumentTotals } from "../../domain/tax/types";
 import type { SalesDocument } from "../../domain/documents/create";
+import type { Customer } from "../../domain/customers/customer";
 import { IntegrationError, type IntegrationsApi } from "../../integrations/api";
 import {
   buildEmailHtml, buildEmailText,
@@ -23,6 +24,7 @@ import {
   TONE_LABELS, type FollowUpFacts, type FollowUpTone,
 } from "../../domain/followups/followups";
 import { armFollowUps, followUpsAvailable, type ArmedStep } from "../../data/followups";
+import { mayWhatsApp, splitNumber, templateFor, TEMPLATE_SETTING } from "../../domain/integrations/interakt";
 import { TODAY } from "../../domain/dates";
 
 /* NO DEFAULT CC ADDRESS HERE. A real address baked into a template is one
@@ -49,6 +51,9 @@ export interface DocumentActionsProps {
   images?: DocImages;
   /** Whose name, role and address the email carries. */
   currentUser?: { id: string; name: string; email?: string; designation?: string };
+  /** The customer this document is for, where there is one. Read only for
+   *  whether they have agreed to be messaged on WhatsApp. */
+  customer?: Customer | null;
   /** Called once the customer actually has the document. The editor uses it
    *  to record that it was sent — until now nothing did, so a quotation
    *  emailed on Monday still read "Draft" on Friday, and the deal sat in
@@ -86,7 +91,7 @@ function defaultMessage(doc: SalesDocument, docType: DocType): string {
 }
 
 export function DocumentActions({
-  api, doc, docType, model, rows, totals, settings, images, currentUser, onSent,
+  api, doc, docType, model, rows, totals, settings, images, currentUser, customer, onSent,
 }: DocumentActionsProps) {
   const toast = useToast();
   const [emailOpen, setEmailOpen] = useState(false);
@@ -223,6 +228,15 @@ export function DocumentActions({
       ? `Every step in the sequence would land after ${doc.validUntil ? fmtDate(doc.validUntil) : "this document lapses"}. Move Valid until further out, or shorten the sequence in Settings → Follow-ups.`
     : null;
 
+  /* WhatsApp is only offered where Meta's rules allow it: the customer has
+     ticked the box, and there is a number that splits cleanly into a country
+     code and a national number. Both are hard gates — writing first without
+     consent is a policy breach, and a mis-split number delivers somebody's
+     quotation reminder to a stranger. */
+  const waNumber = splitNumber(doc.billPhone);
+  const waCustomer = customer ?? null;
+  const waAllowed = !!waNumber && !!waCustomer && mayWhatsApp(waCustomer);
+
   const armable = canFollowUp && !cannotArm && plannedFollowUps.length > 0
     ? {
         ownerId: doc.ownerId,
@@ -233,6 +247,15 @@ export function DocumentActions({
         customerName: doc.billName || "",
         facts: followUpFacts,
         plan: plannedFollowUps,
+        whatsapp: waAllowed
+          ? { to: `${waNumber.countryCode} ${waNumber.phoneNumber}`, why: "" }
+          : { to: "", why: whyNoWhatsApp(waNumber, waCustomer) },
+        templateNames: {
+          nudge: String(settings[TEMPLATE_SETTING.nudge] ?? ""),
+          check: String(settings[TEMPLATE_SETTING.check] ?? ""),
+          final: String(settings[TEMPLATE_SETTING.final] ?? ""),
+        },
+        company: doc.billName || "",
       }
     : null;
 
@@ -356,6 +379,11 @@ interface EmailDialogProps {
     customerName: string;
     facts: FollowUpFacts;
     plan: Array<{ step: number; tone: FollowUpTone; dueOn: string }>;
+    /** Where a WhatsApp follow-up would go, or why it cannot. */
+    whatsapp: { to: string; why: string };
+    /** The names these templates were approved under in Meta. */
+    templateNames: Partial<Record<FollowUpTone, string>>;
+    company: string;
   } | null;
   /** Why no sequence can be armed, when none can. Shown instead of the tick
    *  box, because a control that silently is not there reads as a feature
@@ -380,6 +408,9 @@ function EmailDialog({
   const [tone, setTone] = useState<FollowUpTone>("nudge");
   const [attach, setAttach] = useState(attachByDefault);
   const [arm, setArm] = useState(true);
+  /* Email unless WhatsApp is actually available. Defaulting to a channel
+     that cannot send would arm a sequence that fails three times quietly. */
+  const [channels, setChannels] = useState<{ email: boolean; whatsapp: boolean }>({ email: true, whatsapp: false });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [showPreview, setShowPreview] = useState(false);
@@ -432,26 +463,54 @@ function EmailDialog({
       /* After the send, never instead of it, and never allowed to fail it.
          The customer has the quotation either way; a sequence that could not
          be stored is worth a warning, not an error on a message that went. */
-      if (armable && arm) {
+      if (armable && arm && (channels.email || channels.whatsapp)) {
         try {
-          const steps: ArmedStep[] = armable.plan.map((p) => ({
-            step: p.step,
-            steps: armable.plan.length,
-            tone: p.tone,
-            dueOn: p.dueOn,
-            subject: followUpSubject(p.tone, armable.facts),
-            message: buildEmailText({
-              body: followUpBody(p.tone, armable.facts),
-              sender, company, quotation, attachmentName: null,
-            }),
-            /* Rendered NOW, from the same builder the preview uses, and
-               stored. What goes out weeks later is this exact markup — not
-               something re-templated by code nobody watched. */
-            html: buildEmailHtml({
-              body: followUpBody(p.tone, armable.facts),
-              sender, company, quotation, attachmentName: null,
-            }),
-          }));
+          const steps: ArmedStep[] = armable.plan.flatMap((p) => {
+            const rows: ArmedStep[] = [];
+            const base = { step: p.step, steps: armable.plan.length, tone: p.tone, dueOn: p.dueOn };
+
+            if (channels.email) {
+              rows.push({
+                ...base,
+                channel: "email",
+                subject: followUpSubject(p.tone, armable.facts),
+                message: buildEmailText({
+                  body: followUpBody(p.tone, armable.facts),
+                  sender, company, quotation, attachmentName: null,
+                }),
+                /* Rendered NOW, from the same builder the preview uses, and
+                   stored. What goes out weeks later is this exact markup —
+                   not something re-templated by code nobody watched. */
+                html: buildEmailHtml({
+                  body: followUpBody(p.tone, armable.facts),
+                  sender, company, quotation, attachmentName: null,
+                }),
+              });
+            }
+
+            if (channels.whatsapp && armable.whatsapp.to) {
+              /* The template and its placeholder values are decided here and
+                 stored, for the same reason the email markup is: what was
+                 queued is what goes out. The WORDS are Meta's, in the
+                 approved template — nothing here can change them. */
+              const t = templateFor(p.tone, {
+                contact: armable.facts.contact,
+                company: armable.company,
+                number: armable.facts.number,
+                date: armable.facts.date,
+                validUntil: armable.facts.validUntil,
+              }, armable.templateNames);
+              rows.push({
+                ...base,
+                channel: "whatsapp",
+                toPhone: armable.whatsapp.to,
+                templateName: t.templateName,
+                templateValues: [...t.bodyValues],
+              });
+            }
+
+            return rows;
+          });
           await armFollowUps({
             ownerId: armable.ownerId,
             docType: armable.docType,
@@ -565,9 +624,37 @@ function EmailDialog({
             </label>
             <p className="field-hint" style={{ margin: "4px 0 0 24px" }}>
               {arm
-                ? `${armable.plan.length} email${armable.plan.length === 1 ? "" : "s"} to ${to || "this customer"}, on ${armable.plan.map((p) => fmtDate(p.dueOn)).join(", ")}. They stop by themselves the moment this ${armable.docType === "proforma" ? "proforma" : "quotation"} is accepted, turned down or expires — and you can stop them from this document at any time.`
+                ? `${armable.plan.length} follow-up${armable.plan.length === 1 ? "" : "s"} on ${armable.plan.map((p) => fmtDate(p.dueOn)).join(", ")}. They stop by themselves the moment this ${armable.docType === "proforma" ? "proforma" : "quotation"} is accepted, turned down or expires — and you can stop them from this document at any time.`
                 : "Nothing will be sent on its own. You can still follow up by hand from this document."}
             </p>
+
+            {arm ? (
+              <div style={{ margin: "8px 0 0 24px" }}>
+                <label className="row-tight" style={{ cursor: "pointer" }}>
+                  <input
+                    type="checkbox"
+                    checked={channels.email}
+                    onChange={(e) => setChannels((c) => ({ ...c, email: e.target.checked }))}
+                  />
+                  <span>By email, to {to || "this customer"}</span>
+                </label>
+
+                <label className="row-tight" style={{ cursor: armable.whatsapp.to ? "pointer" : "default", opacity: armable.whatsapp.to ? 1 : .55 }}>
+                  <input
+                    type="checkbox"
+                    checked={channels.whatsapp}
+                    disabled={!armable.whatsapp.to}
+                    onChange={(e) => setChannels((c) => ({ ...c, whatsapp: e.target.checked }))}
+                  />
+                  <span>By WhatsApp{armable.whatsapp.to ? `, to ${armable.whatsapp.to}` : ""}</span>
+                </label>
+                <p className="field-hint" style={{ margin: "2px 0 0 24px" }}>
+                  {armable.whatsapp.why
+                    ? armable.whatsapp.why
+                    : "Sent as the WhatsApp template approved for this, not as free text — Meta allows nothing else this long after the last message."}
+                </p>
+              </div>
+            ) : null}
           </div>
         ) : null}
 
@@ -592,4 +679,19 @@ function EmailDialog({
       </div>
     </Modal>
   );
+}
+
+/** Why WhatsApp is not on offer, in the words that say what to do about it. */
+function whyNoWhatsApp(
+  number: { countryCode: string; phoneNumber: string } | null,
+  customer: Customer | null,
+): string {
+  if (!customer) return "This document is not linked to a customer record.";
+  if (customer.whatsappOptIn !== true) {
+    /* Meta requires opt-in before a business writes first. Said plainly,
+       because the fix is a conversation with the customer, not a setting. */
+    return "This customer hasn't agreed to WhatsApp. Tick it on their record once they have.";
+  }
+  if (!number) return "There's no usable phone number with a country code on this document.";
+  return "";
 }

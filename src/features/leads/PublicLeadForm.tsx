@@ -35,7 +35,7 @@ const BLANK = {
   company: "", contact: "", designation: "", email: "", phone: "",
   country: "India", state: "Delhi", city: "", address: "", pincode: "",
   gstin: "", pan: "", segment: "", message: "",
-  altPhone: "", companyWebsite: "",
+  altPhone: "", companyWebsite: "", whatsappOptIn: "",
   shipAddress: "", shipCity: "", shipState: "", shipPincode: "",
   shipContact: "", shipPhone: "",
   /* The honeypot. Never shown to a person; a value here means a bot. */
@@ -286,6 +286,18 @@ export function PublicLeadForm({ refId }: { refId: string }) {
                   </Field>
                 </div>
               ) : null}
+
+              {/* Asked, not assumed. WhatsApp's own rules require consent
+                  before a business sends the first message, and a tick
+                  somebody chose is the only thing that counts as one. */}
+              <label className="row-tight" style={{ cursor: "pointer" }}>
+                <input
+                  type="checkbox"
+                  checked={form.whatsappOptIn === "yes"}
+                  onChange={(e) => setForm((cur) => ({ ...cur, whatsappOptIn: e.target.checked ? "yes" : "" }))}
+                />
+                <span>You can send me updates about this enquiry on WhatsApp</span>
+              </label>
 
               <Field label="Type of organisation" hint="Optional — it helps us quote the right way.">
                 <Select value={form.segment} onChange={set("segment")}>

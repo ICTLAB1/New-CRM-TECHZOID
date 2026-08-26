@@ -25,6 +25,11 @@ export interface Customer {
   pincode?: string;
   /** A second number, for when the first one does not answer. */
   altPhone?: string;
+  /** Consent to be messaged on WhatsApp. Meta requires opt-in before a
+   *  business writes first, so this is a hard gate on the automated
+   *  channel — an unticked box is not consent, and neither is a legacy
+   *  record that predates the question. */
+  whatsappOptIn?: boolean;
   website?: string;
 
   /* WHERE THE GOODS GO, which is not always where the invoice goes: a head
@@ -75,7 +80,7 @@ export function blankCustomer(ownerId: string, id: string): Customer {
     id, ownerId,
     company: "", contact: "", designation: "", email: "", phone: "",
     gstin: "", pan: "", address: "", city: "", state: "Delhi",
-    country: "India", pincode: "", altPhone: "", website: "",
+    country: "India", pincode: "", altPhone: "", website: "", whatsappOptIn: false,
     shipSame: true, shipAddress: "", shipCity: "", shipState: "",
     shipPincode: "", shipContact: "", shipPhone: "",
     segment: "SMB", source: "Inbound Call", stage: "lead",

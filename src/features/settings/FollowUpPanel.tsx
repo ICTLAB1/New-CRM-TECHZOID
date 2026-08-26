@@ -4,6 +4,7 @@ import {
   DEFAULT_FOLLOWUP_STEPS, MAX_STEP_DAYS, MAX_STEPS, MIN_STEP_DAYS, readSteps, TONE_LABELS,
   type FollowUpStep, type FollowUpTone,
 } from "../../domain/followups/followups";
+import { DEFAULT_TEMPLATE_NAMES, TEMPLATE_SETTING } from "../../domain/integrations/interakt";
 
 /**
  * When a sent quotation gets chased, and how the chaser reads.
@@ -59,6 +60,48 @@ export function FollowUpPanel({
             quotation, or press Stop, when a customer comes back to you.
           </span>
         </div>
+      </Card>
+
+      <Card title="WhatsApp">
+        <p className="field-hint" style={{ marginTop: 0 }}>
+          Follow-ups can go by WhatsApp as well as by email, through Interakt. A chaser arrives days
+          after the last message, which is outside the 24-hour window where WhatsApp allows free text —
+          so each one is sent as a <strong>template approved by Meta in advance</strong>. The wording lives
+          in Interakt, not here; what goes below is the name each template was approved under.
+        </p>
+
+        <div className="notice">
+          <span>
+            <strong>Every template takes the same three placeholders, in this order:</strong>{" "}
+            <code>{"{{1}}"}</code> who it is addressed to, <code>{"{{2}}"}</code> the quotation number,{" "}
+            <code>{"{{3}}"}</code> a date — the validity date on the last one, the quotation date on the
+            others. Register them in Interakt with exactly three variables, or the send is refused.
+          </span>
+        </div>
+
+        <div className="stack" style={{ marginTop: 12 }}>
+          {(Object.keys(TONE_LABELS) as FollowUpTone[]).map((tone) => (
+            <Field
+              key={tone}
+              label={`Template for "${TONE_LABELS[tone].name}"`}
+              hint={`${TONE_LABELS[tone].what} Blank uses "${DEFAULT_TEMPLATE_NAMES[tone]}".`}
+            >
+              <Input
+                className="mono"
+                value={String(settings[TEMPLATE_SETTING[tone]] ?? "")}
+                disabled={!canEdit}
+                placeholder={DEFAULT_TEMPLATE_NAMES[tone]}
+                onChange={(e) => write({ [TEMPLATE_SETTING[tone]]: e.target.value })}
+              />
+            </Field>
+          ))}
+        </div>
+
+        <p className="field-hint" style={{ marginBottom: 0 }}>
+          A customer is only messaged where they have agreed to it — the tick on their record, or on the
+          registration form. Without it the WhatsApp option is switched off for that customer, whatever is
+          set here.
+        </p>
       </Card>
 
       <Card
