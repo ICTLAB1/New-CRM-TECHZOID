@@ -104,6 +104,8 @@ export function CustomerSheet({ open = true, customer, users, customFields, canR
             <Field label="Designation"><Input value={f.designation ?? ""} onChange={set("designation")} placeholder="IT Head" /></Field>
             <Field label="Email"><Input type="email" value={f.email ?? ""} onChange={set("email")} /></Field>
             <Field label="Phone"><Input value={f.phone ?? ""} onChange={set("phone")} /></Field>
+            <Field label="Alternate phone" hint="For when the first one doesn't answer."><Input value={f.altPhone ?? ""} onChange={set("altPhone")} /></Field>
+            <Field label="Website"><Input value={f.website ?? ""} onChange={set("website")} placeholder="www.example.com" /></Field>
           </div>
         </div>
 
@@ -152,6 +154,41 @@ export function CustomerSheet({ open = true, customer, users, customFields, canR
             <Field label="City"><Input value={f.city ?? ""} onChange={set("city")} /></Field>
             <Field label="Pincode"><Input value={f.pincode ?? ""} onChange={set("pincode")} /></Field>
           </div>
+
+          {/* WHERE THE GOODS GO. Held here rather than typed onto each
+              document: a head office billing in Delhi and taking delivery at
+              a plant in Bhiwadi is the ordinary case, and retyping it per
+              document is how a consignment reaches an accounts department. */}
+          <label className="row-tight" style={{ cursor: "pointer" }}>
+            <input
+              type="checkbox"
+              checked={f.shipSame !== false}
+              onChange={(e) => setF((cur) => ({ ...cur, shipSame: e.target.checked }))}
+            />
+            <span>Goods are delivered to the billing address</span>
+          </label>
+
+          {f.shipSame === false ? (
+            <div className="stack">
+              <Field label="Delivery address"><Textarea rows={2} value={f.shipAddress ?? ""} onChange={set("shipAddress")} /></Field>
+              <div className="grid grid-2">
+                <Field label="City"><Input value={f.shipCity ?? ""} onChange={set("shipCity")} /></Field>
+                <Field label="Pincode"><Input value={f.shipPincode ?? ""} onChange={set("shipPincode")} /></Field>
+                <Field label="State" hint="Blank uses the billing state.">
+                  {isIndia ? (
+                    <Select value={f.shipState ?? ""} onChange={set("shipState")}>
+                      <option value="">Same as billing</option>
+                      {STATE_NAMES.map((st) => <option key={st}>{st}</option>)}
+                    </Select>
+                  ) : (
+                    <Input value={f.shipState ?? ""} onChange={set("shipState")} />
+                  )}
+                </Field>
+                <Field label="Who receives it"><Input value={f.shipContact ?? ""} onChange={set("shipContact")} /></Field>
+                <Field label="Phone at the site"><Input value={f.shipPhone ?? ""} onChange={set("shipPhone")} /></Field>
+              </div>
+            </div>
+          ) : null}
         </div>
 
         <div className="stack">

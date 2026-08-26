@@ -35,6 +35,9 @@ const BLANK = {
   company: "", contact: "", designation: "", email: "", phone: "",
   country: "India", state: "Delhi", city: "", address: "", pincode: "",
   gstin: "", pan: "", segment: "", message: "",
+  altPhone: "", companyWebsite: "",
+  shipAddress: "", shipCity: "", shipState: "", shipPincode: "",
+  shipContact: "", shipPhone: "",
   /* The honeypot. Never shown to a person; a value here means a bot. */
   website: "",
 };
@@ -44,6 +47,10 @@ export function PublicLeadForm({ refId }: { refId: string }) {
   const [branding, setBranding] = useState<Branding | null>(null);
   const [form, setForm] = useState({ ...BLANK });
   const [extra, setExtra] = useState<Record<string, string>>({});
+  /* Off by default: most customers take delivery where they are billed, and
+     a form that opens with two addresses on it is a form fewer people
+     finish. */
+  const [shipElsewhere, setShipElsewhere] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -75,7 +82,17 @@ export function PublicLeadForm({ refId }: { refId: string }) {
       const resp = await fetch("/.netlify/functions/submit-lead", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ refId, ...form, customFields: extra }),
+        body: JSON.stringify({
+          refId, ...form, customFields: extra,
+          /* The tick is what decides it, not whether the boxes happen to
+             have something in them — somebody who types an address and then
+             changes their mind must not have it used anyway. */
+          shipSame: !shipElsewhere,
+          ...(shipElsewhere ? {} : {
+            shipAddress: "", shipCity: "", shipState: "", shipPincode: "",
+            shipContact: "", shipPhone: "",
+          }),
+        }),
       });
       const data = await resp.json().catch(() => ({}));
       if (!resp.ok || data.error) {
@@ -162,6 +179,12 @@ export function PublicLeadForm({ refId }: { refId: string }) {
                 <Field label="Phone">
                   <Input required value={form.phone} onChange={set("phone")} placeholder="+91 98100 12345" />
                 </Field>
+                <Field label="Alternate phone" hint="Optional — for when the first one doesn't answer.">
+                  <Input value={form.altPhone} onChange={set("altPhone")} />
+                </Field>
+                <Field label="Website" hint="Optional.">
+                  <Input value={form.companyWebsite} onChange={set("companyWebsite")} placeholder="www.example.com" />
+                </Field>
                 <Field label="Country">
                   <Select value={form.country} onChange={set("country")}>
                     {COUNTRIES.map((c) => <option key={c} value={c}>{c}</option>)}
@@ -193,6 +216,52 @@ export function PublicLeadForm({ refId }: { refId: string }) {
                   )}
                 </div>
               </div>
+
+              <div>
+                <label className="row-tight" style={{ cursor: "pointer" }}>
+                  <input
+                    type="checkbox"
+                    checked={shipElsewhere}
+                    onChange={(e) => setShipElsewhere(e.target.checked)}
+                  />
+                  <span>Deliver somewhere else</span>
+                </label>
+                <p className="field-hint" style={{ margin: "4px 0 0 24px" }}>
+                  Tick this if the goods should go to a different site from the billing address.
+                </p>
+              </div>
+
+              {shipElsewhere ? (
+                <div className="stack">
+                  <Field label="Delivery address">
+                    <Textarea rows={2} value={form.shipAddress} onChange={set("shipAddress")} />
+                  </Field>
+                  <div className="grid grid-2">
+                    <Field label="City"><Input value={form.shipCity} onChange={set("shipCity")} /></Field>
+                    <Field label={isIndia ? "PIN code" : "Post code"}>
+                      <Input value={form.shipPincode} onChange={set("shipPincode")} />
+                    </Field>
+                    {isIndia ? (
+                      <Field label="State">
+                        <Select value={form.shipState} onChange={set("shipState")}>
+                          <option value="">Same as billing</option>
+                          {STATE_NAMES.map((name) => <option key={name} value={name}>{name}</option>)}
+                        </Select>
+                      </Field>
+                    ) : (
+                      <Field label="State or region" hint="Optional.">
+                        <Input value={form.shipState} onChange={set("shipState")} />
+                      </Field>
+                    )}
+                    <Field label="Who receives it" hint="Optional — a name for the delivery note.">
+                      <Input value={form.shipContact} onChange={set("shipContact")} />
+                    </Field>
+                    <Field label="Phone at the site" hint="Optional.">
+                      <Input value={form.shipPhone} onChange={set("shipPhone")} />
+                    </Field>
+                  </div>
+                </div>
+              ) : null}
 
               {isIndia ? (
                 <div className="grid grid-2">
@@ -262,6 +331,7 @@ export function PublicLeadForm({ refId }: { refId: string }) {
                     || !form.company.trim() || !form.contact.trim()
                     || !form.email.trim() || !form.phone.trim()
                     || !form.address.trim() || !form.city.trim() || !form.pincode.trim()
+                    || (shipElsewhere && !form.shipAddress.trim())
                   }
                 >
                   {sending ? "Sending…" : "Send my details"}

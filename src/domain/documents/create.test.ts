@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   applyCustomer, CARRIED_FIELDS, CUSTOMER_DERIVED_FIELDS, documentFieldsFrom,
   duplicateQuotation, effectiveStatus, newQuotation,
-  proformaFromQuotation, taxTypeFor, type DocSettings, type SalesDocument,
+  proformaFromQuotation, shippingFieldsFrom, taxTypeFor,
+  type DocSettings, type SalesDocument,
 } from "./create";
 import { blankCustomer, type Customer } from "../customers/customer";
 
@@ -263,5 +264,64 @@ describe("effective status", () => {
 
   it("does not expire on the validity date itself", () => {
     expect(effectiveStatus({ status: "Sent", validUntil: TODAY }, TODAY)).toBe("Sent");
+  });
+});
+
+describe("where the goods go", () => {
+  /* A head office billing in Delhi and taking delivery at a plant in
+     Bhiwadi is the ordinary case. Asked once on the customer; carried onto
+     every document from there. */
+  const withDelivery = (o: Partial<Customer> = {}): Customer => domestic({
+    shipSame: false,
+    shipAddress: "Plot 44, RIICO Industrial Area",
+    shipCity: "Bhiwadi",
+    shipState: "Rajasthan",
+    shipPincode: "301019",
+    shipContact: "Stores — Mr Yadav",
+    shipPhone: "+91 99999 00000",
+    ...o,
+  });
+
+  it("ships to billing when the customer has said nothing", () => {
+    const ship = shippingFieldsFrom(domestic());
+    expect(ship.shipSameAsBilling).toBe(true);
+    expect(ship.shipAddress).toBe("");
+  });
+
+  it("ships to billing when the customer says they are the same", () => {
+    expect(shippingFieldsFrom(withDelivery({ shipSame: true })).shipSameAsBilling).toBe(true);
+  });
+
+  it("ignores a delivery address that is only a tick with nothing behind it", () => {
+    // Half-filled is how a document ends up addressed to a blank line.
+    expect(shippingFieldsFrom(withDelivery({ shipAddress: "   " })).shipSameAsBilling).toBe(true);
+  });
+
+  it("carries the whole delivery address onto the document", () => {
+    const ship = shippingFieldsFrom(withDelivery());
+    expect(ship.shipSameAsBilling).toBe(false);
+    expect(ship.shipAddress).toBe("Plot 44, RIICO Industrial Area, Bhiwadi, 301019");
+    expect(ship.shipState).toBe("Rajasthan");
+    expect(ship.shipContact).toBe("Stores — Mr Yadav");
+    expect(ship.shipPhone).toBe("+91 99999 00000");
+  });
+
+  it("falls back to the main contact where the delivery site names nobody", () => {
+    const ship = shippingFieldsFrom(withDelivery({ shipContact: "", shipPhone: "" }));
+    expect(ship.shipContact).toBe("Rajesh Kumar");
+    expect(ship.shipPhone).toBe("+91 98100 12345");
+  });
+
+  it("never guesses a GSTIN for the delivery site", () => {
+    // A tax figure nobody checked is worse than a blank one.
+    const ship = shippingFieldsFrom(withDelivery());
+    expect(ship.shipGstin).toBe("");
+    expect(ship.shipPan).toBe("");
+  });
+
+  it("reaches a new quotation, not just the helper", () => {
+    const doc = newQuotation({ settings: SETTINGS, user: USER, customer: withDelivery(), today: TODAY });
+    expect(doc.shipSameAsBilling).toBe(false);
+    expect(doc.shipAddress).toContain("Bhiwadi");
   });
 });

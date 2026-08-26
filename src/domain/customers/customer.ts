@@ -23,6 +23,22 @@ export interface Customer {
   state?: string;
   country?: string;
   pincode?: string;
+  /** A second number, for when the first one does not answer. */
+  altPhone?: string;
+  website?: string;
+
+  /* WHERE THE GOODS GO, which is not always where the invoice goes: a head
+     office in Delhi buying for a plant in Bhiwadi is the ordinary case, not
+     the exception. Held on the customer so it is asked once and carried onto
+     every document, rather than typed again on each one — which is how a
+     delivery ends up at the billing address. */
+  shipSame?: boolean;
+  shipAddress?: string;
+  shipCity?: string;
+  shipState?: string;
+  shipPincode?: string;
+  shipContact?: string;
+  shipPhone?: string;
   segment?: string;
   source?: string;
   stage?: StageId;
@@ -59,7 +75,9 @@ export function blankCustomer(ownerId: string, id: string): Customer {
     id, ownerId,
     company: "", contact: "", designation: "", email: "", phone: "",
     gstin: "", pan: "", address: "", city: "", state: "Delhi",
-    country: "India", pincode: "",
+    country: "India", pincode: "", altPhone: "", website: "",
+    shipSame: true, shipAddress: "", shipCity: "", shipState: "",
+    shipPincode: "", shipContact: "", shipPhone: "",
     segment: "SMB", source: "Inbound Call", stage: "lead",
     value: "", nextFollowUp: "",
     currency: "INR", taxType: "gst",

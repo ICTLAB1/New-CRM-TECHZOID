@@ -3,7 +3,7 @@ import { Modal } from "../../components/Modal";
 import { Button, Field, Input, Textarea } from "../../components/primitives";
 import { useToast } from "../../components/Toast";
 import { whatsappLink } from "../../domain/integrations/phone";
-import { leadLink } from "../../domain/leads/link";
+import { isLeadCode, leadLink } from "../../domain/leads/link";
 import { myLeadCode } from "../../data/leadCode";
 import { IntegrationError, type IntegrationsApi } from "../../integrations/api";
 import {
@@ -95,6 +95,17 @@ export function ShareLinkDialog({
           />
           <Button tone="primary" onClick={() => void copy()}>Copy</Button>
         </div>
+
+        {/* SAYS SO RATHER THAN JUST BEING LONG. A short code has to be minted
+            by the database, and until that update has been run there is
+            nothing to mint it — which from here looks identical to the
+            feature never having been built. */}
+        {!isLeadCode(code) ? (
+          <p className="field-hint" style={{ margin: 0 }}>
+            Short links aren't switched on yet — an admin needs to run the latest database update.
+            This link works exactly the same in the meantime; it is only longer.
+          </p>
+        ) : null}
 
         <div className="row-tight wrap">
           <a

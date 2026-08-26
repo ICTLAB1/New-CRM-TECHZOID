@@ -207,6 +207,36 @@ const emptyShipping = () => ({
   shipGstin: "", shipPan: "", shipContact: "", shipPhone: "", shipEmail: "",
 });
 
+/**
+ * Where this customer's goods go.
+ *
+ * A head office that bills in Delhi and takes delivery at a plant in Bhiwadi
+ * is the ordinary case. The delivery address is asked once, on the customer,
+ * and carried onto every document from here — rather than retyped per
+ * document, which is how a consignment ends up at an accounts department.
+ *
+ * A customer with no separate delivery address, or one marked as the same,
+ * gets the empty block and the "same as billing" tick, exactly as before.
+ */
+export function shippingFieldsFrom(customer: Customer | null) {
+  const wantsSeparate = !!customer && customer.shipSame === false && !!(customer.shipAddress ?? "").trim();
+  if (!wantsSeparate) return emptyShipping();
+  return {
+    shipSameAsBilling: false,
+    shipName: customer.company ?? "",
+    shipAddress: [customer.shipAddress, customer.shipCity, customer.shipPincode].filter(Boolean).join(", "),
+    shipState: customer.shipState || customer.state || "",
+    shipCountry: customer.country || "India",
+    /* Not copied: a delivery site does not have its own GSTIN unless
+       somebody says so, and guessing one onto a document is a tax figure
+       nobody checked. */
+    shipGstin: "", shipPan: "",
+    shipContact: customer.shipContact || customer.contact || "",
+    shipPhone: customer.shipPhone || customer.phone || "",
+    shipEmail: "",
+  };
+}
+
 /** Terms that match the customer: an export quotation carrying GST clauses
  *  and Indian jurisdiction is a real commercial problem. Always editable. */
 function termsFor(customer: Customer | null, settings: DocSettings, templateTerms?: readonly string[]): string[] {
@@ -231,7 +261,7 @@ export function newQuotation({ settings, user, customer = null, today = TODAY() 
     number: buildDocNumber(settings.quotePrefix ?? "TZ/QT", settings.quoteSeq),
     ...fields,
     ownerId: fields.ownerId || user.id,
-    ...emptyShipping(),
+    ...shippingFieldsFrom(customer),
     subject: "Quotation for IT products and services",
     referenceNo: "", enquiryRef: "", revisionNo: 0,
     paymentTerms: "As specified", deliveryTerms: "As specified",
@@ -258,7 +288,7 @@ export function newProforma({ settings, user, customer = null, today = TODAY() }
     ...fields,
     ownerId: fields.ownerId || user.id,
     quoteId: "", quoteNumber: "",
-    ...emptyShipping(),
+    ...shippingFieldsFrom(customer),
     subject: "Proforma invoice for IT products and services",
     referenceNo: "", enquiryRef: "", revisionNo: 0, bankAccountId: "",
     paymentTerms: "As specified", deliveryTerms: "As specified",
@@ -436,7 +466,7 @@ export function invoiceFrom(
       }
     : {
         ...documentFieldsFrom(null, settings),
-        ...emptyShipping(),
+        ...shippingFieldsFrom(null),
         ownerId: user.id,
         quoteId: "", quoteNumber: "",
         items: [blankItem(settings.defaultGst)],

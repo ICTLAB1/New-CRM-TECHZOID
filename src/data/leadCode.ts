@@ -16,9 +16,16 @@ export async function myLeadCode(): Promise<string> {
   if (!isSupabaseConfigured()) return "";
   try {
     const { data, error } = await getSupabase().rpc("my_lead_code");
-    if (error || !data) return "";
+    if (error || !data) {
+      /* Logged rather than swallowed: the usual cause is that migration 013
+         has not been run, and an admin looking for why the link is still
+         long deserves to find the reason somewhere. */
+      if (error) console.warn("short link unavailable:", error.message);
+      return "";
+    }
     return String(data);
-  } catch {
+  } catch (err) {
+    console.warn("short link unavailable:", err);
     return "";
   }
 }

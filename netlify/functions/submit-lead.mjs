@@ -39,7 +39,7 @@ function cleanCustomFields(raw) {
 const MAX = {
   company: 200, contact: 120, designation: 100, email: 200, phone: 40,
   gstin: 15, pan: 10, address: 300, city: 100, state: 100, country: 100,
-  pincode: 12, message: 2000,
+  pincode: 12, message: 2000, website: 200,
 };
 
 export async function handler(event) {
@@ -135,6 +135,23 @@ export async function handler(event) {
     state: str(body.state, MAX.state),
     country,
     pincode: str(body.pincode, MAX.pincode),
+    altPhone: str(body.altPhone, MAX.phone),
+    /* Sent as `companyWebsite`, NOT `website`: `website` is the honeypot
+       above, and a real field sharing its name would mark every honest
+       submission as a bot. */
+    website: str(body.companyWebsite, MAX.website),
+
+    /* Where the goods go. The tick decides, not whether the boxes have
+       something in them — somebody who typed an address and then changed
+       their mind must not have it delivered to. */
+    shipSame: body.shipSame !== false,
+    shipAddress: str(body.shipAddress, MAX.address),
+    shipCity: str(body.shipCity, MAX.city),
+    shipState: str(body.shipState, MAX.state),
+    shipPincode: str(body.shipPincode, MAX.pincode),
+    shipContact: str(body.shipContact, MAX.contact),
+    shipPhone: str(body.shipPhone, MAX.phone),
+
     segment: SEGMENTS.includes(str(body.segment, 40)) ? str(body.segment, 40) : "SMB",
     /* NEVER SET BEFORE, AND IT SHOWED. Without these a lead from the form
        reached the app with no currency and no tax regime, so the first
