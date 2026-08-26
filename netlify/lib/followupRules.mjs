@@ -15,8 +15,20 @@
  * both move together — and the tests on both sides fail until they do.
  */
 
-/** Statuses that mean the document is still out with the customer. */
-const LIVE = new Set(["Sent", "Issued"]);
+/** Statuses that record a DECISION about the document. */
+const DECIDED = {
+  Accepted: "the customer accepted it",
+  Rejected: "the customer turned it down",
+  Expired: "it has expired",
+  Cancelled: "it has been cancelled",
+  Paid: "it has been paid",
+};
+
+/* "Draft" counts as undecided. Emailing a quotation from this CRM does not
+   set its status to Sent — that field is set by hand — so treating Draft as
+   a stop reason cancelled sequences the morning after they were armed, on
+   the strength of a field nobody had updated. */
+const UNDECIDED = new Set(["", "Draft", "Sent", "Issued"]);
 
 /**
  * @param {{status?: string, validUntil?: string}} doc
@@ -24,20 +36,14 @@ const LIVE = new Set(["Sent", "Issued"]);
  * @returns {string|null} why to stop, or null to carry on
  */
 export function stopReason(doc, today) {
-  const status = doc?.status ?? "";
-
   /* Validity first, and before the status is even considered: a quotation
-     still marked "Sent" whose validity ran out yesterday has expired
-     whatever the row says. The app shows the same thing — see
-     effectiveStatus in src/domain/documents/create.ts. */
-  if (LIVE.has(status) && doc?.validUntil && doc.validUntil < today) return "it has expired";
+     still marked "Sent" whose last valid day is behind it has expired
+     whatever the row says. */
+  if (doc?.validUntil && doc.validUntil < today) return "it has expired";
 
-  if (LIVE.has(status)) return null;
-  if (!status || status === "Draft") return "it is back to a draft";
-  if (status === "Accepted") return "the customer accepted it";
-  if (status === "Rejected") return "the customer turned it down";
-  if (status === "Expired") return "it has expired";
-  if (status === "Paid") return "it has been paid";
+  const status = doc?.status ?? "";
+  if (DECIDED[status]) return DECIDED[status];
+  if (UNDECIDED.has(status)) return null;
   return `its status is now ${status}`;
 }
 

@@ -396,10 +396,18 @@ describe("whether the scheduler should still chase a document", () => {
      one shows up as a failure on the other side. */
   const TODAY = "2026-08-24";
 
-  it("carries on while the document is out with the customer", () => {
+  it("carries on while nobody has decided anything", () => {
     expect(stopReason({ status: "Sent" }, TODAY)).toBeNull();
     expect(stopReason({ status: "Sent", validUntil: "2026-09-23" }, TODAY)).toBeNull();
     expect(stopReason({ status: "Issued" }, TODAY)).toBeNull();
+  });
+
+  it("carries on for a Draft, because emailing does not set the status", () => {
+    // The status field is set by hand. Stopping on Draft cancelled every
+    // sequence the morning after it was armed.
+    expect(stopReason({ status: "Draft" }, TODAY)).toBeNull();
+    expect(stopReason({}, TODAY)).toBeNull();
+    expect(stopReason(null, TODAY)).toBeNull();
   });
 
   it("stops the moment the customer has decided", () => {
@@ -407,6 +415,7 @@ describe("whether the scheduler should still chase a document", () => {
     // they already gave.
     expect(stopReason({ status: "Accepted" }, TODAY)).toBe("the customer accepted it");
     expect(stopReason({ status: "Rejected" }, TODAY)).toBe("the customer turned it down");
+    expect(stopReason({ status: "Cancelled" }, TODAY)).toBe("it has been cancelled");
   });
 
   it("treats a lapsed validity as expired however the row is marked", () => {
@@ -420,9 +429,7 @@ describe("whether the scheduler should still chase a document", () => {
   });
 
   it("stops on a status it does not recognise rather than guessing", () => {
-    expect(stopReason({ status: "Cancelled" }, TODAY)).toBe("its status is now Cancelled");
-    expect(stopReason({}, TODAY)).toBe("it is back to a draft");
-    expect(stopReason(null, TODAY)).toBe("it is back to a draft");
+    expect(stopReason({ status: "Superseded" }, TODAY)).toBe("its status is now Superseded");
   });
 
   it("knows which table each kind of document lives in", () => {

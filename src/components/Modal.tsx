@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { isMod } from "./hotkeys";
 import { usePresence } from "./usePresence";
 import { Button } from "./primitives";
@@ -99,7 +100,25 @@ export function Modal({ open, title, description, onClose, footer, side, unsaved
     else onClose();
   };
 
-  return (
+  /**
+   * PORTALLED TO THE BODY, AND THAT IS LOAD-BEARING.
+   *
+   * `.scrim` is `position: fixed`, which normally means "against the
+   * viewport". It does not, if any ancestor carries a transform, filter or
+   * perspective — such an element becomes the containing block for every
+   * fixed descendant beneath it, and CSS gives no way to opt out.
+   *
+   * That is not hypothetical here. `.page` animates in with a 6px rise, and
+   * an element with a running or filled transform animation keeps a
+   * transform as its used value forever after. So on the document editor —
+   * a page nearly 1900px tall — the send dialog was laid out against the
+   * PAGE and opened 640px above the top of the screen. It looked like the
+   * app had hung.
+   *
+   * Rendering here also matches what a dialog is: it belongs to the screen,
+   * not to the button that opened it.
+   */
+  return createPortal((
     <div
       className={"scrim" + (side ? " scrim-side" : "") + leaving}
       onMouseDown={(e) => { if (e.target === e.currentTarget) attemptClose(); }}
@@ -134,7 +153,7 @@ export function Modal({ open, title, description, onClose, footer, side, unsaved
         ) : null}
       </div>
     </div>
-  );
+  ), document.body);
 }
 
 /**

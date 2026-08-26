@@ -86,21 +86,39 @@ describe("what is due", () => {
 });
 
 describe("when to stop chasing", () => {
-  it("keeps going while the document is out with the customer", () => {
-    expect(stopReason({ status: "Sent" })).toBeNull();
-    expect(stopReason({ status: "Issued" })).toBeNull();
+  const TODAY = "2026-08-24";
+
+  it("keeps going while nobody has decided anything", () => {
+    expect(stopReason({ status: "Sent" }, TODAY)).toBeNull();
+    expect(stopReason({ status: "Issued" }, TODAY)).toBeNull();
   });
 
-  it("stops the moment somebody moves it on, and says why", () => {
-    expect(stopReason({ status: "Accepted" })).toBe("the customer accepted it");
-    expect(stopReason({ status: "Rejected" })).toBe("the customer turned it down");
-    expect(stopReason({ status: "Expired" })).toBe("it has expired");
-    expect(stopReason({ status: "Draft" })).toBe("it is back to a draft");
+  it("keeps going on a Draft, because sending does not set the status", () => {
+    // Emailing a quotation from this CRM leaves the status alone — it is set
+    // by hand. Treating Draft as a stop reason cancelled every sequence the
+    // morning after it was armed, on a field nobody had got round to.
+    expect(stopReason({ status: "Draft" }, TODAY)).toBeNull();
+    expect(stopReason({}, TODAY)).toBeNull();
+  });
+
+  it("stops the moment somebody decides, and says why", () => {
+    expect(stopReason({ status: "Accepted" }, TODAY)).toBe("the customer accepted it");
+    expect(stopReason({ status: "Rejected" }, TODAY)).toBe("the customer turned it down");
+    expect(stopReason({ status: "Expired" }, TODAY)).toBe("it has expired");
+    expect(stopReason({ status: "Cancelled" }, TODAY)).toBe("it has been cancelled");
+  });
+
+  it("treats a lapsed validity as expired however the row is marked", () => {
+    expect(stopReason({ status: "Sent", validUntil: "2026-08-23" }, TODAY)).toBe("it has expired");
+    expect(stopReason({ status: "Draft", validUntil: "2026-08-23" }, TODAY)).toBe("it has expired");
+  });
+
+  it("does not call a quotation expired on its last valid day", () => {
+    expect(stopReason({ status: "Sent", validUntil: "2026-08-24" }, TODAY)).toBeNull();
   });
 
   it("stops rather than guessing at a status it does not know", () => {
-    expect(stopReason({ status: "Cancelled" })).toBe("its status is now Cancelled");
-    expect(stopReason({})).toBe("it is back to a draft");
+    expect(stopReason({ status: "Superseded" }, TODAY)).toBe("its status is now Superseded");
   });
 });
 

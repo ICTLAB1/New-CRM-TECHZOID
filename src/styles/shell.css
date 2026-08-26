@@ -96,10 +96,21 @@
 @media (max-width: 760px) { .topsearch { display: none; } }
 
 /* Each screen arrives rather than replacing the last one between frames.
-   Keyed on the view in AppShell so it re-runs on every navigation; a shift
-   of a few pixels is enough to say "this is a different screen" without
-   making the app feel slow to get to. */
-@keyframes page-in { from { opacity: 0; transform: translateY(6px) } to { opacity: 1; transform: none } }
+   Keyed on the view in AppShell so it re-runs on every navigation.
+
+   OPACITY ONLY, AND IT MUST STAY THAT WAY. This used to add a 6px rise, and
+   that one line cost `position: fixed` across the entire app: an element
+   with a transform — including the identity transform an element keeps once
+   a transform animation has filled — becomes the containing block for every
+   fixed descendant under it, with no way to opt out. Modals inside a tall
+   page were laid out against the page instead of the screen and opened
+   hundreds of pixels above the viewport.
+
+   Modals are portalled to the body now and no longer care, but anything
+   fixed rendered inside a screen would hit exactly the same wall. A fade is
+   enough to say "this is a different screen"; six pixels of movement is not
+   worth a whole class of layout bug. */
+@keyframes page-in { from { opacity: 0 } to { opacity: 1 } }
 /* A transparent wrapper whose only job is to carry the view key. It must add
    no box of its own, or every screen gains a layout it was not designed
    around. */

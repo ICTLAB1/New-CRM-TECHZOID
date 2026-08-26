@@ -132,21 +132,46 @@ export function dueFollowUps(rows: readonly FollowUp[], today: string = TODAY())
     .sort((a, b) => a.dueOn.localeCompare(b.dueOn) || a.step - b.step);
 }
 
+/** Statuses that record a DECISION about the document. Each one is a reason
+ *  a chaser would be worse than silence. */
+const DECIDED: Record<string, string> = {
+  Accepted: "the customer accepted it",
+  Rejected: "the customer turned it down",
+  Expired: "it has expired",
+  Cancelled: "it has been cancelled",
+  Paid: "it has been paid",
+};
+
+/**
+ * Statuses that mean nobody has decided anything yet.
+ *
+ * "Draft" IS IN THIS LIST, and that is not an oversight. Emailing a
+ * quotation from this CRM does not set its status to Sent — that field is
+ * set by hand, and plenty of documents are emailed and never touched again.
+ * Treating Draft as a reason to stop meant a sequence armed at the moment
+ * the email actually left would cancel itself the next morning, on the
+ * strength of a field nobody had got round to updating. The send is the
+ * better evidence, and it is the evidence we have.
+ */
+const UNDECIDED = new Set(["", "Draft", "Sent", "Issued"]);
+
 /**
  * Whether a document has stopped being worth chasing.
  *
- * Anything other than "Sent" means somebody has moved it on — accepted,
- * rejected, expired, or pulled back to a draft — and a chaser for a decision
- * already taken is worse than no chaser at all.
+ * Validity is checked before the status and beats it: a quotation still
+ * marked Sent whose last valid day is behind it has expired, whatever the
+ * row says. Beyond that, only a decision stops a sequence — and a status
+ * this does not recognise stops it too, because guessing wrong here means
+ * emailing a customer about something already settled.
  */
-export function stopReason(doc: { status?: string }): string | null {
+export function stopReason(
+  doc: { status?: string; validUntil?: string },
+  today: string = TODAY(),
+): string | null {
+  if (doc.validUntil && doc.validUntil < today) return "it has expired";
   const status = doc.status ?? "";
-  if (status === "Sent" || status === "Issued") return null;
-  if (!status || status === "Draft") return "it is back to a draft";
-  if (status === "Accepted") return "the customer accepted it";
-  if (status === "Rejected") return "the customer turned it down";
-  if (status === "Expired") return "it has expired";
-  if (status === "Paid") return "it has been paid";
+  if (DECIDED[status]) return DECIDED[status];
+  if (UNDECIDED.has(status)) return null;
   return `its status is now ${status}`;
 }
 

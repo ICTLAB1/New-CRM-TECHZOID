@@ -19,8 +19,8 @@ import {
   type EmailCompany, type EmailQuotation, type EmailSender,
 } from "../../domain/integrations/emailTemplate";
 import {
-  autoFollowUpsOn, followUpBody, followUpSubject, planFollowUps, readSteps, TONE_LABELS,
-  type FollowUpFacts, type FollowUpTone,
+  autoFollowUpsOn, followUpBody, followUpSubject, planFollowUps, readSteps, stopReason,
+  TONE_LABELS, type FollowUpFacts, type FollowUpTone,
 } from "../../domain/followups/followups";
 import { armFollowUps, followUpsAvailable, type ArmedStep } from "../../data/followups";
 import { TODAY } from "../../domain/dates";
@@ -205,7 +205,20 @@ export function DocumentActions({
     ? planFollowUps(TODAY(), readSteps(settings["followUpSteps"]), doc.validUntil || null)
     : [];
 
-  const armable = canFollowUp && followUpsAvailable() && autoFollowUpsOn(settings) && plannedFollowUps.length > 0
+  /* WHY IT CANNOT ARM, IN THE PLACE SOMEBODY WOULD LOOK FOR IT. The first
+     version simply hid the tick box whenever a sequence was impossible, so a
+     quotation whose validity had run out showed nothing at all — and "the
+     feature is missing" is the only conclusion available from that. */
+  const cannotArm = !canFollowUp ? null
+    : !followUpsAvailable() ? "Automatic follow-ups need a signed-in workspace."
+    : !autoFollowUpsOn(settings) ? "Switched off in Settings → Follow-ups."
+    : stopReason({ status: doc.status, validUntil: doc.validUntil })
+      ? `Nothing to chase — ${stopReason({ status: doc.status, validUntil: doc.validUntil })}.`
+    : plannedFollowUps.length === 0
+      ? `Every step in the sequence would land after ${doc.validUntil ? fmtDate(doc.validUntil) : "this document lapses"}. Move Valid until further out, or shorten the sequence in Settings → Follow-ups.`
+    : null;
+
+  const armable = canFollowUp && !cannotArm && plannedFollowUps.length > 0
     ? {
         ownerId: doc.ownerId,
         docType: docType as "quotation" | "proforma",
@@ -262,6 +275,7 @@ export function DocumentActions({
         company={emailBrand}
         quotation={emailQuotation}
         armable={armable}
+        cannotArm={cannotArm}
         getAttachment={async () => pdfAttachment(renderOpts)}
       />
 
@@ -335,6 +349,10 @@ interface EmailDialogProps {
     facts: FollowUpFacts;
     plan: Array<{ step: number; tone: FollowUpTone; dueOn: string }>;
   } | null;
+  /** Why no sequence can be armed, when none can. Shown instead of the tick
+   *  box, because a control that silently is not there reads as a feature
+   *  that was never built. */
+  cannotArm?: string | null;
   title?: string;
   description?: string;
   getAttachment: () => Promise<{ base64: string; filename: string }>;
@@ -344,7 +362,7 @@ interface EmailDialogProps {
 function EmailDialog({
   open, api, defaultTo = "", defaultCc = "", defaultSubject, defaultMessage,
   sender, company, quotation, followUp, attachByDefault = true, armable = null,
-  title, description, getAttachment, onClose,
+  cannotArm = null, title, description, getAttachment, onClose,
 }: EmailDialogProps) {
   const toast = useToast();
   const [to, setTo] = useState(defaultTo);
@@ -518,6 +536,16 @@ function EmailDialog({
         {/* The dates, not a promise. These emails leave with nobody
             watching, so the last person who can stop them is looking at
             exactly when they will go. */}
+        {!armable && cannotArm ? (
+          <div>
+            <label className="row-tight" style={{ opacity: .55 }}>
+              <input type="checkbox" checked={false} disabled readOnly />
+              <span>Follow up automatically</span>
+            </label>
+            <p className="field-hint" style={{ margin: "4px 0 0 24px" }}>{cannotArm}</p>
+          </div>
+        ) : null}
+
         {armable ? (
           <div>
             <label className="row-tight" style={{ cursor: "pointer" }}>
