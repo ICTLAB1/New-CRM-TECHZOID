@@ -422,6 +422,12 @@ export function DocumentEditor({
               settings={settings}
               images={docImages}
               currentUser={currentUser}
+              /* Emailing it IS sending it. Recorded here rather than left to
+                 somebody remembering to change a dropdown afterwards —
+                 which is why quotations sat at "Draft" and their deals sat
+                 in Lead. Saved with the document as it stands, because what
+                 was just emailed is what is on screen. */
+              onSent={() => onSave({ ...doc, status: doc.status === "Draft" ? "Sent" : doc.status })}
             />
           </div>
 

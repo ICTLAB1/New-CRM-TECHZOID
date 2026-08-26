@@ -109,6 +109,15 @@ export function Workbench({
     move("subscriptions", subscriptions, owners(next.subscriptions));
   };
 
+  /* One place a document can move a customer along the board. It only ever
+     moves them forward — see src/domain/pipeline/advance.ts, which decides
+     whether there is a move at all. */
+  const advanceCustomer = (customerId: string, stage: string) => {
+    handleCustomersChange(
+      customers.map((c) => (c.id === customerId ? { ...c, stage: stage as Customer["stage"], updatedAt: Date.now() } : c)),
+    );
+  };
+
   const analytics = { customers, quotations, proformas, orders, challans, subscriptions };
 
   /**
@@ -199,6 +208,7 @@ export function Workbench({
           api={integrations}
           currentUser={user}
           onChange={(docs, s) => { onChange("quotations", docs); onSettingsChange(s); }}
+          onCustomerStage={advanceCustomer}
           onCreateProforma={(pf) => { onChange("proformas", [pf, ...proformas]); setView("proformas"); }}
           onCreateInvoice={(inv) => { onChange("invoices", [inv, ...invoices]); setView("invoices"); }}
         />
@@ -214,6 +224,7 @@ export function Workbench({
           api={integrations}
           currentUser={user}
           onChange={(docs, s) => { onChange("proformas", docs); onSettingsChange(s); }}
+          onCustomerStage={advanceCustomer}
           onCreateInvoice={(inv) => { onChange("invoices", [inv, ...invoices]); setView("invoices"); }}
         />
       ) : view === "invoices" ? (

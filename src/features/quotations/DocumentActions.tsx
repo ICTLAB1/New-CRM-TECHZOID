@@ -49,6 +49,11 @@ export interface DocumentActionsProps {
   images?: DocImages;
   /** Whose name, role and address the email carries. */
   currentUser?: { id: string; name: string; email?: string; designation?: string };
+  /** Called once the customer actually has the document. The editor uses it
+   *  to record that it was sent — until now nothing did, so a quotation
+   *  emailed on Monday still read "Draft" on Friday, and the deal sat in
+   *  Lead on the pipeline board. */
+  onSent?: () => void;
 }
 
 const label = (docType: DocType): string =>
@@ -81,7 +86,7 @@ function defaultMessage(doc: SalesDocument, docType: DocType): string {
 }
 
 export function DocumentActions({
-  api, doc, docType, model, rows, totals, settings, images, currentUser,
+  api, doc, docType, model, rows, totals, settings, images, currentUser, onSent,
 }: DocumentActionsProps) {
   const toast = useToast();
   const [emailOpen, setEmailOpen] = useState(false);
@@ -276,6 +281,7 @@ export function DocumentActions({
         quotation={emailQuotation}
         armable={armable}
         cannotArm={cannotArm}
+        onSent={onSent}
         getAttachment={async () => pdfAttachment(renderOpts)}
       />
 
@@ -336,6 +342,8 @@ interface EmailDialogProps {
   followUp?: FollowUpFacts;
   /** False where the customer already has the file. */
   attachByDefault?: boolean;
+  /** Fired after a successful send, so the document can be marked as one. */
+  onSent?: () => void;
   /** Present when this send can also arm an automatic sequence. Null when
    *  the workspace has it switched off, when there is nowhere to store one,
    *  or when the quotation's validity leaves no room for a chaser. */
@@ -362,7 +370,7 @@ interface EmailDialogProps {
 function EmailDialog({
   open, api, defaultTo = "", defaultCc = "", defaultSubject, defaultMessage,
   sender, company, quotation, followUp, attachByDefault = true, armable = null,
-  cannotArm = null, title, description, getAttachment, onClose,
+  cannotArm = null, onSent, title, description, getAttachment, onClose,
 }: EmailDialogProps) {
   const toast = useToast();
   const [to, setTo] = useState(defaultTo);
@@ -460,6 +468,9 @@ function EmailDialog({
         }
       }
 
+      /* After the send and after arming, so a failure in either is never
+         recorded as a document the customer has. */
+      onSent?.();
       onClose();
     } catch (err) {
       setError(err instanceof IntegrationError ? err.message : "Couldn't send that email.");

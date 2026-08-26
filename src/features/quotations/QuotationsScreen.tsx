@@ -13,6 +13,7 @@ import {
   type DocSettings, type SalesDocument,
 } from "../../domain/documents/create";
 import type { Customer } from "../../domain/customers/customer";
+import { advancesPipeline, stageAfterQuotation } from "../../domain/pipeline/advance";
 import type { CatalogProduct } from "../../domain/catalog/types";
 import { computeDocument } from "../../domain/tax/compute";
 import { inrList } from "../../domain/currency/format";
@@ -41,6 +42,9 @@ export interface QuotationsScreenProps {
   api: IntegrationsApi;
   currentUser: { id: string; name: string; email?: string; role?: string };
   onChange: (documents: SalesDocument[], settings: Record<string, unknown>) => void;
+  /** Moves the customer along the pipeline board when a quotation reaches
+   *  them. Absent on the screens where that would make no sense. */
+  onCustomerStage?: (customerId: string, stage: string) => void;
   /** Raising a proforma from a quotation hands it to the proformas screen. */
   onCreateProforma?: (proforma: SalesDocument) => void;
   /** Raising a tax invoice hands it to the invoices screen. */
@@ -49,7 +53,7 @@ export interface QuotationsScreenProps {
 
 export function QuotationsScreen({
   docType, documents, customers, catalog, settings, brandLogos, docImages, api, currentUser,
-  onChange, onCreateProforma, onCreateInvoice,
+  onChange, onCustomerStage, onCreateProforma, onCreateInvoice,
 }: QuotationsScreenProps) {
   const toast = useToast();
   const [editing, setEditing] = useState<SalesDocument | null>(null);
@@ -100,6 +104,17 @@ export function QuotationsScreen({
     /* The sequence only advances once a document is actually saved, so
        opening the editor and cancelling does not burn a number. */
     onChange(next, exists ? settings : bumpSequence(settings));
+
+    /* A quotation the customer has moves the deal to "Quotation Sent".
+       Nothing did this before, so the board only ever showed what somebody
+       had remembered to drag — see src/domain/pipeline/advance.ts for why it
+       is one-directional. */
+    if (onCustomerStage && doc.customerId && advancesPipeline(docType) && doc.status === "Sent") {
+      const customer = customers.find((c) => c.id === doc.customerId);
+      const stage = stageAfterQuotation(customer?.stage);
+      if (stage) onCustomerStage(doc.customerId, stage);
+    }
+
     setEditing(null);
     toast(`${label} ${doc.number} saved.`, "good");
   };
