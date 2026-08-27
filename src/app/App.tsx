@@ -4,6 +4,7 @@ import { Button, Card } from "../components/primitives";
 import { Workbench } from "./Workbench";
 import { SignIn, NoProfile } from "./SignIn";
 import { PublicLeadForm } from "../features/leads/PublicLeadForm";
+import { ErrorBoundary } from "../components/ErrorBoundary";
 import { readLeadRef } from "../domain/leads/link";
 import { useWorkspace, type WorkspaceData } from "../data/useWorkspace";
 import { isConfigured, loadProfile, onSessionChange, signOut, type SignedInUser } from "../data/session";
@@ -30,14 +31,21 @@ export function App() {
   if (leadRef) {
     return (
       <ToastProvider>
-        <PublicLeadForm refId={leadRef} />
+        <ErrorBoundary where="the registration form">
+          <PublicLeadForm refId={leadRef} />
+        </ErrorBoundary>
       </ToastProvider>
     );
   }
 
   return (
     <ToastProvider>
-      {isConfigured() ? <LiveApp /> : <DemoApp />}
+      {/* Inside the toast provider, so a screen that crashed can still say
+          something, and so the boundary catches the app rather than the
+          provider that reports on it. */}
+      <ErrorBoundary where="the CRM">
+        {isConfigured() ? <LiveApp /> : <DemoApp />}
+      </ErrorBoundary>
     </ToastProvider>
   );
 }

@@ -118,8 +118,8 @@ export function AssistantScreen({ api, workspace, users, currentUser, settings }
           />
           <div className="spread">
             <span className="field-hint">Enter to send, Shift + Enter for a new line.</span>
-            <Button tone="primary" disabled={busy || !input.trim()} onClick={() => void ask(input)}>
-              {busy ? "Asking…" : "Ask"}
+            <Button loading={busy} loadingLabel="Asking…" tone="primary" disabled={busy || !input.trim()} onClick={() => void ask(input)}>
+              Ask
             </Button>
           </div>
         </div>

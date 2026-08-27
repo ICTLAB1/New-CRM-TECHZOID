@@ -280,12 +280,12 @@ function AddMember({
       footer={
         <>
           <Button tone="quiet" onClick={onClose}>Cancel</Button>
-          <Button
+          <Button loading={busy} loadingLabel="Creating…"
             tone="primary"
             disabled={busy || !email.trim() || password.length < 8}
             onClick={() => void create()}
           >
-            {busy ? "Creating…" : "Create the account"}
+            Create the account
           </Button>
         </>
       }
@@ -357,8 +357,8 @@ function EditMember({
       footer={
         <>
           <Button tone="quiet" onClick={onClose}>Cancel</Button>
-          <Button tone="primary" disabled={busy || (!name.trim() && !email.trim())} onClick={() => void save()}>
-            {busy ? "Saving…" : "Save"}
+          <Button loading={busy} loadingLabel="Saving…" tone="primary" disabled={busy || (!name.trim() && !email.trim())} onClick={() => void save()}>
+            Save
           </Button>
         </>
       }
@@ -413,8 +413,8 @@ function ResetPassword({
       footer={
         <>
           <Button tone="quiet" onClick={onClose}>Cancel</Button>
-          <Button tone="primary" disabled={busy || password.length < 8} onClick={() => void save()}>
-            {busy ? "Changing…" : "Change the password"}
+          <Button loading={busy} loadingLabel="Changing…" tone="primary" disabled={busy || password.length < 8} onClick={() => void save()}>
+            Change the password
           </Button>
         </>
       }

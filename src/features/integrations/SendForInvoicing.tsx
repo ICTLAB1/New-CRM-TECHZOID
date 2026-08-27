@@ -73,8 +73,8 @@ export function SendForInvoicing({ api, doc, docType, totals, settings, getAttac
         footer={
           <>
             <Button tone="quiet" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button tone="primary" disabled={busy || !mail.to} onClick={() => void send()}>
-              {busy ? "Sending…" : "Send now"}
+            <Button loading={busy} loadingLabel="Sending…" tone="primary" disabled={busy || !mail.to} onClick={() => void send()}>
+              Send now
             </Button>
           </>
         }

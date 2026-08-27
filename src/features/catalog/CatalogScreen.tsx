@@ -335,8 +335,8 @@ function ImportDialog({
           ? <Button tone="primary" onClick={onClose}>Done</Button>
           : <>
               <Button tone="quiet" onClick={onClose}>Cancel</Button>
-              <Button tone="primary" disabled={busy} onClick={() => fileInput.current?.click()}>
-                {busy ? "Reading…" : "Choose a file"}
+              <Button loading={busy} loadingLabel="Reading…" tone="primary" disabled={busy} onClick={() => fileInput.current?.click()}>
+                Choose a file
               </Button>
             </>
       }

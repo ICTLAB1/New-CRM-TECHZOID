@@ -553,8 +553,8 @@ function EmailDialog({
       footer={
         <>
           <Button tone="quiet" onClick={onClose}>Cancel</Button>
-          <Button tone="primary" disabled={busy || !to.trim() || !subject.trim()} onClick={() => void send()}>
-            {busy ? "Sending…" : "Send"}
+          <Button loading={busy} loadingLabel="Sending…" tone="primary" disabled={busy || !to.trim() || !subject.trim()} onClick={() => void send()}>
+            Send
           </Button>
         </>
       }

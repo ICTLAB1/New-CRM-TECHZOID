@@ -129,8 +129,8 @@ function MailboxPanel({ api, user }: { api: IntegrationsApi; user: { role: strin
         ) : (
           <div className="spread wrap" style={{ width: "100%", gap: 10 }}>
             <span className="muted">Emails send from the shared company address.</span>
-            <Button size="sm" tone="primary" disabled={busy} onClick={() => void connect()}>
-              {busy ? "Opening Microsoft…" : "Connect Microsoft 365"}
+            <Button loading={busy} loadingLabel="Opening Microsoft…" size="sm" tone="primary" disabled={busy} onClick={() => void connect()}>
+              Connect Microsoft 365
             </Button>
           </div>
         )}

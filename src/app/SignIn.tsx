@@ -78,8 +78,8 @@ export function SignIn() {
               </div>
             ) : null}
 
-            <Button type="submit" tone="primary" disabled={busy || !email.trim() || !password}>
-              {busy ? "Signing in…" : "Sign in"}
+            <Button loading={busy} loadingLabel="Signing in…" type="submit" tone="primary" disabled={busy || !email.trim() || !password}>
+              Sign in
             </Button>
 
             <div className="spread wrap">

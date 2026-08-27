@@ -57,8 +57,8 @@ export function WhatsAppDialog({ open, api, defaultPhone = "", defaultMessage = 
       footer={
         <>
           <Button tone="quiet" onClick={openManually}>Open in WhatsApp instead</Button>
-          <Button tone="primary" disabled={busy || !valid || !message.trim()} onClick={() => void send()}>
-            {busy ? "Sending…" : "Send now"}
+          <Button loading={busy} loadingLabel="Sending…" tone="primary" disabled={busy || !valid || !message.trim()} onClick={() => void send()}>
+            Send now
           </Button>
         </>
       }

@@ -13,15 +13,39 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   tone?: ButtonTone;
   size?: "sm" | "md" | "lg";
   iconOnly?: boolean;
+  /**
+   * The action is in flight.
+   *
+   * DISABLES THE BUTTON, which is the point. Every duplicate customer, every
+   * double-sent email and every twice-raised invoice starts with somebody
+   * pressing Save again because nothing appeared to happen. The label
+   * changes too, so the answer to "did that work?" is on the control that
+   * was pressed rather than somewhere else on the screen.
+   */
+  loading?: boolean;
+  /** What to say while it runs — "Saving…", "Sending…". Falls back to the
+   *  button's own label, which is better than a spinner with no words. */
+  loadingLabel?: ReactNode;
 }
 
-export function Button({ tone = "default", size = "md", iconOnly, className, type = "button", ...rest }: ButtonProps) {
+export function Button({
+  tone = "default", size = "md", iconOnly, loading = false, loadingLabel,
+  className, type = "button", disabled, children, ...rest
+}: ButtonProps) {
   return (
     <button
       type={type}
-      className={cx("btn", `btn-${tone}`, size === "sm" && "btn-sm", size === "lg" && "btn-lg", iconOnly && "btn-icon", className)}
+      /* aria-busy rather than only a visual change: a screen reader user
+         gets told the control is working, not left with a button that has
+         silently stopped responding. */
+      aria-busy={loading || undefined}
+      disabled={disabled || loading}
+      className={cx("btn", `btn-${tone}`, size === "sm" && "btn-sm", size === "lg" && "btn-lg", iconOnly && "btn-icon", loading && "is-loading", className)}
       {...rest}
-    />
+    >
+      {loading ? <span className="btn-spinner" aria-hidden="true" /> : null}
+      {loading ? (loadingLabel ?? children) : children}
+    </button>
   );
 }
 

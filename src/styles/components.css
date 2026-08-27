@@ -31,6 +31,24 @@
    on purpose: a button that visibly travels reads as a toy. */
 .btn:active:not(:disabled) { transform: translateY(1px); }
 .btn:disabled { opacity: .45; cursor: not-allowed; transform: none; }
+/* A button that is working reads differently from one that is unavailable:
+   still legible, still clearly the thing you pressed, just not pressable. */
+.btn.is-loading { opacity: .8; cursor: progress; }
+.btn-spinner {
+  width: 12px; height: 12px; flex: 0 0 auto;
+  border: 2px solid currentColor; border-right-color: transparent;
+  border-radius: 50%;
+  /* transform only, so it composites on the GPU and costs nothing on a
+     cheap Android handset. */
+  animation: btn-spin .6s linear infinite;
+}
+@keyframes btn-spin { to { transform: rotate(360deg); } }
+/* Reduced motion gets a pulse instead of a spin — the control must still
+   say it is busy, just without anything rotating. */
+@media (prefers-reduced-motion: reduce) {
+  .btn-spinner { animation: btn-pulse 1.2s ease-in-out infinite; }
+  @keyframes btn-pulse { 0%, 100% { opacity: .35 } 50% { opacity: 1 } }
+}
 
 .btn-primary { background: var(--accent); color: var(--on-accent); }
 .btn-primary:hover:not(:disabled) { background: var(--accent-hover); }
@@ -379,6 +397,26 @@ button.tile:hover { background: var(--surface-2); }
 .toast-good { border-left-color: var(--good); }
 .toast-bad  { border-left-color: var(--bad); }
 .toast-warn { border-left-color: var(--warn); }
+.toast-info { border-left-color: var(--accent); }
+
+/* Two stacks so failures can be announced assertively and everything else
+   politely; they read as one dock because the dock is the flex column. */
+.toast-stack { display: flex; flex-direction: column; gap: var(--gap-tight); }
+.toast-text { flex: 1 1 auto; min-width: 0; }
+/* Big enough to hit with a thumb without making the toast look like it has
+   a button in it. */
+.toast-close {
+  flex: 0 0 auto;
+  margin: -4px -4px -4px 0;
+  padding: 4px 6px;
+  border: 0; background: none; cursor: pointer;
+  color: var(--ink-4); font-size: 13px; line-height: 1;
+  border-radius: var(--radius);
+  transition: color var(--t-quick) var(--ease), background var(--t-quick) var(--ease);
+}
+.toast-close:hover { color: var(--ink); background: var(--surface-3); }
+.toast-close:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+@media (pointer: coarse) { .toast-close { padding: 10px 12px; margin: -10px -10px -10px 0; } }
 @media (max-width: 720px) { .toast-dock { left: var(--gap); right: var(--gap); bottom: calc(var(--gap) + 56px); } .toast { max-width: none; } }
 
 /* ── progress ──────────────────────────────────────────────────────── */

@@ -250,8 +250,8 @@ function SendLinkDialog({
       footer={
         <>
           <Button tone="quiet" onClick={onBack}>Back</Button>
-          <Button tone="primary" disabled={busy || !to.trim() || !api} onClick={() => void send()}>
-            {busy ? "Sending…" : "Send"}
+          <Button loading={busy} loadingLabel="Sending…" tone="primary" disabled={busy || !to.trim() || !api} onClick={() => void send()}>
+            Send
           </Button>
         </>
       }

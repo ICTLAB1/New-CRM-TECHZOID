@@ -165,8 +165,8 @@ export function AttachmentsPanel({
   return (
     <Frame
       actions={
-        <Button size="sm" tone="default" disabled={busy} onClick={() => inputRef.current?.click()}>
-          {busy ? "Uploading…" : "Attach a file"}
+        <Button loading={busy} loadingLabel="Uploading…" size="sm" tone="default" disabled={busy} onClick={() => inputRef.current?.click()}>
+          Attach a file
         </Button>
       }
     >

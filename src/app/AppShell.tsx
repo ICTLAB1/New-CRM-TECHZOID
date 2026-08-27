@@ -2,6 +2,7 @@ import { useState, type ReactNode } from "react";
 import { useHotkeys } from "../components/hotkeys";
 import { ShortcutsHelp } from "../components/ShortcutsHelp";
 import { NAV } from "./nav";
+import { ConnectionBanner } from "../components/ConnectionBanner";
 import { Button } from "../components/primitives";
 
 export interface AppShellProps {
@@ -117,6 +118,9 @@ export function AppShell({ view, onNavigate, user, brand, onSignOut, banner, chi
           <input className="topsearch" type="search" placeholder="Search customers, quotations, orders…" aria-label="Search" />
           <span className="topbar-crumb">FY 2026-27</span>
         </header>
+        {/* Connectivity first: when the network is gone it explains every
+            other failure on the screen, so it belongs above them. */}
+        <ConnectionBanner />
         {banner}
         {/* Keyed on the view so React replaces the subtree on navigation and
             the page's entrance animation re-runs. Without the key, moving
