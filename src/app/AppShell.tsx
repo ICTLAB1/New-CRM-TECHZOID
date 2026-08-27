@@ -17,13 +17,16 @@ export interface AppShellProps {
   /** A strip above the page for something that applies everywhere — a save
    *  that failed, a preview with no server behind it. */
   banner?: ReactNode;
+  /** Rendered in the topbar. Passed in rather than built here so the shell
+   *  stays free of any opinion about where notifications come from. */
+  bell?: ReactNode;
   children: ReactNode;
 }
 
 const initials = (name: string): string =>
   name.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? "").join("");
 
-export function AppShell({ view, onNavigate, user, brand, onSignOut, banner, children }: AppShellProps) {
+export function AppShell({ view, onNavigate, user, brand, onSignOut, banner, bell, children }: AppShellProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const section = NAV.find((s) => s.items.some((i) => i.id === view));
@@ -116,6 +119,7 @@ export function AppShell({ view, onNavigate, user, brand, onSignOut, banner, chi
           </nav>
           <span className="grow" />
           <input className="topsearch" type="search" placeholder="Search customers, quotations, orders…" aria-label="Search" />
+          {bell}
           <span className="topbar-crumb">FY 2026-27</span>
         </header>
         {/* Connectivity first: when the network is gone it explains every

@@ -5,6 +5,8 @@ import { CustomersScreen } from "../features/customers/CustomersScreen";
 import { PipelineBoard } from "../features/pipeline/PipelineBoard";
 import { CustomerSheet } from "../features/customers/CustomerSheet";
 import { Presence } from "../components/Presence";
+import { NotificationBell } from "../components/NotificationBell";
+import type { CrmEvent } from "../domain/notifications/events";
 import { Showcase } from "./Showcase";
 import { QuotationsScreen } from "../features/quotations/QuotationsScreen";
 import { OrdersScreen } from "../features/orders/OrdersScreen";
@@ -53,6 +55,9 @@ export interface WorkbenchProps {
   onSignOut?: () => void;
   /** Shown across the top when it is worth interrupting for. */
   banner?: React.ReactNode;
+  /** What has changed in the workspace since this screen last looked. */
+  events?: CrmEvent[];
+  onEventsSeen?: () => void;
 }
 
 /** The lighter shape the reassignment cascade works on: who owns what. */
@@ -66,6 +71,7 @@ const ownershipOf = (data: WorkspaceData): OwnershipWorkspace => ({
 
 export function Workbench({
   data, settings, team, user, onChange, onSettingsChange, onTeamChange, onRestore, onSignOut, banner,
+  events = [], onEventsSeen,
 }: WorkbenchProps) {
   const [view, setView] = useState("dashboard");
   const [editing, setEditing] = useState<Customer | null>(null);
@@ -148,6 +154,7 @@ export function Workbench({
       brand={settings["company"] as { name?: string; logo?: string } | undefined}
       onSignOut={onSignOut}
       banner={banner}
+      bell={<NotificationBell events={events} onOpen={() => onEventsSeen?.()} />}
     >
       {view === "dashboard" ? (
         <DashboardScreen

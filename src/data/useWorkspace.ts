@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { store, TABLE_OF, type Profile, type Store, type WorkspaceData } from "./store";
+import { detectEvents, summarize, type CrmEvent } from "../domain/notifications/events";
 
 /**
  * The workspace, loaded once and kept in step.
@@ -37,13 +38,17 @@ export interface Workspace {
   /** The last write that failed, kept until it succeeds or is dismissed. */
   saveError: string | null;
   reload: () => Promise<void>;
+  /** What changed in the workspace since this screen last looked, derived
+   *  from the refetch a realtime event triggered. Empty on a first load. */
+  events: CrmEvent[];
+  clearEvents: () => void;
   update: <K extends keyof WorkspaceData>(key: K, next: WorkspaceData[K]) => void;
   updateSettings: (next: Record<string, unknown>) => void;
   setProfiles: (next: Profile[]) => void;
   dismissSaveError: () => void;
 }
 
-export function useWorkspace(enabled: boolean, db: Store = store()): Workspace {
+export function useWorkspace(enabled: boolean, meId = "", db: Store = store()): Workspace {
   const [state, setState] = useState<LoadState>(enabled ? "loading" : "ready");
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<WorkspaceData>(EMPTY);
@@ -51,6 +56,13 @@ export function useWorkspace(enabled: boolean, db: Store = store()): Workspace {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [events, setEvents] = useState<CrmEvent[]>([]);
+  /* In a ref so `reload` does not have to be rebuilt — and therefore the
+     realtime subscription torn down and remade — every time the signed-in
+     user's object identity changes. */
+  const meRef = useRef(meId);
+  meRef.current = meId;
+  const clearEvents = useCallback(() => setEvents([]), []);
 
   /* The last state the server is known to hold, so a write can be diffed
      against it rather than against whatever the screen happens to show. */
@@ -58,9 +70,17 @@ export function useWorkspace(enabled: boolean, db: Store = store()): Workspace {
   const committedSettings = useRef<Record<string, unknown>>({});
   const inFlight = useRef(0);
 
-  const reload = useCallback(async () => {
+  const reload = useCallback(async (announce = false) => {
     try {
       const loaded = await db.load();
+      /* Diffed BEFORE the new data is committed, against what this screen
+         already held. A change this user made themselves is already in
+         there — their optimistic update put it there — so it diffs to
+         nothing and nobody is told about their own click. */
+      if (announce) {
+        const found = detectEvents(committed.current, loaded.data, meRef.current);
+        if (found.length) setEvents((cur) => [...summarize(found), ...cur].slice(0, 50));
+      }
       committed.current = loaded.data;
       committedSettings.current = loaded.settings;
       setData(loaded.data);
@@ -91,7 +111,7 @@ export function useWorkspace(enabled: boolean, db: Store = store()): Workspace {
       timer = setTimeout(() => {
         /* Never pull the server's rows back over a save still in flight. */
         if (inFlight.current > 0) return;
-        void reload();
+        void reload(true);
       }, 700);
     });
     return () => {
@@ -150,7 +170,9 @@ export function useWorkspace(enabled: boolean, db: Store = store()): Workspace {
 
   return {
     state, error, data, settings, profiles, saving, saveError,
-    reload, update, updateSettings, setProfiles,
+    reload: () => reload(),
+    events, clearEvents,
+    update, updateSettings, setProfiles,
     dismissSaveError: () => setSaveError(null),
   };
 }

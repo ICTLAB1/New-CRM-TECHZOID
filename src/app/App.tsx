@@ -88,7 +88,7 @@ function LiveApp() {
 }
 
 function LiveWorkbench({ user }: { user: SignedInUser }) {
-  const ws = useWorkspace(true);
+  const ws = useWorkspace(true, user.id);
 
   if (ws.state === "loading") return <Splash message="Loading your workspace…" />;
   if (ws.state === "failed") {
@@ -115,6 +115,8 @@ function LiveWorkbench({ user }: { user: SignedInUser }) {
       onTeamChange={(next) => ws.setProfiles(next.map((m) => ({ ...m, email: m.email ?? "" })))}
       onRestore={(backup) => restore(backup, ws.data, ws.update, ws.settings, ws.updateSettings)}
       onSignOut={() => void signOut()}
+      events={ws.events}
+      onEventsSeen={ws.clearEvents}
       banner={ws.saveError ? (
         <div className="page-banner notice notice-bad">
           <span>{ws.saveError}</span>

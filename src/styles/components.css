@@ -758,3 +758,55 @@ button.tile:hover { background: var(--surface-2); }
 .inline-check { display: inline-flex; align-items: center; gap: 5px; }
 .inline-check.is-good { color: var(--good); }
 .inline-check.is-warn { color: var(--warn); font-weight: 500; }
+
+
+/* ── notification bell ────────────────────────────────────────────────
+   Sits in the topbar beside the search. The panel is anchored to it rather
+   than being a modal: this is something you glance at and dismiss, not a
+   workflow, and a scrim over the whole screen for three lines of text is
+   the wrong weight entirely. */
+.bell-wrap { position: relative; flex: 0 0 auto; }
+.bell {
+  position: relative;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px;
+  border: 1px solid transparent; background: none; cursor: pointer;
+  border-radius: var(--radius); font-size: 15px; line-height: 1;
+  transition: background var(--t-quick) var(--ease), border-color var(--t-quick) var(--ease);
+}
+.bell:hover { background: var(--surface-3); }
+.bell:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.bell-count {
+  position: absolute; top: -2px; right: -2px;
+  min-width: 15px; height: 15px; padding: 0 3px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--bad); color: var(--on-accent);
+  border-radius: 8px; font-size: 9px; font-weight: 600; line-height: 1;
+}
+.bell-panel {
+  position: absolute; top: calc(100% + 6px); right: 0; z-index: 70;
+  width: min(340px, calc(100vw - 24px));
+  background: var(--surface); border: 1px solid var(--rule);
+  border-radius: var(--radius-card); box-shadow: var(--lift);
+  animation: modal-in var(--t-enter) var(--ease) both;
+}
+.bell-panel.is-leaving { animation: modal-out var(--t-exit) var(--ease) forwards; }
+.bell-head { padding: 10px var(--gap); border-bottom: 1px solid var(--rule); }
+.bell-empty { padding: var(--gap); margin: 0; }
+.bell-list { list-style: none; margin: 0; padding: 0; max-height: 60vh; overflow-y: auto; }
+.bell-item {
+  display: flex; align-items: baseline; gap: var(--gap-tight);
+  padding: 9px var(--gap);
+  border-bottom: 1px solid var(--rule-soft, var(--rule));
+  font-size: var(--t-body); color: var(--ink-2);
+}
+.bell-item:last-child { border-bottom: 0; }
+/* Unread is a weight and an edge, not a colour wash: the list has to stay
+   readable when most of it is unread. The edge is a border rather than an
+   inset shadow, which is how every other tone marker in this file is drawn
+   — see .toast and .card. */
+.bell-item { border-left: var(--edge) solid transparent; }
+.bell-item.is-unread { color: var(--ink); font-weight: 500; border-left-color: var(--accent); }
+.bell-text { flex: 1 1 auto; min-width: 0; }
+.bell-when { flex: 0 0 auto; color: var(--ink-4); font-size: var(--t-small, 11px); white-space: nowrap; }
+@media (pointer: coarse) { .bell { width: 40px; height: 40px; } .bell-item { padding: 12px var(--gap); } }
