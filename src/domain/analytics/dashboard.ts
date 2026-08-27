@@ -79,7 +79,7 @@ export function kpis(ws: Workspace, sellerState: string, now: Date = new Date())
   return {
     openPipeline: open.reduce((a, c) => a + (Number(c.value) || 0), 0),
     openDeals: open.length,
-    wonThisMonth: won.reduce((a, c) => a + (Number(c.value) || 0), 0),
+    wonThisMonth: won.reduce((a, c) => a + wonAmount(c), 0),
     wonThisMonthCount: won.length,
     quotesPending: pending.length,
     quotesStale: stale.length,

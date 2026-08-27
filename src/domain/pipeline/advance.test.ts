@@ -154,6 +154,23 @@ describe("what a stage change carries with it", () => {
     expect(wonAmount({ value: "250000" })).toBe(250000);
   });
 
+  it("counts nothing for a deal that was won and then lost", () => {
+    // The case the first version of this rule missed, because the test
+    // above passes for the wrong reason: that lost customer has no wonAt,
+    // so "won, or has a wonAt" was never actually asked the hard question.
+    // A won deal that later goes to Lost keeps its stamp — it must not keep
+    // its revenue.
+    expect(countsAsWon({ stage: "lost", wonAt: day(5) })).toBe(false);
+    expect(countsAsWon(applyStage(deal({ stage: "won", value: 3976000, wonAt: day(5) }), "lost", day(9)))).toBe(false);
+  });
+
+  it("counts a customer who was won and is now back in the pipeline", () => {
+    // Every open stage, not just the one a fresh quotation lands them in.
+    for (const stage of ["lead", "contacted", "qualified", "quoted", "negotiation"]) {
+      expect(countsAsWon({ stage, wonAt: day(5) }), stage).toBe(true);
+    }
+  });
+
   it("falls back to the current value for a win stamped before wonValue existed", () => {
     expect(wonAmount({ value: 175000 })).toBe(175000);
     expect(wonAmount({ value: 175000, wonValue: 120000 })).toBe(120000);

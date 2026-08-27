@@ -205,3 +205,50 @@ describe("funnels and team", () => {
     expect(rows[0]?.pct).toBe(40);
   });
 });
+
+describe("a deal that was won and then lost", () => {
+  /* THE REGRESSION THIS EXISTS FOR. Making a win survive re-engagement was
+     written as "stage is won, OR there is a wonAt" — which also takes in
+     every customer who was marked Won and later marked Lost, because the
+     stamp is deliberately never cleared. On a live board that put a lost
+     ₹39.76 L deal into "Won this month", so the tile read ₹42.21 L while
+     the funnel three inches below it read ₹3.03 L for the same deals.
+
+     The fixture below is that board's shape: a lost deal far larger than
+     everything won. */
+  const churned: Workspace = {
+    ...WS,
+    customers: [
+      customer({ id: "w1", ownerId: "u1", company: "Piramal", stage: "won", value: 131000, wonAt: at("2026-08-05") }),
+      customer({ id: "w2", ownerId: "u1", company: "Thinvent", stage: "won", value: 62000, wonAt: at("2026-08-06") }),
+      customer({ id: "l1", ownerId: "u1", company: "Nangia & Co", stage: "lost", value: 3976000, wonAt: at("2026-08-07") }),
+    ],
+  };
+
+  it("is not revenue this month", () => {
+    expect(kpis(churned, "Delhi", NOW).wonThisMonth).toBe(193000);
+    expect(kpis(churned, "Delhi", NOW).wonThisMonthCount).toBe(2);
+  });
+
+  it("agrees with the Won column on the board", () => {
+    // The tile and the funnel are counting the same two deals here, so a
+    // reader looking at both at once must not see two different figures.
+    const funnelWon = pipelineFunnel(churned, STAGES).find((s) => s.id === "won");
+    expect(funnelWon?.value).toBe(kpis(churned, "Delhi", NOW).wonThisMonth);
+  });
+
+  it("is not revenue in the trailing chart either", () => {
+    const august = trailingRevenue(churned, 6, NOW).at(-1);
+    expect(august?.value).toBe(193000);
+  });
+
+  it("still counts a customer quoted again after winning", () => {
+    // The case the change was made for, which must keep working: a won
+    // customer moved back into the pipeline by a fresh quotation.
+    const requoted: Workspace = {
+      ...WS,
+      customers: [customer({ id: "r1", ownerId: "u1", company: "Northline", stage: "quoted", value: 900000, wonValue: 412500, wonAt: at("2026-08-05") })],
+    };
+    expect(kpis(requoted, "Delhi", NOW).wonThisMonth).toBe(412500);
+  });
+});

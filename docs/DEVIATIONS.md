@@ -918,6 +918,19 @@ current stage, so moving a re-engaged customer out of Won does not erase
 what they already bought, and re-quoting them at a different value does not
 rewrite last quarter.
 
+**Lost is the exception, and getting it wrong cost a day in production.**
+The rule was first written as "stage is Won, or there is a `wonAt`". Because
+the stamp is deliberately never cleared, that also took in every deal marked
+Won and later marked Lost — and on the live board it put a lost ₹39.76 L
+deal into "Won this month", so the tile read ₹42.21 L while the pipeline
+funnel three inches below it read ₹3.03 L for the same deals.
+
+The rule now asks about Lost first. A deal in an open stage carrying a
+`wonAt` is a customer coming back; a deal in Lost is not, whatever happened
+before it. The test that was supposed to cover this passed for the wrong
+reason — its lost customer had no `wonAt`, so the hard question was never
+asked. There is now one that asks it.
+
 And the customer sheet's Stage field now goes through `applyStage` like the
 board always has. Marking somebody Won from the sheet used to set the stage
 and nothing else — no `wonAt` — so that deal never appeared in a single

@@ -59,9 +59,9 @@ export interface LostDetail {
  * changes `value` to the new opportunity's size, and without a snapshot
  * last quarter's revenue would quietly change with it.
  *
- * NEITHER IS EVER CLEARED, including on the way to Lost. A customer who
- * bought in March and did not renew in September has still bought in March,
- * and a report that forgets it is wrong about March.
+ * NEITHER IS EVER CLEARED, including on the way to Lost — the record of
+ * what happened stays. Whether it still counts as revenue is a separate
+ * question, and countsAsWon() below is the one that answers it.
  */
 export function applyStage<T extends { stage?: string; value?: number | string; wonAt?: number; wonValue?: number; lostAt?: number }>(
   customer: T,
@@ -89,10 +89,22 @@ export function applyStage<T extends { stage?: string; value?: number | string; 
  * current stage, that move would erase the sale they already made. A win is
  * a thing that happened on a date, not a state a record is in.
  *
+ * LOST IS THE EXCEPTION, and leaving it out cost a day. `wonAt` is
+ * deliberately never cleared, so a deal marked Won and later marked Lost
+ * still carries the stamp — and a rule of "won, or has a wonAt" quietly
+ * counted every one of them. On a live board that put a lost ₹39.76 L deal
+ * into "Won this month": the tile read ₹42.21 L while the funnel three
+ * inches below it read ₹3.03 L for the same deals.
+ *
+ * Lost is a conclusion somebody reached about this customer, and it is the
+ * later one. A deal in an open stage with a wonAt is a customer coming
+ * back; a deal in Lost is not, whatever happened before it.
+ *
  * A record that has never been won has no `wonAt` and so counts for
  * nothing, which is every lead in the database.
  */
 export function countsAsWon(customer: { stage?: string; wonAt?: number }): boolean {
+  if (customer.stage === "lost") return false;
   return customer.stage === "won" || !!customer.wonAt;
 }
 
