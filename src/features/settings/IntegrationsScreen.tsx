@@ -5,6 +5,7 @@ import { Confirm } from "../../components/Modal";
 import { useToast } from "../../components/Toast";
 import { diagnosticLines, isReady, nextAction, type Diagnostics } from "../../domain/integrations/diagnostics";
 import { IntegrationError, type IntegrationsApi, type MailboxConnection } from "../../integrations/api";
+import { testVerificationConnection } from "../../data/verification";
 
 /**
  * Settings → Integrations.
@@ -37,6 +38,7 @@ export function IntegrationsScreen({ api, user, users, settings, onSettingsChang
       <div className="stack" style={{ maxWidth: 760 }}>
         <MailboxPanel api={api} user={user} />
         <WhatsAppPanel />
+        <VerificationPanel />
         <AssistantPanel />
         <InvoicingPanel settings={settings} onChange={onSettingsChange} canEdit={isAdmin(user.role)} />
         <WebhooksPanel
@@ -419,6 +421,77 @@ function WhatsAppPanel() {
           they automate WhatsApp Web. They are cheaper and quicker to set up than the official Business API,
           at the risk of the number being logged out or restricted without warning.
         </span>
+      </div>
+    </Card>
+  );
+}
+
+/* ── tax & KYC verification ────────────────────────────────────────── */
+
+function VerificationPanel() {
+  const [state, setState] = useState<{ testing: boolean; result: { ok: boolean; message: string } | null }>(
+    { testing: false, result: null },
+  );
+
+  const test = async () => {
+    setState({ testing: true, result: null });
+    const result = await testVerificationConnection();
+    setState({ testing: false, result });
+  };
+
+  return (
+    <Card title="GSTIN &amp; PAN verification" actions={<Chip tone="neutral" dot={false}>Optional</Chip>}>
+      <p className="muted" style={{ marginTop: 0 }}>
+        Checks a customer's GSTIN and PAN against the government register, from the customer sheet. The
+        checksum shown beside the GSTIN field only says the number is well formed — a cancelled registration
+        passes it perfectly, and an invoice raised against one comes back after the goods have shipped. This
+        says whether the registration exists, whether it is active, and whose name it is in.
+      </p>
+
+      <div className="notice" style={{ marginTop: 12 }}>
+        <span>
+          Each check is billed by the provider, so it happens when somebody presses <strong>Verify</strong> —
+          never automatically, and never on a screen that merely shows a customer.
+        </span>
+      </div>
+
+      <div style={{ marginTop: 16 }}>
+        <span className="eyebrow">One-time setup</span>
+        <ol className="steps" style={{ marginTop: 10 }}>
+          <li className="step">
+            <div className="step-body">
+              <div className="step-title">Take the API key and secret from the provider's console</div>
+              <div>Sandbox (sandbox.co.in) → the live key pair, not the test one.</div>
+            </div>
+          </li>
+          <li className="step">
+            <div className="step-body">
+              <div className="step-title">Add both in Netlify</div>
+              <div>
+                Site configuration → Environment variables → <code className="mono">SANDBOX_API_KEY</code> and{" "}
+                <code className="mono">SANDBOX_API_SECRET</code>, then redeploy.
+                {" "}<strong>Not</strong> prefixed <code className="mono">VITE_</code> — anything with that prefix is
+                compiled into the JavaScript every visitor downloads, and a paid verification key published on the
+                internet is somebody else&rsquo;s free key.
+              </div>
+            </div>
+          </li>
+          <li className="step">
+            <div className="step-body">
+              <div className="step-title">Press Test connection</div>
+              <div>It asks the provider for a token and nothing else, so it costs no verification.</div>
+            </div>
+          </li>
+        </ol>
+      </div>
+
+      <div className="row-tight" style={{ marginTop: 16 }}>
+        <Button size="sm" onClick={() => void test()} loading={state.testing} loadingLabel="Asking…">
+          Test connection
+        </Button>
+        {state.result ? (
+          <Chip tone={state.result.ok ? "good" : "bad"}>{state.result.message}</Chip>
+        ) : null}
       </div>
     </Card>
   );

@@ -2,6 +2,7 @@ import { useCallback, useRef, useState } from "react";
 import { Modal } from "../../components/Modal";
 import { AttachmentsPanel } from "../attachments/AttachmentsPanel";
 import { NotesPanel } from "./NotesPanel";
+import { VerifyPanel } from "./VerifyPanel";
 import { addNote } from "../../domain/customers/notes";
 import { askBeforeSave, useConfirmedAction } from "../../components/useConfirmedAction";
 import { Button, Chip, Field, Input, Select, Textarea } from "../../components/primitives";
@@ -160,6 +161,10 @@ export function CustomerSheet({ open = true, customer, users, customFields, canR
             </Field>
           </div>
         </div>
+
+        {/* Against the government register, which is the only thing that
+            knows whether a well-formed GSTIN belongs to anybody. */}
+        <VerifyPanel customer={f} onChange={setF} />
 
         <div className="stack">
           <div className="eyebrow">Address</div>

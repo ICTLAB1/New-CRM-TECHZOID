@@ -12,6 +12,7 @@ import {
   crmIdForWebsiteDeal, customerFieldsFromEvent, noteFromEvent, normaliseStage, websiteDealId,
 } from "./inboundMap.mjs";
 import { stopReason, TABLE_FOR } from "./followupRules.mjs";
+import { expiryOf, providerMessage } from "./sandbox.mjs";
 import {
   readCallbackData, readFailureDetail, readMessageId, readStatus,
 } from "./interaktStatus.mjs";
@@ -489,5 +490,64 @@ describe("reading a WhatsApp delivery status", () => {
       .toBe("Number not on WhatsApp");
     expect(readFailureDetail({ error: "x".repeat(500) })).toHaveLength(300);
     expect(readFailureDetail({})).toBe("");
+  });
+});
+
+describe("what the verification service's answer is turned into", () => {
+  it("treats 'no such registration' as an answer, not a failure", () => {
+    // The register replied, and its reply was about the number somebody
+    // typed. Reporting that as "something went wrong" sends a salesperson
+    // to an admin instead of back to the customer to ask for the right one.
+    expect(providerMessage(404, {})).toBe("The register has no entry for that number.");
+  });
+
+  it("passes the provider's own words through when it explains itself", () => {
+    expect(providerMessage(422, { message: "GSTIN checksum is invalid" })).toBe("GSTIN checksum is invalid");
+    expect(providerMessage(400, { error: "malformed pan" })).toBe("malformed pan");
+  });
+
+  it("says something useful when the provider explains nothing", () => {
+    expect(providerMessage(422, {})).toContain("check it for a typo");
+  });
+
+  it("sends a credentials problem to whoever can fix it", () => {
+    for (const status of [401, 403]) {
+      expect(providerMessage(status, {})).toContain("admin");
+      expect(providerMessage(status, {})).toContain("Netlify");
+    }
+  });
+
+  it("tells the caller to wait rather than to worry", () => {
+    expect(providerMessage(429, {})).toContain("Try again");
+    expect(providerMessage(503, {})).toContain("Try again");
+  });
+
+  it("never leaks a provider payload it was not asked to show", () => {
+    // Anything internal belongs in the function log. A body can name the
+    // account, the plan, or the internal endpoint.
+    const message = providerMessage(500, { stack: "at Object.<anonymous>", account_id: "acc_123" });
+    expect(message).not.toContain("acc_123");
+    expect(message).not.toContain("anonymous");
+  });
+});
+
+describe("how long a verification token is held", () => {
+  const jwt = (claims) =>
+    "x." + Buffer.from(JSON.stringify(claims)).toString("base64") + ".y";
+
+  it("believes the token's own expiry", () => {
+    const exp = Math.floor(Date.UTC(2030, 0, 1) / 1000);
+    expect(expiryOf(jwt({ exp }))).toBe(exp * 1000);
+  });
+
+  it("falls back to a day for anything it cannot read", () => {
+    // Re-authenticating a little too often costs one cheap round trip.
+    // Believing a dead token costs every verification after it.
+    const day = 23 * 60 * 60 * 1000;
+    for (const bad of ["not-a-jwt", "", jwt({ no: "exp" }), "a.!!!not-base64!!!.c"]) {
+      const life = expiryOf(bad) - Date.now();
+      expect(life).toBeGreaterThan(day - 5000);
+      expect(life).toBeLessThanOrEqual(day + 5000);
+    }
   });
 });

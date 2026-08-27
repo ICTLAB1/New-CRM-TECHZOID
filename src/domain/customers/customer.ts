@@ -18,6 +18,27 @@ export interface Customer {
   phone?: string;
   gstin?: string;
   pan?: string;
+
+  /* WHAT THE REGISTER SAID, when somebody pressed Verify. Kept beside the
+     numbers rather than derived on the fly: a verification is a paid call
+     and a point-in-time fact, so re-asking on every render would be both
+     expensive and a different question. `gstinVerifiedAt` is what makes the
+     answer ageable — a registration active in March may be cancelled by
+     September, and the sheet says how old the answer is. */
+  /** The name the GSTIN is registered under. What belongs on a tax invoice;
+   *  `company` is what people here call them, which is often not the same. */
+  legalName?: string;
+  tradeName?: string;
+  /** "Active", "Cancelled", … exactly as the register put it. */
+  gstinStatus?: string;
+  gstinTaxpayerType?: string;
+  gstinRegisteredOn?: string;
+  gstinVerifiedAt?: number;
+  /** True only when the register recognised the PAN. */
+  panVerified?: boolean;
+  panVerifiedAt?: number;
+  /** The name the PAN is held in, when it was checked. */
+  panName?: string;
   address?: string;
   city?: string;
   state?: string;

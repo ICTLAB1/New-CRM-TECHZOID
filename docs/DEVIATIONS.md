@@ -980,3 +980,65 @@ Notes are **append-only**. There is no edit and no delete: a call log that
 can be rewritten afterwards cannot be relied on by whoever reads it on
 Friday, and they would have no way to know it had been changed. A correction
 is a new note saying so.
+
+## 27. GSTIN and PAN verified against the register
+
+The checksum validator beside the GSTIN field is offline arithmetic: it
+reads the state code and the PAN out of the number and confirms the check
+digit. It cannot say whether the registration exists, whether it is still
+active, or whose it is — and **a cancelled GSTIN passes the checksum
+perfectly**. An invoice raised against one comes back from the customer's
+accountant, after the goods have shipped.
+
+Verification goes through Sandbox (sandbox.co.in). The key and secret are
+Netlify environment variables read only on the server; the browser calls our
+own function, which calls the provider. They are deliberately **not**
+prefixed `VITE_` — anything with that prefix is compiled into the JavaScript
+every visitor downloads, and a paid verification key published on the
+internet is somebody else's free key. The build is checked for this: the
+shipped bundle contains neither credential nor even the provider's hostname.
+
+The endpoint is authenticated and rate-limited per person, for the reason
+`ai-proxy` was in v1: an endpoint that verifies without asking who is
+calling is somebody else's free verification service.
+
+**What the register says is recorded; what a person typed is not
+overwritten.** The registered name lands in `legalName`, beside `company`,
+never on top of it — customers are known internally by divisions, brands and
+short forms that somebody has typed into forty quotations, and silently
+replacing that would rewrite how they appear everywhere with nothing to
+notice it by. Applying it is a button. The address is the one exception, in
+one direction: it fills fields that are **empty**, because a blank city on a
+record that now has an authoritative one is a gap, not a decision.
+
+An answer carries its date rather than a bare tick. A registration active in
+March may be cancelled by September, so the panel says "checked 200 days
+ago" and marks anything past six months as worth re-checking.
+
+Three distinctions the code is careful about, because getting any of them
+backwards is worse than not having the feature:
+
+- **"The register says no" is not "we could not ask."** A 404 means the
+  register answered about the number somebody typed; a 429 or a 502 means we
+  never got to ask. Telling a salesperson their customer's GSTIN is bad when
+  in fact the service was down sends them to the wrong conversation.
+- **A blank status is never read as active.** Guessing in the reassuring
+  direction is how a cancelled registration gets invoiced.
+- **A name that differs is not a name that disagrees.** "Northline Logistics
+  Pvt Ltd" and "NORTHLINE LOGISTICS PRIVATE LIMITED" are the same company.
+  Flagging that pair every time is how people learn to ignore the flag.
+
+PAN verification requires the holder's consent, so the request carries a
+consent flag — set from a box a person ticks, never defaulted in code, and
+refused server-side without it.
+
+The provider's endpoints could not be confirmed by calling them: the machine
+this was built on has no route to `api.sandbox.co.in`. They are therefore
+isolated in a `ROUTES` map at the top of `netlify/lib/sandbox.mjs` with a
+comment saying so, everything downstream is independent of them, and
+Integrations → Test connection reports the provider's own status code so a
+mismatch is a two-line change rather than an investigation.
+
+Aadhaar OKYC and bank-account verification are also available from this
+provider and are **not** built. Both are about individuals and need a
+consent journey of their own; neither is what a B2B customer record needs.

@@ -26,6 +26,9 @@ export const LIMITS = {
   "ms-oauth-start": { limit: 10, windowSeconds: 3600 },
   "admin-users": { limit: 30, windowSeconds: 3600 },
   "webhook-deliver": { limit: 120, windowSeconds: 3600 },
+  /* Each one is a billed call to a government register. A salesperson
+     checks a handful of GSTINs a day; a loop checks a thousand. */
+  "verify-tax-id": { limit: 40, windowSeconds: 3600 },
 };
 
 /**
