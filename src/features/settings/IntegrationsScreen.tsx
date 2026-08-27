@@ -5,7 +5,7 @@ import { Confirm } from "../../components/Modal";
 import { useToast } from "../../components/Toast";
 import { diagnosticLines, isReady, nextAction, type Diagnostics } from "../../domain/integrations/diagnostics";
 import { IntegrationError, type IntegrationsApi, type MailboxConnection } from "../../integrations/api";
-import { testVerificationConnection } from "../../data/verification";
+import { integrationStatus, testVerificationConnection, type IntegrationStatus } from "../../data/verification";
 
 /**
  * Settings → Integrations.
@@ -29,6 +29,13 @@ export interface IntegrationsScreenProps {
 const isAdmin = (role: string) => role === "Admin";
 
 export function IntegrationsScreen({ api, user, users, settings, onSettingsChange }: IntegrationsScreenProps) {
+  /* Which keys are set, asked once when the screen opens. Null while it is
+     still being asked, and null for good when it cannot be — a panel
+     showing nothing beats one claiming "not connected" because it could not
+     reach the server to find out. */
+  const [status, setStatus] = useState<IntegrationStatus | null>(null);
+  useEffect(() => { void integrationStatus().then(setStatus); }, []);
+
   return (
     <main className="page">
       <PageHead
@@ -37,8 +44,8 @@ export function IntegrationsScreen({ api, user, users, settings, onSettingsChang
       />
       <div className="stack" style={{ maxWidth: 760 }}>
         <MailboxPanel api={api} user={user} />
-        <WhatsAppPanel />
-        <VerificationPanel />
+        <WhatsAppPanel status={status} />
+        <VerificationPanel status={status} />
         <AssistantPanel />
         <InvoicingPanel settings={settings} onChange={onSettingsChange} canEdit={isAdmin(user.role)} />
         <WebhooksPanel
@@ -369,37 +376,36 @@ function AzureSetup({ api }: { api: IntegrationsApi }) {
 
 /* ── WhatsApp ──────────────────────────────────────────────────────── */
 
-function WhatsAppPanel() {
+function WhatsAppPanel({ status }: { status: IntegrationStatus | null }) {
   return (
     <Card title="WhatsApp" actions={<Chip tone="neutral" dot={false}>Optional</Chip>}>
       <p className="muted" style={{ marginTop: 0 }}>
-        With a provider connected, "Send now" delivers quotations, proformas and renewal reminders straight
-        from the CRM. Without one, every WhatsApp dialog still offers <strong>Open in WhatsApp instead</strong>,
-        which needs no setup and opens WhatsApp with the message already written. Nothing is ever blocked.
+        There are <strong>two</strong> WhatsApp channels here and they are set up separately, because they do
+        different jobs and WhatsApp treats them differently. Connecting one does not connect the other.
+        Neither is required: every WhatsApp dialog always offers <strong>Open in WhatsApp instead</strong>,
+        which needs no setup at all.
       </p>
 
-      <div className="notice" style={{ marginTop: 12 }}>
-        <span>
-          There is no way to test this connection without sending a real message to a real person, so the CRM
-          doesn't pretend to: the first "Send now" is the test.
-        </span>
-      </div>
-
-      <div style={{ marginTop: 16 }}>
-        <span className="eyebrow">One-time setup</span>
+      <div style={{ marginTop: 18 }}>
+        <div className="row-tight">
+          <span className="eyebrow">1 · Send now — free text, by hand</span>
+          {status ? (
+            <Chip tone={status.whatsappDirect ? "good" : "neutral"}>
+              {status.whatsappDirect ? "Connected" : "Not connected"}
+            </Chip>
+          ) : null}
+        </div>
+        <p className="muted" style={{ marginTop: 8 }}>
+          The <strong>Send now</strong> button on a quotation, proforma or renewal reminder. Whatever is typed,
+          sent immediately, from a number you link by scanning a QR code — the same pairing as WhatsApp Web.
+        </p>
         <ol className="steps" style={{ marginTop: 10 }}>
           <li className="step">
             <div className="step-body">
-              <div className="step-title">Sign up with a QR-linked provider</div>
-              <div>Use the phone number customers should see the message coming from.</div>
-            </div>
-          </li>
-          <li className="step">
-            <div className="step-body">
-              <div className="step-title">Link the number</div>
+              <div className="step-title">Sign up with a QR-linked provider and link the number</div>
               <div>
-                In the provider's dashboard, scan the QR code from WhatsApp on that phone
-                (Settings → Linked Devices) — the same pairing as WhatsApp Web.
+                Use the number customers should see the message coming from. In the provider&rsquo;s dashboard,
+                scan the QR code from WhatsApp on that phone (Settings → Linked Devices).
               </div>
             </div>
           </li>
@@ -408,18 +414,78 @@ function WhatsAppPanel() {
               <div className="step-title">Add the token in Netlify</div>
               <div>
                 Site configuration → Environment variables → <code className="mono">WHATSAPP_API_TOKEN</code>,
-                then redeploy. No code changes.
+                then redeploy.
               </div>
             </div>
           </li>
         </ol>
+        <div className="notice" style={{ marginTop: 12 }}>
+          <span>
+            <strong>Worth knowing:</strong> QR-linked services are not WhatsApp&rsquo;s official business channel —
+            they automate WhatsApp Web. Cheaper and quicker to set up than the official Business API, at the risk
+            of the number being logged out or restricted without warning.
+          </span>
+        </div>
       </div>
 
-      <div className="notice" style={{ marginTop: 14 }}>
+      <div style={{ marginTop: 24 }}>
+        <div className="row-tight">
+          <span className="eyebrow">2 · Automatic follow-ups — approved templates</span>
+          {status ? (
+            <Chip tone={status.whatsappTemplates ? "good" : "neutral"}>
+              {status.whatsappTemplates ? "Connected" : "Not connected"}
+            </Chip>
+          ) : null}
+        </div>
+        <p className="muted" style={{ marginTop: 8 }}>
+          The chasers that go out on their own days after a quotation was sent. These land long after the last
+          message, which puts them outside Meta&rsquo;s 24-hour window — and out there <strong>only templates
+          approved in advance may be sent</strong>. That is Meta&rsquo;s rule, not this CRM&rsquo;s, and it is why this
+          channel is a different provider and a different key from the one above.
+        </p>
+        <ol className="steps" style={{ marginTop: 10 }}>
+          <li className="step">
+            <div className="step-body">
+              <div className="step-title">Get three templates approved</div>
+              <div>
+                In Interakt. Meta&rsquo;s review usually takes a day or two, so start here. Each template must take
+                exactly three variables, in this order: <code className="mono">{"{{1}}"}</code> who it is addressed
+                to, <code className="mono">{"{{2}}"}</code> the quotation number, <code className="mono">{"{{3}}"}</code> a date.
+              </div>
+            </div>
+          </li>
+          <li className="step">
+            <div className="step-body">
+              <div className="step-title">Add the key in Netlify</div>
+              <div>
+                Site configuration → Environment variables → <code className="mono">INTERAKT_API_KEY</code> — the
+                Secret Key from Interakt — then redeploy.
+              </div>
+            </div>
+          </li>
+          <li className="step">
+            <div className="step-body">
+              <div className="step-title">Name the templates in Settings → Follow-ups</div>
+              <div>
+                The key alone sends nothing: the follow-up needs to know which approved template to use. Delivery
+                status — sent, delivered, read — is set up on that same panel.
+              </div>
+            </div>
+          </li>
+        </ol>
+        <div className="notice" style={{ marginTop: 12 }}>
+          <span>
+            A customer only ever receives these if <strong>they have agreed to be contacted on WhatsApp</strong> is
+            ticked on their record. An unticked box is not consent, and neither is a record that predates the question.
+          </span>
+        </div>
+      </div>
+
+      <div className="notice" style={{ marginTop: 18 }}>
         <span>
-          <strong>Worth knowing:</strong> QR-linked services are not WhatsApp's official business channel —
-          they automate WhatsApp Web. They are cheaper and quicker to set up than the official Business API,
-          at the risk of the number being logged out or restricted without warning.
+          Neither channel can be tested without sending a real message to a real person, so the CRM doesn&rsquo;t
+          pretend to: the first send is the test. <strong>Connected</strong> above means the key is set — not that
+          WhatsApp has accepted it.
         </span>
       </div>
     </Card>
@@ -428,7 +494,7 @@ function WhatsAppPanel() {
 
 /* ── tax & KYC verification ────────────────────────────────────────── */
 
-function VerificationPanel() {
+function VerificationPanel({ status }: { status: IntegrationStatus | null }) {
   const [state, setState] = useState<{ testing: boolean; result: { ok: boolean; message: string } | null }>(
     { testing: false, result: null },
   );
@@ -440,7 +506,12 @@ function VerificationPanel() {
   };
 
   return (
-    <Card title="GSTIN &amp; PAN verification" actions={<Chip tone="neutral" dot={false}>Optional</Chip>}>
+    <Card
+      title="GSTIN &amp; PAN verification"
+      actions={status
+        ? <Chip tone={status.verification ? "good" : "neutral"}>{status.verification ? "Connected" : "Not connected"}</Chip>
+        : <Chip tone="neutral" dot={false}>Optional</Chip>}
+    >
       <p className="muted" style={{ marginTop: 0 }}>
         Checks a customer's GSTIN and PAN against the government register, from the customer sheet. The
         checksum shown beside the GSTIN field only says the number is well formed — a cancelled registration

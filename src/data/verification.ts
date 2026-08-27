@@ -97,3 +97,31 @@ export async function testVerificationConnection(): Promise<{ ok: boolean; messa
   if (!answer.ok) return { ok: false, message: answer.outcome.message };
   return { ok: true, message: "Connected. Sandbox issued a token." };
 }
+
+/** Which integrations are switched on, as booleans. Never any part of a
+ *  key — see netlify/functions/integration-status.mjs. */
+export interface IntegrationStatus {
+  whatsappDirect: boolean;
+  whatsappTemplates: boolean;
+  verification: boolean;
+  email: boolean;
+}
+
+/** Null when it cannot be asked — the preview, or a session that has ended.
+ *  A panel showing nothing is better than one claiming "not connected"
+ *  because it could not reach the server to find out. */
+export async function integrationStatus(): Promise<IntegrationStatus | null> {
+  if (!isSupabaseConfigured()) return null;
+  try {
+    const { data } = await getSupabase().auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) return null;
+    const resp = await fetch("/.netlify/functions/integration-status", {
+      headers: { Authorization: "Bearer " + token },
+    });
+    if (!resp.ok) return null;
+    return (await resp.json()) as IntegrationStatus;
+  } catch {
+    return null;
+  }
+}
