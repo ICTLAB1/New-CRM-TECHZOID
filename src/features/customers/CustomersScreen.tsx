@@ -60,10 +60,19 @@ export function CustomersScreen({ customers, workspace, users, customFields, cur
     const previous = customers.find((c) => c.id === raw.id);
     const reassigned = !!previous && previous.ownerId !== raw.ownerId;
 
-    /* The customer ID is taken here, at the first save, rather than when the
-       blank form opened — cancelling out of "New customer" must not burn a
-       number and leave a hole in the sequence. */
-    const next = !previous && !raw.code
+    /* The customer ID is taken here, at a save, rather than when the blank
+       form opened — cancelling out of "New customer" must not burn a number
+       and leave a hole in the sequence.
+
+       ANY SAVE, not just the first. Allocation is deliberately allowed to
+       fail quietly: a numbering hiccup must never be the reason somebody
+       loses a customer they have just typed in. But when this only ran on
+       the first save, a customer who lost that coin toss stayed without an
+       ID for good — as did anyone arriving through the registration form
+       while the counter was unreachable. One turned up in a workspace of
+       48. Asking again whenever a record has no code makes the next save of
+       that customer put it right, by itself. */
+    const next = !raw.code
       ? { ...raw, code: await nextCustomerCode(customers.length + 1, String(settings["customerPrefix"] ?? "CUST-")) }
       : raw;
 
