@@ -237,6 +237,16 @@ export function DocumentActions({
   const waCustomer = customer ?? null;
   const waAllowed = !!waNumber && !!waCustomer && mayWhatsApp(waCustomer);
 
+  /* All three, or none: a blank one falls back to a suggested default that
+     is almost certainly not registered with Meta, and the row it queues
+     fails a day later. */
+  const templateNames = {
+    nudge: String(settings[TEMPLATE_SETTING.nudge] ?? "").trim(),
+    check: String(settings[TEMPLATE_SETTING.check] ?? "").trim(),
+    final: String(settings[TEMPLATE_SETTING.final] ?? "").trim(),
+  };
+  const templatesNamed = !!(templateNames.nudge && templateNames.check && templateNames.final);
+
   const armable = canFollowUp && !cannotArm && plannedFollowUps.length > 0
     ? {
         ownerId: doc.ownerId,
@@ -247,14 +257,10 @@ export function DocumentActions({
         customerName: doc.billName || "",
         facts: followUpFacts,
         plan: plannedFollowUps,
-        whatsapp: waAllowed
+        whatsapp: waAllowed && templatesNamed
           ? { to: `${waNumber.countryCode} ${waNumber.phoneNumber}`, why: "" }
-          : { to: "", why: whyNoWhatsApp(waNumber, waCustomer) },
-        templateNames: {
-          nudge: String(settings[TEMPLATE_SETTING.nudge] ?? ""),
-          check: String(settings[TEMPLATE_SETTING.check] ?? ""),
-          final: String(settings[TEMPLATE_SETTING.final] ?? ""),
-        },
+          : { to: "", why: whyNoWhatsApp(waNumber, waCustomer, templatesNamed) },
+        templateNames,
         company: doc.billName || "",
       }
     : null;
@@ -685,6 +691,7 @@ function EmailDialog({
 function whyNoWhatsApp(
   number: { countryCode: string; phoneNumber: string } | null,
   customer: Customer | null,
+  templatesNamed: boolean,
 ): string {
   if (!customer) return "This document is not linked to a customer record.";
   if (customer.whatsappOptIn !== true) {
@@ -693,5 +700,14 @@ function whyNoWhatsApp(
     return "This customer hasn't agreed to WhatsApp. Tick it on their record once they have.";
   }
   if (!number) return "There's no usable phone number with a country code on this document.";
+  if (!templatesNamed) {
+    /* CHECKED HERE, NOT AT SEND TIME, and that is the whole point. With no
+       names configured, templateFor() falls back to a suggested default —
+       a name almost certainly not registered in the account — so the row
+       queues happily and Meta refuses it at 09:30 the next morning. The
+       failure is a day away from the action that caused it, and lands on a
+       row nobody is looking at. Refusing to queue it says so now. */
+    return "No approved WhatsApp templates are named yet — Settings → Follow-ups. Without all three, Meta refuses the message.";
+  }
   return "";
 }

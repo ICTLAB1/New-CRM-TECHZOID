@@ -125,3 +125,54 @@ export async function integrationStatus(): Promise<IntegrationStatus | null> {
     return null;
   }
 }
+
+/* ── follow-up diagnosis ───────────────────────────────────────────────
+   An automatic follow-up passes six gates and every one of them fails
+   silently, a day after the action that caused it. This asks the server
+   which gate is closed rather than leaving people to guess. Privileged
+   only — it reads every owner's queue. */
+
+export interface FollowUpDiagnosis {
+  configured: {
+    interaktKey: boolean;
+    templateNames: { nudge: string; check: string; final: string };
+    templatesNamed: boolean;
+    mailer: boolean;
+  };
+  queue: {
+    total: number; scheduled: number; dueNow: number; nextDueOn: string | null;
+    sent: number; failed: number; cancelled: number;
+    onWhatsApp: number; onEmail: number;
+    whatsappScheduled: number; whatsappSent: number; whatsappDelivered: number;
+    neverSentAnything: boolean; lastSentAt: string | null;
+  };
+  recentFailures: { docNumber: string; channel: string; templateName: string; error: string }[];
+}
+
+async function followUpAdmin<T>(body: Record<string, unknown>): Promise<{ ok: true; data: T } | { ok: false; message: string }> {
+  if (!isSupabaseConfigured()) return { ok: false, message: "This preview has no server to ask." };
+  try {
+    const { data } = await getSupabase().auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) return { ok: false, message: "Your session has ended. Sign in again." };
+    const resp = await fetch("/.netlify/functions/followups-admin", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+      body: JSON.stringify(body),
+    });
+    const payload = await resp.json().catch(() => ({}));
+    if (!resp.ok) {
+      return { ok: false, message: typeof payload.error === "string" ? payload.error : "That didn't work." };
+    }
+    return { ok: true, data: payload as T };
+  } catch {
+    return { ok: false, message: "Couldn't reach the server. Check your connection." };
+  }
+}
+
+export const diagnoseFollowUps = () => followUpAdmin<FollowUpDiagnosis>({ action: "status" });
+
+/** Send everything due right now, rather than waiting for 09:30 tomorrow to
+ *  find out whether it works. Runs the same code the schedule runs. */
+export const runFollowUpsNow = () =>
+  followUpAdmin<{ ran: boolean; tally: Record<string, number> | null; note: string | null }>({ action: "run" });

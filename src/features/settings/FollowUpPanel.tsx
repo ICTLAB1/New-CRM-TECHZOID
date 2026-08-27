@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Button, Card, Field, Input, Select } from "../../components/primitives";
 import { useToast } from "../../components/Toast";
+import { FollowUpDoctor } from "./FollowUpDoctor";
 import { IntegrationError, type IntegrationsApi } from "../../integrations/api";
 import {
   DEFAULT_FOLLOWUP_STEPS, MAX_STEP_DAYS, MAX_STEPS, MIN_STEP_DAYS, readSteps, TONE_LABELS,
@@ -248,7 +249,8 @@ export function FollowUpPanel({
           Up to {MAX_STEPS} steps, between {MIN_STEP_DAYS} and {MAX_STEP_DAYS} days. Two steps on the
           same day would send one customer two emails in a morning, so only the first is kept.
         </p>
-      </Card>
+            <FollowUpDoctor />
+</Card>
     </div>
   );
 }
