@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { Modal } from "../../components/Modal";
 import { AttachmentsPanel } from "../attachments/AttachmentsPanel";
 import { askBeforeSave, useConfirmedAction } from "../../components/useConfirmedAction";
 import { Button, Chip, Field, Input, Select, Textarea } from "../../components/primitives";
 import { applyCountry, applyGstin, customerLabel, type Customer } from "../../domain/customers/customer";
+import { checkDuplicate, duplicateCheckAvailable, type DuplicateHit } from "../../data/duplicateCheck";
 import { gstinMessage, validateGSTIN } from "../../domain/gstin/validate";
 import { COUNTRIES } from "../../domain/geo/countries";
 import { STATE_NAMES } from "../../domain/geo/states";
@@ -47,6 +48,14 @@ export function CustomerSheet({ open = true, customer, users, customFields, canR
     setF((cur) => ({ ...cur, [k]: e.target.value }));
 
   const isIndia = !f.country || f.country === "India";
+
+  /* LIVE DUPLICATE CHECK, on leaving a field rather than at save.
+     Finding out at save that this company is already in the CRM means
+     re-reading everything just typed to work out what to keep; finding out
+     on leaving the name field means the question is asked before any of it
+     was typed. Never while typing — an answer about half a company name is
+     noise, and noise is what teaches people to ignore a warning. */
+  const dup = useDuplicateCheck(f, customer);
 
   /* Compared against what was opened, not tracked with a flag: a field
      typed into and then typed back out of is not an unsaved change, and
@@ -96,14 +105,19 @@ export function CustomerSheet({ open = true, customer, users, customFields, canR
               <Input className="mono" value={f.code} readOnly disabled />
             </Field>
           ) : null}
-          <Field label="Company name">
-            <Input value={f.company ?? ""} onChange={set("company")} placeholder="Acme Industries Pvt Ltd" />
+          <Field label="Company name" hint={dup.hint}>
+            <Input
+              value={f.company ?? ""}
+              onChange={set("company")}
+              onBlur={() => dup.check()}
+              placeholder="Acme Industries Pvt Ltd"
+            />
           </Field>
           <div className="grid grid-2">
             <Field label="Contact person"><Input value={f.contact ?? ""} onChange={set("contact")} placeholder="Rahul Sharma" /></Field>
             <Field label="Designation"><Input value={f.designation ?? ""} onChange={set("designation")} placeholder="IT Head" /></Field>
             <Field label="Email"><Input type="email" value={f.email ?? ""} onChange={set("email")} /></Field>
-            <Field label="Phone"><Input value={f.phone ?? ""} onChange={set("phone")} /></Field>
+            <Field label="Phone"><Input value={f.phone ?? ""} onChange={set("phone")} onBlur={() => dup.check()} /></Field>
             <Field label="Alternate phone" hint="For when the first one doesn't answer."><Input value={f.altPhone ?? ""} onChange={set("altPhone")} /></Field>
             <Field label="Website"><Input value={f.website ?? ""} onChange={set("website")} placeholder="www.example.com" /></Field>
           </div>
@@ -281,4 +295,66 @@ export function CustomerSheet({ open = true, customer, users, customFields, canR
       </div>
     </Modal>
   );
+}
+
+/* ── live duplicate check ──────────────────────────────────────────── */
+
+/**
+ * Ask the database whether this customer already exists, on leaving a field.
+ *
+ * ONLY FOR NEW RECORDS. Editing an existing customer must not raise a
+ * "duplicate of itself" alarm, and the person editing already knows the
+ * record exists — they are looking at it.
+ *
+ * "Checking…" is shown because there is a real network round trip behind it,
+ * not to make an instant answer look like work. The check has to reach the
+ * server precisely because the browser cannot see other people's customers —
+ * see src/data/duplicateCheck.ts.
+ */
+function useDuplicateCheck(draft: Customer, original: Customer) {
+  const [state, setState] = useState<"idle" | "checking" | "clear" | "found">("idle");
+  const [hit, setHit] = useState<DuplicateHit | null>(null);
+  /* What was last asked about, so leaving the same field twice does not ask
+     the same question again. */
+  const asked = useRef("");
+  const isNew = !original.company && !original.gstin && !original.phone;
+
+  const check = useCallback(() => {
+    if (!isNew || !duplicateCheckAvailable()) return;
+
+    const fields = {
+      company: (draft.company ?? "").trim(),
+      phone: (draft.phone ?? "").trim(),
+      gstin: (draft.gstin ?? "").trim(),
+    };
+    const key = `${fields.company}|${fields.phone}|${fields.gstin}`;
+    if (!fields.company && !fields.phone && !fields.gstin) { setState("idle"); return; }
+    if (key === asked.current) return;
+    asked.current = key;
+
+    setState("checking");
+    void checkDuplicate(fields)
+      .then((found) => {
+        setHit(found);
+        setState(found ? "found" : "clear");
+      })
+      .catch((err) => {
+        /* A check that could not run is NOT a clean result. Saying "no
+           existing customer found" because the network dropped is the one
+           answer this must never give. */
+        console.error("duplicate check failed:", err);
+        setState("idle");
+      });
+  }, [draft.company, draft.phone, draft.gstin, isNew]);
+
+  const hint =
+    state === "checking" ? <span className="inline-check">Checking…</span>
+    : state === "clear" ? <span className="inline-check is-good">✓ No existing customer found</span>
+    : state === "found" && hit
+      ? <span className="inline-check is-warn">
+          ⚠ {hit.company} already exists{hit.ownerName ? `, with ${hit.ownerName}` : ""}
+        </span>
+    : undefined;
+
+  return { check, hint, hit, found: state === "found" };
 }

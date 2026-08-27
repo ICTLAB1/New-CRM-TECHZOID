@@ -28,12 +28,25 @@ export interface DuplicateCandidate {
   id: string;
   company?: string;
   gstin?: string;
+  phone?: string;
 }
+
+/** How sure the match is, which decides how firmly it is put to the user. */
+export type DuplicateReason = "gstin" | "phone" | "name";
 
 export interface DuplicateMatch<T extends DuplicateCandidate> {
   match: T;
+  reason: DuplicateReason;
   /** GSTIN matches are near-certain; name matches are a suggestion. */
   byGstin: boolean;
+}
+
+/** Digits only, and only the last ten compared: the same number reaches the
+ *  CRM as "+91 98100 12345", "09810012345" and "9810012345" depending on who
+ *  typed it, and all three are the same person. */
+export function normalizePhone(s: string | null | undefined): string {
+  const digits = (s || "").replace(/[^0-9]/g, "");
+  return digits.length >= 10 ? digits.slice(-10) : "";
 }
 
 /**
@@ -53,13 +66,22 @@ export function findDuplicate<T extends DuplicateCandidate>(
   const gstin = (candidate.gstin || "").trim().toUpperCase();
   if (gstin) {
     const byGstin = others.find((c) => (c.gstin || "").trim().toUpperCase() === gstin);
-    if (byGstin) return { match: byGstin, byGstin: true };
+    if (byGstin) return { match: byGstin, reason: "gstin", byGstin: true };
+  }
+
+  /* A phone number is nearly as strong as a GSTIN and far more often
+     present: an unregistered customer has no GSTIN, but everybody has a
+     number, and two records sharing one are almost always the same buyer. */
+  const phone = normalizePhone(candidate.phone);
+  if (phone) {
+    const byPhone = others.find((c) => normalizePhone(c.phone) === phone);
+    if (byPhone) return { match: byPhone, reason: "phone", byGstin: false };
   }
 
   const name = normalizeCompanyName(candidate.company);
   if (name) {
     const byName = others.find((c) => normalizeCompanyName(c.company) === name);
-    if (byName) return { match: byName, byGstin: false };
+    if (byName) return { match: byName, reason: "name", byGstin: false };
   }
 
   return null;

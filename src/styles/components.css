@@ -748,3 +748,13 @@ button.tile:hover { background: var(--surface-2); }
   /* A row that is only a spacer or an empty cell should not leave a gap. */
   .table td:empty { display: none; }
 }
+
+
+/* ── inline field check ────────────────────────────────────────────────
+   The answer to "does this customer already exist?" sits under the field
+   that was just left, because that is where the person is looking. It
+   replaces the field's hint rather than adding a row, so nothing on the
+   form moves as the answer arrives. */
+.inline-check { display: inline-flex; align-items: center; gap: 5px; }
+.inline-check.is-good { color: var(--good); }
+.inline-check.is-warn { color: var(--warn); font-weight: 500; }
