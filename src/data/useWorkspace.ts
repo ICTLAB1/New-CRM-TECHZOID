@@ -44,6 +44,9 @@ export interface Workspace {
   clearEvents: () => void;
   update: <K extends keyof WorkspaceData>(key: K, next: WorkspaceData[K]) => void;
   updateSettings: (next: Record<string, unknown>) => void;
+  /** Adopt a settings change the database made on its own — see the
+   *  implementation for why this must not write back. */
+  noteSettings: (next: Record<string, unknown>) => void;
   setProfiles: (next: Profile[]) => void;
   dismissSaveError: () => void;
 }
@@ -168,11 +171,27 @@ export function useWorkspace(enabled: boolean, meId = "", db: Store = store()): 
       });
   }, [enabled, reload, db]);
 
+  /**
+   * Take on a settings change the DATABASE has already made.
+   *
+   * Allocating a document number advances a counter inside `settings` in a
+   * single statement in Postgres (next_doc_seq). The row is already written
+   * by the time we hear about it, so writing it back would be a second,
+   * pointless update — and one that row-level security would reject for a
+   * salesperson, who may allocate numbers but not edit settings. Moving the
+   * committed baseline along with the state is what says "this is not a
+   * pending edit; the database and this browser now agree".
+   */
+  const noteSettings = useCallback((next: Record<string, unknown>) => {
+    committedSettings.current = next;
+    setSettings(next);
+  }, []);
+
   return {
     state, error, data, settings, profiles, saving, saveError,
     reload: () => reload(),
     events, clearEvents,
-    update, updateSettings, setProfiles,
+    update, updateSettings, noteSettings, setProfiles,
     dismissSaveError: () => setSaveError(null),
   };
 }

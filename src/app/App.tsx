@@ -112,6 +112,7 @@ function LiveWorkbench({ user }: { user: SignedInUser }) {
       user={user}
       onChange={ws.update}
       onSettingsChange={ws.updateSettings}
+      onSettingsNote={ws.noteSettings}
       onTeamChange={(next) => ws.setProfiles(next.map((m) => ({ ...m, email: m.email ?? "" })))}
       onRestore={(backup) => restore(backup, ws.data, ws.update, ws.settings, ws.updateSettings)}
       onSignOut={() => void signOut()}
@@ -154,6 +155,7 @@ function DemoApp() {
       user={team[0] ?? USERS[0]!}
       onChange={update}
       onSettingsChange={setSettings}
+      onSettingsNote={setSettings}
       onTeamChange={setTeam}
       onRestore={(backup) => restore(backup, data, update, settings, setSettings)}
       banner={

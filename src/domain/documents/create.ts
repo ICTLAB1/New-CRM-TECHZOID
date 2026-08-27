@@ -59,6 +59,11 @@ export interface DocSettings {
 export interface SalesDocument {
   id: string;
   number: string;
+  /** True while the number is still the one the app suggested. The database
+   *  allocates the real one on first save (see src/data/docNumber.ts), and
+   *  only for documents that still carry this flag — clearing it is how a
+   *  number typed by hand survives the save. */
+  autoNumber?: boolean;
   ownerId: string;
   customerId: string;
   quoteId?: string;
@@ -259,6 +264,11 @@ export function newQuotation({ settings, user, customer = null, today = TODAY() 
   return {
     id: uid(),
     number: buildDocNumber(settings.quotePrefix ?? "TZ/QT", settings.quoteSeq),
+    /* The number above is a preview of what this document will get. The
+       real one is allocated by the database when it is first saved — see
+       src/data/docNumber.ts. Typing over it in the editor clears this
+       flag, and a number somebody chose by hand is then left alone. */
+    autoNumber: true,
     ...fields,
     ownerId: fields.ownerId || user.id,
     ...shippingFieldsFrom(customer),
@@ -285,6 +295,11 @@ export function newProforma({ settings, user, customer = null, today = TODAY() }
   return {
     id: uid(),
     number: buildDocNumber(settings.proformaPrefix ?? "TZ/PI", settings.proformaSeq),
+    /* The number above is a preview of what this document will get. The
+       real one is allocated by the database when it is first saved — see
+       src/data/docNumber.ts. Typing over it in the editor clears this
+       flag, and a number somebody chose by hand is then left alone. */
+    autoNumber: true,
     ...fields,
     ownerId: fields.ownerId || user.id,
     quoteId: "", quoteNumber: "",
@@ -331,6 +346,11 @@ export function newPurchaseOrder({ settings, user, customer = null, today = TODA
   return {
     id: uid(),
     number: buildDocNumber(settings.purchaseOrderPrefix ?? "TZ/PO", settings.purchaseOrderSeq),
+    /* The number above is a preview of what this document will get. The
+       real one is allocated by the database when it is first saved — see
+       src/data/docNumber.ts. Typing over it in the editor clears this
+       flag, and a number somebody chose by hand is then left alone. */
+    autoNumber: true,
     ownerId: user.id,
     customerId: dropShip ? customer.id : "",
 
@@ -413,6 +433,11 @@ export function proformaFromQuotation(
   return {
     id: uid(),
     number: buildDocNumber(settings.proformaPrefix ?? "TZ/PI", settings.proformaSeq),
+    /* The number above is a preview of what this document will get. The
+       real one is allocated by the database when it is first saved — see
+       src/data/docNumber.ts. Typing over it in the editor clears this
+       flag, and a number somebody chose by hand is then left alone. */
+    autoNumber: true,
     ownerId: quote.ownerId,
     quoteId: quote.id,
     quoteNumber: quote.number,
@@ -479,6 +504,11 @@ export function invoiceFrom(
   return {
     id: uid(),
     number: buildDocNumber(settings.invoicePrefix ?? "TZ/INV", settings.invoiceSeq),
+    /* The number above is a preview of what this document will get. The
+       real one is allocated by the database when it is first saved — see
+       src/data/docNumber.ts. Typing over it in the editor clears this
+       flag, and a number somebody chose by hand is then left alone. */
+    autoNumber: true,
     ...base,
     ownerId: base.ownerId || user.id,
     subject: "Tax invoice for IT products and services",
@@ -510,6 +540,11 @@ export function duplicateQuotation(
     ...quote,
     id: uid(),
     number: buildDocNumber(settings.quotePrefix ?? "TZ/QT", settings.quoteSeq),
+    /* The number above is a preview of what this document will get. The
+       real one is allocated by the database when it is first saved — see
+       src/data/docNumber.ts. Typing over it in the editor clears this
+       flag, and a number somebody chose by hand is then left alone. */
+    autoNumber: true,
     ...carryOver(quote),
     status: "Draft",
     revisionNo: 0,

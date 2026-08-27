@@ -810,3 +810,45 @@ button.tile:hover { background: var(--surface-2); }
 .bell-text { flex: 1 1 auto; min-width: 0; }
 .bell-when { flex: 0 0 auto; color: var(--ink-4); font-size: var(--t-small, 11px); white-space: nowrap; }
 @media (pointer: coarse) { .bell { width: 40px; height: 40px; } .bell-item { padding: 12px var(--gap); } }
+
+/* ── activity notes ────────────────────────────────────────────────────
+   A log, not a chat. Each entry is one hairline-separated block with the
+   author and time as meta above the words, so a column of them scans as a
+   record rather than as a conversation. No avatars, no bubbles: the
+   question being answered is "what happened and when", and everything else
+   is between the reader and that answer. */
+
+.note-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--rule);
+}
+
+.note {
+  padding: var(--gap) 0;
+  border-bottom: 1px solid var(--rule);
+}
+
+.note-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--gap-tight);
+  margin-bottom: var(--gap-hair);
+}
+
+.note-head strong {
+  font-size: var(--t-small);
+  color: var(--ink);
+}
+
+/* Kept readable at its natural width — a note runs to a couple of
+   sentences and full-width lines of that are harder to read, not easier. */
+.note-text {
+  margin: 0;
+  font-size: var(--t-body);
+  color: var(--ink-2);
+  white-space: pre-wrap;
+  max-width: 68ch;
+}

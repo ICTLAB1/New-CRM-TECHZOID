@@ -1,6 +1,8 @@
 import { useCallback, useRef, useState } from "react";
 import { Modal } from "../../components/Modal";
 import { AttachmentsPanel } from "../attachments/AttachmentsPanel";
+import { NotesPanel } from "./NotesPanel";
+import { addNote } from "../../domain/customers/notes";
 import { askBeforeSave, useConfirmedAction } from "../../components/useConfirmedAction";
 import { Button, Chip, Field, Input, Select, Textarea } from "../../components/primitives";
 import { applyCountry, applyGstin, customerLabel, type Customer } from "../../domain/customers/customer";
@@ -8,7 +10,7 @@ import { checkDuplicate, duplicateCheckAvailable, type DuplicateHit } from "../.
 import { gstinMessage, validateGSTIN } from "../../domain/gstin/validate";
 import { COUNTRIES } from "../../domain/geo/countries";
 import { STATE_NAMES } from "../../domain/geo/states";
-import { SEGMENTS, SOURCES, STAGES } from "../../domain/pipeline/stages";
+import { SEGMENTS, SOURCES, STAGES, applyStage, type StageId } from "../../domain/pipeline/stages";
 import { CURRENCIES } from "../../domain/currency/currencies";
 import { TAX_TYPES } from "../../domain/tax/types";
 
@@ -245,7 +247,15 @@ export function CustomerSheet({ open = true, customer, users, customFields, canR
               </Select>
             </Field>
             <Field label="Stage">
-              <Select value={f.stage ?? "lead"} onChange={set("stage")}>
+              <Select
+                value={f.stage ?? "lead"}
+                /* Through applyStage, not straight onto the field: moving to
+                   Won here used to set the stage and nothing else, so the
+                   deal never got a `wonAt` and never appeared in a single
+                   revenue chart. The board has always gone through it; this
+                   select was the way round it. */
+                onChange={(e) => setF((c) => applyStage(c, e.target.value as StageId))}
+              >
                 {STAGES.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
               </Select>
             </Field>
@@ -274,6 +284,15 @@ export function CustomerSheet({ open = true, customer, users, customFields, canR
             </div>
           </div>
         ) : null}
+
+        {/* Calls, emails and meetings. Folded into the record being edited
+            rather than saved on its own, so a note and the follow-up date
+            it was written to change go in together. */}
+        <NotesPanel
+          customer={f}
+          currentUser={currentUser}
+          onAdd={(draft) => setF((c) => addNote(c, draft, { id: currentUser?.id ?? "", name: currentUser?.name ?? "" }))}
+        />
 
         {/* Signed POs, credit applications, GST certificates — the paperwork
             a customer record acquires. Kept outside the form's own state:

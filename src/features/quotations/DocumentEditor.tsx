@@ -208,7 +208,22 @@ export function DocumentEditor({
                     )}
 
                     <div className="grid grid-2">
-                      <Field label="Document number"><Input value={doc.number} onChange={set("number")} /></Field>
+                      <Field
+                        label="Document number"
+                        hint={doc.autoNumber
+                          ? "Confirmed when you save — the database hands out the number, so two people quoting at once cannot get the same one."
+                          : undefined}
+                      >
+                        <Input
+                          value={doc.number}
+                          onChange={(e) =>
+                            /* Typing over the suggestion means this number was
+                               chosen deliberately. Saving must then leave it
+                               alone rather than replace it with the next one
+                               out of the series. */
+                            setDoc((d) => ({ ...d, number: e.target.value, autoNumber: false }))}
+                        />
+                      </Field>
                       <Field label="Status">
                         <Select value={doc.status} onChange={set("status")}>
                           {statuses.map((s) => <option key={s}>{s}</option>)}

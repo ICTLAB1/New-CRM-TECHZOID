@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { applyStage, type StageId } from "../domain/pipeline/stages";
 import { AppShell, PageHead } from "./AppShell";
 import { Card } from "../components/primitives";
 import { CustomersScreen } from "../features/customers/CustomersScreen";
@@ -50,6 +51,9 @@ export interface WorkbenchProps {
   user: { id: string; name: string; email?: string; designation?: string; role: string };
   onChange: <K extends keyof WorkspaceData>(key: K, next: WorkspaceData[K]) => void;
   onSettingsChange: (next: Record<string, unknown>) => void;
+  /** Settings the database changed by itself — a document counter the
+   *  allocation RPC advanced. Adopted locally, never written back. */
+  onSettingsNote?: (next: Record<string, unknown>) => void;
   onTeamChange: (next: TeamMember[]) => void;
   onRestore: (backup: Record<string, unknown>) => void;
   onSignOut?: () => void;
@@ -70,7 +74,7 @@ const ownershipOf = (data: WorkspaceData): OwnershipWorkspace => ({
 });
 
 export function Workbench({
-  data, settings, team, user, onChange, onSettingsChange, onTeamChange, onRestore, onSignOut, banner,
+  data, settings, team, user, onChange, onSettingsChange, onSettingsNote, onTeamChange, onRestore, onSignOut, banner,
   events = [], onEventsSeen,
 }: WorkbenchProps) {
   const [view, setView] = useState("dashboard");
@@ -120,7 +124,10 @@ export function Workbench({
      whether there is a move at all. */
   const advanceCustomer = (customerId: string, stage: string) => {
     handleCustomersChange(
-      customers.map((c) => (c.id === customerId ? { ...c, stage: stage as Customer["stage"], updatedAt: Date.now() } : c)),
+      /* applyStage, not a bare field write: it is the one place that knows
+         what else a stage carries — when a deal was won, what it was worth
+         at the time, when it was last lost. */
+      customers.map((c) => (c.id === customerId ? { ...applyStage(c, stage as StageId), updatedAt: Date.now() } : c)),
     );
   };
 
@@ -215,6 +222,7 @@ export function Workbench({
           api={integrations}
           currentUser={user}
           onChange={(docs, s) => { onChange("quotations", docs); onSettingsChange(s); }}
+          onSettingsNote={onSettingsNote}
           onCustomerStage={advanceCustomer}
           onCreateProforma={(pf) => { onChange("proformas", [pf, ...proformas]); setView("proformas"); }}
           onCreateInvoice={(inv) => { onChange("invoices", [inv, ...invoices]); setView("invoices"); }}
@@ -231,6 +239,7 @@ export function Workbench({
           api={integrations}
           currentUser={user}
           onChange={(docs, s) => { onChange("proformas", docs); onSettingsChange(s); }}
+          onSettingsNote={onSettingsNote}
           onCustomerStage={advanceCustomer}
           onCreateInvoice={(inv) => { onChange("invoices", [inv, ...invoices]); setView("invoices"); }}
         />
@@ -246,6 +255,7 @@ export function Workbench({
           api={integrations}
           currentUser={user}
           onChange={(docs, s) => { onChange("invoices", docs); onSettingsChange(s); }}
+          onSettingsNote={onSettingsNote}
         />
       ) : view === "receivables" ? (
         <ReceivablesScreen
@@ -267,6 +277,7 @@ export function Workbench({
           api={integrations}
           currentUser={user}
           onChange={(docs, s) => { onChange("purchaseOrders", docs); onSettingsChange(s); }}
+          onSettingsNote={onSettingsNote}
         />
       ) : view === "orders" ? (
         <OrdersScreen
@@ -275,6 +286,7 @@ export function Workbench({
           settings={settings}
           currentUser={user}
           onChange={(o, c, s) => { onChange("orders", o); onChange("challans", c); onSettingsChange(s); }}
+          onSettingsNote={onSettingsNote}
         />
       ) : view === "dispatch" ? (
         <DispatchScreen challans={challans} onChange={(next) => onChange("challans", next)} />

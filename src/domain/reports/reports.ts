@@ -1,7 +1,7 @@
 import { computeDocument } from "../tax/compute";
 import { computePaymentInfo } from "../payments/ledger";
 import { effectiveStatus } from "../documents/create";
-import { STAGES, stageOf } from "../pipeline/stages";
+import { STAGES, countsAsWon, stageOf, wonAmount } from "../pipeline/stages";
 import { orderStageOf } from "../orders/stages";
 import { orderFulfilment } from "../orders/fulfilment";
 import { daysLeft, expiryLabel, isPerpetual } from "../subscriptions/expiry";
@@ -67,13 +67,13 @@ export function buildReports(
   /* ── by salesperson ── */
   const bySales = users.map((u) => {
     const mine = ws.customers.filter((c) => c.ownerId === u.id);
-    const won = mine.filter((c) => c.stage === "won" && (c.wonAt ?? 0) >= from);
+    const won = mine.filter((c) => countsAsWon(c) && (c.wonAt ?? 0) >= from);
     const open = mine.filter((c) => c.stage !== "won" && c.stage !== "lost");
     const lost = mine.filter((c) => c.stage === "lost");
     return {
       person: u.name, accounts: mine.length, open: open.length,
       openValue: open.reduce((a, c) => a + (Number(c.value) || 0), 0),
-      wonDeals: won.length, wonValue: won.reduce((a, c) => a + (Number(c.value) || 0), 0),
+      wonDeals: won.length, wonValue: won.reduce((a, c) => a + wonAmount(c), 0),
       lostDeals: lost.length,
       quotations: ws.quotations.filter((q) => q.ownerId === u.id).length,
     };
@@ -157,11 +157,11 @@ export function buildReports(
   /* ── by segment ── */
   const segments = [...new Set(ws.customers.map((c) => c.segment || "Unspecified"))].map((seg) => {
     const inSeg = ws.customers.filter((c) => (c.segment || "Unspecified") === seg);
-    const won = inSeg.filter((c) => c.stage === "won");
+    const won = inSeg.filter((c) => countsAsWon(c));
     return {
       segment: seg, accounts: inSeg.length,
       pipeline: inSeg.filter((c) => c.stage !== "won" && c.stage !== "lost").reduce((a, c) => a + (Number(c.value) || 0), 0),
-      won: won.reduce((a, c) => a + (Number(c.value) || 0), 0),
+      won: won.reduce((a, c) => a + wonAmount(c), 0),
     };
   });
   reports.push({

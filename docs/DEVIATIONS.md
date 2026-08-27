@@ -864,3 +864,106 @@ than held on every row: a list of twenty files would otherwise mint twenty
 links, nineteen of which nobody clicks, each a working way into the bucket
 for five minutes. PDFs render in a `sandbox=""` frame — the file belongs to
 somebody else and renders inside the app's own page.
+
+## 23. Follow-ups, registration links and customer IDs
+
+Automatic follow-ups on a quotation: three by default (day 3, 7 and 14),
+armed when a quotation is emailed and cancelled the moment the document is
+decided — accepted, rejected, expired, cancelled or paid. **Draft is not a
+decision**, and treating it as one would have cancelled every sequence
+overnight, because emailing a quotation does not by itself change its
+status. The stop rule exists twice, once in TypeScript for the app and once
+in plain JavaScript for the scheduled Netlify function, and a single test
+file exercises both against the same table of cases — two copies that agree
+is the arrangement; two copies that drift is the bug.
+
+WhatsApp follow-ups go through Interakt's Cloud API. Business-initiated
+messages outside Meta's 24-hour window must be templates, so a follow-up is
+always sent as an approved template rather than free text, and it requires
+`whatsappOptIn` on the customer. An unticked box is not consent, and neither
+is a legacy record that predates the question.
+
+Registration links are short (`?lead=` plus a per-user code from
+`my_lead_code()`) rather than a raw customer UUID, and the CRM can email one
+straight to a customer. Every customer, however they arrive, is allocated a
+readable ID — CUST-000124 — by `next_customer_code()` in the database, not
+by the browser: the public form runs on a server with nobody watching, and
+two readers of one counter hand out the same number twice.
+
+## 24. Repeat business reaches the board
+
+Moving a customer along the pipeline when a quotation goes out (§ the
+pipeline rules in `src/domain/pipeline/advance.ts`) originally refused to
+touch anybody marked Won or Lost, on the reasoning that a conclusion is a
+decision and an automatic rule may not overwrite one.
+
+That is right about the deal and wrong about the customer. An existing
+client is the likeliest person in the database to be quoted again, and under
+that rule their quotation was the one that appeared nowhere — the board
+showed every new lead and none of the repeat business.
+
+The rule is now about the quotation, not the customer: **a quotation raised
+after the conclusion is new business** and puts the customer back on the
+board; one raised before it is the paperwork of the concluded deal and
+changes nothing. Within the open stages nothing changed — a second
+quotation for a deal in Negotiation still leaves it there.
+
+Two things had to become true first.
+
+A win is now a **fact with a date and an amount**, not a state a record is
+in. `wonAt` was already stamped once and never re-stamped; `wonValue` joins
+it, snapshotting what the deal was worth at the moment it was won. Revenue
+reports, the dashboard and the incentive figures read those instead of the
+current stage, so moving a re-engaged customer out of Won does not erase
+what they already bought, and re-quoting them at a different value does not
+rewrite last quarter.
+
+And the customer sheet's Stage field now goes through `applyStage` like the
+board always has. Marking somebody Won from the sheet used to set the stage
+and nothing else — no `wonAt` — so that deal never appeared in a single
+revenue chart. Losses are stamped too, with `lostAt`, which is what lets a
+revival be told from the loss itself.
+
+## 25. Document numbers are allocated by the database
+
+Every document series — quotation, proforma, purchase order, tax invoice,
+sales order, delivery challan — had its counter in the shared `settings`
+row, which the browser read, used, and wrote back incremented.
+
+`settings` is writable only by an admin or a manager. A salesperson's
+write-back was rejected by row-level security, the rejection was swallowed,
+and **every quotation they raised came out with the same number**. Even with
+the rights it was a read-then-write from however many browsers were open.
+
+`public.next_doc_seq(kind)` (migration 018) does both halves in one
+statement, as the database. Twelve concurrent callers get 1 to 12 with no
+duplicates and no gaps; a salesperson may call it, because the right to take
+the next number is not the right to edit company settings.
+
+The number is still taken when a document is **saved**, not when the editor
+opens: a series with holes in it is a question from an auditor, and opening
+the editor and changing your mind must not leave one. The number shown while
+editing is a preview, labelled as such, and typing over it clears the
+`autoNumber` flag so a number somebody chose by hand survives the save.
+
+When there is no database — the preview build — or when migration 018 has
+not been applied yet, allocation falls back to the browser's own counter.
+That is the old behaviour: wrong under contention, but it does not lose the
+document somebody has just spent ten minutes on. The fallback logs.
+
+## 26. Notes on a customer
+
+`Customer.notes` had been in the type since the beginning. The activity
+timeline read it, the webhook dispatcher fired `activity.logged` when one
+appeared, and **nothing anywhere could create one** — so the timeline showed
+only what the app itself had recorded, and the half of it meant to hold
+"rang Rajesh, wants the AMC split out" was always empty.
+
+The customer sheet now has the box, next to the follow-up date it is usually
+written to change. A note carries what kind of contact it was, what was
+said, optionally an outcome and what happens next, and who recorded it.
+
+Notes are **append-only**. There is no edit and no delete: a call log that
+can be rewritten afterwards cannot be relied on by whoever reads it on
+Friday, and they would have no way to know it had been changed. A correction
+is a new note saying so.

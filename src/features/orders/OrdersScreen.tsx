@@ -6,6 +6,8 @@ import { useToast } from "../../components/Toast";
 import { Modal } from "../../components/Modal";
 import { AttachmentsPanel } from "../attachments/AttachmentsPanel";
 import { ORDER_STAGES, orderStageOf, type OrderStageId } from "../../domain/orders/stages";
+import { buildDocNumber } from "../../domain/numbering/docNumber";
+import { nextDocSeq } from "../../data/docNumber";
 import { orderFulfilment, type Challan } from "../../domain/orders/fulfilment";
 import { newChallan, suggestedStage, type DeliveryChallan, type SalesOrder } from "../../domain/orders/create";
 import { computeDocument } from "../../domain/tax/compute";
@@ -19,9 +21,12 @@ export interface OrdersScreenProps {
   /** Who is looking — a file they attach is uploaded as them. */
   currentUser: { id: string; name: string; role?: string };
   onChange: (orders: SalesOrder[], challans: DeliveryChallan[], settings: Record<string, unknown>) => void;
+  /** Catches this browser up with a counter the database has just advanced.
+   *  Local only — it writes nothing back. */
+  onSettingsNote?: (settings: Record<string, unknown>) => void;
 }
 
-export function OrdersScreen({ orders, challans, settings, currentUser, onChange }: OrdersScreenProps) {
+export function OrdersScreen({ orders, challans, settings, currentUser, onChange, onSettingsNote }: OrdersScreenProps) {
   const toast = useToast();
   const [stage, setStage] = useState<string>("open");
   const [query, setQuery] = useState("");
@@ -43,14 +48,21 @@ export function OrdersScreen({ orders, challans, settings, currentUser, onChange
     toast(`${order.number} moved to ${orderStageOf(next).label}.`, "good");
   };
 
-  const raiseChallan = (order: SalesOrder) => {
+  const raiseChallan = async (order: SalesOrder) => {
     const dc = newChallan(order, challans as Challan[], settings as { dispatchPrefix?: string; dispatchSeq?: number });
     if (!dc.items.length) {
       toast("Everything on this order has already been dispatched.", "warn");
       return;
     }
-    onChange(orders, [dc, ...challans], { ...settings, dispatchSeq: (Number(settings["dispatchSeq"]) || 1) + 1 });
-    toast(`Challan ${dc.number} raised for ${dc.items.length} pending line${dc.items.length === 1 ? "" : "s"}.`, "good");
+    /* The dispatch counter is advanced by the database, for the same reason
+       every other document counter is: `settings` is writable only by an
+       admin or a manager, so the browser's bump was silently rejected for
+       everybody else and two challans came out with one number. */
+    const seq = await nextDocSeq("dispatch", Number(settings["dispatchSeq"]) || 1);
+    const numbered = { ...dc, number: buildDocNumber(String(settings["dispatchPrefix"] ?? "TZ/DC"), seq) };
+    onChange(orders, [numbered, ...challans], settings);
+    onSettingsNote?.({ ...settings, dispatchSeq: seq + 1 });
+    toast(`Challan ${numbered.number} raised for ${numbered.items.length} pending line${numbered.items.length === 1 ? "" : "s"}.`, "good");
   };
 
   return (

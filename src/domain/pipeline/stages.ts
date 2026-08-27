@@ -54,9 +54,16 @@ export interface LostDetail {
  *
  * Moving to Won stamps `wonAt` once and never re-stamps it — the trailing
  * revenue reports read that timestamp, so re-winning a deal must not move
- * it into the current month.
+ * it into the current month. `wonValue` is stamped the same way, and is the
+ * reason a win survives what comes after it: quoting a won customer again
+ * changes `value` to the new opportunity's size, and without a snapshot
+ * last quarter's revenue would quietly change with it.
+ *
+ * NEITHER IS EVER CLEARED, including on the way to Lost. A customer who
+ * bought in March and did not renew in September has still bought in March,
+ * and a report that forgets it is wrong about March.
  */
-export function applyStage<T extends { stage?: string; wonAt?: number }>(
+export function applyStage<T extends { stage?: string; value?: number | string; wonAt?: number; wonValue?: number; lostAt?: number }>(
   customer: T,
   stage: StageId,
   now: number = Date.now(),
@@ -65,7 +72,34 @@ export function applyStage<T extends { stage?: string; wonAt?: number }>(
     ...customer,
     stage,
     wonAt: stage === "won" ? (customer.wonAt || now) : customer.wonAt,
+    wonValue: stage === "won" ? (customer.wonValue ?? (Number(customer.value) || 0)) : customer.wonValue,
+    /* Re-stamped on every loss, unlike the win: this one dates the CURRENT
+       conclusion, and a quotation raised after it is what tells the pipeline
+       a lost customer has come back. */
+    lostAt: stage === "lost" ? now : customer.lostAt,
   };
+}
+
+/**
+ * Whether a customer's win still counts as revenue.
+ *
+ * NOT the same question as "is this customer in the Won column". Quoting an
+ * existing client again moves them back into the pipeline, which is what
+ * makes the new opportunity visible — and if revenue were read off the
+ * current stage, that move would erase the sale they already made. A win is
+ * a thing that happened on a date, not a state a record is in.
+ *
+ * A record that has never been won has no `wonAt` and so counts for
+ * nothing, which is every lead in the database.
+ */
+export function countsAsWon(customer: { stage?: string; wonAt?: number }): boolean {
+  return customer.stage === "won" || !!customer.wonAt;
+}
+
+/** What a win was worth: the value at the moment it was won, falling back
+ *  to the current value for records stamped before `wonValue` existed. */
+export function wonAmount(customer: { value?: number | string; wonValue?: number }): number {
+  return Number(customer.wonValue ?? customer.value) || 0;
 }
 
 /** Moving to Lost asks for a reason. It never requires one — see

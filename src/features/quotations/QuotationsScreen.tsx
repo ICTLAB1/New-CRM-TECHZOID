@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Presence } from "../../components/Presence";
 import { PageHead } from "../../app/AppShell";
 import { Button, Card, Chip, Empty, Input, Select, Tabs } from "../../components/primitives";
@@ -13,7 +13,10 @@ import {
   type DocSettings, type SalesDocument,
 } from "../../domain/documents/create";
 import type { Customer } from "../../domain/customers/customer";
-import { advancesPipeline, stageAfterQuotation } from "../../domain/pipeline/advance";
+import { advancesPipeline, concludedAt, isConcluded, stageAfterQuotation } from "../../domain/pipeline/advance";
+import { stageOf } from "../../domain/pipeline/stages";
+import { buildDocNumber } from "../../domain/numbering/docNumber";
+import { SEQ_KEY, nextDocSeq, seqKindOf } from "../../data/docNumber";
 import type { CatalogProduct } from "../../domain/catalog/types";
 import { computeDocument } from "../../domain/tax/compute";
 import { inrList } from "../../domain/currency/format";
@@ -45,6 +48,10 @@ export interface QuotationsScreenProps {
   /** Moves the customer along the pipeline board when a quotation reaches
    *  them. Absent on the screens where that would make no sense. */
   onCustomerStage?: (customerId: string, stage: string) => void;
+  /** Catches this browser up with a counter the database has just advanced.
+   *  Local only — it writes nothing back, so it works for a salesperson,
+   *  who may not edit settings. */
+  onSettingsNote?: (settings: Record<string, unknown>) => void;
   /** Raising a proforma from a quotation hands it to the proformas screen. */
   onCreateProforma?: (proforma: SalesDocument) => void;
   /** Raising a tax invoice hands it to the invoices screen. */
@@ -53,7 +60,7 @@ export interface QuotationsScreenProps {
 
 export function QuotationsScreen({
   docType, documents, customers, catalog, settings, brandLogos, docImages, api, currentUser,
-  onChange, onCustomerStage, onCreateProforma, onCreateInvoice,
+  onChange, onCustomerStage, onSettingsNote, onCreateProforma, onCreateInvoice,
 }: QuotationsScreenProps) {
   const toast = useToast();
   const [editing, setEditing] = useState<SalesDocument | null>(null);
@@ -62,14 +69,44 @@ export function QuotationsScreen({
   const [owner, setOwner] = useState("all");
   const [confirmDelete, setConfirmDelete] = useState<SalesDocument | null>(null);
   const [receiving, setReceiving] = useState<SalesDocument | null>(null);
+  const saving = useRef(false);
 
   const isPo = docType === "purchase_order";
   const isInvoice = docType === "invoice";
   const label = isPo ? "Purchase order" : isInvoice ? "Tax invoice" : docType === "proforma" ? "Proforma" : "Quotation";
   const sellerState = ((settings["company"] as { state?: string })?.state) ?? "Delhi";
 
-  const seqKey = isPo ? "purchaseOrderSeq" : isInvoice ? "invoiceSeq" : docType === "proforma" ? "proformaSeq" : "quoteSeq";
-  const bumpSequence = (s: Record<string, unknown>) => ({ ...s, [seqKey]: (Number(s[seqKey]) || 1) + 1 });
+  const seqKind = seqKindOf(docType);
+  const seqKey = SEQ_KEY[seqKind];
+  const prefix = String(
+    settings[isPo ? "purchaseOrderPrefix" : isInvoice ? "invoicePrefix" : docType === "proforma" ? "proformaPrefix" : "quotePrefix"]
+      ?? (isPo ? "TZ/PO" : isInvoice ? "TZ/INV" : docType === "proforma" ? "TZ/PI" : "TZ/QT"),
+  );
+
+  /**
+   * The number a document about to be saved for the first time should carry.
+   *
+   * The counter is advanced by the database, in one statement, because the
+   * browser could not do it: `settings` is writable only by an admin or a
+   * manager, so a salesperson's bump was rejected by row-level security and
+   * the rejection was swallowed — every quotation they raised came out with
+   * the same number. See src/data/docNumber.ts.
+   *
+   * A number somebody typed over is theirs and is returned untouched.
+   */
+  const allocateNumber = async (doc: SalesDocument): Promise<{ doc: SalesDocument; seq: number | null }> => {
+    if (!doc.autoNumber) return { doc, seq: null };
+    const seq = await nextDocSeq(seqKind, Number(settings[seqKey]) || 1);
+    return { doc: { ...doc, number: buildDocNumber(prefix, seq), autoNumber: false }, seq };
+  };
+
+  /** Keep this browser's copy of the counter level with the database, which
+   *  the allocation above has just moved. Not a settings edit — nothing is
+   *  written back, which is what makes it safe for a salesperson to do. */
+  const noteSequence = (seq: number | null) => {
+    if (seq === null) return;
+    onSettingsNote?.({ ...settings, [seqKey]: seq + 1 });
+  };
 
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -96,32 +133,66 @@ export function QuotationsScreen({
     );
   };
 
-  const save = (doc: SalesDocument) => {
-    const exists = documents.some((d) => d.id === doc.id);
+  const save = async (draft: SalesDocument) => {
+    /* Allocating a number is a round trip, and the editor stays on screen
+       until it comes back. A second click in that window would take a second
+       number and file a second copy of the same document. */
+    if (saving.current) return;
+    saving.current = true;
+    try {
+      await commit(draft);
+    } finally {
+      saving.current = false;
+    }
+  };
+
+  const commit = async (draft: SalesDocument) => {
+    const exists = documents.some((d) => d.id === draft.id);
+    /* The number is taken when a document is actually saved, so opening the
+       editor and cancelling does not leave a hole in the series. */
+    const { doc, seq } = exists ? { doc: draft, seq: null } : await allocateNumber(draft);
     const next = exists
       ? documents.map((d) => (d.id === doc.id ? { ...doc, updatedAt: Date.now() } : d))
       : [{ ...doc, updatedAt: Date.now() }, ...documents];
-    /* The sequence only advances once a document is actually saved, so
-       opening the editor and cancelling does not burn a number. */
-    onChange(next, exists ? settings : bumpSequence(settings));
+    onChange(next, settings);
+    noteSequence(seq);
 
     /* A quotation the customer has moves the deal to "Quotation Sent".
        Nothing did this before, so the board only ever showed what somebody
-       had remembered to drag — see src/domain/pipeline/advance.ts for why it
-       is one-directional. */
+       had remembered to drag — see src/domain/pipeline/advance.ts for the
+       rules, including the one for quoting an existing client again. */
+    let moved: Customer | null = null;
     if (onCustomerStage && doc.customerId && advancesPipeline(docType) && doc.status === "Sent") {
       const customer = customers.find((c) => c.id === doc.customerId);
-      const stage = stageAfterQuotation(customer?.stage);
-      if (stage) onCustomerStage(doc.customerId, stage);
+      const stage = stageAfterQuotation(customer?.stage, {
+        concludedAt: concludedAt(customer),
+        quotedAt: doc.createdAt,
+      });
+      if (stage) {
+        onCustomerStage(doc.customerId, stage);
+        if (isConcluded(customer?.stage)) moved = customer ?? null;
+      }
     }
 
     setEditing(null);
     toast(`${label} ${doc.number} saved.`, "good");
+    /* Bringing a closed deal back onto the board is a bigger thing than a
+       save, and it happens to the customer record rather than to the
+       document somebody was looking at. Say so, and say what did not
+       change: the value they already bought is still in the reports. */
+    if (moved) {
+      toast(
+        `${moved.company || "That customer"} was marked ${stageOf(moved.stage).label} — this quotation puts them back on the board `
+        + "under Quotation Sent. What they have already bought stays in the revenue reports.",
+        "info",
+      );
+    }
   };
 
-  const duplicate = (doc: SalesDocument) => {
-    const copy = duplicateQuotation(doc, settings as DocSettings);
-    onChange([copy, ...documents], bumpSequence(settings));
+  const duplicate = async (doc: SalesDocument) => {
+    const { doc: copy, seq } = await allocateNumber(duplicateQuotation(doc, settings as DocSettings));
+    onChange([copy, ...documents], settings);
+    noteSequence(seq);
     toast(`Duplicated as ${copy.number}, back to Draft.`, "good");
   };
 

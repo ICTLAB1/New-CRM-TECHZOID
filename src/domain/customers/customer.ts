@@ -54,6 +54,12 @@ export interface Customer {
   notes?: CustomerNote[];
   customFields?: Record<string, string>;
   wonAt?: number;
+  /** What the deal was worth when it was won, snapshotted so that quoting
+   *  this customer again cannot rewrite last quarter's revenue. */
+  wonValue?: number;
+  /** When the deal was last marked Lost. A quotation raised after this date
+   *  is a revival, and puts the customer back on the board. */
+  lostAt?: number;
   lostReason?: string;
   lostCompetitor?: string;
   lostNotes?: string;

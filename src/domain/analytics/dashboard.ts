@@ -6,7 +6,7 @@ import { orderFulfilment, type Challan } from "../orders/fulfilment";
 import type { SalesOrder } from "../orders/create";
 import { daysLeft, dueForRenewal, valueAtRisk, type Subscription } from "../subscriptions/expiry";
 import type { Customer } from "../customers/customer";
-import { isOpenStage } from "../pipeline/stages";
+import { countsAsWon, isOpenStage, wonAmount } from "../pipeline/stages";
 import { scopeTo, type Owned } from "./scope";
 import { TODAY } from "../dates";
 
@@ -61,7 +61,7 @@ export function kpis(ws: Workspace, sellerState: string, now: Date = new Date())
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
 
   const open = ws.customers.filter((c) => isOpenStage(c.stage));
-  const won = ws.customers.filter((c) => c.stage === "won" && (c.wonAt ?? 0) >= monthStart);
+  const won = ws.customers.filter((c) => countsAsWon(c) && (c.wonAt ?? 0) >= monthStart);
 
   const pending = ws.quotations.filter((q) => effectiveStatus(q, today) === "Sent");
   const stale = ws.quotations.filter((q) => q.status === "Sent" && effectiveStatus(q, today) === "Expired");
@@ -188,12 +188,12 @@ export function trailingRevenue(ws: Workspace, months = 6, now: Date = new Date(
     const start = new Date(now.getFullYear(), now.getMonth() - i, 1);
     const end = new Date(now.getFullYear(), now.getMonth() - i + 1, 1);
     const won = ws.customers.filter(
-      (c) => c.stage === "won" && (c.wonAt ?? 0) >= start.getTime() && (c.wonAt ?? 0) < end.getTime(),
+      (c) => countsAsWon(c) && (c.wonAt ?? 0) >= start.getTime() && (c.wonAt ?? 0) < end.getTime(),
     );
     points.push({
       key: `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}`,
       label: start.toLocaleDateString("en-IN", { month: "short" }),
-      value: won.reduce((a, c) => a + (Number(c.value) || 0), 0),
+      value: won.reduce((a, c) => a + wonAmount(c), 0),
       count: won.length,
     });
   }
@@ -237,7 +237,7 @@ export function teamPerformance(
         ownerId: u.id, name: u.name,
         openDeals: open.length,
         openValue: open.reduce((a, c) => a + (Number(c.value) || 0), 0),
-        wonValue: mine.filter((c) => c.stage === "won" && (c.wonAt ?? 0) >= from).reduce((a, c) => a + (Number(c.value) || 0), 0),
+        wonValue: mine.filter((c) => countsAsWon(c) && (c.wonAt ?? 0) >= from).reduce((a, c) => a + wonAmount(c), 0),
         quotations: ws.quotations.filter((q) => q.ownerId === u.id).length,
       };
     })

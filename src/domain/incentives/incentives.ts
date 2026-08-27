@@ -1,3 +1,4 @@
+import { countsAsWon, wonAmount } from "../pipeline/stages";
 import { fyBounds, monthBounds } from "../numbering/docNumber";
 import type { Workspace } from "../analytics/dashboard";
 
@@ -90,11 +91,11 @@ export function calcMetrics(
     !!ts && ts >= bounds.startMs && ts <= bounds.endMs;
 
   const mine = ws.customers.filter((c) => c.ownerId === ownerId);
-  const won = mine.filter((c) => c.stage === "won" && inPeriod(c.wonAt));
+  const won = mine.filter((c) => countsAsWon(c) && inPeriod(c.wonAt));
 
   return {
     ...bounds,
-    revenue: won.reduce((a, c) => a + (Number(c.value) || 0), 0),
+    revenue: won.reduce((a, c) => a + wonAmount(c), 0),
     dealsWon: won.length,
     newCustomers: mine.filter((c) => inPeriod(c.createdAt)).length,
     quotationsSent: ws.quotations.filter((q) => q.ownerId === ownerId && inPeriod(q.createdAt)).length,
