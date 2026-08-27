@@ -6,6 +6,7 @@ import { AttachmentsPanel } from "../attachments/AttachmentsPanel";
 import { askBeforeSave, useConfirmedAction } from "../../components/useConfirmedAction";
 import { useHotkeys } from "../../components/hotkeys";
 import { previewPdf } from "../../documents/pdf/deliver";
+import { accountSummary, pickBankAccount, readAccounts } from "../../domain/banking/accounts";
 import type { DocImages } from "../../documents/pdf/render";
 import type { IntegrationsApi } from "../../integrations/api";
 import { Modal } from "../../components/Modal";
@@ -94,6 +95,12 @@ export function DocumentEditor({
 
   const set = <K extends keyof SalesDocument>(key: K) => (e: { target: { value: string } }) =>
     setDoc((d) => ({ ...d, [key]: e.target.value }));
+
+  /* The accounts to choose from, and which one this document would use if
+     nobody chooses — shown in the hint so the automatic answer is visible
+     rather than something to be discovered on the PDF. */
+  const bankAccounts = readAccounts(settings);
+  const autoAccount = pickBankAccount(bankAccounts, "", doc.currency);
 
   const isIndia = !doc.billCountry || doc.billCountry === "India";
   const showTax = doc.taxType !== "none";
@@ -231,6 +238,29 @@ export function DocumentEditor({
                       </Field>
                       <Field label="Date"><Input type="date" value={doc.date} onChange={set("date")} /></Field>
                       <Field label={isPo ? "Required by" : "Valid until"}><Input type="date" value={doc.validUntil} onChange={set("validUntil")} /></Field>
+                      {/* NOT on a purchase order: bank details tell someone
+                          where to pay US, and on a document where we are the
+                          buyer our own account is at best noise and at worst
+                          an invitation to misdirect a payment. */}
+                      {!isPo && bankAccounts.length ? (
+                        <Field
+                          label="Bank account"
+                          hint={
+                            doc.bankAccountId
+                              ? "Printed in the payment details on this document."
+                              : autoAccount
+                                ? `Using ${accountSummary(autoAccount)} — the one that matches this document. Pick another to override it.`
+                                : "No account matches; nothing will print."
+                          }
+                        >
+                          <Select value={doc.bankAccountId ?? ""} onChange={set("bankAccountId")}>
+                            <option value="">Choose automatically</option>
+                            {bankAccounts.map((a) => (
+                              <option key={a.id} value={a.id}>{accountSummary(a)}</option>
+                            ))}
+                          </Select>
+                        </Field>
+                      ) : null}
                       <Field label={isPo ? "Supplier reference" : "Customer reference"}><Input value={doc.referenceNo} onChange={set("referenceNo")} placeholder={isPo ? "Their quotation number" : "PO/ABC/2425/078"} /></Field>
                       <Field label="Enquiry reference"><Input value={doc.enquiryRef ?? ""} onChange={set("enquiryRef")} placeholder="ENQ-150826-01" /></Field>
                       <Field label="Customer ID" hint="Printed on the document. Not the database id."><Input value={doc.customerCode ?? ""} onChange={set("customerCode")} placeholder="CUST-000123" /></Field>

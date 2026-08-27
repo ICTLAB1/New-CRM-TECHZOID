@@ -1042,3 +1042,43 @@ mismatch is a two-line change rather than an investigation.
 Aadhaar OKYC and bank-account verification are also available from this
 provider and are **not** built. Both are about individuals and need a
 consent journey of their own; neither is what a B2B customer record needs.
+
+## 28. Bank accounts became something you can manage
+
+Both ends of this had existed since the start and never met. A document
+renders whichever account it names — `SalesDocument.bankAccountId` — and
+`settings.bankAccounts` is the list it names one from. Nothing anywhere
+could put an account into that list, edit one, or choose between them. So
+every quotation, proforma and invoice printed whatever had been seeded, and
+correcting a branch address meant editing the database by hand.
+
+**More than one is the normal case**, which is why this is a list rather
+than a set of fields on the company record. A rupee current account and a
+foreign-currency account are different accounts, and putting the INR one on
+a USD invoice is how a customer's wire comes back a week later minus the
+charges. An account can name the currency it is for; a document in that
+currency picks it without anybody remembering.
+
+Which account prints, in order: the one the document names, the one
+matching its currency, the default, the first there is. The document
+editor's picker shows what the automatic answer would be — the choice is
+visible on the screen where it is made rather than discovered on the PDF.
+
+Never on a purchase order. Bank details tell someone where to pay **us**;
+on a document where we are the buyer, our own account is at best noise and
+at worst an invitation to misdirect a payment. The renderer already refused
+to print it there and the picker does not offer it.
+
+Exactly one default, always. Two accounts both claiming it means the one
+that prints depends on array order, which nobody can see and a re-save can
+change. Adding the first account makes it the default because there is
+nothing else to fall back to; removing the default promotes a survivor; and
+a stored list where none claims it reads as the first one being it —
+because that is already what prints, and a list showing no default while
+quietly printing one is a list that lies.
+
+**Every check warns and none of them blocks.** An IFSC in the wrong shape,
+an account number with letters in it, no IFSC and no SWIFT at all — each is
+flagged, in the words of what a bank will reject, and each still saves. A
+foreign account has no IFSC, and a form that refuses to save one is broken
+for exactly the exports this company does.

@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { BrandStripsPanel } from "./BrandStripsPanel";
 import { FollowUpPanel } from "./FollowUpPanel";
+import { BankAccountsPanel } from "./BankAccountsPanel";
 import type { IntegrationsApi } from "../../integrations/api";
 import { PageHead } from "../../app/AppShell";
 import { Button, Card, Chip, Empty, Field, Input, Select, Tabs, Textarea } from "../../components/primitives";
@@ -38,7 +39,7 @@ export interface SettingsScreenProps {
   api?: IntegrationsApi;
 }
 
-type Tab = "company" | "document" | "numbering" | "terms" | "incentives" | "fields" | "backup" | "brands" | "followups";
+type Tab = "company" | "document" | "numbering" | "terms" | "incentives" | "fields" | "backup" | "brands" | "followups" | "bank";
 
 const uid = (): string => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
 
@@ -58,6 +59,7 @@ export function SettingsScreen({ settings, canEdit, workspaceForBackup, api, onR
           { id: "document", label: "Document" },
           { id: "brands", label: "Logos & brands" },
           { id: "numbering", label: "Numbering & tax" },
+          { id: "bank", label: "Bank accounts" },
           { id: "terms", label: "Default terms" },
           { id: "followups", label: "Follow-ups" },
           { id: "incentives", label: "Incentives" },
@@ -73,6 +75,7 @@ export function SettingsScreen({ settings, canEdit, workspaceForBackup, api, onR
         {tab === "document" ? <DocumentPanel settings={settings} canEdit={canEdit} onChange={onChange} /> : null}
         {tab === "brands" ? <BrandStripsPanel settings={settings} canEdit={canEdit} onChange={onChange} /> : null}
         {tab === "numbering" ? <NumberingPanel settings={settings} canEdit={canEdit} onChange={onChange} /> : null}
+        {tab === "bank" ? <BankAccountsPanel settings={settings} canEdit={canEdit} onChange={onChange} /> : null}
         {tab === "terms" ? <TermsPanel settings={settings} canEdit={canEdit} onChange={onChange} /> : null}
         {tab === "followups" ? <FollowUpPanel settings={settings} canEdit={canEdit} api={api} onChange={onChange} /> : null}
         {tab === "incentives" ? <IncentivesPanel settings={settings} canEdit={canEdit} onChange={onChange} /> : null}

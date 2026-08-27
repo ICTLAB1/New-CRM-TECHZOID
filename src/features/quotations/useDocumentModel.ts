@@ -3,6 +3,7 @@ import { buildDocumentModel, type DocType } from "../../domain/documents/model";
 import { normalizeDocTemplate, type DocTemplate } from "../../domain/documents/template";
 import { computeDocument } from "../../domain/tax/compute";
 import type { SalesDocument } from "../../domain/documents/create";
+import { pickBankAccount, readAccounts } from "../../domain/banking/accounts";
 
 /**
  * Totals and the document model for one document.
@@ -25,9 +26,13 @@ export function useDocumentModel(
     const forTax = docType === "purchase_order" ? { ...doc, billState: doc.vendorState ?? "" } : doc;
     const totals = computeDocument(forTax, sellerState);
     const template: DocTemplate = normalizeDocTemplate(settings["docTemplate"] as Partial<DocTemplate>);
-    const accounts = (settings["bankAccounts"] as { id?: string }[] | undefined) ?? [];
+    /* The account this document names, else one matching its currency, else
+       the default — see src/domain/banking/accounts.ts. `settings.bank` is
+       the pre-list arrangement and is still honoured for a workspace that
+       has never opened the new panel. */
+    const accounts = readAccounts(settings);
     const bankAccount =
-      accounts.find((a) => a.id === doc.bankAccountId) ?? accounts[0] ?? (settings["bank"] as object) ?? {};
+      pickBankAccount(accounts, doc.bankAccountId, doc.currency) ?? (settings["bank"] as object) ?? {};
     const model = buildDocumentModel({ doc, settings, totals, docType, template, bankAccount });
     return { totals, model };
   }, [doc, settings, docType]);
