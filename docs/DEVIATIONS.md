@@ -1082,3 +1082,44 @@ an account number with letters in it, no IFSC and no SWIFT at all — each is
 flagged, in the words of what a bank will reject, and each still saves. A
 foreign account has no IFSC, and a form that refuses to save one is broken
 for exactly the exports this company does.
+
+## 29. The counter functions were callable without signing in
+
+Found by looking at the live database rather than by re-reading the
+migration:
+
+```
+select routine_name, grantee from information_schema.role_routine_grants
+where specific_schema = 'public' and routine_name = 'next_doc_seq';
+-- anon, authenticated, postgres, service_role
+```
+
+Migration 018 ends with `revoke all on function … from public`, which reads
+like it closes this and does not. **PUBLIC is the pseudo-role; `anon` is a
+real one**, and Supabase's default privileges grant EXECUTE on every new
+function in `public` to anon and authenticated as it is created. The revoke
+removed the pseudo-role's grant and left anon's untouched. Every
+security-definer function in the schema was affected, not only the new one.
+
+Nothing readable was exposed — none of these return anybody's data. But two
+of them **advance a counter**, and the anon key is in the JavaScript every
+visitor downloads by design. So anyone could push quotation numbers and
+customer IDs to arbitrary values by calling them in a loop.
+`next_customer_code` had been open since it was written; `next_doc_seq`
+since earlier the same day.
+
+`find_duplicate_customer` and `my_lead_code` already refused when
+`auth.uid()` was null and were never exposed this way. Their grants are
+revoked too — a grant nothing needs is a grant worth not having.
+
+Fixed in two layers, because **the grant comes back on its own**: any
+future `create or replace` re-triggers those default privileges silently,
+so a revoke alone would quietly undo itself the next time one of these
+functions is edited. The in-function check is what still holds then.
+
+The guard refuses **anon specifically** rather than demanding a signed-in
+user, and that distinction is the whole care in it: `next_customer_code` is
+also called by the public registration form, which runs server-side as
+`service_role` and therefore has no `auth.uid()` at all. A "must be signed
+in" check would have broken every customer arriving through the form — the
+one path nobody would think to test by hand.
