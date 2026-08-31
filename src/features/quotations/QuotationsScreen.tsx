@@ -17,6 +17,7 @@ import { advancesPipeline, concludedAt, isConcluded, stageAfterQuotation } from 
 import { stageOf } from "../../domain/pipeline/stages";
 import { buildDocNumber } from "../../domain/numbering/docNumber";
 import { SEQ_KEY, nextDocSeq, seqKindOf } from "../../data/docNumber";
+import { orderFromProforma, type SalesOrder } from "../../domain/orders/create";
 import type { CatalogProduct } from "../../domain/catalog/types";
 import { computeDocument } from "../../domain/tax/compute";
 import { formatTotals, isMixed, moneyList, totalsByCurrency } from "../../domain/currency/format";
@@ -56,11 +57,15 @@ export interface QuotationsScreenProps {
   onCreateProforma?: (proforma: SalesDocument) => void;
   /** Raising a tax invoice hands it to the invoices screen. */
   onCreateInvoice?: (invoice: SalesDocument) => void;
+  /** Confirming a proforma as a sales order hands it to the orders screen.
+   *  Without this the whole Deliver section — sales orders and the dispatch
+   *  challans raised from them — had no way in at all. */
+  onCreateOrder?: (order: SalesOrder) => void;
 }
 
 export function QuotationsScreen({
   docType, documents, customers, catalog, settings, brandLogos, docImages, api, currentUser,
-  onChange, onCustomerStage, onSettingsNote, onCreateProforma, onCreateInvoice,
+  onChange, onCustomerStage, onSettingsNote, onCreateProforma, onCreateInvoice, onCreateOrder,
 }: QuotationsScreenProps) {
   const toast = useToast();
   const [editing, setEditing] = useState<SalesDocument | null>(null);
@@ -215,6 +220,19 @@ export function QuotationsScreen({
     toast(`Tax invoice ${inv.number} raised from ${doc.number}.`, "good");
   };
 
+  const confirmOrder = async (doc: SalesDocument) => {
+    /* The order number comes from the same database counter every other
+       document uses, so two people confirming at once cannot collide. */
+    const seq = await nextDocSeq("order", Number(settings["orderSeq"]) || 1);
+    const order = {
+      ...orderFromProforma(doc, settings as DocSettings),
+      number: buildDocNumber(String(settings["orderPrefix"] ?? "TZ/SO"), seq),
+    };
+    onCreateOrder?.(order);
+    onSettingsNote?.({ ...settings, orderSeq: seq + 1 });
+    toast(`Sales order ${order.number} confirmed from ${doc.number}.`, "good");
+  };
+
   const raiseProforma = (doc: SalesDocument) => {
     const pf = proformaFromQuotation(doc, settings as DocSettings, currentUser);
     onCreateProforma?.(pf);
@@ -345,6 +363,9 @@ export function QuotationsScreen({
                           ) : null}
                           {onCreateInvoice && !isPo && !isInvoice ? (
                             <Button size="sm" tone="default" onClick={() => raiseInvoice(d)}>Invoice</Button>
+                          ) : null}
+                          {onCreateOrder && docType === "proforma" ? (
+                            <Button size="sm" tone="default" onClick={() => void confirmOrder(d)}>Sales order</Button>
                           ) : null}
                           <Button size="sm" tone="danger" onClick={() => setConfirmDelete(d)}>Delete</Button>
                         </span>

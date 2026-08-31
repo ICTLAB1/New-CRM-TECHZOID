@@ -1217,3 +1217,44 @@ what somebody is owed without them asking is the one thing this file has
 warned against since the schemes were written; the basis is chosen per
 scheme in Settings → Incentives, and the incentives screen names the basis
 under the revenue figure so nobody has to guess what they are being paid on.
+
+## 32. The screens were not connected to each other
+
+Reported as "check all inter connectivity, most of them are not working
+properly", and the reporter was right. One cause underneath all of it: **tax
+invoices and sales orders were added to the CRM after the analytics and
+hand-off layers were written, and never wired into them.** Each screen
+worked; the joins between them did not.
+
+**The whole Deliver section had no way in.** `orderFromProforma()` existed,
+complete and correct, and nothing anywhere called it. Sales orders could
+never be created, and since dispatch challans are raised from a sales order,
+Dispatch was unreachable too — two screens in the navigation that could only
+ever show seed data. A proforma now confirms into a sales order, numbered
+from the same database counter every other document uses.
+
+**Tax invoices were invisible to four screens.**
+
+- *Dashboard* — "Payments due" and "Needs attention" read proformas only, so
+  an overdue invoice showed on Receivables and nowhere on the screen people
+  open first. Money owed is money owed whichever document asked for it.
+- *Activity* — raising an invoice, the moment the money is actually asked
+  for, left no trace on the one screen that claims to show everything that
+  happened.
+- *Reports* — the payments report counted proformas only.
+- *Incentives* — see §31; the workspace had no `invoices` field at all.
+
+The scoping helper carries invoices through as well, or a Sales user's
+dashboard would silently drop them again after all this.
+
+### What was checked and is connected
+
+Quotation → proforma → invoice; proforma → sales order → dispatch challan;
+purchase order → goods receipt; invoice → receivables; a quotation sent →
+the pipeline board; a deal won → the revenue reports; a note logged →
+Activity. Subscriptions and renewals are entered directly, by design —
+nothing upstream creates them.
+
+Purchase orders deliberately stay out of the sales analytics: they are the
+buy side, and counting what the company spends as though it were revenue is
+worse than not counting it.

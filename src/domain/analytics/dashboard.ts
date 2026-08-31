@@ -38,6 +38,7 @@ export function scopeWorkspace(ws: Workspace, user: DashboardUser): Workspace {
     customers: scope(ws.customers),
     quotations: scope(ws.quotations),
     proformas: scope(ws.proformas),
+    invoices: scope(ws.invoices ?? []),
     orders,
     /* Challans have no owner of their own — they follow their order. */
     challans: ws.challans.filter((c) => orderIds.has(c.orderId)),
@@ -71,11 +72,16 @@ export function kpis(ws: Workspace, sellerState: string, now: Date = new Date())
   const pending = ws.quotations.filter((q) => effectiveStatus(q, today) === "Sent");
   const stale = ws.quotations.filter((q) => q.status === "Sent" && effectiveStatus(q, today) === "Expired");
 
+  /* PROFORMAS AND TAX INVOICES BOTH. Invoices were added to the CRM after
+     this tile was written and never wired into it, so an overdue invoice
+     showed on Receivables and nowhere on the dashboard — the screen people
+     actually look at first. Money owed is money owed whichever document
+     asked for it. */
   let paymentsDue = 0;
   let paymentsOverdue = 0;
-  for (const pf of ws.proformas) {
-    if (pf.status === "Draft") continue;
-    const info = computePaymentInfo(pf, grandOf(pf, sellerState), today);
+  for (const doc of [...ws.proformas, ...(ws.invoices ?? [])]) {
+    if (doc.status === "Draft") continue;
+    const info = computePaymentInfo(doc, grandOf(doc, sellerState), today);
     if (info.paymentStatus === "paid") continue;
     paymentsDue += info.outstanding;
     if (info.overdue) paymentsOverdue++;
@@ -125,7 +131,7 @@ export function needsAttention(ws: Workspace, sellerState: string, now: Date = n
   const today = now.toISOString().slice(0, 10);
   const rows: AttentionRow[] = [];
 
-  for (const pf of ws.proformas) {
+  for (const pf of [...ws.proformas, ...(ws.invoices ?? [])]) {
     if (pf.status === "Draft") continue;
     const info = computePaymentInfo(pf, grandOf(pf, sellerState), today);
     if (!info.overdue) continue;

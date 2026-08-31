@@ -208,7 +208,9 @@ export function buildReports(
   });
 
   /* ── payments ── */
-  const payments = ws.proformas
+  /* Proformas AND tax invoices: both ask a customer for money, and a
+     payments report that shows only one of them is not a payments report. */
+  const payments = [...ws.proformas, ...(ws.invoices ?? [])]
     .filter((p) => p.status !== "Draft")
     .map((p) => {
       const total = grand(p);

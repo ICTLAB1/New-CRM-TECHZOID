@@ -243,6 +243,7 @@ export function Workbench({
           currentUser={user}
           onChange={(docs, s) => { onChange("proformas", docs); onSettingsChange(s); }}
           onSettingsNote={onSettingsNote}
+          onCreateOrder={(order) => { onChange("orders", [order, ...orders]); setView("orders"); }}
           onCustomerStage={advanceCustomer}
           onCreateInvoice={(inv) => { onChange("invoices", [inv, ...invoices]); setView("invoices"); }}
         />

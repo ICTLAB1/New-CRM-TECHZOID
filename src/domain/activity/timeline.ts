@@ -22,7 +22,7 @@ type ChallanLike = Challan & { number?: string; status?: string; createdAt?: num
 
 export type ActivityKind =
   | "Note" | "Call" | "Email" | "Meeting" | "WhatsApp" | "Site Visit" | "Demo"
-  | "quotation" | "proforma" | "order" | "challan" | "subscription";
+  | "quotation" | "proforma" | "invoice" | "order" | "challan" | "subscription";
 
 /** The kinds a person can log by hand. The rest are generated. */
 export const LOGGED_KINDS: readonly ActivityKind[] = [
@@ -75,7 +75,7 @@ export function buildTimeline(ws: Workspace, sellerState: string): ActivityEvent
     }
   }
 
-  const docEvents = (docs: typeof ws.quotations, kind: "quotation" | "proforma", label: string) => {
+  const docEvents = (docs: typeof ws.quotations, kind: "quotation" | "proforma" | "invoice", label: string) => {
     for (const doc of docs) {
       events.push({
         id: `${kind}-${doc.id}`,
@@ -93,6 +93,11 @@ export function buildTimeline(ws: Workspace, sellerState: string): ActivityEvent
   };
   docEvents(ws.quotations, "quotation", "Quotation");
   docEvents(ws.proformas, "proforma", "Proforma");
+  /* Invoices were added to the CRM after this file and never added here, so
+     raising a tax invoice — the moment the money is actually asked for —
+     left no trace on the one screen that claims to show everything that
+     happened. */
+  docEvents(ws.invoices ?? [], "invoice", "Tax invoice");
 
   for (const order of ws.orders) {
     events.push({
