@@ -1166,3 +1166,54 @@ outstanding balance in two currencies is two different debts. **The
 dashboard's summary tiles still add across currencies** and are the
 remaining place this is wrong; they are compact by design and need a
 product decision about what a mixed-currency tile should say.
+
+## 31. Incentives could not see an invoice
+
+Reported as "I created a customer, made a proforma which is paid, and an
+invoice sent and accepted, worth more than ₹22 lakhs — incentives are not
+updated." The screen read **Deals won 3, Revenue earned ₹0**, which is the
+contradiction that gives it away.
+
+Three separate faults, stacked.
+
+**Invoices were never passed in.** The analytics `Workspace` had no
+`invoices` field at all, and `Workbench` did not send them. The incentive
+calculation could not see a tax invoice even in principle.
+
+**Revenue was read from a typed estimate.** It came from the Deal value on
+the customer record — while the screen said "worked out from deals actually
+closed, not from targets typed in". A raised, accepted invoice counted for
+nothing.
+
+**And a zero could freeze permanently.** `applyStage` snapshotted
+`wonValue: customer.wonValue ?? (Number(customer.value) || 0)`. `??` falls
+through on null and undefined but **not on 0**, so a deal marked Won before
+anybody typed a value got `wonValue: 0`, and `wonAmount()` returned 0 for
+ever after — the real figure typed in later could not get past the
+snapshot. Three won deals and no revenue is exactly what that looks like.
+Fixed by never snapshotting a zero.
+
+The compounding is what made it total silence rather than a wrong number: a
+Percentage slab pays a percentage of **revenue** whatever its own metric, so
+revenue of zero paid zero on every slab, including the ones measured on
+deals won.
+
+### Revenue now has three meanings, and you pick one
+
+They are genuinely different money — the difference is *when* somebody gets
+paid, not a detail:
+
+- **Tax invoices raised** — recognised revenue, counted the day the invoice
+  is raised. Drafts excluded; an invoice nobody sent is not revenue.
+- **Payments received** — money as it actually clears, across invoices and
+  proformas alike, because this company takes payment against a proforma
+  routinely. Dated by the **payment**, not the document: a January invoice
+  settled in March is March's revenue to somebody paid on collections.
+- **Deal value on the customer** — the old behaviour, kept so an existing
+  scheme is not silently restated.
+
+**The default stays the old behaviour** for exactly that reason. Changing
+what somebody is owed without them asking is the one thing this file has
+warned against since the schemes were written; the basis is chosen per
+scheme in Settings → Incentives, and the incentives screen names the basis
+under the revenue figure so nobody has to guess what they are being paid on.

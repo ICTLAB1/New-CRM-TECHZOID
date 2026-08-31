@@ -2,7 +2,7 @@ import { useState } from "react";
 import { PageHead } from "../../app/AppShell";
 import { Card, Chip, Empty, Meter, Select, StatTile, SummaryBar } from "../../components/primitives";
 import {
-  activeSchemes, calcMetrics, computePayout, nextTarget,
+  DEFAULT_REVENUE_BASIS, REVENUE_BASES, activeSchemes, calcMetrics, computePayout, nextTarget,
   type IncentiveScheme,
 } from "../../domain/incentives/incentives";
 import { inr, inrShort } from "../../domain/currency/format";
@@ -29,6 +29,7 @@ const canViewOthers = (role: string) => role === "Admin" || role === "Manager";
 export function IncentivesScreen({ workspace, settings, users, currentUser }: IncentivesScreenProps) {
   const [viewing, setViewing] = useState(currentUser.id);
   const schemes = activeSchemes(settings["incentiveSchemes"] as IncentiveScheme[] | undefined);
+  const sellerState = ((settings["company"] as { state?: string })?.state) ?? "Delhi";
   const person = users.find((u) => u.id === viewing) ?? currentUser;
   const mine = viewing === currentUser.id;
 
@@ -56,7 +57,7 @@ export function IncentivesScreen({ workspace, settings, users, currentUser }: In
       ) : (
         <div className="stack">
           {schemes.map((scheme) => (
-            <SchemeCard key={scheme.id} scheme={scheme} workspace={workspace} ownerId={viewing} />
+            <SchemeCard key={scheme.id} scheme={scheme} workspace={workspace} ownerId={viewing} sellerState={sellerState} />
           ))}
         </div>
       )}
@@ -64,8 +65,10 @@ export function IncentivesScreen({ workspace, settings, users, currentUser }: In
   );
 }
 
-function SchemeCard({ scheme, workspace, ownerId }: { scheme: IncentiveScheme; workspace: Workspace; ownerId: string }) {
-  const metrics = calcMetrics(ownerId, scheme.period, workspace);
+function SchemeCard({ scheme, workspace, ownerId, sellerState }: { scheme: IncentiveScheme; workspace: Workspace; ownerId: string; sellerState: string }) {
+  const basis = scheme.revenueBasis || DEFAULT_REVENUE_BASIS;
+  const metrics = calcMetrics(ownerId, scheme.period, workspace, new Date(), basis, sellerState);
+  const basisLabel = REVENUE_BASES.find((b) => b.id === basis)?.label ?? String(basis);
   const result = computePayout(scheme, metrics);
   const gap = nextTarget(result, metrics);
 
@@ -82,7 +85,7 @@ function SchemeCard({ scheme, workspace, ownerId }: { scheme: IncentiveScheme; w
       {scheme.description ? <p className="muted" style={{ marginTop: 0 }}>{scheme.description}</p> : null}
 
       <SummaryBar columns={5}>
-        <StatTile label="Revenue earned" value={inrShort(metrics.revenue)} />
+        <StatTile label="Revenue earned" value={inrShort(metrics.revenue)} meta={basisLabel} />
         <StatTile label="Deals won" value={metrics.dealsWon} />
         <StatTile label="Quotations sent" value={metrics.quotationsSent} />
         <StatTile label="Renewals closed" value={metrics.renewals} />

@@ -11,7 +11,7 @@ import { CURRENCIES } from "../../domain/currency/currencies";
 import { STATE_NAMES } from "../../domain/geo/states";
 import { normalizeDocTemplate, SECTION_ORDER_META, type DocTemplate, type SectionKey } from "../../domain/documents/template";
 import { DOMESTIC_TERMS } from "../../domain/documents/terms";
-import type { IncentiveScheme, IncentiveSlab } from "../../domain/incentives/incentives";
+import { DEFAULT_REVENUE_BASIS, REVENUE_BASES, type IncentiveScheme, type IncentiveSlab } from "../../domain/incentives/incentives";
 import { buildDocNumber } from "../../domain/numbering/docNumber";
 
 /**
@@ -652,6 +652,21 @@ function IncentivesPanel({ settings, canEdit, onChange }: { settings: Record<str
                 <option value="Quarterly">Quarterly — Indian financial quarters</option>
                 <option value="Yearly">Financial year</option>
               </Select>
+            </Field>
+            <Field
+              label="Revenue is"
+              hint="What the Revenue metric counts — and what every Percentage slab pays a percentage of, whatever its own metric."
+            >
+              <Select
+                value={scheme.revenueBasis ?? DEFAULT_REVENUE_BASIS}
+                disabled={!canEdit}
+                onChange={(e) => patchScheme(scheme.id, { revenueBasis: e.target.value })}
+              >
+                {REVENUE_BASES.map((b) => <option key={b.id} value={b.id}>{b.label}</option>)}
+              </Select>
+              <div className="field-hint">
+                {REVENUE_BASES.find((b) => b.id === (scheme.revenueBasis ?? DEFAULT_REVENUE_BASIS))?.hint}
+              </div>
             </Field>
             <Field label="Description" hint="Shown to whoever is being paid on it.">
               <Input value={scheme.description ?? ""} disabled={!canEdit} onChange={(e) => patchScheme(scheme.id, { description: e.target.value })} />

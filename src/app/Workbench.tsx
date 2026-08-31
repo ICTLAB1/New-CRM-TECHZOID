@@ -131,7 +131,10 @@ export function Workbench({
     );
   };
 
-  const analytics = { customers, quotations, proformas, orders, challans, subscriptions };
+  /* Invoices are in here because the incentive calculation is measured on
+     them. Leaving them out is why a raised, accepted invoice counted for
+     nothing on that screen. */
+  const analytics = { customers, quotations, proformas, invoices, orders, challans, subscriptions };
 
   /**
    * Every place a customer record is saved funnels through here — the

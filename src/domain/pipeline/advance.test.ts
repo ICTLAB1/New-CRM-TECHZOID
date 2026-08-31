@@ -177,3 +177,28 @@ describe("what a stage change carries with it", () => {
     expect(wonAmount({})).toBe(0);
   });
 });
+
+describe("a deal won before anybody typed its value", () => {
+  it("does not freeze at zero", () => {
+    // `??` falls through on null and undefined but NOT on 0, so snapshotting
+    // a zero locked wonAmount() at zero for ever — the real figure typed in
+    // afterwards could never get past it. Three won deals and no revenue.
+    const won = applyStage(deal({ stage: "quoted" }), "won", day(5));
+    expect(won.wonValue).toBeUndefined();
+    expect(wonAmount(won)).toBe(0);
+
+    const priced = { ...won, value: 2200000 };
+    expect(wonAmount(priced)).toBe(2200000);
+    expect(countsAsWon(priced)).toBe(true);
+  });
+
+  it("still freezes a real figure", () => {
+    const won = applyStage(deal({ stage: "quoted", value: 400000 }), "won", day(5));
+    expect(won.wonValue).toBe(400000);
+    expect(wonAmount({ ...won, value: 900000 })).toBe(400000);
+  });
+
+  it("treats an empty string the same as no value", () => {
+    expect(applyStage(deal({ stage: "quoted", value: "" }), "won", day(5)).wonValue).toBeUndefined();
+  });
+});

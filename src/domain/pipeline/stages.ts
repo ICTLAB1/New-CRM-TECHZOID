@@ -72,7 +72,14 @@ export function applyStage<T extends { stage?: string; value?: number | string; 
     ...customer,
     stage,
     wonAt: stage === "won" ? (customer.wonAt || now) : customer.wonAt,
-    wonValue: stage === "won" ? (customer.wonValue ?? (Number(customer.value) || 0)) : customer.wonValue,
+    /* NEVER SNAPSHOT A ZERO. `??` falls through on null and undefined but
+       not on 0, so a deal marked Won before anybody typed a value got
+       wonValue: 0 and wonAmount() then returned 0 for ever — the value
+       typed in afterwards could not get past the snapshot. Three won deals
+       and no revenue at all was what that looked like on the incentives
+       screen. Leaving it unset lets the live value through until there is
+       something real to freeze. */
+    wonValue: stage === "won" ? (customer.wonValue || (Number(customer.value) || undefined)) : customer.wonValue,
     /* Re-stamped on every loss, unlike the win: this one dates the CURRENT
        conclusion, and a quotation raised after it is what tells the pipeline
        a lost customer has come back. */

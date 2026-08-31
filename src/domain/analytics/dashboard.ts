@@ -14,6 +14,11 @@ export interface Workspace {
   customers: Customer[];
   quotations: SalesDocument[];
   proformas: SalesDocument[];
+  /** Tax invoices. Optional because this shape predates them, and every
+   *  caller that does not need them still type-checks — but the incentive
+   *  calculation DOES need them, and not passing them is why a ₹22 lakh
+   *  invoice counted for nothing there. */
+  invoices?: SalesDocument[];
   orders: SalesOrder[];
   challans: Challan[];
   subscriptions: Subscription[];

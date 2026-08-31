@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  activeSchemes, calcMetrics, computePayout, nextTarget, periodBounds,
-  type IncentiveScheme,
-} from "./incentives";
+import { activeSchemes, calcMetrics, computePayout, nextTarget, periodBounds, type IncentiveScheme } from "./incentives";
 import type { Workspace } from "../analytics/dashboard";
 
 const AUG = new Date("2026-08-23T10:00:00+05:30");
@@ -137,5 +134,86 @@ describe("payout", () => {
   it("ignores an inactive scheme", () => {
     expect(activeSchemes([scheme(), scheme({ id: "x", active: false })])).toHaveLength(1);
     expect(activeSchemes(undefined)).toEqual([]);
+  });
+});
+
+describe("what revenue is measured on", () => {
+  /* THE REPORTED BUG. A customer created, a proforma paid, a tax invoice
+     raised and accepted for more than ₹22 lakh — and the incentives screen
+     read "Deals won 3, Revenue earned ₹0". Revenue came from the Deal value
+     typed on the customer record, and invoices were not even passed to the
+     calculation. Because a Percentage slab pays a percentage of REVENUE
+     whatever its metric, zero revenue paid zero on every slab. */
+  const NOW = new Date("2026-08-27T10:00:00");
+  const ms = (iso: string) => new Date(iso + "T00:00:00").getTime();
+
+  const doc = (o: Record<string, unknown>): never => ({
+    id: "d", number: "TZ/INV/1", ownerId: "u1", customerId: "c1",
+    billName: "NEXCEL", billContact: "", billAddress: "", billState: "Delhi", billCountry: "India",
+    billGstin: "", billPan: "", billEmail: "", billPhone: "",
+    shipSameAsBilling: true, shipName: "", shipAddress: "", shipState: "", shipCountry: "",
+    shipGstin: "", shipPan: "", shipContact: "", shipPhone: "", shipEmail: "",
+    currency: "INR", taxType: "none", referenceNo: "", revisionNo: 0, subject: "",
+    date: "2026-08-10", validUntil: "2026-09-10", status: "Accepted",
+    items: [{ id: "i", qty: 1, rate: 2200000, disc: 0, gst: 0 }],
+    terms: [], roundOff: false, preparedBy: "", createdAt: ms("2026-08-10"), updatedAt: 0, ...o,
+  }) as never;
+
+  const ws = {
+    customers: [
+      /* Won this month, and nobody typed a Deal value — which is ordinary
+         when the real figure lives on the invoice. */
+      { id: "c1", ownerId: "u1", stage: "won", wonAt: ms("2026-08-12") },
+      { id: "c2", ownerId: "u1", stage: "won", wonAt: ms("2026-08-14") },
+      { id: "c3", ownerId: "u1", stage: "won", wonAt: ms("2026-08-20") },
+    ] as never[],
+    quotations: [] as never[],
+    proformas: [doc({ id: "pf1", number: "TZ/PI/1", status: "Paid", paymentHistory: [{ amount: 500000, date: "2026-08-15" }] })],
+    invoices: [doc({ id: "inv1" })],
+    orders: [] as never[], challans: [] as never[], subscriptions: [] as never[],
+  };
+
+  it("counted nothing before, from three won deals", () => {
+    // The old behaviour, kept as an option so an existing scheme is not
+    // silently restated.
+    const m = calcMetrics("u1", "Monthly", ws, NOW, "deal-value");
+    expect(m.dealsWon).toBe(3);
+    expect(m.revenue).toBe(0);
+  });
+
+  it("counts the tax invoice that was actually raised", () => {
+    const m = calcMetrics("u1", "Monthly", ws, NOW, "invoiced");
+    expect(m.revenue).toBe(2200000);
+    expect(m.dealsWon).toBe(3);
+  });
+
+  it("counts money that actually arrived, on an invoice or a proforma", () => {
+    // This company takes payment against a proforma routinely.
+    expect(calcMetrics("u1", "Monthly", ws, NOW, "collected").revenue).toBe(500000);
+  });
+
+  it("dates a collection by the payment, not by the document", () => {
+    // A January invoice settled in March is March's revenue to whoever is
+    // paid on collections.
+    const late = { ...ws, proformas: [] as never[], invoices: [doc({ id: "inv2", createdAt: ms("2026-01-05"), paymentHistory: [{ amount: 900000, date: "2026-08-20" }] })] };
+    expect(calcMetrics("u1", "Monthly", late, NOW, "collected").revenue).toBe(900000);
+    // …and it is NOT August's invoiced revenue, because it was raised in January.
+    expect(calcMetrics("u1", "Monthly", late, NOW, "invoiced").revenue).toBe(0);
+  });
+
+  it("ignores a draft invoice, which has not been raised at all", () => {
+    const draft = { ...ws, invoices: [doc({ id: "inv3", status: "Draft" })] };
+    expect(calcMetrics("u1", "Monthly", draft, NOW, "invoiced").revenue).toBe(0);
+  });
+
+  it("counts only this person's documents", () => {
+    const theirs = { ...ws, invoices: [doc({ id: "inv4", ownerId: "u2" })] };
+    expect(calcMetrics("u1", "Monthly", theirs, NOW, "invoiced").revenue).toBe(0);
+  });
+
+  it("copes with a workspace that carries no invoices at all", () => {
+    const none = { ...ws, invoices: undefined };
+    expect(calcMetrics("u1", "Monthly", none, NOW, "invoiced").revenue).toBe(0);
+    expect(calcMetrics("u1", "Monthly", none, NOW, "collected").revenue).toBe(500000);
   });
 });
