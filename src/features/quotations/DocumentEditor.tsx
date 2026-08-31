@@ -7,6 +7,8 @@ import { askBeforeSave, useConfirmedAction } from "../../components/useConfirmed
 import { useHotkeys } from "../../components/hotkeys";
 import { previewPdf } from "../../documents/pdf/deliver";
 import { accountSummary, pickBankAccount, readAccounts } from "../../domain/banking/accounts";
+import { documentMargin, marginNote, marginTone } from "../../domain/margin/margin";
+import { effectiveCost } from "../../domain/catalog/vendors";
 import type { DocImages } from "../../documents/pdf/render";
 import type { IntegrationsApi } from "../../integrations/api";
 import { Modal } from "../../components/Modal";
@@ -102,6 +104,8 @@ export function DocumentEditor({
   /* The catalog is priced in the company's own currency — a product's
      list price does not change because this quotation is in dollars. */
   const baseCurrency = String(settings["defaultCurrency"] ?? "INR");
+  /* What this deal earns, from the costs captured on its own lines. */
+  const margin = documentMargin(doc.items);
   const bankAccounts = readAccounts(settings);
   const autoAccount = pickBankAccount(bankAccounts, "", doc.currency);
 
@@ -126,6 +130,11 @@ export function DocumentEditor({
         sku: product.skuId || "", hsn: product.hsn || "997331",
         qty: 1, unit: product.unit || "License", rate: product.sellPrice || "",
         disc: 0, gst: (settings["defaultGst"] as number) ?? 18,
+        /* SNAPSHOTTED, not looked up later. A distributor moving a price
+           next month must not restate the margin on a quotation sent this
+           month — see domain/margin. Taken from the cheapest vendor price
+           still live today. */
+        cost: effectiveCost(product, new Date().toISOString().slice(0, 10)).cost || undefined,
       }],
     }));
     setShowCatalog(false);
@@ -452,6 +461,26 @@ export function DocumentEditor({
             <span className="grow" />
             <span className="field-hint">
               {totals.rows.length} line{totals.rows.length === 1 ? "" : "s"} · {moneyList(totals.grand, doc.currency)} grand total
+              {/* INTERNAL. Cost and margin are on this screen and on the
+                  record; they are not in the model the PDF is built from,
+                  and a test asserts that. */}
+              {margin.known ? (
+                <>
+                  {" · "}
+                  <span style={{ color: `var(--${marginTone(margin) === "good" ? "good" : marginTone(margin) === "bad" ? "bad" : "warn"})` }}>
+                    {moneyList(margin.amount, doc.currency)} margin
+                    {margin.percent !== null ? ` (${margin.percent.toFixed(1)}%)` : ""}
+                  </span>
+                </>
+              ) : null}
+              {/* What the figure does NOT cover, and when it should worry
+                  somebody. A percentage that quietly treats uncosted lines
+                  as pure profit is worse than no percentage at all. */}
+              {marginNote(margin) ? (
+                <div className={marginTone(margin) === "bad" ? "field-msg" : "field-hint"}>
+                  {marginNote(margin)}
+                </div>
+              ) : null}
             </span>
           </div>
 

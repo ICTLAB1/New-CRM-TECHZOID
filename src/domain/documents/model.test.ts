@@ -362,3 +362,48 @@ describe("legacy documents", () => {
     expect(JSON.stringify(m)).not.toContain("undefined");
   });
 });
+
+describe("what a customer must never be able to read", () => {
+  /* THE RULE. Cost and margin live on the document record and on the
+     editor's own screen. They are not in the model the PDF and the preview
+     are built from, and they must never be. The day somebody adds a cost
+     column to the item table for debugging is the day a customer opens a
+     quotation and reads what the product cost us. */
+  const COSTED = {
+    ...DOC,
+    items: [
+      { id: "1", desc: "Microsoft 365 E3", qty: 10, rate: 2400, disc: 0, gst: 18, cost: 1717 },
+      { id: "2", desc: "Adobe Creative Cloud", qty: 4, rate: 5000, disc: 5, gst: 18, cost: 4321 },
+    ],
+  };
+
+  const model = buildDocumentModel({
+    doc: COSTED as never,
+    settings: SETTINGS,
+    totals: computeDocument(COSTED as never, "Delhi"),
+    docType: "quotation",
+    template: normalizeDocTemplate(DEFAULT_DOC_TEMPLATE),
+    bankAccount: {},
+  });
+
+  it("carries no cost figure anywhere in the model", () => {
+    // Serialised whole, so this catches a cost reaching ANY part of the
+    // document — a column, a note, a total, a debug field somebody added.
+    const json = JSON.stringify(model);
+    expect(json).not.toContain("1717");
+    expect(json).not.toContain("4321");
+  });
+
+  it("names no column that would print a cost or a margin", () => {
+    const columns = JSON.stringify(model.items.columns).toLowerCase();
+    for (const word of ["cost", "margin", "profit", "buy price", "landed"]) {
+      expect(columns, `item table must not have a ${word} column`).not.toContain(word);
+    }
+  });
+
+  it("still prices the document correctly with costs present", () => {
+    // The guard must not be achieved by dropping the line.
+    expect(model.items.rowCount).toBe(2);
+    expect(model.money.grandValue).toBeTruthy();
+  });
+});

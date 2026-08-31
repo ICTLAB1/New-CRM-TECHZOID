@@ -10,6 +10,10 @@ export interface CatalogProduct {
   segment: string;
   costPrice: number;
   sellPrice: number;
+  /** What this SKU costs from each distributor, and until when. `costPrice`
+   *  above is the effective one, kept level with the cheapest live entry —
+   *  see vendors.ts. Absent on a catalog imported before this existed. */
+  vendorPrices?: import("./vendors").VendorPrice[];
   hsn: string;
   unit: string;
   /** Products with no price stay ACTIVE. Marking them inactive hid them from

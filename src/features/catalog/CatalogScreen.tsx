@@ -7,6 +7,10 @@ import {
   CATALOG_VENDORS, mergeCatalog, parseProductCatalogWorkbook,
   type CatalogImportResult, type CatalogProduct,
 } from "../../domain/catalog";
+import {
+  bestPrice, blankVendorPrice, effectiveCost, isExpired, readVendorPrices, withEffectiveCost,
+  type VendorPrice,
+} from "../../domain/catalog/vendors";
 import { inrList } from "../../domain/currency/format";
 
 /**
@@ -216,6 +220,19 @@ function ProductSheet({
 
   const margin = p.sellPrice && p.costPrice ? ((p.sellPrice - p.costPrice) / p.sellPrice) * 100 : null;
 
+  const today = new Date().toISOString().slice(0, 10);
+  const prices = readVendorPrices(p);
+  const best = bestPrice(prices, today);
+  const live = prices.length ? effectiveCost(p, today) : null;
+
+  const patchPrice = (id: string, patch: Partial<VendorPrice>) =>
+    setP((c) => {
+      const next = readVendorPrices(c).map((v) => (v.id === id ? { ...v, ...patch } : v));
+      /* Cost price follows the cheapest live entry, so the figure every
+         other screen reads never disagrees with the list beneath it. */
+      return withEffectiveCost({ ...c, vendorPrices: next }, today);
+    });
+
   return (
     <Modal
       open
@@ -253,7 +270,12 @@ function ProductSheet({
         </div>
 
         <div className="grid grid-2">
-          <Field label="Cost price" hint="What it costs us. Never printed.">
+          <Field
+            label="Cost price"
+            hint={live
+              ? `From ${live.source}. Never printed.`
+              : "What it costs us. Never printed."}
+          >
             <Input numeric type="number" value={p.costPrice || ""} onChange={setNum("costPrice")} />
           </Field>
           <Field
@@ -262,6 +284,72 @@ function ProductSheet({
           >
             <Input numeric type="number" value={p.sellPrice || ""} onChange={setNum("sellPrice")} />
           </Field>
+        </div>
+
+        {/* WHAT IT COSTS, FROM WHOM. One cost price was never true: the same
+            SKU comes from several distributors at different prices, quoted
+            for a period and then expired. Cost price above stays level with
+            the cheapest live entry here, so every other screen agrees. */}
+        <div className="stack">
+          <div className="row-tight">
+            <span className="eyebrow">Vendor prices</span>
+            <Button size="sm" tone="quiet" onClick={() => setP((c) => ({ ...c, vendorPrices: [...readVendorPrices(c), blankVendorPrice()] }))}>
+              Add a vendor
+            </Button>
+          </div>
+
+          {readVendorPrices(p).length === 0 ? (
+            <p className="field-hint">
+              None yet, so the cost price above is used as typed. Add one for each distributor who quotes this
+              SKU and the cheapest live price becomes the cost.
+            </p>
+          ) : (
+            <div className="table-wrap">
+              <table className="table">
+                <thead>
+                  <tr><th>Distributor</th><th className="num">Cost</th><th>Valid until</th><th>Note</th><th /></tr>
+                </thead>
+                <tbody>
+                  {readVendorPrices(p).map((v) => {
+                    const expired = isExpired(v, today);
+                    const isBest = best?.id === v.id;
+                    return (
+                      <tr key={v.id}>
+                        <td data-label="Distributor">
+                          <div className="row-tight">
+                            <Input value={v.vendor} onChange={(e) => patchPrice(v.id, { vendor: e.target.value })} placeholder="Ingram" />
+                            {isBest ? <Chip tone="good">In use</Chip> : null}
+                          </div>
+                        </td>
+                        <td data-label="Cost" className="num">
+                          <Input numeric type="number" value={v.cost || ""} onChange={(e) => patchPrice(v.id, { cost: Number(e.target.value) || 0 })} />
+                        </td>
+                        <td data-label="Valid until">
+                          <Input type="date" value={v.validUntil} onChange={(e) => patchPrice(v.id, { validUntil: e.target.value })} />
+                          {expired ? <div className="field-msg">Expired — not used.</div> : null}
+                        </td>
+                        <td data-label="Note">
+                          <Input value={v.note} onChange={(e) => patchPrice(v.id, { note: e.target.value })} placeholder="Deal reg" />
+                        </td>
+                        <td data-actions>
+                          <Button size="sm" tone="danger" onClick={() => setP((c) => ({ ...c, vendorPrices: readVendorPrices(c).filter((x) => x.id !== v.id) }))}>
+                            Remove
+                          </Button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {live?.expired ? (
+            <p className="field-msg">
+              Every vendor price on this product has lapsed, so the cost price above is being used. Refresh the
+              list before quoting off it.
+            </p>
+          ) : null}
         </div>
 
         <label className="row-tight" style={{ cursor: "pointer" }}>

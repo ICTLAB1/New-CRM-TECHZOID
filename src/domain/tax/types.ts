@@ -25,6 +25,11 @@ export interface LineItem {
   rate?: number | string;
   /** Discount percentage, applied before tax. */
   disc?: number | string;
+  /** UNIT cost, captured when the product was picked from the catalog.
+   *  Internal: it is what the margin is worked out from, and it is never
+   *  rendered onto the document a customer sees. Absent on a line nobody
+   *  has costed, which is "unknown", not "free" — see domain/margin. */
+  cost?: number | string;
   /** Per-item tax rate percentage. Named `gst` for database compatibility —
    *  it carries the rate for every regime, not only GST. */
   gst?: number | string;

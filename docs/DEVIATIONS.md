@@ -1312,3 +1312,55 @@ only "has this screen shown it yet" — which is a property of the screen. The
 id list is capped, because a list that grows for ever fills the storage
 quota and then every write fails silently, which would show every message on
 every load.
+
+## 34. Vendor price lists, and the margin on a deal
+
+### One cost price was never true
+
+The same SKU comes from several distributors at different prices, those
+prices are quoted for a period and then expire, and which one you can
+actually get today is the job. A single `costPrice` field can only hold one
+of those, and quoting off a stale one is how a deal is won at a loss.
+
+A product now carries a list: distributor, cost, currency, valid-until, and
+a note ("deal reg", "Q3 promo"). **Expired prices are skipped rather than
+silently used** — that is the entire point of recording the date, and the
+catalog says so when every price on a product has lapsed.
+
+`costPrice` stays and stays meaningful: it is kept level with the cheapest
+live entry, so every screen written before this — and every document already
+saved — reads exactly as it did.
+
+### Margin, where the decision is made
+
+**The cost is captured on the line, not looked up later.** A price list
+changes; a quotation does not. Reading the catalog when a six-week-old
+quotation is reopened would restate its margin every time a distributor
+moved a price, and last month's reported margin would drift under
+everyone's feet. Same reason `wonValue` is snapshotted when a deal is won.
+
+The editor shows the margin beside the grand total, so it is visible at the
+moment somebody decides the price rather than discovered in a report next
+month. A live example from the demo data: an HP laptop quoted at ₹1,12,500
+less 8% against a ₹1,18,000 cost reads **"₹-6,125 margin (-0.4%)"** with
+*"At least one line is priced below what it cost"* under it.
+
+Three things it refuses to do:
+
+- **An uncosted line is unknown, not free.** Averaging it in as zero cost
+  would report a 100% margin on a line nobody has costed. Uncosted lines are
+  excluded and the count of them is stated.
+- **A zero cost IS a cost.** Free stock still has a margin, so `0` counts and
+  only a missing value is unknown.
+- **A healthy total does not hide a loss-making line.** `anyBelowCost` is
+  tracked separately, because the loss-leader buried inside a profitable
+  quote is exactly what a single percentage conceals.
+
+### None of it reaches the customer
+
+Cost and margin are on the record and on the editor's own screen. They are
+**not** in the model the PDF and the preview are built from, and a test
+asserts it by serialising the whole model and searching for the cost
+figures — so a cost reaching any part of the document fails the build, not
+only a cost column. The day somebody adds one "just for debugging" is the
+day a customer opens a quotation and reads what the product cost.
