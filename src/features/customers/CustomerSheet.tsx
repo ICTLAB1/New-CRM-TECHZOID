@@ -3,6 +3,7 @@ import { Modal } from "../../components/Modal";
 import { AttachmentsPanel } from "../attachments/AttachmentsPanel";
 import { NotesPanel } from "./NotesPanel";
 import { VerifyPanel } from "./VerifyPanel";
+import { PortalPanel } from "./PortalPanel";
 import { addNote } from "../../domain/customers/notes";
 import { askBeforeSave, useConfirmedAction } from "../../components/useConfirmedAction";
 import { Button, Chip, Field, Input, Select, Textarea } from "../../components/primitives";
@@ -32,6 +33,11 @@ export interface CustomerSheetProps {
   /** False while the sheet is animating away. */
   open?: boolean;
   customer: Customer;
+  /** True for a record that has never been saved. Its id exists in this
+   *  browser and nowhere else yet, so anything that references the customer
+   *  row in the database — a portal link, most obviously — has nothing to
+   *  point at until Save. */
+  isNew?: boolean;
   users: { id: string; name: string }[];
   customFields: { id: string; label: string }[];
   canReassign: boolean;
@@ -45,7 +51,7 @@ export interface CustomerSheetProps {
   onClose: () => void;
 }
 
-export function CustomerSheet({ open = true, customer, users, customFields, canReassign, currentUser, settings = {}, onSave, onClose }: CustomerSheetProps) {
+export function CustomerSheet({ open = true, customer, isNew = false, users, customFields, canReassign, currentUser, settings = {}, onSave, onClose }: CustomerSheetProps) {
   const [f, setF] = useState<Customer>({ ...customer, notes: customer.notes ?? [], customFields: customer.customFields ?? {} });
   const set = <K extends keyof Customer>(k: K) => (e: { target: { value: string } }) =>
     setF((cur) => ({ ...cur, [k]: e.target.value }));
@@ -297,6 +303,16 @@ export function CustomerSheet({ open = true, customer, users, customFields, canR
           customer={f}
           currentUser={currentUser}
           onAdd={(draft) => setF((c) => addNote(c, draft, { id: currentUser?.id ?? "", name: currentUser?.name ?? "" }))}
+        />
+
+        {/* The link the customer follows to see their own documents. Below
+            the notes rather than beside the contact details: issuing one is
+            something you do occasionally and deliberately, not a field you
+            fill in while typing a record. */}
+        <PortalPanel
+          customerId={customer.id}
+          saved={!isNew}
+          currentUserId={currentUser?.id ?? ""}
         />
 
         {/* Signed POs, credit applications, GST certificates — the paperwork

@@ -189,3 +189,37 @@
 /* Off-screen rather than display:none — some bots skip hidden fields, and
    this one only works if they fill it in. */
 .honeypot { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+
+/* ── the customer portal ───────────────────────────────────────────────
+   Same frame as the registration form — a stranger, on a phone, once — but
+   this one is read rather than filled in, so it is a list and a document
+   instead of a form. */
+.portal-list { display: flex; flex-direction: column; }
+.portal-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  width: 100%; padding: 14px 16px; text-align: left;
+  background: none; border: 0; border-top: 1px solid var(--rule); cursor: pointer;
+  font: inherit; color: inherit;
+}
+.portal-row:first-child { border-top: 0; }
+.portal-row:hover { background: var(--surface-2); }
+.portal-row-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.portal-row-title { font-weight: 600; color: var(--ink); }
+.portal-row-side { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+.portal-row-amount { font-weight: 600; }
+
+.portal-meta { display: flex; flex-wrap: wrap; gap: 18px 28px; }
+.portal-meta .muted { font-size: var(--t-small); display: block; }
+
+.portal-totals { border-top: 1px solid var(--rule); padding: 12px 16px; }
+.portal-total-row { display: flex; justify-content: space-between; gap: 24px; padding: 3px 0; }
+
+.portal-payment { display: flex; justify-content: space-between; gap: 16px; }
+.portal-terms { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
+
+@media (max-width: 560px) {
+  /* The amount and the status stop fitting beside a long document number
+     before the number does, so they wrap under it rather than squeezing it. */
+  .portal-row { flex-direction: column; align-items: flex-start; gap: 8px; }
+  .portal-row-side { gap: 10px; }
+}

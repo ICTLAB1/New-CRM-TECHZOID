@@ -26,6 +26,13 @@ export const LIMITS = {
   "ms-oauth-start": { limit: 10, windowSeconds: 3600 },
   "admin-users": { limit: 30, windowSeconds: 3600 },
   "webhook-deliver": { limit: 120, windowSeconds: 3600 },
+  /* The portal is the one place a stranger with a URL reads from the
+     database, so the limit is on reading, not only on writing: the traffic
+     worth stopping is somebody working through guessed tokens. Generous
+     enough that a customer refreshing a page and opening three documents
+     never meets it. */
+  "portal": { limit: 60, windowSeconds: 600 },
+  "portal-respond": { limit: 10, windowSeconds: 600 },
   /* Each one is a billed call to a government register. A salesperson
      checks a handful of GSTINs a day; a loop checks a thousand. */
   "verify-tax-id": { limit: 40, windowSeconds: 3600 },

@@ -1364,3 +1364,97 @@ asserts it by serialising the whole model and searching for the cost
 figures — so a cost reaching any part of the document fails the build, not
 only a cost column. The day somebody adds one "just for debugging" is the
 day a customer opens a quotation and reads what the product cost.
+
+## 32. The customer portal
+
+A link a customer follows to see their own quotations, proformas and
+invoices, and to accept or decline a quotation. No account, no password.
+This is the only surface in the product where somebody who is not signed in
+reads out of the database, so the security decisions are worth writing down
+rather than leaving in the code.
+
+### The link is the password, and it is treated like one
+
+`?portal=<token>` carries 32 bytes from the platform CSPRNG — 256 bits,
+url-safe base64, 43 characters. Not a uuid: a v4 uuid is 122 bits and reads
+like an identifier rather than a secret.
+
+**The secret is never stored.** `portal_tokens` holds only its SHA-256, and
+the row is looked up by hash. The table leaking hands nobody a working link.
+Plain SHA-256 rather than bcrypt, deliberately: password hashing exists to
+make guessing a human-chosen input expensive, and there is no dictionary for
+32 random bytes. What matters is that the stored value is not itself usable.
+
+**Minted in the browser.** The obvious design has the server generate it and
+hand it back, which puts the plaintext in a response body — and therefore in
+whatever logs, proxies and error reporters sit in between. Generated in the
+page, it exists in two places for its whole life: the salesperson's
+clipboard and the customer's inbox. It is shown once, because there is
+nothing to show a second time.
+
+It expires (30 days by default), it can be withdrawn, and a trigger pins
+`customer_id` and `token_hash` so a link already in somebody's inbox can
+never be repointed at another account — not by an Admin, and not by the
+service role, which bypasses RLS but not triggers. The first version of the
+migration claimed a `with check` clause did this. **It did not**: a policy
+sees only the row being written, and an Admin satisfies the predicate for
+every customer. A test against a real Postgres caught it.
+
+### The anon key is granted nothing
+
+The natural implementation lets the customer's browser query Supabase with
+the anon key under an RLS policy keyed on the token. That would mean
+granting `anon` a way to read `quotes`, `proformas` and `invoices` — the
+company's entire sales history, with the buying price of every line in it —
+and betting the business on one predicate being right forever.
+
+Instead every portal read goes through `netlify/functions/portal.mjs` with
+the service role. A customer's browser never speaks to the database. It
+costs a function invocation.
+
+### What leaves is an allowlist, and it has to be
+
+`netlify/lib/portalView.mjs` builds the response field by field. A deny list
+fails the same way every time: somebody adds a column and it ships because
+nobody remembered to exclude it.
+
+That is not hypothetical here. **`LineItem.cost` was added to this codebase
+the same day the portal was written**, for the margin work above. Under a
+deny list, the buying price of every line would now be in the JSON behind a
+link customers were emailed. A test pins the exact shape of the output, so
+gaining a field is a decision with a test to update.
+
+Also absent, each on purpose: drafts (only what was deliberately sent is
+listed); purchase orders (they carry our buying price on their face, so
+there is no redaction that makes one safe — the portal does not know the
+kind exists); the internal remark beside a payment; anything about how the
+account is run — owner, stage, value, notes; and bank details, which are
+printed on a proforma PDF but not here, because a leaked link carrying
+account numbers is an invoice-fraud kit.
+
+### Failing the same way whatever went wrong
+
+Revoked, expired, mistyped and never-existed all return `{ valid: false }`
+and the same page. What to do about it is genuinely identical in all four
+cases, and distinguishing them lets somebody working through guesses learn
+which tokens were real.
+
+Accepting is idempotent — this is a button in an email client, possibly
+behind a link prefetcher, on a phone with a flaky connection. Pressing it
+twice succeeds quietly. Pressing the *other* button afterwards does not:
+reversing an acceptance is a conversation, not a click. And it is a confirm
+step rather than one tap, because the link gets forwarded around a
+customer's office and a stray tap must not order forty licences.
+
+### A bug found by opening a broken link
+
+The route was decided by whether the token was **valid**, so a link a mail
+client had wrapped across two lines — `?portal=Xk3p_Q` — was not a portal
+link at all, and the customer landed on the sign-in screen of a CRM they
+have no account for. Precisely what the public routes exist to prevent.
+
+Presence and validity are two different questions and now have two
+functions: `isPortalUrl` decides the route, `readPortalToken` decides
+whether to make a request. A malformed token still never reaches the
+network — the page says "ask for a fresh one" without asking the server
+about a string that cannot be a token.

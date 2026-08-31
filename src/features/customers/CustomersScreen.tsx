@@ -39,6 +39,10 @@ export function CustomersScreen({ customers, workspace, users, customFields, cur
   const [stageFilter, setStageFilter] = useState<string>("all");
   const [owner, setOwner] = useState<string>("all");
   const [editing, setEditing] = useState<Customer | null>(null);
+  /* Whether the sheet is on a record that exists in the database yet. Held
+     here rather than guessed inside the sheet: a blank customer already has
+     an id, so there is nothing about the record itself that says. */
+  const [isNew, setIsNew] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [pending, setPending] = useState<Pending | null>(null);
 
@@ -118,7 +122,7 @@ export function CustomersScreen({ customers, workspace, users, customFields, cur
                 call, so it sits next to the manual route rather than being
                 buried in a menu. */}
             <Button tone="default" onClick={() => setSharing(true)}>Share a registration link</Button>
-            <Button tone="primary" onClick={() => setEditing(blankCustomer(currentUser.id, uid()))}>
+            <Button tone="primary" onClick={() => { setIsNew(true); setEditing(blankCustomer(currentUser.id, uid())); }}>
               New customer
             </Button>
           </>
@@ -182,7 +186,7 @@ export function CustomersScreen({ customers, workspace, users, customFields, cur
                   const stage = stageOf(c.stage);
                   const overdue = isOverdue(c.nextFollowUp);
                   return (
-                    <tr key={c.id} className={overdue ? "needs-warn" : undefined} onClick={() => setEditing(c)} style={{ cursor: "pointer" }}>
+                    <tr key={c.id} className={overdue ? "needs-warn" : undefined} onClick={() => { setIsNew(false); setEditing(c); }} style={{ cursor: "pointer" }}>
                       <td className="edge-cell" />
                       <td data-head className="strong">{customerLabel(c)}</td>
                       <td data-label="Contact">{c.contact || "—"}</td>
@@ -207,6 +211,7 @@ export function CustomersScreen({ customers, workspace, users, customFields, cur
         <CustomerSheet
           open={open}
           customer={record}
+          isNew={isNew}
           users={users}
           customFields={customFields}
           canReassign={canReassign}

@@ -4,8 +4,10 @@ import { Button, Card } from "../components/primitives";
 import { Workbench } from "./Workbench";
 import { SignIn, NoProfile } from "./SignIn";
 import { PublicLeadForm } from "../features/leads/PublicLeadForm";
+import { CustomerPortal } from "../features/portal/CustomerPortal";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import { readLeadRef } from "../domain/leads/link";
+import { isPortalUrl } from "../domain/portal/token";
 import { useWorkspace, type WorkspaceData } from "../data/useWorkspace";
 import { isConfigured, loadProfile, onSessionChange, signOut, type SignedInUser } from "../data/session";
 import { CHALLANS, CUSTOMERS, ORDERS, INVOICES, PROFORMAS, PURCHASE_ORDERS, QUOTATIONS, SETTINGS, SUBSCRIPTIONS, USERS } from "./demoData";
@@ -23,6 +25,27 @@ import type { Session } from "@supabase/supabase-js";
  */
 
 export function App() {
+  /* ?portal=<token> is the customer's own view of their documents. Checked
+     first, and before the registration link, for the same reason that one is
+     checked before the sign-in screen: somebody arriving with a link must
+     never be asked to sign in to something they have no account for.
+
+     Both public routes are decided here, in front of everything else, so
+     there is exactly one place to look for "what can a stranger reach".
+
+     Routed on the PRESENCE of ?portal=, not on the token being well-formed:
+     a link a mail client wrapped and broke must reach a page that says "ask
+     for a fresh one", not the sign-in screen. */
+  if (isPortalUrl(window.location)) {
+    return (
+      <ToastProvider>
+        <ErrorBoundary where="your documents">
+          <CustomerPortal />
+        </ErrorBoundary>
+      </ToastProvider>
+    );
+  }
+
   /* /r/<code> — and the ?lead=<uuid> links already shared — are the public
      registration form: no sign-in, no shell, nothing of the CRM around it.
      Checked before anything else so a customer with the link never sees a
