@@ -3,6 +3,7 @@ import { PageHead } from "../../app/AppShell";
 import { Button, Card, Chip, Empty, Field, Input, Select } from "../../components/primitives";
 import { Confirm, Modal } from "../../components/Modal";
 import { useToast } from "../../components/Toast";
+import { BroadcastComposer } from "../broadcasts/BroadcastComposer";
 import { IntegrationError, type IntegrationsApi } from "../../integrations/api";
 
 /**
@@ -83,6 +84,18 @@ export function TeamScreen({ api, members, currentUser, onChange }: TeamScreenPr
       />
 
       {error ? <div className="notice notice-bad" style={{ marginBottom: 12 }}><span>{error}</span></div> : null}
+
+      {/* Putting a message on everybody's screen belongs beside the list of
+          who would receive it. Row-level security is what actually enforces
+          who may send — hiding the card is only tidiness. */}
+      {currentUser.role === "Admin" || currentUser.role === "Manager" ? (
+        <div style={{ marginBottom: 16 }}>
+          <BroadcastComposer
+            currentUser={currentUser}
+            users={members.map((m) => ({ id: m.id, name: m.name }))}
+          />
+        </div>
+      ) : null}
 
       <div className="stack">
       <Card padded={false}>

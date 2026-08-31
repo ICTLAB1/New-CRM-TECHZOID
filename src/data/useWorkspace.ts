@@ -1,4 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+
+/** How often the workspace refetches when nothing else has told it to.
+ *  A backstop, not the mechanism — realtime is normally seconds. */
+const POLL_MS = 45_000;
 import { store, TABLE_OF, type Profile, type Store, type WorkspaceData } from "./store";
 import { detectEvents, summarize, type CrmEvent } from "../domain/notifications/events";
 
@@ -103,22 +107,63 @@ export function useWorkspace(enabled: boolean, meId = "", db: Store = store()): 
     void reload();
   }, [enabled, reload]);
 
-  /* Live sync. Another person's change arrives as a table name; we refetch
-     everything, which is cheap at this size and cannot get out of step the
-     way applying individual row events can. */
+  /**
+   * Live sync, by three routes that back each other up.
+   *
+   * WHY THREE. The realtime subscription is the good one — a change arrives
+   * as a table name within a second, and refetching everything is cheap at
+   * this size and cannot get out of step the way applying individual row
+   * events can. But it depends on the Realtime service being switched on
+   * for the project and on every table being in the publication, which is
+   * server-side configuration this code cannot see, cannot fix, and cannot
+   * even tell has gone wrong: a socket that never delivers looks exactly
+   * like a workspace where nothing is happening.
+   *
+   * So it is not relied on alone. Coming back to the tab refetches, because
+   * that is the moment somebody is about to read the screen; and a slow
+   * poll runs underneath, so a screen left open on a wall display stays
+   * true even if the socket never connects at all.
+   *
+   * Every route goes through the same guard: never pull the server's rows
+   * over a save that is still in flight.
+   */
   useEffect(() => {
     if (!enabled || state !== "ready") return;
+
     let timer: ReturnType<typeof setTimeout> | null = null;
-    const channel = db.subscribeAll(() => {
+    const refresh = (delay: number) => {
       if (timer) clearTimeout(timer);
       timer = setTimeout(() => {
-        /* Never pull the server's rows back over a save still in flight. */
         if (inFlight.current > 0) return;
+        /* Nothing to refresh into while the tab is hidden, and a background
+           tab polling all day is somebody's battery. */
+        if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
         void reload(true);
-      }, 700);
-    });
+      }, delay);
+    };
+
+    const channel = db.subscribeAll(() => refresh(700));
+
+    /* Back at the tab: refetch at once rather than waiting for the poll. */
+    const onVisible = () => {
+      if (typeof document === "undefined" || document.visibilityState === "visible") refresh(150);
+    };
+    if (typeof window !== "undefined") {
+      window.addEventListener("focus", onVisible);
+      document.addEventListener("visibilitychange", onVisible);
+    }
+
+    /* The floor. Slow enough to be invisible on the bill, quick enough that
+       nobody is looking at yesterday's pipeline. */
+    const poll = setInterval(() => refresh(0), POLL_MS);
+
     return () => {
       if (timer) clearTimeout(timer);
+      clearInterval(poll);
+      if (typeof window !== "undefined") {
+        window.removeEventListener("focus", onVisible);
+        document.removeEventListener("visibilitychange", onVisible);
+      }
       void channel.unsubscribe();
     };
   }, [enabled, state, reload, db]);

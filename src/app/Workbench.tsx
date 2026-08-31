@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { applyStage, type StageId } from "../domain/pipeline/stages";
 import { AppShell, PageHead } from "./AppShell";
+import { BroadcastPopup } from "../features/broadcasts/BroadcastPopup";
 import { Card } from "../components/primitives";
 import { CustomersScreen } from "../features/customers/CustomersScreen";
 import { PipelineBoard } from "../features/pipeline/PipelineBoard";
@@ -166,6 +167,10 @@ export function Workbench({
       banner={banner}
       bell={<NotificationBell events={events} onOpen={() => onEventsSeen?.()} />}
     >
+      {/* At the shell, not on a screen: a message from an admin has to reach
+          somebody wherever they happen to be looking. */}
+      <BroadcastPopup names={new Map(team.map((m) => [m.id, m.name]))} />
+
       {view === "dashboard" ? (
         <DashboardScreen
           workspace={analytics}

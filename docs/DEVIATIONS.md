@@ -1258,3 +1258,57 @@ nothing upstream creates them.
 Purchase orders deliberately stay out of the sales analytics: they are the
 buy side, and counting what the company spends as though it were revenue is
 worse than not counting it.
+
+## 33. Auto-refresh that does not depend on Realtime, and a message board
+
+### Everybody's screen keeps itself current
+
+The realtime subscription was already here and already right: a change
+arrives as a table name, and the workspace refetches everything, which is
+cheap at this size and cannot get out of step the way applying individual
+row events can.
+
+What it could not do is **tell anybody when it was not working**. It depends
+on the Realtime service being switched on for the project and every table
+being in the publication — server-side configuration this code cannot see,
+cannot fix, and cannot even detect: a socket that never delivers looks
+exactly like a workspace where nothing is happening.
+
+So it is no longer relied on alone. Coming back to the tab refetches, which
+is the moment somebody is about to read the screen; and a 45-second poll
+runs underneath, so a screen left open on a wall display stays true even if
+the socket never connects. All three go through one guard — never pull the
+server's rows over a save still in flight — and none of them run while the
+tab is hidden, because there is nothing to refresh into and a background tab
+polling all day is somebody's battery.
+
+### An admin can put a message on everybody's screen
+
+For the things that cannot wait for a meeting: the GST portal is down, stop
+raising invoices; prices change on Monday.
+
+**Stored, not shouted.** A socket message only reaches whoever happens to be
+looking, and "stop raising invoices" has to reach the person who opens the
+CRM twenty minutes later too. So it is a row, read on load, on refocus, and
+on a poll — the same three routes as the workspace, for the same reason.
+
+**Because it interrupts, it is rationed.** Shown once per person and then
+never again; gone at its expiry whether or not anybody read it. A popup that
+comes back is one people learn to dismiss without reading, and then the one
+that mattered is dismissed too. The composer says as much in the panel:
+this is worth having *because it is rare*.
+
+Row-level security does the deciding, proven against a real Postgres before
+any client code was written: a person reads only what is addressed to them
+or to everybody and has not expired — a message to one person did not appear
+for another; only an admin or a manager can send; and `from_id` must be the
+sender, so a message cannot go out under somebody else's name. The admin who
+tried to forge one in the test got the same refusal as the salesperson who
+tried to send one at all.
+
+Dismissals are kept in the browser rather than in a table. A read receipt
+would need a row per person per message, and the question being answered is
+only "has this screen shown it yet" — which is a property of the screen. The
+id list is capped, because a list that grows for ever fills the storage
+quota and then every write fails silently, which would show every message on
+every load.
