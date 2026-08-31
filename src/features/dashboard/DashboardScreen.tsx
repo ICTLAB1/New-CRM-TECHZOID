@@ -7,7 +7,7 @@ import {
 } from "../../domain/analytics/dashboard";
 import { seesEverything } from "../../domain/analytics/scope";
 import { STAGES } from "../../domain/pipeline/stages";
-import { inrList, inrShort } from "../../domain/currency/format";
+import { inrShort, moneyList } from "../../domain/currency/format";
 
 /** A bar chart drawn as divs: six months of revenue does not need a
  *  charting library, and one would weigh more than this whole screen. */
@@ -95,7 +95,7 @@ export function DashboardScreen({
                         <div className="strong">{row.title}</div>
                         <div className="field-hint">{row.detail}</div>
                       </td>
-                      <td className="num strong">{row.value ? inrList(row.value) : ""}</td>
+                      <td className="num strong">{row.value ? moneyList(row.value, row.currency) : ""}</td>
                     </tr>
                   ))}
                 </tbody>

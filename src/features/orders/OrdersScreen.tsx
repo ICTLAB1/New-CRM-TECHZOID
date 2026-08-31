@@ -11,7 +11,7 @@ import { nextDocSeq } from "../../data/docNumber";
 import { orderFulfilment, type Challan } from "../../domain/orders/fulfilment";
 import { newChallan, suggestedStage, type DeliveryChallan, type SalesOrder } from "../../domain/orders/create";
 import { computeDocument } from "../../domain/tax/compute";
-import { inrList } from "../../domain/currency/format";
+import { moneyList } from "../../domain/currency/format";
 import { fmtDate } from "../../domain/dates";
 
 export interface OrdersScreenProps {
@@ -129,7 +129,7 @@ export function OrdersScreen({ orders, challans, settings, currentUser, onChange
                         <Meter pct={f.pct} tone={f.pct === 100 ? "good" : undefined} />
                         <div className="field-hint">{f.dispatched} of {f.ordered} units</div>
                       </td>
-                      <td data-label="Value" className="num strong">{inrList(totals.grand)}</td>
+                      <td data-label="Value" className="num strong">{moneyList(totals.grand, o.currency)}</td>
                       <td data-actions>
                         <span className="row-tight">
                           {suggest ? (

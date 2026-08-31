@@ -1123,3 +1123,46 @@ also called by the public registration form, which runs server-side as
 `service_role` and therefore has no `auth.uid()` at all. A "must be signed
 in" check would have broken every customer arriving through the form — the
 one path nobody would think to test by hand.
+
+## 30. Money is shown in the currency the record is in
+
+Every screen formatted every figure as rupees. A hard-coded ₹, Indian
+grouping, whatever the record's currency actually was. A proforma raised in
+dollars rendered correctly on its own PDF and read as **₹11,948** in the
+list beside it — the same digits, the wrong currency, and nothing on screen
+to say which one the customer would be billed.
+
+The document renderer had always done this properly, through
+`fmtCurrency()`. The CRM's own tables and tiles never did. `moneyList()`
+and `moneyShort()` are the same idea for screens, and the old `inr*`
+helpers stay as the INR case so that rupee figures are unchanged to the
+character — pinned by a test that walks both over the same numbers.
+
+**The scale words are not universal**, which is why the compact form takes a
+currency. Crore and lakh are how Indian money is read and how this CRM
+writes it everywhere else; "$2.57 L" is not a shorter way of writing a
+dollar figure, it is a phrase a reader in New York has to decode. Rupees
+keep Cr/L/K, everything else gets M/K.
+
+### Totals were worse than a formatting bug
+
+₹100 + $100 is not 200 of anything. Every list footer, every outstanding
+balance and every summary tile was adding across currencies, so a total was
+wrong by the whole of the foreign documents in it — and looked authoritative
+being wrong.
+
+`totalsByCurrency()` keeps them apart, and the screens print "₹23,59,866 +
+$11,948" rather than one figure. Where more than one currency is in play the
+line says so.
+
+**No exchange rates, deliberately.** Converting needs a rate source and a
+decision about *which* rate — the day the document was raised, the day it
+was paid, today — and a made-up rate produces a single confident number that
+is wrong in a way nobody can see. Two honest numbers beat one invented one.
+Until somebody decides the rate policy, the currencies stay apart.
+
+Applied to the document lists, the editor, and receivables — where an
+outstanding balance in two currencies is two different debts. **The
+dashboard's summary tiles still add across currencies** and are the
+remaining place this is wrong; they are compact by design and need a
+product decision about what a mixed-currency tile should say.

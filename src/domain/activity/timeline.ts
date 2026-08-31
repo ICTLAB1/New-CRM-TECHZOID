@@ -1,5 +1,5 @@
 import { computeDocument } from "../tax/compute";
-import { inrShort } from "../currency/format";
+import { moneyShort } from "../currency/format";
 import { seesEverything } from "../analytics/scope";
 import type { Workspace } from "../analytics/dashboard";
 import type { Challan } from "../orders/fulfilment";
@@ -100,7 +100,7 @@ export function buildTimeline(ws: Workspace, sellerState: string): ActivityEvent
       ts: order.createdAt ?? 0,
       kind: "order",
       title: `Order ${order.number} confirmed`,
-      detail: [order.billName, inrShort(computeDocument(order, sellerState).grand)].filter(Boolean).join(" · "),
+      detail: [order.billName, moneyShort(computeDocument(order, sellerState).grand, order.currency)].filter(Boolean).join(" · "),
       status: order.stage,
       ownerId: order.ownerId,
       customerId: order.customerId,

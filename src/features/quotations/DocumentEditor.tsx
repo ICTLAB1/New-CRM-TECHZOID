@@ -24,7 +24,7 @@ import { CURRENCIES } from "../../domain/currency/currencies";
 import { TAX_TYPES } from "../../domain/tax/types";
 import { STATE_NAMES } from "../../domain/geo/states";
 import type { CatalogProduct } from "../../domain/catalog/types";
-import { inrList } from "../../domain/currency/format";
+import { moneyList } from "../../domain/currency/format";
 
 /** A4 is 210mm; at 96dpi that is this many CSS pixels. */
 const A4_PX = (210 / 25.4) * 96;
@@ -99,6 +99,9 @@ export function DocumentEditor({
   /* The accounts to choose from, and which one this document would use if
      nobody chooses — shown in the hint so the automatic answer is visible
      rather than something to be discovered on the PDF. */
+  /* The catalog is priced in the company's own currency — a product's
+     list price does not change because this quotation is in dollars. */
+  const baseCurrency = String(settings["defaultCurrency"] ?? "INR");
   const bankAccounts = readAccounts(settings);
   const autoAccount = pickBankAccount(bankAccounts, "", doc.currency);
 
@@ -135,7 +138,7 @@ export function DocumentEditor({
      reaches, since a shortcut that skipped it would make it meaningless. */
   const save = useConfirmedAction({
     title: `Save ${doc.number}?`,
-    body: `${totals.rows.length} line${totals.rows.length === 1 ? "" : "s"} · ${inrList(totals.grand)} grand total.`,
+    body: `${totals.rows.length} line${totals.rows.length === 1 ? "" : "s"} · ${moneyList(totals.grand, doc.currency)} grand total.`,
     confirmLabel: "Save",
     onConfirm: () => onSave(doc),
     enabled: askBeforeSave(settings),
@@ -448,7 +451,7 @@ export function DocumentEditor({
             <Button tone="quiet" onClick={onClose}>Cancel</Button>
             <span className="grow" />
             <span className="field-hint">
-              {totals.rows.length} line{totals.rows.length === 1 ? "" : "s"} · {inrList(totals.grand)} grand total
+              {totals.rows.length} line{totals.rows.length === 1 ? "" : "s"} · {moneyList(totals.grand, doc.currency)} grand total
             </span>
           </div>
 
@@ -510,7 +513,7 @@ export function DocumentEditor({
                 <tr key={p.id}>
                   <td className="strong">{p.name}</td>
                   <td>{p.publisher}</td>
-                  <td className="num">{p.sellPrice ? inrList(p.sellPrice) : "—"}</td>
+                  <td className="num">{p.sellPrice ? moneyList(p.sellPrice, baseCurrency) : "—"}</td>
                   <td><Button size="sm" tone="default" onClick={() => addFromCatalog(p)}>Add</Button></td>
                 </tr>
               ))}

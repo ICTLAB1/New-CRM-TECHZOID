@@ -19,7 +19,7 @@ import { buildDocNumber } from "../../domain/numbering/docNumber";
 import { SEQ_KEY, nextDocSeq, seqKindOf } from "../../data/docNumber";
 import type { CatalogProduct } from "../../domain/catalog/types";
 import { computeDocument } from "../../domain/tax/compute";
-import { inrList } from "../../domain/currency/format";
+import { formatTotals, isMixed, moneyList, totalsByCurrency } from "../../domain/currency/format";
 import { fmtDate, isOverdue } from "../../domain/dates";
 import { receiptStatusLabel, summarizeReceipts } from "../../domain/purchasing/receipts";
 import type { Tone } from "../../components/primitives";
@@ -117,6 +117,19 @@ export function QuotationsScreen({
       return [d.number, d.billName, d.vendorName, d.referenceNo, d.subject].some((v) => (v ?? "").toLowerCase().includes(q));
     });
   }, [documents, query, status, owner]);
+
+  /* Per currency, never one figure. Adding a dollar proforma to a rupee one
+     produces a number that is wrong by the whole of the dollar one, and
+     looks authoritative doing it. */
+  const shownTotals = useMemo(
+    () => totalsByCurrency(
+      shown,
+      (d) => computeDocument(d, sellerState).grand,
+      (d) => d.currency,
+      String(settings["defaultCurrency"] ?? "INR"),
+    ),
+    [shown, sellerState, settings],
+  );
 
   const owners = useMemo(
     () => [...new Set(documents.map((d) => d.ownerId))].filter(Boolean),
@@ -268,7 +281,11 @@ export function QuotationsScreen({
             {owners.map((o) => <option key={o} value={o}>{o}</option>)}
           </Select>
           <span className="grow" />
-          <span className="field-hint">{shown.length} shown</span>
+          <span className="field-hint">
+            {shown.length} shown
+            {shownTotals.length ? " · " + formatTotals(shownTotals) : ""}
+            {isMixed(shownTotals) ? " — kept apart, not added together" : ""}
+          </span>
         </div>
 
         {shown.length === 0 ? (
@@ -311,7 +328,7 @@ export function QuotationsScreen({
                       </td>
                       <td data-label="Status"><Chip tone={STATUS_TONE[live] ?? "neutral"}>{live}</Chip></td>
                       {isPo ? <td data-label="Received"><ReceiptCell doc={d} /></td> : null}
-                      <td data-label="Value" className="num strong">{inrList(totals.grand)}</td>
+                      <td data-label="Value" className="num strong">{moneyList(totals.grand, d.currency)}</td>
                       <td data-actions>
                         <span className="row-tight">
                           <Button size="sm" tone="quiet" onClick={() => setEditing(d)}>Edit</Button>

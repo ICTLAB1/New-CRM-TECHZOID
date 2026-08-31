@@ -7,7 +7,7 @@ import { useToast } from "../../components/Toast";
 import { computeDocument } from "../../domain/tax/compute";
 import { computePaymentInfo, PAYMENT_METHODS } from "../../domain/payments/ledger";
 import { AGE_BUCKETS, buildReceivables, type AgeBucketId } from "../../domain/payments/receivables";
-import { inrList } from "../../domain/currency/format";
+import { formatTotals, isMixed, moneyList, totalsByCurrency } from "../../domain/currency/format";
 import { fmtDate, TODAY } from "../../domain/dates";
 import type { SalesDocument } from "../../domain/documents/create";
 import type { Tone } from "../../components/primitives";
@@ -70,7 +70,20 @@ export function ReceivablesScreen({ invoices, users, currentUser, settings, onCh
     });
   }, [report, bucket, owner, query]);
 
-  const shownTotal = shown.reduce((a, r) => a + r.outstanding, 0);
+  /* PER CURRENCY, NOT ONE FIGURE. An outstanding balance in dollars and one
+     in rupees are two different debts; adding them produced a total that
+     was wrong by the whole of the foreign one and looked authoritative
+     doing it. No conversion here on purpose — that needs a rate source and
+     a decision about which rate, and a made-up rate is worse than two
+     honest numbers. */
+  const baseCurrency = String(settings?.["defaultCurrency"] ?? "INR");
+  const totalsOf = (rows: typeof shown) =>
+    totalsByCurrency(rows, (r) => r.outstanding, (r) => r.invoice.currency, baseCurrency);
+
+  const shownTotals = totalsOf(shown);
+  const outstandingTotals = totalsOf(report.open);
+  const overdueTotals = totalsOf(report.open.filter((r) => r.daysOverdue > 0));
+  const bucketTotals = (bucket: string) => totalsOf(report.open.filter((r) => r.bucket === bucket));
 
   const recordPayment = (invoice: SalesDocument, entry: { amount: number; date: string; method: string; reference: string }) => {
     const next = invoices.map((i) =>
@@ -95,7 +108,7 @@ export function ReceivablesScreen({ invoices, users, currentUser, settings, onCh
         title="Receivables"
         sub={
           report.totalOutstanding > 0
-            ? `${inrList(report.totalOutstanding)} outstanding, of which ${inrList(report.overdueOutstanding)} is overdue.`
+            ? `${formatTotals(outstandingTotals)} outstanding, of which ${formatTotals(overdueTotals) || "nothing"} is overdue.`
             : "Nothing outstanding. Every issued invoice has been paid."
         }
       />
@@ -105,7 +118,7 @@ export function ReceivablesScreen({ invoices, users, currentUser, settings, onCh
           <StatTile
             key={b.id}
             label={b.label}
-            value={inrList(report.byBucket[b.id])}
+            value={formatTotals(bucketTotals(b.id)) || moneyList(0, baseCurrency)}
             tone={report.byBucket[b.id] > 0 ? TILE_TONE[b.id] : undefined}
             meta={report.open.filter((r) => r.bucket === b.id).length + " invoice(s)"}
             onClick={() => setBucket((cur) => (cur === b.id ? "all" : b.id))}
@@ -130,7 +143,10 @@ export function ReceivablesScreen({ invoices, users, currentUser, settings, onCh
             {users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
           </Select>
           <span className="grow" />
-          <span className="field-hint">{shown.length} shown · {inrList(shownTotal)}</span>
+          <span className="field-hint">
+            {shown.length} shown · {formatTotals(shownTotals)}
+            {isMixed(shownTotals) ? " — kept apart, not added together" : ""}
+          </span>
         </div>
 
         {shown.length === 0 ? (
@@ -175,9 +191,9 @@ export function ReceivablesScreen({ invoices, users, currentUser, settings, onCh
                           {row.daysOverdue > 0 ? `${row.daysOverdue}d overdue` : "Not due"}
                         </Chip>
                       </td>
-                      <td data-label="Invoiced" className="num muted">{inrList(row.grand)}</td>
-                      <td data-label="Paid" className="num muted">{row.amountPaid > 0 ? inrList(row.amountPaid) : "—"}</td>
-                      <td data-label="Outstanding" className="num strong">{inrList(row.outstanding)}</td>
+                      <td data-label="Invoiced" className="num muted">{moneyList(row.grand, row.invoice.currency)}</td>
+                      <td data-label="Paid" className="num muted">{row.amountPaid > 0 ? moneyList(row.amountPaid, row.invoice.currency) : "—"}</td>
+                      <td data-label="Outstanding" className="num strong">{moneyList(row.outstanding, row.invoice.currency)}</td>
                       <td data-label="Owner" className="muted">{nameOf.get(row.invoice.ownerId ?? "") ?? "—"}</td>
                       <td data-actions>
                         <Button size="sm" tone="primary" onClick={() => setPaying(row.invoice as SalesDocument)}>
@@ -240,14 +256,14 @@ function RecordPayment({
 
   const save = () => {
     onSave({ amount: value, date, method, reference: reference.trim() });
-    toast(`Payment of ${inrList(value)} recorded against ${invoice.number}`, "good");
+    toast(`Payment of ${moneyList(value, invoice.currency)} recorded against ${invoice.number}`, "good");
   };
 
   return (
     <Modal
       open={open}
       title={`Record a payment — ${invoice.number}`}
-      description={`${invoice.billName || "This customer"} owes ${inrList(outstanding)} on this invoice.`}
+      description={`${invoice.billName || "This customer"} owes ${moneyList(outstanding, invoice.currency)} on this invoice.`}
       unsavedChanges={value > 0}
       onClose={onClose}
       footer={
@@ -264,7 +280,7 @@ function RecordPayment({
             /* A warning, not a block: an overpayment is a real thing that
                happens, and refusing to record it would leave the ledger
                disagreeing with the bank. */
-            hint={over ? `That is more than the ${inrList(outstanding)} outstanding.` : undefined}
+            hint={over ? `That is more than the ${moneyList(outstanding, invoice.currency)} outstanding.` : undefined}
           >
             <Input numeric value={amount} invalid={over} onChange={(e) => setAmount(e.target.value)} />
           </Field>

@@ -8,7 +8,7 @@ import { blankCustomer, customerLabel, type Customer } from "../../domain/custom
 import { findDuplicate } from "../../domain/customers/duplicates";
 import { cascadeReassign, type Workspace } from "../../domain/customers/cascade";
 import { STAGES, stageOf } from "../../domain/pipeline/stages";
-import { inrList } from "../../domain/currency/format";
+import { moneyList } from "../../domain/currency/format";
 import { fmtDate, isOverdue } from "../../domain/dates";
 import { CustomerSheet } from "./CustomerSheet";
 import { nextCustomerCode } from "../../data/customerCode";
@@ -192,7 +192,7 @@ export function CustomersScreen({ customers, workspace, users, customFields, cur
                       <td data-label="Follow-up" className={overdue ? "" : "muted"} style={overdue ? { color: "var(--warn)" } : undefined}>
                         {fmtDate(c.nextFollowUp)}
                       </td>
-                      <td data-label="Value" className="num strong">{Number(c.value) > 0 ? inrList(c.value) : "—"}</td>
+                      <td data-label="Value" className="num strong">{Number(c.value) > 0 ? moneyList(c.value, c.currency) : "—"}</td>
                     </tr>
                   );
                 })}

@@ -100,6 +100,10 @@ export interface AttentionRow {
   /** Sorted by this: bigger is more urgent. */
   urgency: number;
   value?: number;
+  /** The currency `value` is in. A proforma in dollars and a deal in rupees
+   *  sit in the same list, and a row that shows the wrong symbol is telling
+   *  somebody the wrong thing about money they are chasing. */
+  currency?: string;
   tone: "bad" | "warn";
   /** Where clicking this row should go. */
   view: string;
@@ -125,7 +129,7 @@ export function needsAttention(ws: Workspace, sellerState: string, now: Date = n
       kind: "overdue-proforma", id: pf.id,
       title: `${pf.number} — ${pf.billName}`,
       detail: `${daysLate} day${daysLate === 1 ? "" : "s"} past due · ${info.pct}% collected`,
-      urgency: 1000 + daysLate, value: info.outstanding, tone: "bad", view: "proformas",
+      urgency: 1000 + daysLate, value: info.outstanding, currency: pf.currency, tone: "bad", view: "proformas",
     });
   }
 
@@ -137,7 +141,7 @@ export function needsAttention(ws: Workspace, sellerState: string, now: Date = n
       kind: "follow-up", id: c.id,
       title: c.company ?? "Untitled customer",
       detail: daysLate === 0 ? "Follow-up due today" : `Follow-up ${daysLate} day${daysLate === 1 ? "" : "s"} overdue`,
-      urgency: 500 + daysLate, value: Number(c.value) || 0,
+      urgency: 500 + daysLate, value: Number(c.value) || 0, currency: c.currency,
       tone: daysLate > 0 ? "bad" : "warn", view: "customers",
     });
   }
@@ -149,7 +153,7 @@ export function needsAttention(ws: Workspace, sellerState: string, now: Date = n
       kind: "stale-quotation", id: q.id,
       title: `${q.number} — ${q.billName}`,
       detail: `Sent, past validity by ${daysLate} day${daysLate === 1 ? "" : "s"}`,
-      urgency: 300 + daysLate, value: grandOf(q, sellerState), tone: "warn", view: "quotations",
+      urgency: 300 + daysLate, value: grandOf(q, sellerState), currency: q.currency, tone: "warn", view: "quotations",
     });
   }
 
