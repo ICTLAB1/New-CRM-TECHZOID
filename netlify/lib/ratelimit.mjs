@@ -31,6 +31,9 @@ export const LIMITS = {
      worth stopping is somebody working through guessed tokens. Generous
      enough that a customer refreshing a page and opening three documents
      never meets it. */
+  /* Four outbound DNS lookups per call, so a settings page refreshing in a
+     loop must not become a resolver hammer. */
+  "domain-health": { limit: 60, windowSeconds: 3600 },
   "portal": { limit: 60, windowSeconds: 600 },
   "portal-respond": { limit: 10, windowSeconds: 600 },
   /* Each one is a billed call to a government register. A salesperson

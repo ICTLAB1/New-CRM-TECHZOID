@@ -587,3 +587,79 @@ describe("Microsoft Graph scopes", () => {
     expect(/const SCOPES = "([^"]+)"/.exec(src)?.[1]).toContain("Mail.Read");
   });
 });
+
+describe("reading DNS answers", () => {
+  /* Fixtures are the exact shapes Cloudflare and Google return. The live
+     lookup could not be exercised from the build environment — that host is
+     blocked by egress policy — so the PARSING is pinned instead, which is
+     where the bugs actually live. */
+
+  it("joins a long TXT record with nothing between the chunks", async () => {
+    const { unquoteTxt } = await import("./dns.mjs");
+    /* A record over 255 bytes arrives split. Joining with a space — the
+       obvious thing — corrupts exactly the records this feature reads. */
+    expect(unquoteTxt('"v=spf1 include:spf.protection.outlook.com " "include:sendgrid.net -all"'))
+      .toBe("v=spf1 include:spf.protection.outlook.com include:sendgrid.net -all");
+  });
+
+  it("unwraps an ordinary quoted TXT record", async () => {
+    const { unquoteTxt } = await import("./dns.mjs");
+    expect(unquoteTxt('"v=DMARC1; p=reject; rua=mailto:d@techzoid.in"'))
+      .toBe("v=DMARC1; p=reject; rua=mailto:d@techzoid.in");
+    expect(unquoteTxt("v=spf1 -all")).toBe("v=spf1 -all");
+    expect(unquoteTxt(null)).toBe("");
+  });
+
+  it("strips the priority and trailing dot from an MX answer", async () => {
+    const { mxHost } = await import("./dns.mjs");
+    expect(mxHost("10 techzoid-in.mail.protection.outlook.com."))
+      .toBe("techzoid-in.mail.protection.outlook.com");
+    expect(mxHost("0 .")).toBe("");
+  });
+
+  it("strips the trailing dot from a DKIM CNAME, and keeps null as null", async () => {
+    const { cnameTarget } = await import("./dns.mjs");
+    expect(cnameTarget("selector1-techzoid-in._domainkey.techzoid.onmicrosoft.com."))
+      .toBe("selector1-techzoid-in._domainkey.techzoid.onmicrosoft.com");
+    expect(cnameTarget(null)).toBeNull();
+    expect(cnameTarget(undefined)).toBeNull();
+  });
+
+  it("only accepts things that look like domains", async () => {
+    const { DOMAIN_RE } = await import("./dns.mjs");
+    for (const good of ["techzoid.in", "techzoid.co.in", "mail-1.techzoid.ae"]) {
+      expect(DOMAIN_RE.test(good), good).toBe(true);
+    }
+    for (const bad of ["techzoid", "-techzoid.in", "techzoid..in", "http://techzoid.in", "a b.in", ""]) {
+      expect(DOMAIN_RE.test(bad), bad).toBe(false);
+    }
+  });
+
+  /* A missing DKIM selector is an ANSWER — nothing published — not a fault.
+     Returning [] rather than throwing is what lets the grader say "not
+     signed" instead of the page showing an error. */
+  it("treats no records as an empty answer, not an error", async () => {
+    const { resolve } = await import("./dns.mjs");
+    const fetchStub = async () => ({ ok: true, json: async () => ({ Status: 3 }) });
+    await expect(resolve("nothing.here", "CNAME", fetchStub)).resolves.toEqual([]);
+  });
+
+  it("falls back to the second resolver when the first is unreachable", async () => {
+    const { resolve, RESOLVERS } = await import("./dns.mjs");
+    const seen = [];
+    const fetchStub = async (url) => {
+      seen.push(url);
+      if (url.startsWith(RESOLVERS[0])) throw new Error("network down");
+      return { ok: true, json: async () => ({ Answer: [{ data: '"v=spf1 -all"' }] }) };
+    };
+    const answers = await resolve("techzoid.in", "TXT", fetchStub);
+    expect(answers).toHaveLength(1);
+    expect(seen).toHaveLength(2);
+  });
+
+  it("throws only when every resolver fails", async () => {
+    const { resolve } = await import("./dns.mjs");
+    const fetchStub = async () => { throw new Error("no network"); };
+    await expect(resolve("techzoid.in", "TXT", fetchStub)).rejects.toThrow();
+  });
+});
