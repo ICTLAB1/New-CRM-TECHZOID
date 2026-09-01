@@ -144,12 +144,29 @@ describe("stage changes", () => {
     expect(out.wonAt).toBe(1000);
   });
 
-  it("never re-stamps wonAt", () => {
-    // Trailing revenue reads this timestamp; re-winning must not move the
-    // deal into the current month.
+  it("never re-stamps wonAt while the deal stays won", () => {
+    // Trailing revenue reads this timestamp; marking an already-won deal Won
+    // again must not move it into the current month.
     const won = applyStage(cust(), "won", 1000);
-    const again = applyStage(applyStage(won, "negotiation", 2000), "won", 3000);
-    expect(again.wonAt).toBe(1000);
+    expect(applyStage(won, "won", 3000).wonAt).toBe(1000);
+  });
+
+  it("keeps the original date through a re-quote", () => {
+    // A new quotation to a won customer puts them back on the board without
+    // rewriting history — January's sale still happened in January.
+    const won = applyStage(cust(), "won", 1000);
+    const requoted = applyStage(won, "negotiation", 2000, { requote: true });
+    expect(applyStage(requoted, "won", 3000).wonAt).toBe(1000);
+  });
+
+  it("but a win taken back by hand and won again is dated the second time", () => {
+    // Dragging a won deal back to an open stage says the win was wrong. What
+    // follows is a NEW sale, and dating it to the mistake would put revenue
+    // in a month nothing happened in.
+    const won = applyStage(cust(), "won", 1000);
+    const corrected = applyStage(won, "negotiation", 2000);
+    expect(corrected.wonAt).toBeUndefined();
+    expect(applyStage(corrected, "won", 3000).wonAt).toBe(3000);
   });
 
   it("asks for a reason only when moving to Lost", () => {

@@ -123,12 +123,21 @@ export function Workbench({
   /* One place a document can move a customer along the board. It only ever
      moves them forward — see src/domain/pipeline/advance.ts, which decides
      whether there is a move at all. */
-  const advanceCustomer = (customerId: string, stage: string) => {
+  const advanceCustomer = (customerId: string, stage: string, requote = false) => {
     handleCustomersChange(
       /* applyStage, not a bare field write: it is the one place that knows
          what else a stage carries — when a deal was won, what it was worth
-         at the time, when it was last lost. */
-      customers.map((c) => (c.id === customerId ? { ...applyStage(c, stage as StageId), updatedAt: Date.now() } : c)),
+         at the time, when it was last lost.
+
+         `requote` matters here: a document moving a WON customer back onto
+         the board is the one case where the win survives the move. A person
+         dragging the same card by hand is correcting a mistake, and there
+         the win must not survive. */
+      customers.map((c) => (
+        c.id === customerId
+          ? { ...applyStage(c, stage as StageId, Date.now(), { requote }), updatedAt: Date.now() }
+          : c
+      )),
     );
   };
 

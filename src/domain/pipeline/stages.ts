@@ -59,19 +59,49 @@ export interface LostDetail {
  * changes `value` to the new opportunity's size, and without a snapshot
  * last quarter's revenue would quietly change with it.
  *
- * NEITHER IS EVER CLEARED, including on the way to Lost — the record of
- * what happened stays. Whether it still counts as revenue is a separate
- * question, and countsAsWon() below is the one that answers it.
+ * THE WAY BACK OUT. The first version of this said the stamps were never
+ * cleared, and that was wrong in a way that put money on a dashboard that
+ * nobody had earned. Marking a deal Won is one click, and getting it wrong is
+ * ordinary — a salesperson marks a quotation Won when it goes out, realises
+ * the order has not actually landed, and drags it back to Quoted. The stamps
+ * stayed, countsAsWon() reads them, and the deal counted as revenue for ever
+ * with no way to take it back. Two deals like that were 92% of one month's
+ * reported won revenue on a live workspace, neither with so much as a
+ * quotation behind it.
+ *
+ * So a move from Won BACK INTO AN OPEN STAGE clears them: that is somebody
+ * correcting themselves, and a correction has to be possible.
+ *
+ * The exception is `requote`, set only by the quotation screen when a NEW
+ * quotation goes to a customer who had genuinely been won before. That is the
+ * case the snapshot exists for — last quarter's revenue must not change
+ * because this quarter's opportunity opened — and it is distinguishable
+ * because a document was actually raised.
+ *
+ * On the way to LOST the stamps still stay. countsAsWon() already refuses a
+ * lost deal, so nothing is over-counted, and a deal that was won and later
+ * cancelled is a thing that happened.
  */
+export interface StageChange {
+  /** A new quotation to a previously-won customer — the one move off Won
+   *  that is not a correction. Set by the quotation screen, never by hand. */
+  requote?: boolean;
+}
+
 export function applyStage<T extends { stage?: string; value?: number | string; wonAt?: number; wonValue?: number; lostAt?: number }>(
   customer: T,
   stage: StageId,
   now: number = Date.now(),
+  change: StageChange = {},
 ): T {
+  /* Undoing a win: off Won, back onto the open board, and not because a
+     quotation put them there. */
+  const undoingWin = !!customer.wonAt && stage !== "won" && isOpenStage(stage) && !change.requote;
+
   return {
     ...customer,
     stage,
-    wonAt: stage === "won" ? (customer.wonAt || now) : customer.wonAt,
+    wonAt: stage === "won" ? (customer.wonAt || now) : (undoingWin ? undefined : customer.wonAt),
     /* NEVER SNAPSHOT A ZERO. `??` falls through on null and undefined but
        not on 0, so a deal marked Won before anybody typed a value got
        wonValue: 0 and wonAmount() then returned 0 for ever — the value
@@ -79,7 +109,9 @@ export function applyStage<T extends { stage?: string; value?: number | string; 
        and no revenue at all was what that looked like on the incentives
        screen. Leaving it unset lets the live value through until there is
        something real to freeze. */
-    wonValue: stage === "won" ? (customer.wonValue || (Number(customer.value) || undefined)) : customer.wonValue,
+    wonValue: stage === "won"
+      ? (customer.wonValue || (Number(customer.value) || undefined))
+      : (undoingWin ? undefined : customer.wonValue),
     /* Re-stamped on every loss, unlike the win: this one dates the CURRENT
        conclusion, and a quotation raised after it is what tells the pipeline
        a lost customer has come back. */

@@ -48,7 +48,7 @@ export interface QuotationsScreenProps {
   onChange: (documents: SalesDocument[], settings: Record<string, unknown>) => void;
   /** Moves the customer along the pipeline board when a quotation reaches
    *  them. Absent on the screens where that would make no sense. */
-  onCustomerStage?: (customerId: string, stage: string) => void;
+  onCustomerStage?: (customerId: string, stage: string, requote?: boolean) => void;
   /** Catches this browser up with a counter the database has just advanced.
    *  Local only — it writes nothing back, so it works for a salesperson,
    *  who may not edit settings. */
@@ -187,7 +187,11 @@ export function QuotationsScreen({
         quotedAt: doc.createdAt,
       });
       if (stage) {
-        onCustomerStage(doc.customerId, stage);
+        /* A quotation raised against a customer who was already concluded is
+           a genuine re-engagement, and their earlier win stays on the books.
+           Anything else is a first-time move up the board, where there is no
+           win to keep either way. */
+        onCustomerStage(doc.customerId, stage, isConcluded(customer?.stage));
         if (isConcluded(customer?.stage)) moved = customer ?? null;
       }
     }

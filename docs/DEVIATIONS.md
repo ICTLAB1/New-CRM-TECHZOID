@@ -1495,3 +1495,43 @@ state that sum back to somebody as fact. It gets the per-currency figures now.
 *Renewals at risk* tiles, and the six-month revenue chart. They read from
 documents and subscriptions rather than `customer.value`, so each needs its
 own pass.
+
+## 34. A win could not be taken back
+
+`applyStage` used to say, in a comment, that `wonAt` and `wonValue` were
+"NEVER CLEARED". That was a bug with a paper trail: it meant **there was no
+way to un-win a deal.**
+
+Marking a deal Won is one click and getting it wrong is ordinary — a
+salesperson marks it when the quotation goes out, the order does not land,
+and they drag the card back to Quoted. The stamps stayed, `countsAsWon()`
+reads the stamps rather than the stage, and the deal counted as revenue for
+ever.
+
+Found in live data, not in review. Two deals on one workspace, both marked
+Won on the same day, both sitting back in Quoted, **neither with a
+quotation, proforma, invoice or order behind it** — nothing had ever been
+raised. Between them they were 92% of that month's reported won revenue.
+
+The rule now:
+
+- **Off Won, back onto the open board, by hand → the stamps are cleared.**
+  That is somebody correcting themselves, and a correction has to be
+  possible.
+- **Off Won because a NEW quotation was raised → the stamps stay.** This is
+  the case the snapshot was built for: last quarter's revenue must not change
+  because this quarter's opportunity opened. The quotation screen sets
+  `requote`, and it is the only caller that does.
+- **On to Lost → the stamps stay.** `countsAsWon()` already refuses a lost
+  deal, so nothing is over-counted, and a deal won and later cancelled is a
+  thing that happened.
+
+A consequence worth stating: a deal taken back and later won for real is
+dated the **second** time. The old code kept the first date, which would put
+revenue in a month nothing happened in.
+
+**Not fixed, because it is a decision rather than a defect:** the CRM lets a
+deal be Won with no order, proforma or invoice behind it. On the workspace
+above, 9 of 15 deals counted as won had no document of any kind, and only 8%
+of reported won revenue was backed by an actual order. Whether "Won" should
+require one is a question about how the business works, not about the code.

@@ -130,11 +130,16 @@ describe("what a stage change carries with it", () => {
     expect(again.wonValue).toBe(400000);
   });
 
-  it("keeps the win when the customer moves on", () => {
+  it("keeps the win when a new quotation moves the customer on", () => {
     // Quoting an existing client again moves them off Won. What they bought
     // in January still happened in January.
+    //
+    // `requote` is what says this move came from a document rather than from
+    // somebody dragging a card. Without it the same move is read as a
+    // correction and the win is taken back — see "taking back a win that
+    // never happened" below, and the two together are the whole rule.
     const won = applyStage(deal({ stage: "quoted", value: 400000 }), "won", day(5));
-    const requoted = applyStage({ ...won, value: 900000 }, "quoted", day(20));
+    const requoted = applyStage({ ...won, value: 900000 }, "quoted", day(20), { requote: true });
     expect(requoted.wonAt).toBe(day(5));
     expect(requoted.wonValue).toBe(400000);
     expect(countsAsWon(requoted)).toBe(true);
@@ -200,5 +205,67 @@ describe("a deal won before anybody typed its value", () => {
 
   it("treats an empty string the same as no value", () => {
     expect(applyStage(deal({ stage: "quoted", value: "" }), "won", day(5)).wonValue).toBeUndefined();
+  });
+});
+
+describe("taking back a win that never happened", () => {
+  /* FROM A LIVE WORKSPACE. Two deals were marked Won, then moved back to
+     Quoted when the orders did not land. Neither had a quotation, a proforma,
+     an invoice or an order behind it — nothing had been raised at all — and
+     between them they were 92% of the month's reported won revenue, with no
+     way to take it back. `wonAt` and `wonValue` were never cleared. */
+  const wonByMistake = () =>
+    applyStage(deal({ stage: "quoted", value: 663750 }), "won", day(1));
+
+  it("a deal marked Won carries the stamps, as before", () => {
+    const won = wonByMistake();
+    expect(won.wonAt).toBe(day(1));
+    expect(won.wonValue).toBe(663750);
+    expect(countsAsWon(won)).toBe(true);
+  });
+
+  it("dragging it back to an open stage takes the revenue with it", () => {
+    const corrected = applyStage(wonByMistake(), "quoted", day(2));
+    expect(corrected.wonAt).toBeUndefined();
+    expect(corrected.wonValue).toBeUndefined();
+    expect(countsAsWon(corrected)).toBe(false);
+    expect(wonAmount(corrected)).toBe(663750 * 0 + Number(corrected.value));
+  });
+
+  it("works from any open stage, not just the one it came from", () => {
+    for (const stage of ["lead", "contacted", "qualified", "negotiation"] as const) {
+      expect(applyStage(wonByMistake(), stage, day(2)).wonAt).toBeUndefined();
+    }
+  });
+
+  /* THE CASE THIS MUST NOT BREAK — the reason the snapshot exists at all.
+     Quoting a customer who was genuinely won before moves them back onto the
+     board, and last quarter's revenue must not vanish because this quarter's
+     opportunity opened. The quotation screen sets `requote`. */
+  it("a NEW quotation to a previously-won customer keeps the win", () => {
+    const requoted = applyStage(wonByMistake(), "quoted", day(30), { requote: true });
+    expect(requoted.wonAt).toBe(day(1));
+    expect(requoted.wonValue).toBe(663750);
+    expect(countsAsWon(requoted)).toBe(true);
+  });
+
+  /* Marking a won deal Lost is not a correction — it is a thing that
+     happened, and countsAsWon already refuses it. The history stays. */
+  it("marking it Lost keeps the record but stops counting it", () => {
+    const lost = applyStage(wonByMistake(), "lost", day(40));
+    expect(lost.wonAt).toBe(day(1));
+    expect(countsAsWon(lost)).toBe(false);
+  });
+
+  it("re-winning after a correction stamps the new date, not the old one", () => {
+    const corrected = applyStage(wonByMistake(), "quoted", day(2));
+    const wonAgain = applyStage(corrected, "won", day(50));
+    expect(wonAgain.wonAt).toBe(day(50));
+  });
+
+  it("leaves a deal that was never won alone", () => {
+    const plain = applyStage(deal({ stage: "lead", value: 5000 }), "qualified", day(2));
+    expect(plain.wonAt).toBeUndefined();
+    expect(plain.stage).toBe("qualified");
   });
 });
