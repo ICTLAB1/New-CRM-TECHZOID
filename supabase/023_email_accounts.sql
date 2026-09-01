@@ -160,7 +160,16 @@ create policy "email_accounts_manage_own" on public.email_accounts for all
 -- Every column except the secret. `security_invoker` makes the view run as
 -- the caller, so the policies above still apply — without it a view is a
 -- hole straight through RLS.
-create or replace view public.email_accounts_safe
+-- DROP BEFORE CREATE, and the dependent function before the view.
+--
+-- `create or replace view` cannot REMOVE a column, and migration 024
+-- replaces this view with an extra one (is_mine). So re-running 023 after
+-- 024 failed with "cannot drop columns from view" — which meant
+-- RUN_ALL_PENDING.sql, documented as always safe to re-run, failed on its
+-- second run. Found by running the whole runbook twice rather than once.
+drop function if exists public.my_sending_accounts();
+drop view if exists public.email_accounts_safe;
+create view public.email_accounts_safe
 with (security_invoker = true) as
 select a.id, a.domain_id, a.email, a.display_name, a.provider,
        a.connected_by, a.status, a.status_detail, a.last_ok_at,

@@ -1,0 +1,35 @@
+-- 025 — one more function anon should never have been able to reach.
+--
+-- NOT A VULNERABILITY, and worth saying so plainly rather than dressing it
+-- up: regenerate_webhook_secret() guards itself with `if not is_admin()
+-- then raise`, and an anonymous caller has no auth.uid(), so is_admin() is
+-- false and the call is refused. Verified by calling it as anon.
+--
+-- It is still reachable, and that is the thing 019 exists to stop. A guard
+-- inside a function is one edit away from being weakened; a missing EXECUTE
+-- grant is not. Defence in depth costs one line.
+--
+-- THE SAME OLD TRAP: `revoke ... from public` does NOT remove this. PUBLIC
+-- is a pseudo-role; Supabase grants EXECUTE on every new function to the
+-- real role `anon` separately through alter default privileges. It has to be
+-- revoked from anon BY NAME. That mistake has now been made three times in
+-- this repo — in 019, in 021, and here — which is why it is written out
+-- again rather than assumed remembered.
+--
+-- DELIBERATELY NOT TOUCHED: is_privileged() and is_admin() stay callable by
+-- anon. Row-level-security policies call them while evaluating an anonymous
+-- request — that is how they resolve to false and match no rows. Revoking
+-- them makes an anonymous request ERROR instead of quietly seeing nothing,
+-- which would break the public registration form and the customer portal.
+-- Proven the hard way while testing the Azure bootstrap.
+--
+-- SCHEMA CHANGE: none. One grant removed. Safe to re-run.
+
+-- THE SIGNATURE MATTERS. 005 created this with no arguments and 006
+-- redefined it as (p_kind text). A REVOKE naming the wrong overload does
+-- not error loudly — it fails with "function does not exist", which in a
+-- long migration is one line among many and easy to scroll past. The first
+-- version of this file did exactly that and the sweep still showed the
+-- grant in place afterwards.
+revoke all on function public.regenerate_webhook_secret(text) from public, anon;
+grant execute on function public.regenerate_webhook_secret(text) to authenticated;

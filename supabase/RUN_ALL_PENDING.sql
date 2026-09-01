@@ -1757,7 +1757,16 @@ create policy "email_accounts_manage_own" on public.email_accounts for all
 -- Every column except the secret. `security_invoker` makes the view run as
 -- the caller, so the policies above still apply — without it a view is a
 -- hole straight through RLS.
-create or replace view public.email_accounts_safe
+-- DROP BEFORE CREATE, and the dependent function before the view.
+--
+-- `create or replace view` cannot REMOVE a column, and migration 024
+-- replaces this view with an extra one (is_mine). So re-running 023 after
+-- 024 failed with "cannot drop columns from view" — which meant
+-- RUN_ALL_PENDING.sql, documented as always safe to re-run, failed on its
+-- second run. Found by running the whole runbook twice rather than once.
+drop function if exists public.my_sending_accounts();
+drop view if exists public.email_accounts_safe;
+create view public.email_accounts_safe
 with (security_invoker = true) as
 select a.id, a.domain_id, a.email, a.display_name, a.provider,
        a.connected_by, a.status, a.status_detail, a.last_ok_at,
@@ -1901,6 +1910,48 @@ $$;
 
 revoke all on function public.my_sending_accounts() from public, anon;
 grant execute on function public.my_sending_accounts() to authenticated;
+
+
+-- ────────────────────────────────────────────────────────────────────
+-- 025_tighten_anon_execute.sql
+-- One more function anon should never have been able to reach.
+-- ────────────────────────────────────────────────────────────────────
+
+-- 025 — one more function anon should never have been able to reach.
+--
+-- NOT A VULNERABILITY, and worth saying so plainly rather than dressing it
+-- up: regenerate_webhook_secret() guards itself with `if not is_admin()
+-- then raise`, and an anonymous caller has no auth.uid(), so is_admin() is
+-- false and the call is refused. Verified by calling it as anon.
+--
+-- It is still reachable, and that is the thing 019 exists to stop. A guard
+-- inside a function is one edit away from being weakened; a missing EXECUTE
+-- grant is not. Defence in depth costs one line.
+--
+-- THE SAME OLD TRAP: `revoke ... from public` does NOT remove this. PUBLIC
+-- is a pseudo-role; Supabase grants EXECUTE on every new function to the
+-- real role `anon` separately through alter default privileges. It has to be
+-- revoked from anon BY NAME. That mistake has now been made three times in
+-- this repo — in 019, in 021, and here — which is why it is written out
+-- again rather than assumed remembered.
+--
+-- DELIBERATELY NOT TOUCHED: is_privileged() and is_admin() stay callable by
+-- anon. Row-level-security policies call them while evaluating an anonymous
+-- request — that is how they resolve to false and match no rows. Revoking
+-- them makes an anonymous request ERROR instead of quietly seeing nothing,
+-- which would break the public registration form and the customer portal.
+-- Proven the hard way while testing the Azure bootstrap.
+--
+-- SCHEMA CHANGE: none. One grant removed. Safe to re-run.
+
+-- THE SIGNATURE MATTERS. 005 created this with no arguments and 006
+-- redefined it as (p_kind text). A REVOKE naming the wrong overload does
+-- not error loudly — it fails with "function does not exist", which in a
+-- long migration is one line among many and easy to scroll past. The first
+-- version of this file did exactly that and the sweep still showed the
+-- grant in place afterwards.
+revoke all on function public.regenerate_webhook_secret(text) from public, anon;
+grant execute on function public.regenerate_webhook_secret(text) to authenticated;
 
 
 -- ════════════════════════════════════════════════════════════════════
