@@ -372,7 +372,11 @@ describe("a deal counted as won with nothing sold", () => {
   it("goes quiet once an order exists", () => {
     expect(rowsFor({
       customers: [customer({ id: "s", company: "Siddhi", stage: "won", wonAt: at("2026-08-08"), wonValue: 83898 })],
-      orders: [{ id: "o1", customerId: "s" }],
+      /* Only the customer link matters to the backing check, so the rest of
+         a SalesOrder is not spelled out. Cast rather than left implicit —
+         `tsc -b` type-checks test files and a bare literal fails the BUILD,
+         not just the editor. */
+      orders: [{ id: "o1", customerId: "s" } as unknown as SalesOrder],
     })).toEqual([]);
   });
 
