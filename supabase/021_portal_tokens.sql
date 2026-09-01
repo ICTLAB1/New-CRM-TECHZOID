@@ -77,7 +77,17 @@ as $$
   );
 $$;
 
-revoke all on function public.may_manage_customer(text) from public;
+-- REVOKED FROM `anon` BY NAME, and that is not the same thing as revoking
+-- from PUBLIC. PUBLIC is a pseudo-role; Supabase separately grants EXECUTE on
+-- every new function to the real roles anon/authenticated/service_role via
+-- `alter default privileges`. Revoking PUBLIC leaves that grant untouched.
+--
+-- This file's first version did exactly that and shipped a security-definer
+-- function an anonymous caller could invoke — the same mistake 019 was
+-- written to close, made one line above a comment about `to authenticated`
+-- not being decoration. Caught by asking the live database what anon could
+-- actually call, rather than by reading the file again.
+revoke all on function public.may_manage_customer(text) from public, anon;
 grant execute on function public.may_manage_customer(text) to authenticated;
 
 -- Note what is absent from all four: any grant to `anon`. `to authenticated`
@@ -133,6 +143,10 @@ begin
   return new;
 end;
 $$;
+
+-- A trigger function needs no EXECUTE grant to fire, so nobody needs to hold
+-- one. Revoked for the same reason as above.
+revoke all on function public.portal_tokens_pin_identity() from public, anon;
 
 drop trigger if exists portal_tokens_pin_identity on public.portal_tokens;
 create trigger portal_tokens_pin_identity
