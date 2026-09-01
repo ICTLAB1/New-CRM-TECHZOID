@@ -5,13 +5,23 @@ import { consume, tooManyMessage } from "../lib/ratelimit.mjs";
 
 /* Scopes each user grants:
      Mail.Send       send mail as themselves
+     Mail.Read       read their own mailbox, to notice a prospect's REPLY
      offline_access  a refresh token, so the CRM can send later
      User.Read       their name and address, to show "Connected as …"
 
-   Deliberately NOT Mail.Read or Mail.ReadWrite. The CRM sends; it has no
-   business reading anyone's inbox, and asking for it would be a much harder
-   consent screen to justify to a customer's IT department. */
-const SCOPES = "openid profile offline_access User.Read Mail.Send";
+   MAIL.READ WAS ADDED FOR ONE PURPOSE and it is worth being precise about
+   it, because it is the permission a customer's IT department will ask
+   about. An outreach sequence that keeps chasing somebody who already
+   replied is the single most damaging thing this module could do, and the
+   only way to know a reply arrived is to look. It is DELEGATED and
+   read-only: the CRM sees the signed-in person's own mailbox, never anyone
+   else's, and never the tenant's.
+
+   Adding it widens the consent screen, so EVERY ALREADY-CONNECTED MAILBOX
+   MUST RECONNECT ONCE. An old refresh token does not silently gain a scope
+   — it keeps working for sending and simply cannot read, so the failure is
+   quiet unless the UI says so. It does. */
+const SCOPES = "openid profile offline_access User.Read Mail.Send Mail.Read";
 
 export async function handler(event) {
   const stop = guard(event);

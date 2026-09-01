@@ -264,11 +264,17 @@ function AzureSetup({ api }: { api: IntegrationsApi }) {
             <div className="step-title">Add the send permission</div>
             <div>
               API permissions → Add a permission → Microsoft Graph → <strong>Delegated permissions</strong>.
-              Tick <code className="mono">Mail.Send</code>, <code className="mono">User.Read</code> and{" "}
-              <code className="mono">offline_access</code>, then Add.
+              Tick <code className="mono">Mail.Send</code>, <code className="mono">Mail.Read</code>,{" "}
+              <code className="mono">User.Read</code> and <code className="mono">offline_access</code>, then Add.
             </div>
             <div className="field-hint">
               Delegated, not Application. The CRM sends as the signed-in person, never as the whole tenant.
+            </div>
+            <div className="field-hint">
+              <strong>Mail.Read</strong> is read-only and is used for one thing: noticing when a
+              prospect replies, so an outreach sequence stops chasing somebody who has already
+              answered. Anyone whose mailbox is already connected must disconnect and reconnect
+              once for it to take effect.
             </div>
           </div>
         </li>

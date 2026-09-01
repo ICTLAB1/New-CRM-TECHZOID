@@ -551,3 +551,39 @@ describe("how long a verification token is held", () => {
     }
   });
 });
+
+describe("Microsoft Graph scopes", () => {
+  /* THE FAILURE THIS PINS. The OAuth start requests one scope string and the
+     mailer refreshes with another. If they drift, the refresh quietly returns
+     a token with FEWER permissions than were granted — sending keeps working,
+     reply detection silently does not, and nothing in any log says why.
+     Reading both files is ugly; a scope mismatch found in production is
+     uglier. */
+  it("are identical in ms-oauth-start and the mailer", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { fileURLToPath } = await import("node:url");
+    const { dirname, join } = await import("node:path");
+    const here = dirname(fileURLToPath(import.meta.url));
+
+    const scopeIn = (file) => {
+      const src = readFileSync(join(here, file), "utf8");
+      const m = /const SCOPES = "([^"]+)"/.exec(src);
+      return m ? m[1].split(/\s+/).sort() : null;
+    };
+
+    const start = scopeIn("../functions/ms-oauth-start.mjs");
+    const mailer = scopeIn("./mailer.mjs");
+    expect(start, "ms-oauth-start.mjs declares no SCOPES").not.toBeNull();
+    expect(mailer, "mailer.mjs declares no SCOPES").not.toBeNull();
+    expect(mailer).toEqual(start);
+  });
+
+  it("include Mail.Read, which reply detection depends on", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { fileURLToPath } = await import("node:url");
+    const { dirname, join } = await import("node:path");
+    const src = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), "../functions/ms-oauth-start.mjs"), "utf8");
+    expect(/const SCOPES = "([^"]+)"/.exec(src)?.[1]).toContain("Mail.Read");
+  });
+});

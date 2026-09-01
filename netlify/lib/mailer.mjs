@@ -12,7 +12,10 @@
  * Returns a plain result. Nothing here knows what an HTTP response is.
  */
 
-const SCOPES = "openid profile offline_access User.Read Mail.Send";
+/* MUST MATCH ms-oauth-start.mjs exactly. A refresh asking for fewer scopes
+   than were granted quietly returns a token that can do less — which is how
+   reply detection would break with nothing in any log to say why. */
+const SCOPES = "openid profile offline_access User.Read Mail.Send Mail.Read";
 
 /** @returns {{ok: true, via: "microsoft"|"resend", from?: string} | {ok: false, error: string, retryable?: boolean}} */
 export async function sendMail({
