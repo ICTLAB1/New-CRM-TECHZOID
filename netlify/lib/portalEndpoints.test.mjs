@@ -1,6 +1,25 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
+ * WHY THIS FILE IS NOT IN netlify/functions/, beside the code it tests.
+ *
+ * Netlify deploys EVERY file in the functions directory as a function, and a
+ * function's name may contain only letters, digits, hyphens and underscores.
+ * `portal.test.mjs` names a function `portal.test`; the dot is illegal, and
+ * Netlify does not skip the file — it fails the entire build:
+ *
+ *     Incorrect function names. Name should consist of only alphanumeric
+ *     characters, hyphen & underscores
+ *
+ * Which is how this test file, added alongside a feature, silently stopped
+ * every deploy of the site for a day. The code was correct, the build was
+ * green locally, and the site simply never updated.
+ *
+ * The guard at the bottom of this file fails if a dotted name ever appears in
+ * that directory again.
+ */
+
+/**
  * The portal endpoints, exercised end to end against a stand-in database.
  *
  * The unit tests beside portalView.mjs prove the redaction. These prove the
@@ -55,11 +74,11 @@ function makeClient() {
   return { from, rpc: () => Promise.resolve({ data: [{ allowed: true, remaining: 9, retry_after_seconds: 0 }], error: null }) };
 }
 
-vi.mock("../lib/auth.mjs", () => ({ adminClient: () => makeClient() }));
+vi.mock("./auth.mjs", () => ({ adminClient: () => makeClient() }));
 
-const { handler: read } = await import("./portal.mjs");
-const { handler: respond } = await import("./portal-respond.mjs");
-const { hashToken } = await import("../lib/portalToken.mjs");
+const { handler: read } = await import("../functions/portal.mjs");
+const { handler: respond } = await import("../functions/portal-respond.mjs");
+const { hashToken } = await import("./portalToken.mjs");
 
 /* A real-shaped token: 43 url-safe characters, as 32 random bytes encode. */
 const TOKEN = "Xk3p_Qa9ZbLm2Rt7Yu4Wv1Nc8Hd5Ge0Jf6Ki3Ll9Ss";
@@ -237,5 +256,30 @@ describe("answering a quotation", () => {
     const res = await post({ token: TOKEN, documentId: "q-sent", answer: "accept" });
     expect(res.statusCode).toBe(403);
     expect(DB.quotes[0].data.status).toBe("Sent");
+  });
+});
+
+
+/* ── the guard ──────────────────────────────────────────────────────── */
+
+import { readdirSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
+
+describe("what may live in netlify/functions", () => {
+  /* Netlify's own rule, copied exactly: letters, digits, hyphen, underscore. */
+  const LEGAL = /^[A-Za-z0-9_-]+$/;
+
+  it("every file there is named so Netlify can deploy it", () => {
+    const dir = join(dirname(fileURLToPath(import.meta.url)), "..", "functions");
+    const illegal = readdirSync(dir)
+      .filter((f) => f.endsWith(".mjs") || f.endsWith(".js"))
+      .filter((f) => !LEGAL.test(f.replace(/\.(mjs|js)$/, "")));
+
+    expect(
+      illegal,
+      "These break the Netlify build outright — every deploy of the whole site "
+      + "fails, not just the function. Test files belong in netlify/lib/.",
+    ).toEqual([]);
   });
 });
