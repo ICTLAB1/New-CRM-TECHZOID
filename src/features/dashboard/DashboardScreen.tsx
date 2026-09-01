@@ -7,7 +7,7 @@ import {
 } from "../../domain/analytics/dashboard";
 import { seesEverything } from "../../domain/analytics/scope";
 import { STAGES } from "../../domain/pipeline/stages";
-import { inrShort, moneyList } from "../../domain/currency/format";
+import { formatTotals, inrShort, moneyList, moneyShort } from "../../domain/currency/format";
 
 /** A bar chart drawn as divs: six months of revenue does not need a
  *  charting library, and one would weigh more than this whole screen. */
@@ -65,8 +65,8 @@ export function DashboardScreen({
 
       <div style={{ marginBottom: "var(--gap-wide)" }}>
         <SummaryBar columns={5}>
-          <StatTile label="Open pipeline" value={inrShort(k.openPipeline)} meta={`${k.openDeals} deal${k.openDeals === 1 ? "" : "s"}`} onClick={() => onNavigate("pipeline")} />
-          <StatTile label="Won this month" value={inrShort(k.wonThisMonth)} meta={`${k.wonThisMonthCount} deal${k.wonThisMonthCount === 1 ? "" : "s"}`} tone="good" onClick={() => onNavigate("pipeline")} />
+          <StatTile label="Open pipeline" value={formatTotals(k.openPipeline, moneyShort) || "—"} meta={`${k.openDeals} deal${k.openDeals === 1 ? "" : "s"}`} onClick={() => onNavigate("pipeline")} />
+          <StatTile label="Won this month" value={formatTotals(k.wonThisMonth, moneyShort) || "—"} meta={`${k.wonThisMonthCount} deal${k.wonThisMonthCount === 1 ? "" : "s"}`} tone="good" onClick={() => onNavigate("pipeline")} />
           <StatTile label="Quotes pending" value={String(k.quotesPending)} meta={k.quotesStale ? `${k.quotesStale} past validity` : "all in date"} tone={k.quotesStale ? "warn" : undefined} onClick={() => onNavigate("quotations")} />
           <StatTile label="Payments due" value={inrShort(k.paymentsDue)} meta={k.paymentsOverdue ? `${k.paymentsOverdue} overdue` : "none overdue"} tone={k.paymentsOverdue ? "bad" : undefined} onClick={() => onNavigate("proformas")} />
           <StatTile label="Renewals ≤30 days" value={String(k.renewalsDue)} meta={`${inrShort(k.renewalsValue)} at risk`} tone={k.renewalsDue ? "warn" : undefined} onClick={() => onNavigate("renewals")} />
@@ -123,7 +123,7 @@ export function DashboardScreen({
               <div key={step.id}>
                 <div className="spread" style={{ marginBottom: 3 }}>
                   <span className="field-hint">{step.label}</span>
-                  <span className="field-hint">{step.count} · {inrShort(step.value)}</span>
+                  <span className="field-hint">{step.count} · {formatTotals(step.totals, moneyShort) || "—"}</span>
                 </div>
                 <Meter pct={(step.count / funnelMax) * 100} />
               </div>
@@ -164,8 +164,22 @@ export function DashboardScreen({
                 {team.map((t) => (
                   <tr key={t.ownerId}>
                     <td className="strong">{t.name}</td>
-                    <td className="num">{inrShort(t.openValue)}</td>
-                    <td className="num strong">{inrShort(t.wonValue)}</td>
+                    {/* Each currency printed in its own symbol, side by side —
+                        never converted, because no rate is stored and an
+                        invented one would be a number somebody plans from. The
+                        deal count sits under it so a person holding three deals
+                        with no value typed in does not read as a person holding
+                        nothing. */}
+                    <td className="num">
+                      <div>{formatTotals(t.openTotals, moneyShort) || "—"}</div>
+                      <div className="field-hint">{t.openDeals} {t.openDeals === 1 ? "deal" : "deals"}</div>
+                    </td>
+                    <td className="num strong">
+                      <div>{formatTotals(t.wonTotals, moneyShort) || "—"}</div>
+                      {t.wonDeals ? (
+                        <div className="field-hint">{t.wonDeals} {t.wonDeals === 1 ? "deal" : "deals"}</div>
+                      ) : null}
+                    </td>
                   </tr>
                 ))}
               </tbody>

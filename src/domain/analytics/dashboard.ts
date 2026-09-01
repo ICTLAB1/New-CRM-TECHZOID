@@ -6,6 +6,7 @@ import { orderFulfilment, type Challan } from "../orders/fulfilment";
 import type { SalesOrder } from "../orders/create";
 import { daysLeft, dueForRenewal, valueAtRisk, type Subscription } from "../subscriptions/expiry";
 import type { Customer } from "../customers/customer";
+import { totalsByCurrency, type CurrencyTotal } from "../currency/format";
 import { countsAsWon, isOpenStage, wonAmount } from "../pipeline/stages";
 import { scopeTo, type Owned } from "./scope";
 import { TODAY } from "../dates";
@@ -50,9 +51,13 @@ const grandOf = (doc: { items?: unknown; taxType?: string | null }, sellerState:
   computeDocument(doc as Parameters<typeof computeDocument>[0], sellerState).grand;
 
 export interface Kpis {
-  openPipeline: number;
+  /* PER CURRENCY, like the team table below them. These two tiles and that
+     table read the same customer.value, so a single rupee figure here beside
+     a split one there would have the screen disagreeing with itself — and the
+     rupee figure was the wrong one. */
+  openPipeline: CurrencyTotal[];
   openDeals: number;
-  wonThisMonth: number;
+  wonThisMonth: CurrencyTotal[];
   wonThisMonthCount: number;
   quotesPending: number;
   quotesStale: number;
@@ -88,9 +93,9 @@ export function kpis(ws: Workspace, sellerState: string, now: Date = new Date())
   }
 
   return {
-    openPipeline: open.reduce((a, c) => a + (Number(c.value) || 0), 0),
+    openPipeline: totalsByCurrency(open, (c) => Number(c.value) || 0, (c) => c.currency),
     openDeals: open.length,
-    wonThisMonth: won.reduce((a, c) => a + wonAmount(c), 0),
+    wonThisMonth: totalsByCurrency(won, wonAmount, (c) => c.currency),
     wonThisMonthCount: won.length,
     quotesPending: pending.length,
     quotesStale: stale.length,
@@ -219,13 +224,21 @@ export interface FunnelStep {
   id: string;
   label: string;
   count: number;
-  value: number;
+  totals: CurrencyTotal[];
 }
 
 export function pipelineFunnel(ws: Workspace, stages: readonly { id: string; label: string }[]): FunnelStep[] {
   return stages.map((s) => {
     const inStage = ws.customers.filter((c) => (c.stage ?? "lead") === s.id);
-    return { id: s.id, label: s.label, count: inStage.length, value: inStage.reduce((a, c) => a + (Number(c.value) || 0), 0) };
+    return {
+      id: s.id,
+      label: s.label,
+      count: inStage.length,
+      /* Same field, same treatment. A stage holding one AED deal and one
+         rupee deal has no single total, and inventing one by addition is how
+         the number stopped meaning anything. */
+      totals: totalsByCurrency(inStage, (c) => Number(c.value) || 0, (c) => c.currency),
+    };
   });
 }
 
@@ -233,10 +246,21 @@ export interface TeamRow {
   ownerId: string;
   name: string;
   openDeals: number;
-  openValue: number;
-  wonValue: number;
+  /** Open pipeline, KEPT APART BY CURRENCY. Not one number: adding a dollar
+   *  deal to a rupee one produces a figure in no unit at all, and printing it
+   *  with a ₹ in front makes it a wrong figure rather than a meaningless one.
+   *  Same treatment the proforma and invoice lists already got. */
+  openTotals: CurrencyTotal[];
+  wonDeals: number;
+  wonTotals: CurrencyTotal[];
   quotations: number;
 }
+
+/** What a row sorts on. The house currency, because a table has to be in some
+ *  order and comparing a dollar total against a rupee one to decide who goes
+ *  first is the very thing this change exists to stop. */
+const inHouseCurrency = (totals: readonly CurrencyTotal[]): number =>
+  totals.find((t) => t.code === "INR")?.total ?? 0;
 
 export function teamPerformance(
   ws: Workspace,
@@ -248,16 +272,24 @@ export function teamPerformance(
     .map((u) => {
       const mine = ws.customers.filter((c) => c.ownerId === u.id);
       const open = mine.filter((c) => isOpenStage(c.stage));
+      const won = mine.filter((c) => countsAsWon(c) && (c.wonAt ?? 0) >= from);
       return {
         ownerId: u.id, name: u.name,
         openDeals: open.length,
-        openValue: open.reduce((a, c) => a + (Number(c.value) || 0), 0),
-        wonValue: mine.filter((c) => countsAsWon(c) && (c.wonAt ?? 0) >= from).reduce((a, c) => a + wonAmount(c), 0),
+        openTotals: totalsByCurrency(open, (c) => Number(c.value) || 0, (c) => c.currency),
+        wonDeals: won.length,
+        wonTotals: totalsByCurrency(won, wonAmount, (c) => c.currency),
         quotations: ws.quotations.filter((q) => q.ownerId === u.id).length,
       };
     })
-    .filter((r) => r.openDeals || r.wonValue || r.quotations)
-    .sort((a, b) => b.wonValue - a.wonValue);
+    /* A person with open deals belongs here even when every one of them has a
+       blank value — that is a row worth seeing, and the deal count beside the
+       money is what says so. Filtering on the money alone hid them. */
+    .filter((r) => r.openDeals || r.wonDeals || r.quotations)
+    .sort((a, b) =>
+      inHouseCurrency(b.wonTotals) - inHouseCurrency(a.wonTotals)
+      || inHouseCurrency(b.openTotals) - inHouseCurrency(a.openTotals)
+      || a.name.localeCompare(b.name));
 }
 
 export interface DeliveryRow {

@@ -13,6 +13,13 @@ import type { Subscription } from "../subscriptions/expiry";
 const NOW = new Date("2026-08-24T10:00:00");
 const at = (iso: string) => new Date(iso + "T00:00:00").getTime();
 
+/** The rupee total out of a per-currency breakdown. These fixtures are all in
+ *  rupees, so this keeps the assertions reading as plain amounts while the
+ *  figures themselves stay currency-aware. `rupees([])` is 0 — an empty
+ *  breakdown means nothing recorded, which is what these tests mean by 0. */
+const rupees = (totals: readonly { code: string; total: number }[]): number =>
+  totals.find((t) => t.code === "INR")?.total ?? 0;
+
 const customer = (o: Partial<Customer>): Customer => ({ id: "c", ownerId: "u1", ...o } as Customer);
 const doc = (o: Partial<SalesDocument>): SalesDocument => ({
   id: "d", number: "TZ/QT/2627/0001", ownerId: "u1", customerId: "c1",
@@ -85,13 +92,13 @@ describe("KPIs", () => {
 
   it("totals open pipeline, excluding won and lost", () => {
     expect(k.openDeals).toBe(2);
-    expect(k.openPipeline).toBe(1400000);
+    expect(rupees(k.openPipeline)).toBe(1400000);
   });
 
   it("counts what was won THIS month, by the won timestamp", () => {
     // c3 was won in June and must not count toward August.
     expect(k.wonThisMonthCount).toBe(1);
-    expect(k.wonThisMonth).toBe(400000);
+    expect(rupees(k.wonThisMonth)).toBe(400000);
   });
 
   it("counts quotations still live, and stale ones separately", () => {
@@ -112,13 +119,26 @@ describe("KPIs", () => {
 
   it("reports zeroes for an empty workspace rather than NaN", () => {
     const empty = kpis({ customers: [], quotations: [], proformas: [], orders: [], challans: [], subscriptions: [] }, "Delhi", NOW);
-    for (const value of Object.values(empty)) expect(Number.isFinite(value)).toBe(true);
-    expect(empty.openPipeline).toBe(0);
+    /* The point of this one is that nothing is NaN — which is still the
+       point now that two of the fields are per-currency breakdowns rather
+       than plain numbers. Both shapes are checked, so a NaN hiding inside a
+       currency bin fails here too. */
+    for (const value of Object.values(empty)) {
+      if (Array.isArray(value)) {
+        for (const bin of value) expect(Number.isFinite(bin.total)).toBe(true);
+      } else {
+        expect(Number.isFinite(value)).toBe(true);
+      }
+    }
+    /* Nothing recorded is an empty breakdown, not a bin holding zero — the
+       screen prints "—" for it rather than a confident ₹0. */
+    expect(empty.openPipeline).toEqual([]);
+    expect(empty.wonThisMonth).toEqual([]);
   });
 
   it("shows a salesperson only their own numbers", () => {
     const mine = kpis(scopeWorkspace(WS, { id: "u1", role: "Sales" }), "Delhi", NOW);
-    expect(mine.wonThisMonth).toBe(0);
+    expect(rupees(mine.wonThisMonth)).toBe(0);
     expect(mine.openDeals).toBe(1);
   });
 });
@@ -185,13 +205,13 @@ describe("funnels and team", () => {
     const funnel = pipelineFunnel(WS, STAGES);
     expect(funnel).toHaveLength(STAGES.length);
     expect(funnel.find((s) => s.id === "won")?.count).toBe(2);
-    expect(funnel.find((s) => s.id === "lead")?.value).toBe(900000);
+    expect(funnel.find((s) => s.id === "lead")?.totals).toEqual([{ code: "INR", total: 900000, count: 1 }]);
   });
 
   it("ranks the team by what they have won", () => {
     const team = teamPerformance(WS, [{ id: "u1", name: "Priyanshi" }, { id: "u2", name: "Rashmi" }], NOW);
     expect(team.map((t) => t.name)).toEqual(["Rashmi", "Priyanshi"]);
-    expect(team[0]?.wonValue).toBe(400000);
+    expect(team[0]?.wonTotals).toEqual([{ code: "INR", total: 400000, count: 1 }]);
   });
 
   it("leaves out a user with nothing to show", () => {
@@ -226,7 +246,7 @@ describe("a deal that was won and then lost", () => {
   };
 
   it("is not revenue this month", () => {
-    expect(kpis(churned, "Delhi", NOW).wonThisMonth).toBe(193000);
+    expect(rupees(kpis(churned, "Delhi", NOW).wonThisMonth)).toBe(193000);
     expect(kpis(churned, "Delhi", NOW).wonThisMonthCount).toBe(2);
   });
 
@@ -234,7 +254,7 @@ describe("a deal that was won and then lost", () => {
     // The tile and the funnel are counting the same two deals here, so a
     // reader looking at both at once must not see two different figures.
     const funnelWon = pipelineFunnel(churned, STAGES).find((s) => s.id === "won");
-    expect(funnelWon?.value).toBe(kpis(churned, "Delhi", NOW).wonThisMonth);
+    expect(funnelWon?.totals).toEqual(kpis(churned, "Delhi", NOW).wonThisMonth);
   });
 
   it("is not revenue in the trailing chart either", () => {
@@ -249,6 +269,69 @@ describe("a deal that was won and then lost", () => {
       ...WS,
       customers: [customer({ id: "r1", ownerId: "u1", company: "Northline", stage: "quoted", value: 900000, wonValue: 412500, wonAt: at("2026-08-05") })],
     };
-    expect(kpis(requoted, "Delhi", NOW).wonThisMonth).toBe(412500);
+    expect(rupees(kpis(requoted, "Delhi", NOW).wonThisMonth)).toBe(412500);
+  });
+});
+
+describe("the team table and money that is not rupees", () => {
+  /* THE BUG THIS PINS, reported off a live dashboard.
+   *
+   * `teamPerformance` added up `customer.value` and the screen printed the
+   * result through `inrShort`, which hard-codes ₹. So a salesperson holding a
+   * $40,000 deal had 40,000 added to their rupee column and the total was
+   * labelled ₹. The number was not a conversion and not a sum — it was two
+   * different units added together and given one of their symbols.
+   *
+   * The same mistake was fixed on the proforma and invoice lists earlier;
+   * the dashboard was left behind. */
+  const MIXED: Workspace = {
+    customers: [
+      customer({ id: "a", ownerId: "u1", stage: "negotiation", value: 250000, currency: "INR" }),
+      customer({ id: "b", ownerId: "u1", stage: "quoted", value: 40000, currency: "USD" }),
+      customer({ id: "c", ownerId: "u1", stage: "won", wonAt: at("2026-08-01"), wonValue: 500000, currency: "INR" }),
+      customer({ id: "d", ownerId: "u1", stage: "won", wonAt: at("2026-08-02"), wonValue: 12000, currency: "USD" }),
+    ],
+    quotations: [], orders: [], challans: [], proformas: [], invoices: [], subscriptions: [],
+  } as unknown as Workspace;
+
+  const row = () => teamPerformance(MIXED, [{ id: "u1", name: "Rajat" }], NOW)[0]!;
+
+  it("keeps each currency apart instead of adding dollars to rupees", () => {
+    expect(row().openTotals).toEqual([
+      { code: "INR", total: 250000, count: 1 },
+      { code: "USD", total: 40000, count: 1 },
+    ]);
+  });
+
+  it("does the same for what was won", () => {
+    expect(row().wonTotals).toEqual([
+      { code: "INR", total: 500000, count: 1 },
+      { code: "USD", total: 12000, count: 1 },
+    ]);
+  });
+
+  /* A row of ₹0 has two very different meanings — "no deals" and "deals with
+     no value typed in" — and the table showed the same thing for both. The
+     count is what tells them apart. */
+  it("counts the deals behind the money, so a zero row explains itself", () => {
+    const noValues: Workspace = {
+      ...MIXED,
+      customers: [
+        customer({ id: "e", ownerId: "u2", stage: "lead", value: "", currency: "INR" }),
+        customer({ id: "f", ownerId: "u2", stage: "qualified", currency: "INR" }),
+      ],
+    } as unknown as Workspace;
+    const r = teamPerformance(noValues, [{ id: "u2", name: "Chandan" }], NOW)[0]!;
+    expect(r.openDeals).toBe(2);
+    expect(r.openTotals).toEqual([{ code: "INR", total: 0, count: 2 }]);
+  });
+
+  it("treats a customer with no currency set as rupees", () => {
+    const legacy: Workspace = {
+      ...MIXED,
+      customers: [customer({ id: "g", ownerId: "u3", stage: "lead", value: 90000 })],
+    } as unknown as Workspace;
+    expect(teamPerformance(legacy, [{ id: "u3", name: "Old" }], NOW)[0]?.openTotals)
+      .toEqual([{ code: "INR", total: 90000, count: 1 }]);
   });
 });

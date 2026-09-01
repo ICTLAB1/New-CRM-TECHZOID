@@ -2,7 +2,7 @@ import { kpis, needsAttention, scopeWorkspace, teamPerformance, type DashboardUs
 import { effectiveStatus } from "../documents/create";
 import { daysLeft, type Subscription } from "../subscriptions/expiry";
 import { isOpenStage } from "../pipeline/stages";
-import { inrShort } from "../currency/format";
+import { formatTotals, inrShort, moneyShort } from "../currency/format";
 import type { Customer } from "../customers/customer";
 
 /**
@@ -78,8 +78,8 @@ export function buildCrmContext(
     "=== SNAPSHOT ===",
     "",
     "PIPELINE",
-    `- Open: ${k.openDeals} deals worth ${money(k.openPipeline)}`,
-    `- Won this month: ${k.wonThisMonthCount} worth ${money(k.wonThisMonth)}`,
+    `- Open: ${k.openDeals} deals worth ${formatTotals(k.openPipeline, moneyShort) || "nothing recorded"}`,
+    `- Won this month: ${k.wonThisMonthCount} worth ${formatTotals(k.wonThisMonth, moneyShort) || "nothing"}`,
     `- Won overall: ${won.length}; lost: ${lost.length}`,
     `- Follow-ups overdue: ${overdue.length}${overdue.length ? ` (${list(overdue.map((c) => c.company))})` : ""}`,
     "",
@@ -108,7 +108,10 @@ export function buildCrmContext(
     "",
     "TEAM",
     perTeam.length
-      ? perTeam.map((t) => `- ${t.name}: ${t.openDeals} open worth ${money(t.openValue)}, ${money(t.wonValue)} won, ${t.quotations} quotations`).join("\n")
+      /* Per currency, not one rupee figure. The assistant answers questions
+         about these numbers, and a total that silently added dollars to
+         rupees would have it state that sum back as fact. */
+      ? perTeam.map((t) => `- ${t.name}: ${t.openDeals} open worth ${formatTotals(t.openTotals, moneyShort) || "nothing recorded"}, ${formatTotals(t.wonTotals, moneyShort) || "nothing"} won, ${t.quotations} quotations`).join("\n")
       : "- Just you.",
   ];
 

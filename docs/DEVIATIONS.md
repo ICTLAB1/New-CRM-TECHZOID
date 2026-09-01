@@ -1458,3 +1458,40 @@ functions: `isPortalUrl` decides the route, `readPortalToken` decides
 whether to make a request. A malformed token still never reaches the
 network — the page says "ask for a fresh one" without asking the server
 about a string that cannot be a token.
+
+## 33. The dashboard stopped adding dollars to rupees
+
+§30 recorded this as open: the dashboard summed `customer.value` across every
+record and printed the result through `inrShort`, which hard-codes ₹. It is
+now closed, and the decision is the same one the document lists already got —
+**keep the currencies apart, never convert.**
+
+Reported off a live screen: a Team table where one salesperson's "open" was a
+rupee figure with a dollar deal folded into it. The number was not a
+conversion and not a sum; it was two units added together and given one of
+their symbols.
+
+No rate is stored anywhere in this product, and inventing one would be worse
+than the bug — a made-up figure that somebody plans a quarter around. So
+`kpis`, `pipelineFunnel` and `teamPerformance` all return
+`CurrencyTotal[]` now, and the screen prints them side by side:
+**₹1.24 Cr + AED 2.14M**.
+
+Two smaller things came out of the same look:
+
+- **A row of ₹0 had two meanings.** "No deals" and "deals with no value typed
+  in" rendered identically, and `teamPerformance` filtered on the money — so a
+  salesperson holding three untyped deals vanished, or appeared as a row of
+  zeros for a reason (their quotation count) that the table did not display.
+  The deal count now sits under each figure, and the filter counts deals
+  rather than rupees.
+- **Nothing recorded prints as "—", not ₹0.** An empty breakdown is not a
+  confident zero.
+
+The assistant's snapshot was fed the same mixed totals, which meant it would
+state that sum back to somebody as fact. It gets the per-currency figures now.
+
+**Still adding across currencies, and knowingly:** the *Payments due* and
+*Renewals at risk* tiles, and the six-month revenue chart. They read from
+documents and subscriptions rather than `customer.value`, so each needs its
+own pass.
