@@ -852,3 +852,12 @@ button.tile:hover { background: var(--surface-2); }
   white-space: pre-wrap;
   max-width: 68ch;
 }
+
+/* A deal counted as won with no order or invoice behind it. Quiet — most of
+   these are a stage set early rather than a mistake — but present on the card
+   where the stage was set, which is where it gets put right. */
+.deal-flag {
+  margin-top: 4px; font-size: var(--t-small); color: var(--warn);
+  display: inline-flex; align-items: center; gap: 4px;
+}
+.deal-flag::before { content: "●"; font-size: 8px; }

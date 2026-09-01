@@ -146,9 +146,9 @@ describe("KPIs", () => {
 describe("needs attention", () => {
   const rows = needsAttention(WS, "Delhi", NOW);
 
-  it("lists overdue proformas, due follow-ups, stale quotations and renewals", () => {
+  it("lists overdue proformas, due follow-ups, stale quotations, renewals and unbacked wins", () => {
     expect(new Set(rows.map((r) => r.kind))).toEqual(
-      new Set(["overdue-proforma", "follow-up", "stale-quotation", "renewal"]),
+      new Set(["overdue-proforma", "follow-up", "stale-quotation", "renewal", "unbacked-win"]),
     );
   });
 
@@ -333,5 +333,94 @@ describe("the team table and money that is not rupees", () => {
     } as unknown as Workspace;
     expect(teamPerformance(legacy, [{ id: "u3", name: "Old" }], NOW)[0]?.openTotals)
       .toEqual([{ code: "INR", total: 90000, count: 1 }]);
+  });
+});
+
+
+describe("a deal counted as won with nothing sold", () => {
+  /* Straight from a live workspace: two deals marked Won on the same day,
+     both moved back to Quoted, neither with a quotation, proforma, invoice
+     or order ever raised. Between them they were 92% of the month's reported
+     won revenue, and no screen said a word about it. */
+  const base = {
+    quotations: [], proformas: [], invoices: [], orders: [], challans: [], subscriptions: [],
+  };
+
+  const rowsFor = (ws: Partial<Workspace>) =>
+    needsAttention({ ...base, customers: [], ...ws } as unknown as Workspace, "Delhi", NOW)
+      .filter((r) => r.kind === "unbacked-win");
+
+  it("is flagged when nothing at all was raised", () => {
+    const [row] = rowsFor({
+      customers: [customer({ id: "m", company: "Metrro", stage: "won", wonAt: at("2026-08-26"), wonValue: 663750 })],
+    });
+    expect(row?.title).toBe("Metrro");
+    expect(row?.detail).toBe("Marked won, but nothing was ever raised against it");
+    expect(row?.value).toBe(663750);
+    expect(row?.view).toBe("pipeline");
+    expect(row?.tone).toBe("warn");
+  });
+
+  it("is flagged when only a quotation was raised — asking is not selling", () => {
+    const [row] = rowsFor({
+      customers: [customer({ id: "q", company: "OrbIT", stage: "won", wonAt: at("2026-08-06"), wonValue: 10478 })],
+      quotations: [doc({ id: "d1", customerId: "q" })],
+    });
+    expect(row?.detail).toBe("Marked won on a quotation — no order or invoice yet");
+  });
+
+  it("goes quiet once an order exists", () => {
+    expect(rowsFor({
+      customers: [customer({ id: "s", company: "Siddhi", stage: "won", wonAt: at("2026-08-08"), wonValue: 83898 })],
+      orders: [{ id: "o1", customerId: "s" }],
+    })).toEqual([]);
+  });
+
+  /* The case the whole thing is about: the deal is no longer in the Won
+     column, but countsAsWon still counts its money, so it still has to be
+     flagged. Reading the stage instead of countsAsWon would miss exactly
+     the deals that caused this. */
+  it("still flags a win that was re-quoted off the Won column", () => {
+    const [row] = rowsFor({
+      customers: [customer({ id: "r", company: "Oriental", stage: "quoted", wonAt: at("2026-08-26"), wonValue: 663750 })],
+    });
+    expect(row?.title).toBe("Oriental");
+  });
+
+  it("says nothing about a deal that was never won", () => {
+    expect(rowsFor({ customers: [customer({ id: "n", stage: "negotiation", value: 500000 })] })).toEqual([]);
+  });
+
+  it("says nothing about a lost deal carrying an old win stamp", () => {
+    expect(rowsFor({
+      customers: [customer({ id: "l", stage: "lost", wonAt: at("2026-08-01"), wonValue: 1000 })],
+    })).toEqual([]);
+  });
+});
+
+describe("how loudly an unbacked win is reported", () => {
+  const NOTHING = { customers: [], quotations: [], proformas: [], invoices: [], orders: [], challans: [], subscriptions: [] };
+  const rank = (ws: Partial<Workspace>) =>
+    needsAttention({ ...NOTHING, ...ws } as unknown as Workspace, "Delhi", NOW);
+
+  it("a win with nothing behind it outranks an overdue follow-up", () => {
+    const rows = rank({
+      customers: [
+        customer({ id: "phantom", company: "Metrro", stage: "won", wonAt: at("2026-08-26"), wonValue: 663750 }),
+        customer({ id: "cold", company: "Someone", stage: "qualified", nextFollowUp: "2026-08-20", value: 50000 }),
+      ],
+    });
+    expect(rows.map((r) => r.kind)).toEqual(["unbacked-win", "follow-up"]);
+  });
+
+  it("but one that at least has a quotation behind it does not", () => {
+    const rows = rank({
+      customers: [
+        customer({ id: "early", company: "OrbIT", stage: "won", wonAt: at("2026-08-06"), wonValue: 10478 }),
+        customer({ id: "cold", company: "Someone", stage: "qualified", nextFollowUp: "2026-08-20", value: 50000 }),
+      ],
+      quotations: [doc({ id: "d1", customerId: "early" })],
+    });
+    expect(rows.map((r) => r.kind)).toEqual(["follow-up", "unbacked-win"]);
   });
 });

@@ -1535,3 +1535,42 @@ deal be Won with no order, proforma or invoice behind it. On the workspace
 above, 9 of 15 deals counted as won had no document of any kind, and only 8%
 of reported won revenue was backed by an actual order. Whether "Won" should
 require one is a question about how the business works, not about the code.
+
+## 35. Saying when a win has nothing behind it
+
+Following on from §34. The un-win fix stops a correction being impossible;
+this says where the problem already is.
+
+Nothing in the CRM checks that a deal marked Won was actually sold. On the
+workspace that prompted it, **nine of fifteen deals counted as won had no
+document of any kind** — no quotation, no proforma, no invoice, no order —
+and only 8% of reported won revenue had an order behind it. The arithmetic
+was right; it was adding up sales that existed only as a stage somebody set.
+
+**What counts as backing is an order or a tax invoice, and deliberately not a
+quotation.** A quotation is us asking. An order is them agreeing. "Quotations
+sent, not orders closed" was the complaint, so treating a quotation as proof
+would answer the wrong question. A proforma sits between the two — we have
+asked for money — so it is reported in its own words rather than counted
+either way.
+
+Shown in two places, chosen for what each is for:
+
+- **The pipeline board**, on the card: `No order yet`. This is the screen
+  where a stage gets set, so it is the screen where it gets put right.
+- **The dashboard's needs-attention list**, with the reason spelled out:
+  *"Marked won, but nothing was ever raised against it."*
+
+Ranked by how wrong the books are. A win with **no document at all** sits
+above an overdue follow-up — a relationship going cold is recoverable, a sale
+that never existed is on a report somebody is about to act on. One that has a
+quotation or proforma behind it is a stage set early, and drops below.
+Overdue money outranks both: that is cash, not bookkeeping.
+
+**No total moves.** Won revenue is still exactly what the stage says. Deciding
+that an unbacked win is not revenue would change what the business reports
+about itself, and that belongs to whoever runs it.
+
+The board was also still printing every column and card through `inrShort`,
+the same fault §33 fixed on the dashboard. Fixed here too, so a column
+holding one dirham deal now reads AED 2.14M rather than a rupee total.

@@ -2,7 +2,9 @@ import { useState } from "react";
 import { STAGES, applyStage, stageNeedsReason, type LostDetail, type StageId } from "../../domain/pipeline/stages";
 import type { Customer } from "../../domain/customers/customer";
 import { customerLabel } from "../../domain/customers/customer";
-import { inrShort } from "../../domain/currency/format";
+import { formatTotals, moneyShort, totalsByCurrency } from "../../domain/currency/format";
+import { backingFor, backingNote, type BackingSource } from "../../domain/pipeline/backing";
+import { countsAsWon } from "../../domain/pipeline/stages";
 import { fmtDateShort, isOverdue } from "../../domain/dates";
 import { LostReasonModal } from "./LostReasonModal";
 
@@ -16,10 +18,15 @@ import { LostReasonModal } from "./LostReasonModal";
  */
 export function PipelineBoard({
   customers,
+  documents,
   onChange,
   onOpen,
 }: {
   customers: Customer[];
+  /** Orders, invoices, proformas and quotations, so a card can say when a
+   *  deal is being counted as won with nothing sold. Optional: the board
+   *  still works without them, it just cannot make that check. */
+  documents?: BackingSource;
   onChange: (next: Customer[]) => void;
   onOpen: (customer: Customer) => void;
 }) {
@@ -52,7 +59,6 @@ export function PipelineBoard({
       <div className="board scroll">
         {STAGES.map((stage) => {
           const inStage = customers.filter((c) => (c.stage ?? "lead") === stage.id);
-          const total = inStage.reduce((a, c) => a + (Number(c.value) || 0), 0);
           return (
             <div
               key={stage.id}
@@ -66,10 +72,22 @@ export function PipelineBoard({
                 <span className="board-head-label">{stage.label}</span>
                 <span className="board-head-count">{inStage.length}</span>
               </div>
-              <div className="board-head-total">{total > 0 ? inrShort(total) : "—"}</div>
+              {/* Per currency. A column holding one dirham deal and one rupee
+                  deal has no single total, and printing their sum with a ₹
+                  in front is a number in no unit at all. */}
+              <div className="board-head-total">
+                {formatTotals(totalsByCurrency(inStage, (c) => Number(c.value) || 0, (c) => c.currency), moneyShort) || "—"}
+              </div>
               <div className="board-body">
                 {inStage.map((c) => {
                   const overdue = isOverdue(c.nextFollowUp);
+                  /* Counted as revenue with no order or invoice behind it.
+                     Shown on the card because this is the screen where the
+                     stage gets set, so it is the screen where it gets put
+                     right. */
+                  const unbacked = documents && countsAsWon(c) && !backingFor(c.id, documents).backed
+                    ? backingNote(backingFor(c.id, documents))
+                    : "";
                   return (
                     <button
                       key={c.id}
@@ -89,7 +107,8 @@ export function PipelineBoard({
                           </span>
                         ) : null}
                       </div>
-                      {Number(c.value) > 0 ? <div className="deal-value">{inrShort(c.value)}</div> : null}
+                      {Number(c.value) > 0 ? <div className="deal-value">{moneyShort(c.value, c.currency)}</div> : null}
+                      {unbacked ? <div className="deal-flag" title={unbacked}>No order yet</div> : null}
                     </button>
                   );
                 })}

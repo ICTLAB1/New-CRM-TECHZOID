@@ -7,6 +7,7 @@ import type { SalesOrder } from "../orders/create";
 import { daysLeft, dueForRenewal, valueAtRisk, type Subscription } from "../subscriptions/expiry";
 import type { Customer } from "../customers/customer";
 import { totalsByCurrency, type CurrencyTotal } from "../currency/format";
+import { backingFor, backingNote } from "../pipeline/backing";
 import { countsAsWon, isOpenStage, wonAmount } from "../pipeline/stages";
 import { scopeTo, type Owned } from "./scope";
 import { TODAY } from "../dates";
@@ -106,7 +107,7 @@ export function kpis(ws: Workspace, sellerState: string, now: Date = new Date())
   };
 }
 
-export type AttentionKind = "overdue-proforma" | "follow-up" | "stale-quotation" | "renewal";
+export type AttentionKind = "overdue-proforma" | "follow-up" | "stale-quotation" | "renewal" | "unbacked-win";
 
 export interface AttentionRow {
   kind: AttentionKind;
@@ -159,6 +160,31 @@ export function needsAttention(ws: Workspace, sellerState: string, now: Date = n
       detail: daysLate === 0 ? "Follow-up due today" : `Follow-up ${daysLate} day${daysLate === 1 ? "" : "s"} overdue`,
       urgency: 500 + daysLate, value: Number(c.value) || 0, currency: c.currency,
       tone: daysLate > 0 ? "bad" : "warn", view: "customers",
+    });
+  }
+
+  /* A DEAL COUNTED AS REVENUE WITH NOTHING BEHIND IT.
+     Marked Won is one click and nothing checks that anything was sold. This
+     does not change a single total — the money still counts exactly as it
+     did — it just puts the deal where somebody will see it, so "quotation
+     sent" and "order closed" stop being the same thing on a report. Warn,
+     not bad: most of these are a stage set early, not a mistake. */
+  for (const c of ws.customers) {
+    if (!countsAsWon(c)) continue;
+    const backing = backingFor(c.id, ws);
+    if (backing.backed) continue;
+    rows.push({
+      kind: "unbacked-win", id: c.id,
+      title: c.company ?? "Untitled customer",
+      detail: backingNote(backing),
+      /* Ranked by how wrong the books are. A deal booked as revenue with NO
+         document of any kind sits above an overdue follow-up: a relationship
+         going cold is recoverable, a sale that never existed is on a report
+         somebody is about to act on. One that at least has a quotation or a
+         proforma behind it is a stage set early, and drops below. Overdue
+         money still outranks both — that is cash, not bookkeeping. */
+      urgency: backing.nothingRaised ? 700 : 400,
+      value: wonAmount(c), currency: c.currency, tone: "warn", view: "pipeline",
     });
   }
 

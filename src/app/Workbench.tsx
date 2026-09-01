@@ -207,7 +207,7 @@ export function Workbench({
             title="Pipeline"
             sub="Drag a deal to move it. Moving to Lost asks why — you can always skip."
           />
-          <PipelineBoard customers={customers} onChange={handleCustomersChange} onOpen={setEditing} />
+          <PipelineBoard customers={customers} documents={analytics} onChange={handleCustomersChange} onOpen={setEditing} />
           <Presence value={editing}>
             {(record, open) => (
             <CustomerSheet
