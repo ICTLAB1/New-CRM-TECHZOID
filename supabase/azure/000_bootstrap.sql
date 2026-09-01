@@ -51,7 +51,15 @@ create schema if not exists extensions;
 create extension if not exists pgcrypto;
 
 grant usage on schema public to anon, authenticated, service_role;
-grant usage on schema auth   to authenticated, service_role;
+-- ANON NEEDS THIS TOO, and it is easy to talk yourself out of. Every policy
+-- keyed on ownership calls auth.uid(), including when the caller is anon —
+-- that is how it evaluates to NULL and matches nothing. EXECUTE on the
+-- function is not enough on its own: it is only reachable through USAGE on
+-- the schema that holds it, so without this an anonymous request fails with
+-- "permission denied for schema auth" instead of quietly seeing no rows.
+-- Granting usage exposes no data; auth.users is granted separately, and to
+-- service_role only.
+grant usage on schema auth   to anon, authenticated, service_role;
 
 -- ── who is asking ─────────────────────────────────────────────────────
 -- Reads the setting the API tier stamps on the transaction. Returns NULL
@@ -113,6 +121,18 @@ create table if not exists auth.users (
 
 create index if not exists users_email_idx on auth.users (lower(email));
 
+-- BYPASSRLS IS NOT A GRANT. `service_role` skips row-level security, but
+-- table privileges are checked first and separately — so without this the
+-- API tier cannot create the auth.users row on somebody's first Entra
+-- sign-in, and every new user fails with "permission denied for table
+-- users". Supabase grants this; found here by trying to provision a user
+-- against the shim and watching it refuse.
+grant select, insert, update, delete on auth.users to service_role;
+
+-- `authenticated` deliberately gets NOTHING on auth.users. Names, emails and
+-- roles that the app legitimately shows live in public.profiles, which has
+-- its own policy. The identity table is not a directory.
+
 -- ── storage ───────────────────────────────────────────────────────────
 -- Migrations 010 and 011 create policies against storage.objects. Attachments
 -- themselves move to Azure Blob Storage, so these tables exist to keep those
@@ -153,6 +173,13 @@ $$;
 
 grant usage on schema storage to authenticated, service_role;
 grant execute on function storage.foldername(text) to authenticated, service_role;
+
+-- Same reasoning as auth.users: migrations 010 and 011 write RLS policies
+-- against storage.objects, and a policy is only consulted once the table
+-- privilege has already been granted.
+grant select, insert, update, delete on storage.objects to authenticated, service_role;
+grant select on storage.buckets to authenticated, service_role;
+grant insert, update, delete on storage.buckets to service_role;
 
 -- ── realtime ──────────────────────────────────────────────────────────
 -- Twelve migrations add their table to this publication. Azure has no

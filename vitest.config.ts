@@ -7,6 +7,6 @@ export default defineConfig({
   },
   test: {
     environment: "node",
-    include: ["src/**/*.test.ts", "src/**/*.test.tsx", "netlify/**/*.test.mjs"],
+    include: ["src/**/*.test.ts", "src/**/*.test.tsx", "netlify/**/*.test.mjs", "api/**/*.test.mjs"],
   },
 });
