@@ -1,5 +1,33 @@
 # Moving to Azure
 
+> **PARKED — NOT IN USE. The CRM runs on Supabase and Netlify.**
+>
+> This was explored in full and then deliberately stopped. The reasoning is
+> worth keeping because the question will come back:
+>
+> - **Nothing that was going wrong was caused by the platform.** The failures
+>   that day were a misplaced test file and a type error, both breaking the
+>   Netlify build; wrong dashboard figures from currency handling and a deal
+>   that could not be un-won. Supabase and Netlify caused none of it.
+> - **The data is already in Mumbai.** The Supabase project is `ap-south-1`,
+>   so residency was never a reason to move.
+> - **It costs more** for the same product, and the weeks it would take are
+>   weeks not spent on the outreach module the business actually asked for.
+> - **Two silent-breakage bugs turned up in a 170-line bootstrap alone.** The
+>   remaining surface — 13 data files, Entra ID, Web PubSub, Blob Storage,
+>   Bicep, cutover — has far more of them, and each one lands on a live CRM.
+>
+> **What the work bought, and why it stays in the repo:** the schema is
+> proven to run on plain PostgreSQL and the identity gate is written and
+> tested. That is the hard part, done. If a government or PSU tender ever
+> requires Azure hosting, or the Microsoft partnership makes it worth it, or
+> Supabase changes its terms, this is no longer a rewrite — it is a resumed
+> project. That optionality is worth more sitting unused than the cost of
+> keeping it.
+>
+> **If it is ever resumed**, start at "What still has to be built". Nothing
+> below has been undone and nothing here touches production.
+
 Target: **Azure Database for PostgreSQL Flexible Server**, an **Azure Functions**
 API tier, **Static Web Apps** for the front end, **Entra ID** for sign-in,
 **Blob Storage** for attachments, **Key Vault** for secrets.
