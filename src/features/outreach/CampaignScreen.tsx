@@ -6,6 +6,8 @@ import {
 import { useToast } from "../../components/Toast";
 import { TEMPLATES, byId } from "../../domain/outreach/templates";
 import { GREETING_FALLBACK, valuesFor } from "../../domain/outreach/personalise";
+import { renderSignature, signatureFrom } from "../../domain/outreach/signature";
+import { previewHtml } from "../../domain/outreach/preview";
 import {
   DEFAULT_SCHEDULE, audienceSummary, buildAudience, excludedByReason,
   perHourCeiling, workingDaysNeeded, type Schedule,
@@ -167,6 +169,11 @@ export function CampaignScreen({ currentUser, settings, preselected, onDoneWithP
   /* Rendered with a real prospect's details, never with placeholder text.
      A preview that says "Hello {{first_name}}" proves nothing about whether
      the data behind the campaign is any good. */
+  const signatureHtml = useMemo(
+    () => renderSignature(signatureFrom(settings, currentUser)),
+    [settings, currentUser],
+  );
+
   const preview = useMemo(() => {
     const first = audience.send[0];
     if (!first) return null;
@@ -175,8 +182,14 @@ export function CampaignScreen({ currentUser, settings, preselected, onDoneWithP
         const v = (first.values as Record<string, string | undefined>)[k];
         return v && v.trim() ? v : whole;
       });
-    return { to: first.email, subject: fill(subject), body: fill(body) };
-  }, [audience.send, subject, body]);
+    const filled = fill(body);
+    return {
+      to: first.email,
+      subject: fill(subject),
+      body: filled,
+      html: previewHtml(filled, signatureHtml),
+    };
+  }, [audience.send, subject, body, signatureHtml]);
 
   function applyTemplate(id: string) {
     setTemplateId(id);
@@ -500,10 +513,17 @@ export function CampaignScreen({ currentUser, settings, preselected, onDoneWithP
         {preview ? (
           <Card title={`Preview — as ${preview.to} will see it`} padded>
             <p className="muted small" style={{ marginTop: 0 }}>
-              A real prospect's details, not placeholder text.
+              A real prospect's details, and the same renderer the email itself uses — including the
+              signature and the unsubscribe line.
             </p>
-            <p><strong>{preview.subject}</strong></p>
-            <pre style={{ whiteSpace: "pre-wrap", fontFamily: "inherit", margin: 0 }}>{preview.body}</pre>
+            <p style={{ margin: "0 0 8px" }}><strong>{preview.subject}</strong></p>
+            <div
+              style={{ border: "1px solid var(--rule, #e5e7eb)", borderRadius: 6, background: "#fff", overflowX: "auto" }}
+              /* Built here from this workspace's own settings and this
+                 campaign's own words, every value escaped on the way through
+                 — not markup arriving from anywhere else. */
+              dangerouslySetInnerHTML={{ __html: preview.html }}
+            />
           </Card>
         ) : (
           <p className="muted small">

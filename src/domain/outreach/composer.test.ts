@@ -231,9 +231,24 @@ describe("the templates", () => {
     }
   });
 
-  it("signs every one, so nothing arrives anonymous", () => {
+  /* THE SIGNATURE MOVED, and this now asserts the opposite of what it used
+     to. A template used to end with a {{sender_signature}} block, which only
+     ever carried the sender's job title. The renderer now appends the real
+     one — name, logo, both offices, the partner badges, the disclaimer —
+     built from the workspace's settings, so a template carrying a block of
+     its own would print the job title twice: once bare, and again inside the
+     block directly underneath. See src/domain/outreach/signature.ts. */
+  it("leaves the signing to the renderer, so nothing is signed twice", () => {
     for (const t of TEMPLATES) {
-      expect(t.blocks.some((b) => b.kind === "signature"), t.id).toBe(true);
+      expect(t.blocks.some((b) => b.kind === "signature"), t.id).toBe(false);
+    }
+  });
+
+  it("still ends on the sender's own words rather than trailing off", () => {
+    for (const t of TEMPLATES) {
+      const last = t.blocks[t.blocks.length - 1];
+      expect(last?.kind, t.id).toBe("paragraph");
+      expect(String(last?.text ?? "").trim().length, t.id).toBeGreaterThan(10);
     }
   });
 

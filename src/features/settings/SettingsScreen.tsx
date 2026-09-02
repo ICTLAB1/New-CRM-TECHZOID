@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { BrandStripsPanel } from "./BrandStripsPanel";
 import { FollowUpPanel } from "./FollowUpPanel";
 import { BankAccountsPanel } from "./BankAccountsPanel";
+import { SignaturePanel } from "./SignaturePanel";
 import type { IntegrationsApi } from "../../integrations/api";
 import { PageHead } from "../../app/AppShell";
 import { Button, Card, Chip, Empty, Field, Input, Select, Tabs, Textarea } from "../../components/primitives";
@@ -37,13 +38,15 @@ export interface SettingsScreenProps {
   onChange: (next: Record<string, unknown>) => void;
   /** Lets the Follow-ups tab mint the Interakt callback URL. */
   api?: IntegrationsApi;
+  /** Whose name and job title the email signature preview shows. */
+  currentUser?: { name?: string; email?: string; designation?: string };
 }
 
-type Tab = "company" | "document" | "numbering" | "terms" | "incentives" | "fields" | "backup" | "brands" | "followups" | "bank";
+type Tab = "company" | "document" | "numbering" | "terms" | "incentives" | "fields" | "backup" | "brands" | "followups" | "bank" | "signature";
 
 const uid = (): string => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
 
-export function SettingsScreen({ settings, canEdit, workspaceForBackup, api, onRestore, onChange }: SettingsScreenProps) {
+export function SettingsScreen({ settings, canEdit, workspaceForBackup, api, currentUser, onRestore, onChange }: SettingsScreenProps) {
   const [tab, setTab] = useState<Tab>("company");
 
   return (
@@ -58,6 +61,7 @@ export function SettingsScreen({ settings, canEdit, workspaceForBackup, api, onR
           { id: "company", label: "Company" },
           { id: "document", label: "Document" },
           { id: "brands", label: "Logos & brands" },
+          { id: "signature", label: "Email signature" },
           { id: "numbering", label: "Numbering & tax" },
           { id: "bank", label: "Bank accounts" },
           { id: "terms", label: "Default terms" },
@@ -74,6 +78,7 @@ export function SettingsScreen({ settings, canEdit, workspaceForBackup, api, onR
         {tab === "company" ? <CompanyPanel settings={settings} canEdit={canEdit} onChange={onChange} /> : null}
         {tab === "document" ? <DocumentPanel settings={settings} canEdit={canEdit} onChange={onChange} /> : null}
         {tab === "brands" ? <BrandStripsPanel settings={settings} canEdit={canEdit} onChange={onChange} /> : null}
+        {tab === "signature" ? <SignaturePanel settings={settings} canEdit={canEdit} currentUser={currentUser ?? {}} onChange={onChange} /> : null}
         {tab === "numbering" ? <NumberingPanel settings={settings} canEdit={canEdit} onChange={onChange} /> : null}
         {tab === "bank" ? <BankAccountsPanel settings={settings} canEdit={canEdit} onChange={onChange} /> : null}
         {tab === "terms" ? <TermsPanel settings={settings} canEdit={canEdit} onChange={onChange} /> : null}

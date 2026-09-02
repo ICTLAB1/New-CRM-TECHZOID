@@ -351,6 +351,7 @@ export function Workbench({
         <IncentivesScreen workspace={analytics} settings={settings} users={team} currentUser={user} />
       ) : view === "settings" ? (
         <SettingsScreen
+          currentUser={user}
           settings={settings}
           canEdit={canEditSettings}
           onChange={onSettingsChange}

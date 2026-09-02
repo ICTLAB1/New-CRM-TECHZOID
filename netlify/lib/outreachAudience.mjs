@@ -71,6 +71,7 @@ export const KNOWN_VARIABLES = new Set([
   "first_name", "last_name", "full_name", "job_title", "company_name",
   "company_domain", "industry", "country", "city",
   "sender_name", "sender_company", "sender_email", "sender_phone", "signature",
+  "sender_signature", "sender_designation",
 ]);
 
 /** Variables a template uses that this CRM cannot supply — a typo, usually. */
@@ -161,6 +162,8 @@ export function buildValues(row, sender) {
     sender_email: String(sender?.email ?? "").trim(),
     sender_phone: String(sender?.phone ?? "").trim(),
     signature: String(sender?.signature ?? "").trim(),
+    sender_signature: String(sender?.signature ?? sender?.designation ?? "").trim(),
+    sender_designation: String(sender?.designation ?? sender?.signature ?? "").trim(),
   };
 }
 

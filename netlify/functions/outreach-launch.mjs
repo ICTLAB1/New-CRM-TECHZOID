@@ -2,6 +2,7 @@ import { adminClient, signedInProfile } from "../lib/auth.mjs";
 import { buildAudience, buildValues, withGreetingFallback } from "../lib/outreachAudience.mjs";
 import { renderCampaignFor } from "../lib/outreachRender.mjs";
 import { drainQueue } from "../lib/outreachSender.mjs";
+import { renderSignature, signatureFrom } from "../lib/outreachSignature.mjs";
 
 /**
  * Turn a campaign and a list of prospects into a send queue.
@@ -131,6 +132,11 @@ export async function handler(event) {
     company: "",
   };
 
+  /* The signature, rendered ONCE for the campaign rather than per recipient:
+     it is the same block for everybody, and rendering it four hundred times
+     would put four hundred copies of a base64 logo into the queue. */
+  const signature = await renderSignatureFor(admin, caller);
+
   const audience = buildAudience({
     candidates: (prospects ?? []).map((p) => ({
       id: String(p.id),
@@ -154,7 +160,7 @@ export async function handler(event) {
 
   /* Rendered per person, now, and stored. See the note at the top. */
   const rows = audience.send.map((r) => {
-    const rendered = renderCampaignFor(campaign, r.values);
+    const rendered = renderCampaignFor(campaign, r.values, signature);
     return {
       campaign_id: campaignId,
       prospect_id: r.id,
@@ -218,6 +224,29 @@ export async function handler(event) {
 
   console.log("outreach-launch:", JSON.stringify({ campaignId, queued, sentNow, excluded: audience.excluded.length }));
   return json(200, { queued, sentNow, excluded: audience.excluded.length, sending: true });
+}
+
+/**
+ * Build the signature from the workspace settings.
+ *
+ * Read server-side rather than accepted from the request, so a compromised
+ * session cannot put arbitrary HTML into mail leaving this company's domain.
+ */
+async function renderSignatureFor(admin, caller) {
+  try {
+    const { data } = await admin.from("settings").select("data").eq("id", "main").maybeSingle();
+    const settings = data?.data ?? {};
+    return renderSignature(signatureFrom(settings, {
+      name: caller.profile?.name ?? "",
+      email: caller.profile?.email ?? "",
+      designation: caller.profile?.designation ?? "",
+    }));
+  } catch (err) {
+    /* A campaign without a signature is worse than one with, and better than
+       no campaign — so this is logged and the send goes on. */
+    console.warn("outreach-launch: could not build the signature —", err?.message ?? err);
+    return "";
+  }
 }
 
 const json = (statusCode, payload) => ({

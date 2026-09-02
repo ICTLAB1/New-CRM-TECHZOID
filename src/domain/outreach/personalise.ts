@@ -18,6 +18,7 @@ export const VARIABLES = [
   "first_name", "last_name", "full_name", "job_title",
   "company_name", "company_domain", "industry", "country", "city",
   "sender_name", "sender_company", "sender_email", "sender_phone", "sender_signature",
+  "sender_designation",
 ] as const;
 export type VariableName = (typeof VARIABLES)[number];
 
@@ -27,6 +28,7 @@ export const VARIABLE_LABELS: Readonly<Record<VariableName, string>> = {
   industry: "Industry", country: "Country", city: "City",
   sender_name: "Your name", sender_company: "Your company", sender_email: "Your email",
   sender_phone: "Your phone", sender_signature: "Your signature",
+  sender_designation: "Your job title",
 };
 
 /** Which variables are about the PROSPECT — the ones that can be missing.
@@ -164,7 +166,7 @@ export function valuesFor(
     firstName?: string; lastName?: string; fullName?: string; jobTitle?: string;
     company?: string; companyDomain?: string; industry?: string; country?: string; city?: string;
   },
-  sender: { name?: string; company?: string; email?: string; phone?: string; signature?: string },
+  sender: { name?: string; company?: string; email?: string; phone?: string; signature?: string; designation?: string },
 ): Values {
   const first = (prospect.firstName ?? "").trim();
   const last = (prospect.lastName ?? "").trim();
@@ -183,5 +185,9 @@ export function valuesFor(
     sender_email: (sender.email ?? "").trim(),
     sender_phone: (sender.phone ?? "").trim(),
     sender_signature: (sender.signature ?? "").trim(),
+    /* The job title, for a line like "I'm Abhinav Jain, Managing Director
+       at TechZoid". Distinct from sender_signature, which predates the real
+       signature block and only ever carried the same string. */
+    sender_designation: (sender.designation ?? sender.signature ?? "").trim(),
   };
 }

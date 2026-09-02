@@ -1,6 +1,7 @@
 import { adminClient, signedInProfile } from "../lib/auth.mjs";
 import { buildValues, withGreetingFallback } from "../lib/outreachAudience.mjs";
 import { renderCampaignFor, withUnsubscribe } from "../lib/outreachRender.mjs";
+import { renderSignature, signatureFrom } from "../lib/outreachSignature.mjs";
 import { sendMail } from "../lib/mailer.mjs";
 
 /**
@@ -109,7 +110,21 @@ export async function handler(event) {
   }
   values = withGreetingFallback(values, !!body.greetUnnamed);
 
-  const rendered = renderCampaignFor({ subject, body: message }, values);
+  /* The same signature the real send carries — whether it looks right is one
+     of the main things a test is for. */
+  let signature = "";
+  try {
+    const { data } = await admin.from("settings").select("data").eq("id", "main").maybeSingle();
+    signature = renderSignature(signatureFrom(data?.data ?? {}, {
+      name: caller.profile?.name ?? "",
+      email: caller.profile?.email ?? "",
+      designation: caller.profile?.designation ?? "",
+    }));
+  } catch (err) {
+    console.warn("outreach-test-send: could not build the signature —", err?.message ?? err);
+  }
+
+  const rendered = renderCampaignFor({ subject, body: message }, values, signature);
 
   /* A real, working unsubscribe link, pointed at nothing. Its own id is not a
      send row, so clicking it does nothing — but it has to be in the message,

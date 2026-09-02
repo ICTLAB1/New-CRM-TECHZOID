@@ -46,9 +46,38 @@ export interface EmailTemplate {
   waitDays?: number;
 }
 
-const SIGNATURE: Block = { kind: "signature", text: "{{sender_signature}}" };
+/* NOT USED ANY MORE, and kept only so an older stored campaign that still
+   names it renders. Every template ends at its last sentence: the signature
+   block — name, logo, both offices, the badges, the disclaimer — is appended
+   by the renderer from the workspace's settings, so a template carrying one
+   of its own would print the job title twice, once bare and once inside the
+   block underneath it. See src/domain/outreach/signature.ts. */
+export const LEGACY_SIGNATURE: Block = { kind: "signature", text: "{{sender_signature}}" };
 
 export const TEMPLATES: EmailTemplate[] = [
+  {
+    /* Written in the shape that actually works for this business: a bold
+       lead-in that says why the mail exists, an italic aside that lowers the
+       temperature, and ONE highlighted question. The highlight is doing real
+       work — a cold email that asks three things gets none of them answered,
+       and a reader skimming on a phone sees the yellow line first. */
+    id: "intro-licensing-audit",
+    name: "Introduction — the licensing question (recommended)",
+    category: "Introduction",
+    audience: "CIO, CTO, IT Head, Admin Head, Purchase Head",
+    step: 0,
+    subject: "Software licensing at {{company_name}}",
+    preheader: "A question about your current licensing, from {{sender_company}}.",
+    blocks: [
+      { kind: "paragraph", text: "Hello, {{first_name}}" },
+      { kind: "paragraph", text: "I'm **{{sender_name}}**, _{{sender_designation}}_ at **{{sender_company}}**. We supply and manage software licensing for organisations across India and the UAE — Microsoft, Adobe, Autodesk and more." },
+      { kind: "paragraph", text: "**The reason I'm writing: most of the teams we work with discover, somewhere between two renewal cycles, that they're paying for seats nobody uses, sitting on the wrong SKU, or renewing at list when a better commercial structure was available all along. It's rarely obvious from inside the business.**" },
+      { kind: "paragraph", text: "_So rather than pitch you anything, I'd rather ask:_" },
+      { kind: "paragraph", text: "==What does your licensing landscape look like right now — which products, roughly how many seats, and when does your next renewal fall due?==" },
+      { kind: "paragraph", text: "**If there's room to improve the commercials or the structure, I'll tell you exactly where. If everything's already optimal, I'll tell you that too, and you'll have a second opinion at no cost.**" },
+      { kind: "paragraph", text: "_Either way, I'd value your reply._" },
+    ],
+  },
   {
     id: "intro-general",
     name: "Introduction — general IT decision maker",
@@ -63,7 +92,6 @@ export const TEMPLATES: EmailTemplate[] = [
       { kind: "paragraph", text: "I am writing because most companies your size are managing licences across several vendors with renewals falling in different months, and it is rarely anybody's full-time job to keep track of it." },
       { kind: "paragraph", text: "If it would be useful, I can put together a short summary of what your current agreements cover and where the renewal dates fall. No obligation — plenty of people find it clarifying even if they stay where they are." },
       { kind: "paragraph", text: "Would that be worth a look? And if licensing sits with somebody else at {{company_name}}, I would be grateful for a pointer." },
-      SIGNATURE,
     ],
   },
   {
@@ -84,7 +112,6 @@ export const TEMPLATES: EmailTemplate[] = [
       ] },
       { kind: "paragraph", text: "Nothing to action today. If you have a renewal coming up, or a licence question that has been sitting on your list, I am happy to look at it — whether or not it turns into anything." },
       { kind: "paragraph", text: "What are you running at the moment?" },
-      SIGNATURE,
     ],
   },
   {
@@ -106,7 +133,6 @@ export const TEMPLATES: EmailTemplate[] = [
       ] },
       { kind: "paragraph", text: "If you have a requirement open now I am glad to quote it. If not, keeping us on file for the next comparison is fine too." },
       { kind: "paragraph", text: "Who should I send a company profile and vendor details to?" },
-      SIGNATURE,
     ],
   },
   {
@@ -127,7 +153,6 @@ export const TEMPLATES: EmailTemplate[] = [
         "Consolidated reporting for finance, and invoicing in the right entity and currency",
       ] },
       { kind: "paragraph", text: "If a review of how your agreements are structured would be useful, I am happy to go through it with your team. If the timing is wrong, tell me roughly when and I will come back then rather than chase." },
-      SIGNATURE,
     ],
   },
   {
@@ -146,7 +171,6 @@ export const TEMPLATES: EmailTemplate[] = [
          chaser that only repeats itself trains people to ignore the sender. */
       { kind: "paragraph", text: "One thing worth mentioning: if any of your Microsoft or Adobe renewals fall in the next quarter, that is usually the point where changes are easiest to make. Happy to check the dates with you if that would help." },
       { kind: "paragraph", text: "If this is not relevant, just say so and I will leave it there." },
-      SIGNATURE,
     ],
   },
   {
@@ -166,7 +190,6 @@ export const TEMPLATES: EmailTemplate[] = [
         "Renewal dates are easier to move at renewal than at any other point. If yours are scattered across the year, that is the moment to align them.",
       ] },
       { kind: "paragraph", text: "If either is useful and you want a hand looking at it, I am here. If not, that is genuinely fine." },
-      SIGNATURE,
     ],
   },
   {
@@ -187,7 +210,6 @@ export const TEMPLATES: EmailTemplate[] = [
         "The billing entity and country, so the invoice is raised correctly",
       ] },
       { kind: "paragraph", text: "If you are not certain on any of it, send what you have and I will come back with options rather than hold things up." },
-      SIGNATURE,
     ],
   },
   {
@@ -207,7 +229,6 @@ export const TEMPLATES: EmailTemplate[] = [
         "**Edition** — features move between plans, and what you needed last year may now sit in a cheaper one, or a dearer one",
       ] },
       { kind: "paragraph", text: "Tell me if anything has changed and I will send a revised quotation. If everything is the same, say so and I will process the renewal as it stands." },
-      SIGNATURE,
     ],
   },
   {
@@ -223,7 +244,6 @@ export const TEMPLATES: EmailTemplate[] = [
       { kind: "paragraph", text: "{{sender_name}} from **{{sender_company}}**. We supply Microsoft licensing — Microsoft 365, Windows, Office, and Azure — for companies in India and the UAE." },
       { kind: "paragraph", text: "Where people usually want help is the plan comparison: Business Standard against Business Premium, or E3 against E5, and whether the security features in the higher tier are ones you would actually use. It is a genuinely awkward comparison and the vendor's own pages do not make it easier." },
       { kind: "paragraph", text: "If you are looking at this now, I can put the options side by side against how your team works. What are you weighing up?" },
-      SIGNATURE,
     ],
   },
   {
@@ -239,7 +259,6 @@ export const TEMPLATES: EmailTemplate[] = [
       { kind: "paragraph", text: "{{sender_name}} from **{{sender_company}}**. We supply Adobe licensing — Creative Cloud for teams, Acrobat, and the single-application plans — across India and the UAE." },
       { kind: "paragraph", text: "The question we are asked most is whether a team needs the full Creative Cloud or whether single-app licences cover it. For a lot of teams a mix works out considerably better, and it is worth checking before renewing everyone on the same plan." },
       { kind: "paragraph", text: "If that is a live question for you, I am happy to look at it. How is your team set up at the moment?" },
-      SIGNATURE,
     ],
   },
   {
@@ -255,7 +274,6 @@ export const TEMPLATES: EmailTemplate[] = [
       { kind: "paragraph", text: "{{sender_name}} from **{{sender_company}}**. We supply Autodesk licensing — AutoCAD, Revit, Inventor and the industry collections — for firms in India and the UAE." },
       { kind: "paragraph", text: "Two things come up repeatedly: whether an industry collection works out better than separate products once you count what the team actually opens, and how to handle people who need a seat for part of the year rather than all of it." },
       { kind: "paragraph", text: "If either is on your mind, I am glad to go through it. What is your team using?" },
-      SIGNATURE,
     ],
   },
   {
@@ -275,14 +293,13 @@ export const TEMPLATES: EmailTemplate[] = [
          to answer months later. */
       { kind: "paragraph", text: "I will stop here rather than keep filling your inbox. If licensing comes up later — a renewal, a new requirement, or a quotation you want compared — my details are below and I am glad to help then." },
       { kind: "paragraph", text: "Thanks for your time, and good luck with the rest of it." },
-      SIGNATURE,
     ],
   },
 ];
 
 /** The default sequence: introduction, then three follow-ups that each add
  *  something, spaced so they never arrive on consecutive days. */
-export const DEFAULT_SEQUENCE = ["intro-general", "followup-1", "followup-2-value", "followup-final"] as const;
+export const DEFAULT_SEQUENCE = ["intro-licensing-audit", "followup-1", "followup-2-value", "followup-final"] as const;
 
 export const byId = (id: string): EmailTemplate | undefined => TEMPLATES.find((t) => t.id === id);
 
