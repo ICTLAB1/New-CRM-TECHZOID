@@ -555,3 +555,42 @@ export async function mySendingAccounts(): Promise<SendingAccount[]> {
     isDefault: !!r.is_default,
   }));
 }
+
+/**
+ * Send one copy of the campaign to yourself, now.
+ *
+ * Bypasses the queue and the throttle entirely — see
+ * netlify/functions/outreach-test-send.mjs. The recipient is NOT a parameter:
+ * the server reads it from your profile, because an endpoint that sends to an
+ * address in the request is a relay.
+ */
+export async function sendTestEmail(args: {
+  subject: string;
+  body: string;
+  fromAccountId: string | null;
+  replyTo?: string;
+  /** Render against this prospect, so the test shows what they would get. */
+  prospectId?: string;
+  greetUnnamed?: boolean;
+  accessToken: string;
+}): Promise<{ to: string }> {
+  const res = await fetch("/.netlify/functions/outreach-test-send", {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${args.accessToken}` },
+    body: JSON.stringify({
+      subject: args.subject,
+      body: args.body,
+      fromAccountId: args.fromAccountId,
+      replyTo: args.replyTo ?? "",
+      prospectId: args.prospectId ?? "",
+      greetUnnamed: !!args.greetUnnamed,
+    }),
+  });
+
+  const text = await res.text();
+  let payload: Record<string, unknown> = {};
+  try { payload = text ? JSON.parse(text) : {}; } catch { /* a proxy error page, not JSON */ }
+
+  if (!res.ok) throw new Error(String(payload.error ?? "The test could not be sent."));
+  return { to: String(payload.to ?? "") };
+}

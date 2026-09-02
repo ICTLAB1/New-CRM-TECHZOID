@@ -12,7 +12,7 @@ import {
 } from "../../domain/outreach/sending";
 import {
   allSendableProspects, campaignProgress, cancelCampaign, launchCampaign, listCampaigns,
-  mySendingAccounts, outreachAvailable, saveCampaign, setCampaignStatus, suppressedAddresses,
+  mySendingAccounts, outreachAvailable, saveCampaign, sendTestEmail, setCampaignStatus, suppressedAddresses,
   type CampaignRow, type CampaignProgress, type ProspectRow, type SendingAccount,
 } from "../../data/outreach";
 import { currentSession } from "../../data/session";
@@ -82,6 +82,7 @@ export function CampaignScreen({ currentUser, settings, preselected, onDoneWithP
   const [greetUnnamed, setGreetUnnamed] = useState(false);
   const [chosen, setChosen] = useState<Set<string>>(new Set(preselected ?? []));
   const [launching, setLaunching] = useState(false);
+  const [testing, setTesting] = useState(false);
 
   const company = (settings["company"] as { name?: string } | undefined)?.name ?? "";
 
@@ -188,6 +189,32 @@ export function CampaignScreen({ currentUser, settings, preselected, onDoneWithP
 
   const canLaunch = !!name.trim() && !!subject.trim() && !!body.trim()
     && summary.sending > 0 && !!fromAccountId && !launching;
+
+  /* The review loop. A campaign drains through a queue every fifteen minutes
+     at one message every ninety seconds, which is right for four hundred
+     strangers and useless for "does this look right?". */
+  async function sendTest() {
+    setTesting(true);
+    try {
+      const session = await currentSession();
+      const token = session?.access_token;
+      if (!token) throw new Error("Your session has expired. Sign in again.");
+
+      const out = await sendTestEmail({
+        subject, body, fromAccountId, replyTo,
+        /* Rendered against the first person who would actually receive it, so
+           the test shows their details rather than a template. */
+        prospectId: audience.send[0]?.id,
+        greetUnnamed,
+        accessToken: token,
+      });
+      toast(`Sent to ${out.to}. It should arrive within a minute.`, "good");
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "The test could not be sent.", "bad");
+    } finally {
+      setTesting(false);
+    }
+  }
 
   async function launch() {
     setLaunching(true);
@@ -482,7 +509,14 @@ export function CampaignScreen({ currentUser, settings, preselected, onDoneWithP
           </p>
         )}
 
-        <div className="row-tight" style={{ marginTop: 12 }}>
+        <div className="row-tight wrap" style={{ marginTop: 12 }}>
+          <Button
+            loading={testing}
+            disabled={!subject.trim() || !body.trim() || !fromAccountId || testing}
+            onClick={() => void sendTest()}
+          >
+            Send a test to me
+          </Button>
           <Button tone="primary" disabled={!canLaunch} loading={launching} onClick={() => void launch()}>
             {summary.sending
               ? `Launch — ${summary.sending} recipient${summary.sending === 1 ? "" : "s"}`
@@ -492,6 +526,12 @@ export function CampaignScreen({ currentUser, settings, preselected, onDoneWithP
             <Button onClick={() => setChosen(new Set())}>Use every prospect instead</Button>
           ) : null}
         </div>
+        <p className="muted small" style={{ marginTop: 8, marginBottom: 0 }}>
+          A test goes to your own address straight away and is marked “[Test]” in the subject —
+          nothing else about it differs, and it spends none of the day’s limit. Launching queues the
+          real thing, which goes out inside your sending hours at the pace set above, so the first
+          message can be up to fifteen minutes away.
+        </p>
       </Card>
 
       {loading ? <p className="muted">Loading…</p> : null}

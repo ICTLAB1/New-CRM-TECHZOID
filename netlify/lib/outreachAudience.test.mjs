@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
 import * as server from "./outreachAudience.mjs";
 import { buildAudience as clientAudience, sendWindow as clientWindow, DEFAULT_SCHEDULE }
   from "../../src/domain/outreach/sending";
@@ -277,5 +278,47 @@ describe("greeting somebody whose name is not known", () => {
     const rendered = renderCampaignFor({ subject: "Hi", body: "Hello {{first_name}}," }, values);
     expect(rendered.body).toBe("Hello there,");
     expect(rendered.body).not.toContain("{{");
+  });
+});
+
+/* ── the test send ─────────────────────────────────────────────────── */
+
+describe("sending yourself a test", () => {
+  /* An authenticated endpoint that sends to an address in the request is a
+     relay: one leaked session and this company's domain delivers somebody
+     else's mail. The recipient must come from the profile, server-side. */
+  it("takes no recipient from the request at all", () => {
+    const src = readFileSync(
+      new URL("../functions/outreach-test-send.mjs", import.meta.url), "utf8",
+    );
+    /* The only assignment to `to` is from the caller's profile. */
+    expect(src).toContain("const to = String(caller.profile?.email");
+    expect(src).not.toMatch(/\bto\s*=\s*(?:String\()?body\./);
+    expect(src).not.toMatch(/body\.(to|recipient|email)\b/);
+  });
+
+  it("never writes to the send queue, so a test cannot spend the day's limit", () => {
+    const src = readFileSync(
+      new URL("../functions/outreach-test-send.mjs", import.meta.url), "utf8",
+    );
+    /* The table is NAMED in a comment saying it is not written to, so this
+       looks for the call rather than the word. */
+    expect(src).not.toMatch(/\.from\(\s*["']outreach_sends["']/);
+    expect(src).not.toMatch(/\.from\(\s*["']outreach_campaigns["']\s*\)[\s\S]{0,200}\.update\(/);
+    expect(src).not.toMatch(/last_contacted_at/);
+  });
+
+  it("checks the mailbox is one the caller may send from", () => {
+    const src = readFileSync(
+      new URL("../functions/outreach-test-send.mjs", import.meta.url), "utf8",
+    );
+    expect(src).toContain("may_manage_email_account");
+  });
+
+  it("marks the subject so a test cannot be mistaken for a real send", () => {
+    const src = readFileSync(
+      new URL("../functions/outreach-test-send.mjs", import.meta.url), "utf8",
+    );
+    expect(src).toContain("[Test]");
   });
 });
