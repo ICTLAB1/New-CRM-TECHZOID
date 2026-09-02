@@ -221,12 +221,16 @@ export function sendWindow({ now, schedule, sentToday, lastSentAt, batchLimit })
   const remaining = schedule.dailyCap - sentToday;
   if (remaining <= 0) return { allowed: 0, hold: "daily-cap" };
 
+  /* The gap is an allowance, not a gate — elapsed time earns sends. See the
+     note in src/domain/outreach/sending.ts. */
+  let earned = batchLimit;
   if (lastSentAt) {
     const waited = (now.getTime() - lastSentAt.getTime()) / 1000;
-    if (waited < schedule.minGapSeconds) return { allowed: 0, hold: "too-soon" };
+    earned = Math.floor(waited / Math.max(1, schedule.minGapSeconds));
+    if (earned < 1) return { allowed: 0, hold: "too-soon" };
   }
 
-  return { allowed: Math.max(0, Math.min(remaining, batchLimit)) };
+  return { allowed: Math.max(0, Math.min(remaining, batchLimit, earned)) };
 }
 
 /** Read a campaign row's throttle into the shape sendWindow wants. */

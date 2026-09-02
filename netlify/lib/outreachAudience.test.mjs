@@ -177,6 +177,28 @@ describe("the server and the browser agree on when to send", () => {
     expect(server.sendWindow(args).hold).toBe("too-soon");
   });
 
+  /* The gap is an allowance, not a gate — both sides must earn sends from
+     elapsed time identically, or the composer's estimate and what actually
+     goes out drift apart. */
+  for (const [label, ago, expected] of [
+    ["one gap", 91_000, 1],
+    ["five minutes", 300_000, 3],
+    ["half an hour", 1_800_000, 20],
+  ]) {
+    it(`agrees how many sends ${label} has earned`, () => {
+      const now = new Date("2026-09-02T05:30:00Z");
+      const args = {
+        now,
+        schedule: DEFAULT_SCHEDULE,
+        sentToday: 1,
+        lastSentAt: new Date(now.getTime() - ago),
+        batchLimit: 20,
+      };
+      expect(server.sendWindow(args)).toEqual(clientWindow(args));
+      expect(server.sendWindow(args).allowed).toBe(expected);
+    });
+  }
+
   it("reads a campaign row's throttle into the shape the rules expect", () => {
     expect(server.scheduleOf({
       daily_cap: 25, min_gap_seconds: 120, send_from_hour: 10, send_to_hour: 17,

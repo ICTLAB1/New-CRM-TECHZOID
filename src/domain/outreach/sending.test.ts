@@ -218,9 +218,34 @@ describe("deciding how many may go out right now", () => {
       .toEqual({ allowed: 0, hold: "too-soon" });
   });
 
-  it("sends again once the gap has passed", () => {
-    const longEnough = new Date(WED_11AM.getTime() - 91_000);
-    expect(sendWindow({ now: WED_11AM, ...base, lastSentAt: longEnough }).allowed).toBe(25);
+  /* THE GAP IS AN ALLOWANCE, NOT A GATE, and treating it as a gate was a bug:
+     a run either sent nothing or sent its whole batch back to back, so "90
+     seconds between messages" was true of the first message of a run and
+     false of every one after it. */
+  it("earns exactly one send when one gap has passed", () => {
+    const oneGap = new Date(WED_11AM.getTime() - 91_000);
+    expect(sendWindow({ now: WED_11AM, ...base, lastSentAt: oneGap }).allowed).toBe(1);
+  });
+
+  it("earns more as more time passes, so a pause catches up", () => {
+    const fiveMinutes = new Date(WED_11AM.getTime() - 5 * 60_000);
+    /* Five minutes at ninety seconds apart is three. */
+    expect(sendWindow({ now: WED_11AM, ...base, lastSentAt: fiveMinutes }).allowed).toBe(3);
+  });
+
+  it("never lets catching up outrun the batch", () => {
+    const anHour = new Date(WED_11AM.getTime() - 3600_000);
+    expect(sendWindow({ now: WED_11AM, ...base, lastSentAt: anHour, batchLimit: 5 }).allowed).toBe(5);
+  });
+
+  it("never lets catching up outrun the daily cap", () => {
+    const anHour = new Date(WED_11AM.getTime() - 3600_000);
+    expect(sendWindow({ now: WED_11AM, ...base, lastSentAt: anHour, sentToday: 48 }).allowed).toBe(2);
+  });
+
+  /* A campaign that has never sent has nothing to space itself from. */
+  it("lets the first message go without waiting", () => {
+    expect(sendWindow({ now: WED_11AM, ...base, lastSentAt: null }).allowed).toBe(25);
   });
 
   it("holds on the day before the hours — a Sunday at noon is not a sending day", () => {

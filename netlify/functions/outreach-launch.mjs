@@ -1,6 +1,7 @@
 import { adminClient, signedInProfile } from "../lib/auth.mjs";
 import { buildAudience, buildValues, withGreetingFallback } from "../lib/outreachAudience.mjs";
 import { renderCampaignFor } from "../lib/outreachRender.mjs";
+import { drainQueue } from "../lib/outreachSender.mjs";
 
 /**
  * Turn a campaign and a list of prospects into a send queue.
@@ -19,8 +20,12 @@ import { renderCampaignFor } from "../lib/outreachRender.mjs";
  * re-derivation that could come out differently next Tuesday because somebody
  * edited the campaign in between.
  *
- * IT DOES NOT SEND. It queues, sets the campaign to 'sending', and returns.
- * The scheduled sender decides when — see outreach-run.mjs.
+ * IT QUEUES, THEN SENDS THE FIRST FEW ITSELF. Queueing alone meant the first
+ * message could be a quarter of an hour behind the person who pressed Launch,
+ * because only the scheduled sender drained the queue. They pressed it,
+ * watched nothing arrive, and concluded the feature was broken — a fair
+ * reading. The throttle is unchanged: what goes out here is what the campaign
+ * is allowed right now, and the schedule carries the rest.
  */
 
 /** Enough for a real list; small enough that the insert cannot outlive the
@@ -193,8 +198,26 @@ export async function handler(event) {
     return json(500, { error: "The recipients were queued but the campaign could not be started. Try Resume.", queued });
   }
 
-  console.log("outreach-launch:", JSON.stringify({ campaignId, queued, excluded: audience.excluded.length }));
-  return json(200, { queued, excluded: audience.excluded.length, sending: true });
+  /* SEND WHAT IT MAY, NOW. Small budget on purpose: a person is waiting on
+     this response, and the point is that the first message leaves before they
+     have finished reading the confirmation — not that the whole campaign goes
+     out in one request. Failing here is not failing the launch: the rows are
+     queued and the schedule will carry them, so a problem draining is logged
+     and the launch still reports success. */
+  let sentNow = 0;
+  try {
+    const drained = await drainQueue(admin, {
+      siteUrl: process.env.URL || process.env.DEPLOY_PRIME_URL || "",
+      batchLimit: 2,
+      campaignId,
+    });
+    sentNow = drained.sent ?? 0;
+  } catch (err) {
+    console.error("outreach-launch: queued but could not start sending —", err?.message ?? err);
+  }
+
+  console.log("outreach-launch:", JSON.stringify({ campaignId, queued, sentNow, excluded: audience.excluded.length }));
+  return json(200, { queued, sentNow, excluded: audience.excluded.length, sending: true });
 }
 
 const json = (statusCode, payload) => ({

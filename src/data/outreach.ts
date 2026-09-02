@@ -507,7 +507,7 @@ export async function launchCampaign(args: {
    *  server is what actually renders the words that get sent. */
   greetUnnamed?: boolean;
   accessToken: string;
-}): Promise<{ queued: number; excluded: number }> {
+}): Promise<{ queued: number; excluded: number; sentNow: number }> {
   const res = await fetch("/.netlify/functions/outreach-launch", {
     method: "POST",
     headers: { "content-type": "application/json", authorization: `Bearer ${args.accessToken}` },
@@ -524,7 +524,13 @@ export async function launchCampaign(args: {
   try { payload = text ? JSON.parse(text) : {}; } catch { /* a proxy error page, not JSON */ }
 
   if (!res.ok) throw new Error(String(payload.error ?? text ?? "The campaign could not be launched."));
-  return { queued: Number(payload.queued ?? 0), excluded: Number(payload.excluded ?? 0) };
+  return {
+    queued: Number(payload.queued ?? 0),
+    excluded: Number(payload.excluded ?? 0),
+    /* The server sends the first few itself, so a person watching sees
+       something happen rather than a queue. */
+    sentNow: Number(payload.sentNow ?? 0),
+  };
 }
 
 /* ── mailboxes a campaign may send from ────────────────────────────── */

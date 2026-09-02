@@ -274,12 +274,24 @@ export function sendWindow(args: {
   const remaining = args.schedule.dailyCap - args.sentToday;
   if (remaining <= 0) return { allowed: 0, hold: "daily-cap" };
 
+  /* THE GAP IS AN ALLOWANCE, NOT A GATE, and that distinction was a bug.
+     Treating it as a gate meant a run either sent nothing or sent its whole
+     batch back to back — the spacing held between runs and not within one,
+     so "90 seconds between messages" was true of the first message of a run
+     and false of the rest.
+     
+     Elapsed time earns sends: at ninety seconds apart, five minutes of
+     waiting has earned three. That paces correctly however often the sender
+     happens to run, which matters because it now runs both on a schedule and
+     immediately after a launch. */
+  let earned = args.batchLimit;
   if (args.lastSentAt) {
     const waited = (args.now.getTime() - args.lastSentAt.getTime()) / 1000;
-    if (waited < args.schedule.minGapSeconds) return { allowed: 0, hold: "too-soon" };
+    earned = Math.floor(waited / Math.max(1, args.schedule.minGapSeconds));
+    if (earned < 1) return { allowed: 0, hold: "too-soon" };
   }
 
-  return { allowed: Math.max(0, Math.min(remaining, args.batchLimit)) };
+  return { allowed: Math.max(0, Math.min(remaining, args.batchLimit, earned)) };
 }
 
 /**

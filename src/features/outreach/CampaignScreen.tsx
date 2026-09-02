@@ -242,9 +242,11 @@ export function CampaignScreen({ currentUser, settings, preselected, onDoneWithP
       });
 
       toast(
-        out.queued
-          ? `${out.queued} queued. The first will go out within about fifteen minutes, inside your sending hours.`
-          : "Nothing was queued — everybody on that list was excluded.",
+        !out.queued
+          ? "Nothing was queued — everybody on that list was excluded."
+          : out.sentNow
+            ? `${out.queued} queued, ${out.sentNow} already on the way. The rest follow at the pace set above.`
+            : `${out.queued} queued. Nothing has gone out yet — outside your sending hours, or the day's limit is spent.`,
         out.queued ? "good" : "warn",
       );
 
@@ -528,9 +530,9 @@ export function CampaignScreen({ currentUser, settings, preselected, onDoneWithP
         </div>
         <p className="muted small" style={{ marginTop: 8, marginBottom: 0 }}>
           A test goes to your own address straight away and is marked “[Test]” in the subject —
-          nothing else about it differs, and it spends none of the day’s limit. Launching queues the
-          real thing, which goes out inside your sending hours at the pace set above, so the first
-          message can be up to fifteen minutes away.
+          nothing else about it differs, and it spends none of the day’s limit. Launching starts
+          sending immediately: the first messages leave within seconds, and the rest follow at the
+          pace set above, pausing outside your sending hours.
         </p>
       </Card>
 

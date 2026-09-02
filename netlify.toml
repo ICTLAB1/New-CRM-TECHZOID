@@ -15,18 +15,24 @@
 [functions."followups-run"]
   schedule = "0 4 * * *"
 
-# The campaign sender. Every 15 minutes, not because a campaign is urgent but
-# because the throttle is enforced per run: 90 seconds between messages means
-# a run that could send twenty spends most of its time waiting, so it sends
-# what it may and comes back. The function itself decides whether the moment
-# is inside the campaign's own sending window — most runs correctly send
-# nothing, including every run overnight and at the weekend.
+# The campaign sender. Every two minutes, because the pacing lives in the
+# rules rather than in how often this runs: sendWindow works out how many
+# messages the elapsed time has earned at the campaign's own gap, so running
+# often makes a campaign responsive without making it faster. Fifteen minutes
+# was the first version and it was wrong in a way nobody would have called a
+# bug — the first message of a campaign was up to a quarter of an hour behind
+# the person who pressed Launch, which reads as broken.
+#
+# A launch now also drains a couple of messages itself, so the first one
+# leaves in seconds. This carries the rest across the hours that follow, and
+# most runs correctly send nothing: outside sending hours, at the weekend,
+# once the cap is spent, or because not enough time has passed.
 #
 # Declared here as well as in the function file: the schedule is the whole
 # feature, and a scheduled function that silently is not scheduled looks
 # exactly like a campaign with nothing left to send.
 [functions."outreach-run"]
-  schedule = "*/15 * * * *"
+  schedule = "*/2 * * * *"
 
 [[redirects]]
   from = "/*"
