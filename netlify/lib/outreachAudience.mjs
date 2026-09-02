@@ -164,6 +164,23 @@ export function buildValues(row, sender) {
   };
 }
 
+/**
+ * A polite fallback for a first name. Mirrors GREETING_FALLBACK in
+ * src/domain/outreach/personalise.ts.
+ *
+ * NEVER applied on its own. A campaign opts into it, and both the screen and
+ * this file then apply it BEFORE the rules run, so the person is not missing
+ * a name rather than being excluded and then smuggled past the exclusion.
+ */
+export const GREETING_FALLBACK = "there";
+
+/** Fill an absent first name, when the campaign asked for it. */
+export function withGreetingFallback(values, greetUnnamed) {
+  if (!greetUnnamed) return values;
+  if (String(values.first_name ?? "").trim()) return values;
+  return { ...values, first_name: GREETING_FALLBACK };
+}
+
 /* ── how fast, and when ────────────────────────────────────────────── */
 
 /** The campaign's local wall clock: ISO weekday, hour, calendar date. */

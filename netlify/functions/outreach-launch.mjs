@@ -1,5 +1,5 @@
 import { adminClient, signedInProfile } from "../lib/auth.mjs";
-import { buildAudience, buildValues } from "../lib/outreachAudience.mjs";
+import { buildAudience, buildValues, withGreetingFallback } from "../lib/outreachAudience.mjs";
 import { renderCampaignFor } from "../lib/outreachRender.mjs";
 
 /**
@@ -47,6 +47,7 @@ export async function handler(event) {
   const campaignId = String(body.campaignId ?? "");
   const prospectIds = Array.isArray(body.prospectIds) ? body.prospectIds.map(String) : [];
   const allowMissing = !!body.allowMissing;
+  const greetUnnamed = !!body.greetUnnamed;
 
   if (!campaignId) return json(400, { error: "Which campaign?" });
   if (!prospectIds.length) return json(400, { error: "Choose at least one prospect." });
@@ -129,7 +130,10 @@ export async function handler(event) {
     candidates: (prospects ?? []).map((p) => ({
       id: String(p.id),
       email: String(p.email ?? ""),
-      values: buildValues(p, sender),
+      /* The same fallback the screen applied, applied here too. Without it
+         the screen would show "Hello there," in its preview and this would
+         render "Hello {{first_name}}," into the actual email. */
+      values: withGreetingFallback(buildValues(p, sender), greetUnnamed),
       quarantined: !!p.quarantined,
       verificationStatus: String(p.verification_status ?? "Unknown"),
     })),

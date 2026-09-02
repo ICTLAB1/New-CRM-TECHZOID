@@ -5,7 +5,7 @@ import {
 } from "../../components/primitives";
 import { useToast } from "../../components/Toast";
 import { TEMPLATES, byId } from "../../domain/outreach/templates";
-import { valuesFor } from "../../domain/outreach/personalise";
+import { GREETING_FALLBACK, valuesFor } from "../../domain/outreach/personalise";
 import {
   DEFAULT_SCHEDULE, audienceSummary, buildAudience, excludedByReason,
   perHourCeiling, workingDaysNeeded, type Schedule,
@@ -16,6 +16,7 @@ import {
   type CampaignRow, type CampaignProgress, type ProspectRow, type SendingAccount,
 } from "../../data/outreach";
 import { currentSession } from "../../data/session";
+import { RecipientsPicker } from "./RecipientsPicker";
 import type { Block } from "../../domain/outreach/emailHtml";
 
 /**
@@ -76,6 +77,9 @@ export function CampaignScreen({ currentUser, settings, preselected, onDoneWithP
   const [replyTo, setReplyTo] = useState("");
   const [schedule, setSchedule] = useState<Schedule>(DEFAULT_SCHEDULE);
   const [allowMissing, setAllowMissing] = useState(false);
+  /* personalise.ts defines GREETING_FALLBACK and deliberately does not
+     apply it by itself. This is the deliberate choice it was waiting for. */
+  const [greetUnnamed, setGreetUnnamed] = useState(false);
   const [chosen, setChosen] = useState<Set<string>>(new Set(preselected ?? []));
   const [launching, setLaunching] = useState(false);
 
@@ -94,7 +98,10 @@ export function CampaignScreen({ currentUser, settings, preselected, onDoneWithP
       setAccounts(accs);
       setProspects(ps);
       setSuppressed(sup);
-      if (!fromAccountId) setFromAccountId(accs.find((a) => a.isDefault)?.id ?? accs[0]?.id ?? null);
+      /* Functional form, so `fromAccountId` need not be a dependency of this
+         callback. It was, and because this also sets it, every mount fetched
+         everything twice. */
+      setFromAccountId((current) => current ?? accs.find((a) => a.isDefault)?.id ?? accs[0]?.id ?? null);
 
       const live = cs.filter((c) => c.status === "sending" || c.status === "paused");
       const tallies = await Promise.all(live.map((c) => campaignProgress(c.id).then((p) => [c.id, p] as const)));
@@ -104,7 +111,7 @@ export function CampaignScreen({ currentUser, settings, preselected, onDoneWithP
     } finally {
       setLoading(false);
     }
-  }, [available, fromAccountId, toast]);
+  }, [available, toast]);
 
   useEffect(() => { void refresh(); }, [refresh]);
 
@@ -123,14 +130,22 @@ export function CampaignScreen({ currentUser, settings, preselected, onDoneWithP
   const candidates = useMemo(
     () => prospects
       .filter((p) => chosen.size === 0 || chosen.has(p.id))
-      .map((p) => ({
-        id: p.id,
-        email: p.email,
-        values: valuesFor(p, sender),
-        quarantined: p.quarantined,
-        verificationStatus: p.verificationStatus,
-      })),
-    [prospects, chosen, sender],
+      .map((p) => {
+        const values = valuesFor(p, sender);
+        /* Filled in BEFORE the rules run, so somebody with no name simply is
+           not missing one any more — rather than being excluded and then
+           smuggled past the exclusion. The audience rules stay untouched,
+           which keeps them identical to the server's copy. */
+        if (greetUnnamed && !values.first_name?.trim()) values.first_name = GREETING_FALLBACK;
+        return {
+          id: p.id,
+          email: p.email,
+          values,
+          quarantined: p.quarantined,
+          verificationStatus: p.verificationStatus,
+        };
+      }),
+    [prospects, chosen, sender, greetUnnamed],
   );
 
   /* The same rules the server will apply. See the note at the top. */
@@ -191,6 +206,11 @@ export function CampaignScreen({ currentUser, settings, preselected, onDoneWithP
         campaignId: saved.id,
         prospectIds: audience.send.map((r) => r.id),
         allowMissing,
+        /* The server applies the same fallback before running the rules, so
+           from its point of view those people are not missing a name either.
+           Forcing allowMissing here instead would ALSO let a missing company
+           through, which this screen never offered. */
+        greetUnnamed,
         accessToken: token,
       });
 
@@ -346,6 +366,15 @@ export function CampaignScreen({ currentUser, settings, preselected, onDoneWithP
         ) : null}
       </Card>
 
+      <RecipientsPicker
+        ownerId={currentUser.id}
+        prospects={prospects}
+        suppressed={suppressed}
+        selected={chosen}
+        onSelectedChange={setChosen}
+        onImported={() => void refresh()}
+      />
+
       <Card title="How fast" padded>
         <div className="grid grid-2">
           <Field label="Most per day" hint="Fifty from one mailbox is unremarkable. Two hundred from a new domain is not.">
@@ -430,9 +459,13 @@ export function CampaignScreen({ currentUser, settings, preselected, onDoneWithP
           </table>
         ) : null}
 
-        <label className="row-tight small" style={{ margin: "12px 0" }}>
+        <label className="row-tight small" style={{ margin: "12px 0 4px" }}>
+          <input type="checkbox" checked={greetUnnamed} onChange={(e) => setGreetUnnamed(e.target.checked)} />
+          Greet anyone with no first name as “{GREETING_FALLBACK}” — for shared inboxes like procurement@
+        </label>
+        <label className="row-tight small" style={{ margin: "0 0 12px" }}>
           <input type="checkbox" checked={allowMissing} onChange={(e) => setAllowMissing(e.target.checked)} />
-          Send even where a detail is missing — the variable will appear literally, braces and all
+          Send even where a detail is still missing — that variable will appear literally, braces and all
         </label>
 
         {preview ? (

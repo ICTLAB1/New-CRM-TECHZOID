@@ -501,6 +501,11 @@ export async function launchCampaign(args: {
   campaignId: string;
   prospectIds: readonly string[];
   allowMissing?: boolean;
+  /** Fill an absent first name with "there" before rendering, so a shared
+   *  inbox gets "Hello there," rather than a literal variable. The server
+   *  applies it too — see netlify/functions/outreach-launch.mjs — because the
+   *  server is what actually renders the words that get sent. */
+  greetUnnamed?: boolean;
   accessToken: string;
 }): Promise<{ queued: number; excluded: number }> {
   const res = await fetch("/.netlify/functions/outreach-launch", {
@@ -510,6 +515,7 @@ export async function launchCampaign(args: {
       campaignId: args.campaignId,
       prospectIds: args.prospectIds,
       allowMissing: !!args.allowMissing,
+      greetUnnamed: !!args.greetUnnamed,
     }),
   });
 

@@ -235,3 +235,47 @@ describe("every campaign email carries a way out", () => {
     expect(html).toContain("&lt;script&gt;");
   });
 });
+
+/* ── the greeting fallback ─────────────────────────────────────────── */
+
+describe("greeting somebody whose name is not known", () => {
+  const parts = { subject: "Hi", body: "Hello {{first_name}}," };
+  const nameless = [{ id: "1", email: "procurement@acme.example", values: { company_name: "Acme" }, verificationStatus: "Role-based" }];
+
+  it("holds a nameless recipient back when the campaign has not asked for it", () => {
+    const a = server.buildAudience({ candidates: nameless, parts });
+    expect(a.send).toEqual([]);
+    expect(a.excluded[0].reason).toBe("missing-data");
+  });
+
+  /* Applied BEFORE the rules, so the person is not missing a name rather
+     than being excluded and then smuggled past the exclusion. */
+  it("sends to them once it has been asked for, with a real greeting", () => {
+    const candidates = nameless.map((c) => ({ ...c, values: server.withGreetingFallback(c.values, true) }));
+    const a = server.buildAudience({ candidates, parts });
+    expect(a.send).toHaveLength(1);
+    expect(server.fill(parts.body, a.send[0].values).text).toBe("Hello there,");
+  });
+
+  it("never overwrites a name somebody actually has", () => {
+    expect(server.withGreetingFallback({ first_name: "Ravi" }, true).first_name).toBe("Ravi");
+  });
+
+  it("does nothing at all unless the campaign asked", () => {
+    expect(server.withGreetingFallback({ first_name: "" }, false).first_name).toBe("");
+  });
+
+  it("uses the same word as the browser does", async () => {
+    const { GREETING_FALLBACK } = await import("../../src/domain/outreach/personalise");
+    expect(server.GREETING_FALLBACK).toBe(GREETING_FALLBACK);
+  });
+
+  /* The failure this guards: the screen previews "Hello there," and the
+     server renders "Hello {{first_name}}," into the email that goes out. */
+  it("does not leave a literal variable in the rendered message", () => {
+    const values = server.withGreetingFallback({ company_name: "Acme" }, true);
+    const rendered = renderCampaignFor({ subject: "Hi", body: "Hello {{first_name}}," }, values);
+    expect(rendered.body).toBe("Hello there,");
+    expect(rendered.body).not.toContain("{{");
+  });
+});
