@@ -22,6 +22,25 @@ const page = (statusCode, title, message, ok) => ({
 export async function handler(event) {
   const params = event.queryStringParameters || {};
 
+  /* THE ADMINISTRATOR COMING BACK from Microsoft's /adminconsent screen.
+     That endpoint returns admin_consent=True and a tenant id rather than an
+     authorization code, so without this the admin would land on "the
+     response from Microsoft was incomplete" immediately after doing the one
+     thing everybody had been asking them to do. */
+  if (params.admin_consent !== undefined) {
+    const granted = String(params.admin_consent).toLowerCase() === "true";
+    return granted
+      ? page(200, "Approved for the whole organisation",
+          "Microsoft has recorded your approval. Everyone here can now connect their own mailbox "
+          + "from Settings \u2192 Integrations without being stopped \u2014 including anybody who hit "
+          + "\u201cNeed admin approval\u201d before. You do not need to do this again unless the "
+          + "permissions the CRM asks for change.", true)
+      : page(200, "Not approved",
+          "Nothing was changed. Colleagues will keep seeing \u201cNeed admin approval\u201d when they "
+          + "try to connect a mailbox, and quotation email from their own address will not work "
+          + "until this is granted.", false);
+  }
+
   if (params.error) {
     /* Microsoft's own text, escaped. It is a query-string value and so is
        attacker-controlled. */
@@ -42,12 +61,15 @@ export async function handler(event) {
     if (needsAdmin) {
       return page(200, "Your Microsoft administrator has to approve this once",
         "This is not something you can fix from here, and nothing is wrong with your account. "
-        + "The CRM is asking for a permission your organisation has not approved yet, so Microsoft "
-        + "is holding it until an administrator says yes. "
-        + "Ask whoever manages your Microsoft 365 tenant to open Entra admin centre → App "
-        + "registrations → TechZoid CRM → API permissions, and press \u201cGrant admin consent\u201d. "
-        + "It takes a moment and only needs doing once for the whole company \u2014 after that, "
-        + "come back to Settings \u2192 Integrations and connect your mailbox again.",
+        + "Your organisation only allows apps from Microsoft-verified publishers to be approved by "
+        + "users themselves; this one is not verified, so Microsoft holds it until an administrator "
+        + "says yes. "
+        + "Ask an administrator to open Settings \u2192 Integrations in this CRM and use "
+        + "\u201cApprove for the whole organisation\u201d \u2014 one screen, one click, and it covers "
+        + "everybody here permanently. "
+        + "Hunting for the app under Entra \u2192 App registrations is the thing to avoid: it will not "
+        + "be listed there unless it was registered in this tenant, which is why it can look as "
+        + "though the app does not exist.",
         false);
     }
 

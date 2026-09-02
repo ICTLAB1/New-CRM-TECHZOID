@@ -154,9 +154,12 @@ function MailboxPanel({ api, user }: { api: IntegrationsApi; user: { role: strin
 
       {isAdmin(user.role) ? (
         <div style={{ marginTop: 14, borderTop: "1px solid var(--rule)", paddingTop: 14 }}>
-          <Button size="sm" tone="default" onClick={() => setShowSetup((v) => !v)}>
-            {showSetup ? "Hide the one-time setup" : "One-time setup for the company"}
-          </Button>
+          <AdminConsent />
+          <div style={{ marginTop: 14 }}>
+            <Button size="sm" tone="default" onClick={() => setShowSetup((v) => !v)}>
+              {showSetup ? "Hide the one-time setup" : "One-time setup for the company"}
+            </Button>
+          </div>
           {showSetup ? <AzureSetup api={api} /> : null}
         </div>
       ) : null}
@@ -264,17 +267,19 @@ function AzureSetup({ api }: { api: IntegrationsApi }) {
             <div className="step-title">Add the send permission</div>
             <div>
               API permissions → Add a permission → Microsoft Graph → <strong>Delegated permissions</strong>.
-              Tick <code className="mono">Mail.Send</code>, <code className="mono">Mail.Read</code>,{" "}
-              <code className="mono">User.Read</code> and <code className="mono">offline_access</code>, then Add.
+              Tick <code className="mono">Mail.Send</code>, <code className="mono">User.Read</code> and{" "}
+              <code className="mono">offline_access</code>, then Add.
             </div>
             <div className="field-hint">
               Delegated, not Application. The CRM sends as the signed-in person, never as the whole tenant.
             </div>
             <div className="field-hint">
-              <strong>Mail.Read</strong> is read-only and is used for one thing: noticing when a
-              prospect replies, so an outreach sequence stops chasing somebody who has already
-              answered. Anyone whose mailbox is already connected must disconnect and reconnect
-              once for it to take effect.
+              <strong>Not Mail.Read.</strong> It was on this list and has been taken off. Reply
+              detection — noticing when a prospect answers, so a sequence stops chasing them — is not
+              built yet, so asking for it now would be a permission granted and never used. Worse,
+              every change to this list sends everybody back to “Need admin approval”, including
+              people an administrator had already approved. It will be asked for at the point that
+              feature is switched on, by the person switching it on.
             </div>
           </div>
         </li>
@@ -864,5 +869,67 @@ function WebhooksPanel({
         </span>
       </div>
     </Card>
+  );
+}
+
+/**
+ * Approving the CRM for the whole organisation, in one click.
+ *
+ * WHY THIS IS A BUTTON AND NOT A PARAGRAPH. The paragraph existed — open
+ * Entra, find App registrations, find TechZoid CRM, API permissions, Grant
+ * admin consent — and it sent an administrator to a blade where the app was
+ * not listed, because an app registered in one tenant does not appear under
+ * App registrations in another. They looked, found nothing, and concluded
+ * the app did not exist, while colleagues kept hitting "Need admin
+ * approval".
+ *
+ * Microsoft's /adminconsent endpoint has none of that problem: it takes the
+ * client id and grants for the whole tenant, wherever the registration
+ * lives. The server builds the link, because only the server knows the
+ * client id.
+ */
+function AdminConsent() {
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+
+  async function open() {
+    setBusy(true);
+    try {
+      const res = await fetch("/.netlify/functions/ms-admin-consent", { credentials: "include" });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok || !payload?.url) {
+        throw new Error(String(payload?.error ?? "Could not build the approval link."));
+      }
+      /* A new tab, so nothing half-filled on this screen is lost, and so the
+         admin can come back and read the rest. */
+      window.open(String(payload.url), "_blank", "noopener,noreferrer");
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Could not build the approval link.", "bad");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div>
+      <Button size="sm" tone="primary" loading={busy} onClick={() => void open()}>
+        Approve for the whole organisation
+      </Button>
+      <p className="field-hint" style={{ marginTop: 8 }}>
+        Opens Microsoft's approval screen. Sign in there as a Global Administrator and accept once —
+        after that nobody here sees <strong>“Need admin approval”</strong> again, and everyone can
+        connect their own mailbox.
+      </p>
+      <p className="field-hint">
+        You are approving the same three things a single person would approve for themselves: send
+        mail as themselves, read their own name and address, and stay signed in. Nothing reads
+        anybody else's mailbox, and nothing is tenant-wide.
+      </p>
+      <p className="field-hint">
+        Needed because this app is not a Microsoft-verified publisher, and most tenants only let
+        people approve verified apps for themselves. It is one screen, and it does not need repeating
+        unless the permissions change.
+      </p>
+    </div>
   );
 }

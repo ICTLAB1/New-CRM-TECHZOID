@@ -593,8 +593,32 @@ describe("Microsoft Graph scopes", () => {
     expect(refreshed).not.toContain("Mail.Read");
   });
 
-  it("asks for Mail.Read at consent time, which reply detection needs", async () => {
-    expect(await scopesIn("../functions/ms-oauth-start.mjs")).toContain("Mail.Read");
+  /* THIS ASSERTED THE OPPOSITE, and the change is the point. Mail.Read was
+     added to the consent request for a reply-detection feature that has not
+     been built, so it was a permission asked for and never used — and every
+     change to the scope list sends every user in a tenant that restricts
+     consent back to "Need admin approval", including ones an administrator
+     had already approved. That is exactly what happened: consent was
+     granted, Mail.Read was added, and the next colleague to connect was
+     stopped again.
+
+     When reply detection exists it should ask for Mail.Read incrementally,
+     at the moment somebody turns that feature on. READ_SCOPES in mailer.mjs
+     is already written for it. */
+  it("does not ask for Mail.Read until something actually reads mail", async () => {
+    expect(await scopesIn("../functions/ms-oauth-start.mjs")).not.toContain("Mail.Read");
+  });
+
+  /* An administrator approving for the whole tenant and a user approving for
+     themselves must be approving the SAME list. Consent granted for a
+     different set than the one later requested puts everybody straight back
+     on the approval screen, which is the failure the admin-consent button
+     exists to end. */
+  it("admin consent covers exactly what a user would be asked for", async () => {
+    const user = await scopesIn("../functions/ms-oauth-start.mjs");
+    const admin = await scopesIn("../functions/ms-admin-consent.mjs");
+    expect(admin, "ms-admin-consent.mjs declares no SCOPES").not.toBeNull();
+    expect([...admin].sort()).toEqual([...user].sort());
   });
 });
 

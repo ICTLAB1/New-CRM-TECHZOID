@@ -5,23 +5,29 @@ import { consume, tooManyMessage } from "../lib/ratelimit.mjs";
 
 /* Scopes each user grants:
      Mail.Send       send mail as themselves
-     Mail.Read       read their own mailbox, to notice a prospect's REPLY
      offline_access  a refresh token, so the CRM can send later
      User.Read       their name and address, to show "Connected as …"
 
-   MAIL.READ WAS ADDED FOR ONE PURPOSE and it is worth being precise about
-   it, because it is the permission a customer's IT department will ask
-   about. An outreach sequence that keeps chasing somebody who already
-   replied is the single most damaging thing this module could do, and the
-   only way to know a reply arrived is to look. It is DELEGATED and
-   read-only: the CRM sees the signed-in person's own mailbox, never anyone
-   else's, and never the tenant's.
+   MAIL.READ IS NOT ASKED FOR, and was removed after being added too early.
+   It is wanted eventually — an outreach sequence that keeps chasing somebody
+   who already replied is the worst thing this module could do, and the only
+   way to know a reply arrived is to look — but reply detection does not
+   exist yet, so today it would be a permission requested and never used.
 
-   Adding it widens the consent screen, so EVERY ALREADY-CONNECTED MAILBOX
-   MUST RECONNECT ONCE. An old refresh token does not silently gain a scope
-   — it keeps working for sending and simply cannot read, so the failure is
-   quiet unless the UI says so. It does. */
-const SCOPES = "openid profile offline_access User.Read Mail.Send Mail.Read";
+   Asking for it early was not free. Every scope on the consent screen is one
+   an IT department has to approve, and in a tenant that restricts consent to
+   verified publishers — the default for tenants created since 2020 — any
+   change to the scope list sends every user back to "Need admin approval",
+   including users an administrator had already approved. That is what
+   happened here: consent was granted, Mail.Read was added, and the next
+   colleague to connect was stopped again.
+
+   When reply detection is built it should ask for Mail.Read AT THAT POINT,
+   incrementally, from the person turning it on — which is how a permission
+   should be explained anyway: at the moment somebody chooses the feature
+   that needs it. READ_SCOPES in ../lib/mailer.mjs is already written for
+   exactly that. */
+const SCOPES = "openid profile offline_access User.Read Mail.Send";
 
 export async function handler(event) {
   const stop = guard(event);
