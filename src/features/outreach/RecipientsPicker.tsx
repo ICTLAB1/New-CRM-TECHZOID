@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Button, Card, Chip, Empty, Field, Input, Tabs, Textarea } from "../../components/primitives";
 import { useToast } from "../../components/Toast";
 import { ImportWizard } from "./ImportWizard";
+import { SampleDownload } from "./SampleDownload";
 import { enrichFromAddress, parsePastedList, pasteSummary } from "../../domain/outreach/paste";
 import { importProspects, type ProspectRow } from "../../data/outreach";
 import { isEligible } from "../../domain/outreach/verify";
@@ -241,7 +242,14 @@ export function RecipientsPicker({
             For a real export — Apollo, Sales Navigator, a conference list. You will see the column
             mapping and exactly how many rows will be imported before anything is written.
           </p>
-          <Button tone="primary" onClick={() => setImporting(true)}>Choose a file</Button>
+          <div className="row-tight wrap">
+            <Button tone="primary" onClick={() => setImporting(true)}>Choose a file</Button>
+            <SampleDownload compact />
+          </div>
+          <p className="muted small">
+            Not sure what the file should look like? Download the sample, replace the four example
+            rows with your own, and upload it back.
+          </p>
           <ImportWizard
             open={importing}
             ownerId={ownerId}

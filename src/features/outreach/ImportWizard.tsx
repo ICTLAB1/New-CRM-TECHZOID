@@ -8,6 +8,7 @@ import {
   type ImportAudit, type ProspectField,
 } from "../../domain/outreach/importMap";
 import { importProspects } from "../../data/outreach";
+import { SampleDownload } from "./SampleDownload";
 
 /**
  * Bringing a list of people into the CRM.
@@ -154,16 +155,21 @@ export function ImportWizard({ open, ownerId, existing, suppressed, onClose, onI
       }
     >
       {step === "file" ? (
-        <Field label="Choose a file" hint="Read in your browser. Nothing is uploaded until you press Import.">
-          <input
-            type="file"
-            accept=".csv,text/csv,text/plain"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) void readFile(file);
-            }}
-          />
-        </Field>
+        <>
+          <Field label="Choose a file" hint="Read in your browser. Nothing is uploaded until you press Import.">
+            <input
+              type="file"
+              accept=".csv,text/csv,text/plain"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) void readFile(file);
+              }}
+            />
+          </Field>
+          <Card title="Not sure what the file should look like?" padded>
+            <SampleDownload />
+          </Card>
+        </>
       ) : null}
 
       {step === "map" && parsed ? (
