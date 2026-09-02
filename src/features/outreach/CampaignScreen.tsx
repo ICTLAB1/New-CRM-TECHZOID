@@ -19,6 +19,7 @@ import {
 } from "../../data/outreach";
 import { currentSession } from "../../data/session";
 import { RecipientsPicker } from "./RecipientsPicker";
+import { SenderPanel } from "./SenderPanel";
 import type { Block } from "../../domain/outreach/emailHtml";
 
 /**
@@ -130,16 +131,23 @@ export function CampaignScreen({ currentUser, settings, preselected, onDoneWithP
      same: this passed the designation only as `signature`, and the server
      passed no company at all, so {{sender_company}} was filled here and
      literal in the email. */
+  /* Saving a job title from the panel below has to change the preview
+     immediately. The profile is loaded by the app shell, so rather than
+     plumb a callback all the way up, the freshly saved value is held here
+     and wins over the copy this screen was handed. */
+  const [designationOverride, setDesignationOverride] = useState<string | null>(null);
+  const designation = designationOverride ?? currentUser.designation ?? "";
+
   const sender = useMemo(
     () => ({
       name: currentUser.name,
       email: currentUser.email ?? "",
       company,
-      designation: currentUser.designation ?? "",
+      designation,
       phone: String((settings["company"] as { phone?: string } | undefined)?.phone ?? ""),
-      signature: currentUser.designation ?? "",
+      signature: designation,
     }),
-    [currentUser, company, settings],
+    [currentUser, company, settings, designation],
   );
 
   const candidates = useMemo(
@@ -182,8 +190,8 @@ export function CampaignScreen({ currentUser, settings, preselected, onDoneWithP
      A preview that says "Hello {{first_name}}" proves nothing about whether
      the data behind the campaign is any good. */
   const signatureHtml = useMemo(
-    () => renderSignature(signatureFrom(settings, currentUser)),
-    [settings, currentUser],
+    () => renderSignature(signatureFrom(settings, { ...currentUser, designation })),
+    [settings, currentUser, designation],
   );
 
   const preview = useMemo(() => {
@@ -409,6 +417,13 @@ export function CampaignScreen({ currentUser, settings, preselected, onDoneWithP
         >
           <Textarea rows={12} value={body} onChange={(e) => setBody(e.target.value)} />
         </Field>
+
+        <SenderPanel
+          sender={sender}
+          subject={subject}
+          body={body}
+          onDesignationSaved={setDesignationOverride}
+        />
 
         {audience.unknownVariables.length ? (
           <Card title="Check these" padded>

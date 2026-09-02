@@ -89,3 +89,28 @@ export function readableAuthError(message: string): string {
   if (m.includes("network") || m.includes("fetch")) return "Couldn't reach the server. Check your connection.";
   return "Couldn't sign in. Try again, or ask an admin to reset your password.";
 }
+
+/**
+ * Set your own job title.
+ *
+ * WHY THIS IS NOT THE ADMIN ENDPOINT. Team management goes through
+ * admin-users.mjs behind an Admin check, because handing out roles and
+ * resetting passwords is an administrator's job. A job title is not: it is
+ * the line under your own name at the foot of email you send, and the person
+ * who knows it is you. Routing it through the admin function would mean every
+ * salesperson had to ask somebody else to type their own title in.
+ *
+ * It is safe as a direct write because profiles_update_self_or_admin already
+ * governs it: `using (auth.uid() = id or is_admin())` limits the row to your
+ * own, and the `with check` clause refuses any change that would alter the
+ * role of a non-admin. So the worst this can do is change your own title.
+ */
+export async function setMyDesignation(designation: string): Promise<void> {
+  const session = await currentSession();
+  if (!session) throw new Error("You're signed out. Sign in again and retry.");
+  const { error } = await getSupabase()
+    .from("profiles")
+    .update({ designation: designation.trim() })
+    .eq("id", session.user.id);
+  if (error) throw new Error("Couldn't save your job title. Try again in a moment.");
+}
