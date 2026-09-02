@@ -23,6 +23,17 @@ export const NAV: NavSection[] = [
     ],
   },
   {
+    /* Before "Sell" would be wrong — this is where deals come from, but a
+       salesperson opens the CRM to work the pipeline, not to import a list.
+       Its own group because outreach is a different job from selling to
+       somebody who has already replied. */
+    label: "Find",
+    items: [
+      { id: "prospects", label: "Prospects" },
+      { id: "campaigns", label: "Campaigns" },
+    ],
+  },
+  {
     label: "Buy",
     items: [
       { id: "purchase-orders", label: "Purchase orders" },

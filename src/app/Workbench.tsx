@@ -24,6 +24,8 @@ import { TeamScreen, type TeamMember } from "../features/team/TeamScreen";
 import { IncentivesScreen } from "../features/incentives/IncentivesScreen";
 import { ActivityScreen } from "../features/activity/ActivityScreen";
 import { AssistantScreen } from "../features/assistant/AssistantScreen";
+import { ProspectsScreen } from "../features/outreach/ProspectsScreen";
+import { CampaignScreen } from "../features/outreach/CampaignScreen";
 import { integrations } from "../integrations";
 import { BRAND_LOGOS, DOC_IMAGES } from "./demoData";
 import type { CatalogProduct } from "../domain/catalog/types";
@@ -79,6 +81,8 @@ export function Workbench({
   events = [], onEventsSeen,
 }: WorkbenchProps) {
   const [view, setView] = useState("dashboard");
+  /* Prospects handed from the Prospects screen to the composer. */
+  const [composeFor, setComposeFor] = useState<string[] | undefined>(undefined);
   const [editing, setEditing] = useState<Customer | null>(null);
 
   const { customers, quotations, proformas, purchaseOrders, invoices, orders, challans, subscriptions } = data;
@@ -316,6 +320,21 @@ export function Workbench({
         />
       ) : view === "integrations" ? (
         <IntegrationsScreen api={integrations} user={user} users={team} settings={settings} onSettingsChange={onSettingsChange} />
+      ) : view === "prospects" ? (
+        <ProspectsScreen
+          currentUser={user}
+          onCompose={(ids) => { setComposeFor(ids); setView("campaigns"); }}
+        />
+      ) : view === "campaigns" ? (
+        <CampaignScreen
+          currentUser={user}
+          settings={settings}
+          preselected={composeFor}
+          /* Cleared once the composer has taken them, so navigating back to
+             Campaigns later does not silently re-select a list somebody
+             chose days ago. */
+          onDoneWithPreselection={() => setComposeFor(undefined)}
+        />
       ) : view === "assistant" ? (
         <AssistantScreen api={integrations} workspace={analytics} users={team} currentUser={user} settings={settings} />
       ) : view === "activity" ? (

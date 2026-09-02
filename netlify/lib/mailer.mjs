@@ -37,31 +37,73 @@ const SEND_SCOPES = "openid profile offline_access User.Read Mail.Send";
  *  was added to the consent screen. */
 export const READ_SCOPES = "openid profile offline_access User.Read Mail.Read";
 
-/** @returns {{ok: true, via: "microsoft"|"resend", from?: string} | {ok: false, error: string, retryable?: boolean}} */
+/**
+ * @param {object} args
+ * @param {string} [args.accountId] A row in `email_accounts` to send from,
+ *   for a campaign sending on behalf of a shared mailbox somebody was granted
+ *   (see supabase/024_shared_mailboxes.sql). When absent — every existing
+ *   caller — the sender's own `ms_mail_accounts` row is used exactly as
+ *   before. This parameter is additive on purpose: the quotation path is what
+ *   this company runs on, and it must not change shape to let campaigns exist.
+ * @returns {{ok: true, via: "microsoft"|"resend", from?: string} | {ok: false, error: string, retryable?: boolean}}
+ */
 export async function sendMail({
-  admin, userId, to, cc = [], subject, message, html = null, replyTo = "", attachment = null,
+  admin, userId, accountId = null, to, cc = [], subject, message, html = null, replyTo = "", attachment = null,
 }) {
-  /* The sender's OWN mailbox first, exactly as the interactive path chooses
-     it: the customer sees the salesperson they have been dealing with, and a
-     copy lands in that person's Sent Items — which is the only way a
-     scheduled email is ever visible to the human it was sent on behalf of. */
+  /* A named mailbox wins when one was asked for. `email_accounts` and
+     `ms_mail_accounts` hold the same shape of secret but are different rows,
+     so each carries its own way of writing a rotated token back — get that
+     wrong and the token is stored against the wrong mailbox, which fails on
+     the NEXT send and looks like an expired connection. */
   let mailbox = null;
-  if (userId) {
+  let persistToken = null;
+
+  if (accountId) {
+    try {
+      const { data } = await admin
+        .from("email_accounts")
+        .select("id, email, refresh_token")
+        .eq("id", accountId)
+        .maybeSingle();
+      if (data?.refresh_token) {
+        mailbox = { refresh_token: data.refresh_token, ms_email: data.email };
+        persistToken = (token) =>
+          admin.from("email_accounts")
+            .update({ refresh_token: token, updated_at: new Date().toISOString() })
+            .eq("id", accountId);
+      }
+    } catch (err) {
+      console.warn("campaign mailbox lookup failed:", err?.message ?? err);
+    }
+  }
+
+  /* The sender's OWN mailbox otherwise, exactly as the interactive path
+     chooses it: the customer sees the salesperson they have been dealing
+     with, and a copy lands in that person's Sent Items — which is the only
+     way a scheduled email is ever visible to the human it was sent on behalf
+     of. */
+  if (!mailbox && userId) {
     try {
       const { data } = await admin.from("ms_mail_accounts").select("*").eq("user_id", userId).maybeSingle();
       mailbox = data ?? null;
+      if (mailbox) {
+        persistToken = (token) =>
+          admin.from("ms_mail_accounts")
+            .update({ refresh_token: token, updated_at: new Date().toISOString() })
+            .eq("user_id", userId);
+      }
     } catch (err) {
       console.warn("mailbox lookup failed, falling back:", err?.message ?? err);
     }
   }
 
   if (mailbox?.refresh_token && process.env.MS_CLIENT_ID && process.env.MS_CLIENT_SECRET) {
-    return sendViaMicrosoft({ admin, userId, mailbox, to, cc, subject, message, html, replyTo, attachment });
+    return sendViaMicrosoft({ mailbox, persistToken, to, cc, subject, message, html, replyTo, attachment });
   }
   return sendViaResend({ to, cc, subject, message, html, replyTo, attachment });
 }
 
-async function sendViaMicrosoft({ admin, userId, mailbox, to, cc, subject, message, html, replyTo, attachment }) {
+async function sendViaMicrosoft({ mailbox, persistToken, to, cc, subject, message, html, replyTo, attachment }) {
   const tenant = process.env.MS_TENANT_ID || "common";
   try {
     const tokenResp = await fetch("https://login.microsoftonline.com/" + encodeURIComponent(tenant) + "/oauth2/v2.0/token", {
@@ -83,11 +125,10 @@ async function sendViaMicrosoft({ admin, userId, mailbox, to, cc, subject, messa
     }
 
     /* Microsoft ROTATES refresh tokens. Store the new one or the next send
-       fails with an expired-token error that looks like a broken setup. */
-    if (tok.refresh_token && tok.refresh_token !== mailbox.refresh_token) {
-      const { error } = await admin.from("ms_mail_accounts")
-        .update({ refresh_token: tok.refresh_token, updated_at: new Date().toISOString() })
-        .eq("user_id", userId);
+       fails with an expired-token error that looks like a broken setup.
+       Which row it belongs to was decided by the caller — see sendMail. */
+    if (tok.refresh_token && tok.refresh_token !== mailbox.refresh_token && persistToken) {
+      const { error } = await persistToken(tok.refresh_token);
       if (error) console.error("could not store rotated refresh token:", error.message);
     }
 

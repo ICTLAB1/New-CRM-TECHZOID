@@ -32,7 +32,10 @@ describe("navigation", () => {
   it("groups by what someone is doing, not by table", () => {
     // "Buy" sits between selling and delivering because that is the order
     // the work happens in: quote the customer, order from the distributor,
-    // then despatch.
-    expect(NAV.map((s) => s.label)).toEqual(["Sell", "Buy", "Deliver", "Get paid", "Understand", "Administer"]);
+    // then despatch. "Find" — cold outreach — comes after selling rather
+    // than before it: a salesperson opens the CRM to work the pipeline, not
+    // to import a list.
+    expect(NAV.map((s) => s.label))
+      .toEqual(["Sell", "Find", "Buy", "Deliver", "Get paid", "Understand", "Administer"]);
   });
 });
