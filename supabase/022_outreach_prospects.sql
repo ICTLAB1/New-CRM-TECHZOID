@@ -1,20 +1,43 @@
 -- 022 — the front of the outreach funnel: prospects, imports, verification,
 -- and the suppression list.
 --
--- WHY PROSPECTS ARE NOT CUSTOMERS. `customers` is an account somebody is
--- selling to: it carries a stage, a deal value, an owner's forecast. A
--- prospect is a name on a list who has never replied. Putting ten thousand
--- imported rows into `customers` would put ten thousand deals on the pipeline
--- board and make every dashboard figure meaningless. A prospect graduates —
--- `customer_id` is set when one is created from them — and until then it
--- stays out of the sales numbers entirely.
+-- WHY EVERY TABLE HERE IS PREFIXED `outreach_`. This database is shared with
+-- another application, and that application already owns `public.prospects`,
+-- `public.campaigns`, `public.sequence_steps`, `public.suppressions` and
+-- `public.touches` — an outreach system of its own, occupying exactly the
+-- names this module wants.
 --
--- SCHEMA CHANGE: four new tables. Nothing existing is touched. Safe to re-run.
+-- The first version of this migration created `public.prospects`. Because it
+-- said `create table if not exists`, it did not fail — it SILENTLY DID
+-- NOTHING, and left this CRM's code pointing at a table with entirely
+-- different columns (campaign_id, vendor_focus, employee_band, dedupe_key).
+-- Nothing would have gone wrong until somebody imported a list, and the error
+-- then would have made no sense to anybody.
+--
+-- WHY A PREFIX AND NOT A SEPARATE SCHEMA. A dedicated `outreach` schema is the
+-- tidier namespace, and it was built and tested that way first. It was undone
+-- for one practical reason: PostgREST only serves schemas named in the
+-- project's "Exposed schemas" setting, which is a dashboard toggle and cannot
+-- be set from SQL. Ship the schema version and every query from the browser
+-- fails with PGRST106 until somebody finds that setting — a migration that
+-- looks applied but leaves the feature dead. A prefix needs no setting, works
+-- the moment the migration runs, and rules out collision just as completely:
+-- the other application's tables are all unprefixed, so `outreach_campaigns`
+-- and `outreach_touches` stay free for us later too.
+--
+-- NOT RENAMED: email_accounts, email_domains and email_account_grants keep
+-- their names. They are already live and hold three working refresh tokens;
+-- they collide with nothing, and renaming them to gain symmetry would risk the
+-- mailboxes the company sends quotations from.
+--
+-- SCHEMA CHANGE: four new tables. Nothing existing is touched — least of all
+-- the other application's tables. Safe to re-run.
 
 create extension if not exists pgcrypto;
 
+
 -- ── a batch somebody uploaded ─────────────────────────────────────────
-create table if not exists public.prospect_imports (
+create table if not exists public.outreach_imports (
   id uuid primary key default gen_random_uuid(),
   imported_by uuid not null references public.profiles (id) on delete cascade,
   file_name text not null default '',
@@ -29,13 +52,13 @@ create table if not exists public.prospect_imports (
 );
 
 -- ── the prospect ──────────────────────────────────────────────────────
-create table if not exists public.prospects (
+create table if not exists public.outreach_prospects (
   id uuid primary key default gen_random_uuid(),
   owner_id uuid not null references public.profiles (id) on delete cascade,
   -- Set when this prospect becomes a real account. Null for everybody who
   -- has not replied yet, which is most of them.
   customer_id text references public.customers (id) on delete set null,
-  import_id uuid references public.prospect_imports (id) on delete set null,
+  import_id uuid references public.outreach_imports (id) on delete set null,
 
   email text not null,
   first_name text not null default '',
@@ -82,18 +105,18 @@ create table if not exists public.prospects (
 -- prospect receiving the same introduction twice from two people at the same
 -- company, which is the single most damaging thing an outreach tool can do.
 create unique index if not exists prospects_email_key
-  on public.prospects (lower(email));
+  on public.outreach_prospects (lower(email));
 
-create index if not exists prospects_owner_idx  on public.prospects (owner_id, created_at desc);
-create index if not exists prospects_status_idx on public.prospects (status) where not quarantined;
-create index if not exists prospects_verify_idx on public.prospects (verification_status) where not quarantined;
-create index if not exists prospects_import_idx on public.prospects (import_id);
+create index if not exists prospects_owner_idx  on public.outreach_prospects (owner_id, created_at desc);
+create index if not exists prospects_status_idx on public.outreach_prospects (status) where not quarantined;
+create index if not exists prospects_verify_idx on public.outreach_prospects (verification_status) where not quarantined;
+create index if not exists prospects_import_idx on public.outreach_prospects (import_id);
 
 -- ── what verification decided, and why ────────────────────────────────
 -- Keyed by ADDRESS, not by prospect: a re-import of the same list should
 -- reuse a recent verdict rather than pay for it again, and a verdict is a
 -- fact about an address rather than about one row.
-create table if not exists public.email_verifications (
+create table if not exists public.outreach_verifications (
   id uuid primary key default gen_random_uuid(),
   email text not null,
   status text not null,
@@ -107,12 +130,12 @@ create table if not exists public.email_verifications (
 );
 
 create unique index if not exists email_verifications_latest_key
-  on public.email_verifications (lower(email), provider);
+  on public.outreach_verifications (lower(email), provider);
 create index if not exists email_verifications_email_idx
-  on public.email_verifications (lower(email), checked_at desc);
+  on public.outreach_verifications (lower(email), checked_at desc);
 
 -- ── never write to these people again ─────────────────────────────────
-create table if not exists public.suppression_list (
+create table if not exists public.outreach_suppressions (
   id uuid primary key default gen_random_uuid(),
   email text not null,
   -- 'unsubscribed' | 'hard-bounce' | 'complaint' | 'do-not-contact' | 'manual'
@@ -124,23 +147,23 @@ create table if not exists public.suppression_list (
 );
 
 create unique index if not exists suppression_email_key
-  on public.suppression_list (lower(email));
+  on public.outreach_suppressions (lower(email));
 
 -- ── who may see what ──────────────────────────────────────────────────
-alter table public.prospects           enable row level security;
-alter table public.prospect_imports    enable row level security;
-alter table public.email_verifications enable row level security;
-alter table public.suppression_list    enable row level security;
+alter table public.outreach_prospects           enable row level security;
+alter table public.outreach_imports    enable row level security;
+alter table public.outreach_verifications enable row level security;
+alter table public.outreach_suppressions    enable row level security;
 
 -- Prospects follow the same rule as customers: yours, or you are privileged.
-drop policy if exists "prospects_rw" on public.prospects;
-create policy "prospects_rw" on public.prospects for all
+drop policy if exists "prospects_rw" on public.outreach_prospects;
+create policy "prospects_rw" on public.outreach_prospects for all
   to authenticated
   using (owner_id = auth.uid() or public.is_privileged())
   with check (owner_id = auth.uid() or public.is_privileged());
 
-drop policy if exists "prospect_imports_rw" on public.prospect_imports;
-create policy "prospect_imports_rw" on public.prospect_imports for all
+drop policy if exists "prospect_imports_rw" on public.outreach_imports;
+create policy "prospect_imports_rw" on public.outreach_imports for all
   to authenticated
   using (imported_by = auth.uid() or public.is_privileged())
   with check (imported_by = auth.uid() or public.is_privileged());
@@ -148,8 +171,8 @@ create policy "prospect_imports_rw" on public.prospect_imports for all
 -- A verdict about an address is not private to a salesperson — two people
 -- importing the same list must both see that it bounced. Read by anyone
 -- signed in; written only by the server, which holds the service role.
-drop policy if exists "email_verifications_read" on public.email_verifications;
-create policy "email_verifications_read" on public.email_verifications for select
+drop policy if exists "email_verifications_read" on public.outreach_verifications;
+create policy "email_verifications_read" on public.outreach_verifications for select
   to authenticated using (true);
 
 -- SUPPRESSION IS READ BY EVERYONE AND ADDED TO BY ANYONE SIGNED IN. Adding
@@ -157,26 +180,42 @@ create policy "email_verifications_read" on public.email_verifications for selec
 -- deliberately absent: there is no policy for delete or update, so nobody
 -- can quietly take a person off the list from the UI. Undoing a suppression
 -- is a decision with a person behind it, not a button.
-drop policy if exists "suppression_read" on public.suppression_list;
-create policy "suppression_read" on public.suppression_list for select
+drop policy if exists "suppression_read" on public.outreach_suppressions;
+create policy "suppression_read" on public.outreach_suppressions for select
   to authenticated using (true);
 
-drop policy if exists "suppression_insert" on public.suppression_list;
-create policy "suppression_insert" on public.suppression_list for insert
+drop policy if exists "suppression_insert" on public.outreach_suppressions;
+create policy "suppression_insert" on public.outreach_suppressions for insert
   to authenticated with check (true);
 
+-- Supabase's default privileges already grant authenticated on new tables in
+-- `public`, so these are strictly belt and braces — but they are cheap, and
+-- they are what makes the migration correct on its own terms rather than
+-- correct by inheriting a project setting. RLS narrows a privilege; it can
+-- never conjure one, so a table missing its grant fails with "permission
+-- denied" no matter how permissive the policies above look.
+grant select, insert, update, delete on table public.outreach_prospects     to authenticated;
+grant select, insert, update, delete on table public.outreach_imports       to authenticated;
+grant select, insert, update, delete on table public.outreach_verifications to authenticated;
+grant select, insert, update, delete on table public.outreach_suppressions  to authenticated;
+
 -- The unsubscribe endpoint is unauthenticated and runs as the service role,
--- which bypasses RLS — so anon needs nothing here at all.
-revoke all on table public.prospects           from anon;
-revoke all on table public.prospect_imports    from anon;
-revoke all on table public.email_verifications from anon;
-revoke all on table public.suppression_list    from anon;
+-- which bypasses RLS — so anon needs nothing here at all. In `public` this
+-- revoke is not optional: Supabase's default privileges DID grant anon on
+-- these tables at creation, and `revoke ... from public` would not have taken
+-- it back, because anon is a real role holding a real grant. It has to be
+-- named. This must run after the grants above so a future edit that widens a
+-- grant is still closed off on the next run.
+revoke all on table public.outreach_prospects     from anon;
+revoke all on table public.outreach_imports       from anon;
+revoke all on table public.outreach_verifications from anon;
+revoke all on table public.outreach_suppressions  from anon;
 
 -- Live, so a colleague importing a list sees it appear.
 do $$
 begin
   if not exists (select 1 from pg_publication_tables
-                 where pubname='supabase_realtime' and schemaname='public' and tablename='prospects') then
-    execute 'alter publication supabase_realtime add table public.prospects';
+                 where pubname='supabase_realtime' and schemaname='public' and tablename='outreach_prospects') then
+    execute 'alter publication supabase_realtime add table public.outreach_prospects';
   end if;
 end $$;
