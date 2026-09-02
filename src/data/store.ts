@@ -24,6 +24,9 @@ export interface Profile {
   /** Their own job title, printed under their name on email they send.
    *  Not the company's authorised signatory — that stays in settings. */
   designation?: string;
+  /** Their own mobile, printed the same way. The company number in Settings
+   *  is the fallback for anyone who has not set one. */
+  phone?: string;
 }
 
 export interface WorkspaceData {
@@ -78,7 +81,7 @@ export function createStore(client: SupabaseClient) {
   async function fetchProfiles(): Promise<Profile[]> {
     const { data, error } = await client
       .from("profiles")
-      .select("id, name, role, email, designation")
+      .select("id, name, role, email, designation, phone")
       .order("created_at", { ascending: true });
     if (error) throw error;
     return (data as Profile[] | null) || [];

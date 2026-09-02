@@ -127,6 +127,7 @@ export async function handler(event) {
     name: caller.profile?.name ?? "",
     email: caller.profile?.email ?? "",
     designation: caller.profile?.designation ?? "",
+    phone: caller.profile?.phone ?? "",
   }));
 
   const rendered = renderCampaignFor({ subject, body: message }, values, signature);
@@ -172,7 +173,9 @@ const senderOf = (caller, settings = {}) => {
     email: caller.profile?.email ?? "",
     company: String(company.name ?? ""),
     designation: caller.profile?.designation ?? "",
-    phone: String(company.phone ?? ""),
+    /* Their own mobile, falling back to the company's. A purchase manager
+       who rings the number under the name expects the person who wrote. */
+    phone: String(caller.profile?.phone ?? "").trim() || String(company.phone ?? ""),
     signature: caller.profile?.designation ?? "",
   };
 };

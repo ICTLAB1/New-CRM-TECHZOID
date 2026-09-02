@@ -51,6 +51,8 @@ export interface TeamMemberInput {
   role: string;
   /** Their own job title, for the signature on email they send. */
   designation?: string;
+  /** Their own mobile, for the same signature. */
+  phone?: string;
 }
 
 export interface CreatedMember {
@@ -74,7 +76,7 @@ export interface IntegrationsApi {
   ask(system: string, messages: ChatMessage[]): Promise<string>;
 
   createTeamMember(input: TeamMemberInput): Promise<CreatedMember>;
-  updateTeamMember(userId: string, patch: { name?: string; email?: string; designation?: string }): Promise<void>;
+  updateTeamMember(userId: string, patch: { name?: string; email?: string; designation?: string; phone?: string }): Promise<void>;
   resetTeamPassword(userId: string, newPassword: string): Promise<void>;
   deleteTeamMember(userId: string): Promise<void>;
 

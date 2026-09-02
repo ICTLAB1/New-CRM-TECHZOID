@@ -54,7 +54,7 @@ describe("what each one will say", () => {
     const title = senderRows(SENDER).find((r) => r.token === "sender_designation");
     expect(title?.source).toMatch(/below/);
     const phone = senderRows(SENDER).find((r) => r.token === "sender_phone");
-    expect(phone?.source).toMatch(/Settings/);
+    expect(phone?.source).toMatch(/below/);
   });
 });
 
@@ -99,5 +99,36 @@ describe("the sentence that lists what is blank", () => {
     expect(listOf(["{{a}}", "{{b}}"])).toBe("{{a}} and {{b}}");
     expect(listOf(["{{a}}", "{{b}}", "{{c}}"])).toBe("{{a}}, {{b}} and {{c}}");
     expect(listOf([])).toBe("");
+  });
+});
+
+
+describe("whose phone number is under the name", () => {
+  const COMPANY = "+91 11 4000 0000";
+
+  /* The bug this fixes: settings.company.phone was the ONLY number either
+     renderer could reach, so a purchase manager who rang the number under a
+     salesperson's name got the switchboard. */
+  it("uses the person's own mobile when they have set one", () => {
+    const rows = senderRows({ ...SENDER, phone: "+91 98100 12345" }, COMPANY);
+    const phone = rows.find((r) => r.token === "sender_phone");
+    expect(phone?.value).toBe("+91 98100 12345");
+    expect(phone?.label).toBe("Your mobile");
+    expect(phone?.source).toBe("the box below");
+  });
+
+  it("says so when the number shown is the company's, not theirs", () => {
+    /* The composer falls back before it reaches here, so the value IS the
+       company number — and the panel must not let that pass as personal. */
+    const rows = senderRows({ ...SENDER, phone: COMPANY }, COMPANY);
+    const phone = rows.find((r) => r.token === "sender_phone");
+    expect(phone?.source).toMatch(/Settings → Company/);
+    expect(phone?.source).toMatch(/no mobile of your own/);
+  });
+
+  it("treats a blank as something to fill in here", () => {
+    const phone = senderRows({ ...SENDER, phone: "" }, COMPANY).find((r) => r.token === "sender_phone");
+    expect(phone?.value).toBe("");
+    expect(phone?.source).toBe("the box below");
   });
 });

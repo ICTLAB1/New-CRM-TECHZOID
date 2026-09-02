@@ -242,3 +242,38 @@ function senderBlock(src) {
   const end = src.indexOf("\n};", at);
   return src.slice(at, end === -1 ? src.length : end);
 }
+
+describe("the number under the name is the sender's own", () => {
+  const settings = {
+    company: { name: "TechZoid Technologies", phone: "+91 11 4000 0000", email: "sales@t.example" },
+  };
+
+  /* Until migration 031 the only number either renderer could reach was
+     settings.company.phone, so every salesperson's signature carried the
+     switchboard. Both copies now prefer the person's own. */
+  it("prefers their mobile over the company's number", () => {
+    const mine = { name: "Rashmi Verma", email: "rashmi@t.example", phone: "+91 98100 12345" };
+    expect(server.signatureFrom(settings, mine).mobile).toBe("+91 98100 12345");
+    expect(clientFrom(settings, mine).mobile).toBe("+91 98100 12345");
+  });
+
+  it("falls back to the company's when they have not set one", () => {
+    const noMobile = { name: "Chandan", email: "chandan@t.example" };
+    expect(server.signatureFrom(settings, noMobile).mobile).toBe("+91 11 4000 0000");
+    expect(clientFrom(settings, noMobile).mobile).toBe("+91 11 4000 0000");
+  });
+
+  it("treats whitespace as unset rather than as a number", () => {
+    const blank = { name: "Rajat", email: "rajat@t.example", phone: "   " };
+    expect(server.signatureFrom(settings, blank).mobile).toBe("+91 11 4000 0000");
+    expect(clientFrom(settings, blank).mobile).toBe("+91 11 4000 0000");
+  });
+
+  it("renders the person's number into the signature both sides produce", () => {
+    const user = { name: "Rashmi Verma", email: "rashmi@t.example", phone: "+91 98100 12345" };
+    const a = server.renderSignature(server.signatureFrom(settings, user));
+    const b = clientRender(clientFrom(settings, user));
+    expect(a).toContain("+91 98100 12345");
+    expect(a).toBe(b);
+  });
+});

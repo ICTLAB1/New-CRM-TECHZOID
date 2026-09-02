@@ -17,6 +17,8 @@ export interface SignedInUser {
   role: string;
   /** Their own job title, for the signature on email they send. */
   designation?: string;
+  /** Their own mobile. The company number in Settings stays the fallback. */
+  phone?: string;
 }
 
 /** One definition of "is there a server behind this", used by the app to
@@ -43,7 +45,7 @@ export function onSessionChange(handler: (session: Session | null) => void): () 
 export async function loadProfile(session: Session): Promise<SignedInUser | null> {
   const { data, error } = await getSupabase()
     .from("profiles")
-    .select("id, name, email, role, designation")
+    .select("id, name, email, role, designation, phone")
     .eq("id", session.user.id)
     .maybeSingle();
   if (error || !data) return null;
@@ -56,6 +58,9 @@ export async function loadProfile(session: Session): Promise<SignedInUser | null
        left every outgoing email with no title under the sender's name however
        carefully it had been set on their profile. */
     designation: (data.designation as string) || "",
+    /* Their own mobile, so a customer replying to a quotation reaches the
+       person who sent it rather than the switchboard. */
+    phone: (data.phone as string) || "",
   };
 }
 
@@ -91,7 +96,7 @@ export function readableAuthError(message: string): string {
 }
 
 /**
- * Set your own job title.
+ * Set your own job title and mobile number.
  *
  * WHY THIS IS NOT THE ADMIN ENDPOINT. Team management goes through
  * admin-users.mjs behind an Admin check, because handing out roles and
@@ -103,14 +108,23 @@ export function readableAuthError(message: string): string {
  * It is safe as a direct write because profiles_update_self_or_admin already
  * governs it: `using (auth.uid() = id or is_admin())` limits the row to your
  * own, and the `with check` clause refuses any change that would alter the
- * role of a non-admin. So the worst this can do is change your own title.
+ * role of a non-admin. So the worst this can do is change your own details.
+ * Proven against a real Postgres with that policy loaded: a Sales user's
+ * update of their own phone succeeded, the same statement aimed at a
+ * colleague's row changed nothing, and `set role = 'Admin'` on their own row
+ * was rejected outright by the policy.
  */
-export async function setMyDesignation(designation: string): Promise<void> {
+export async function setMyDetails(patch: { designation?: string; phone?: string }): Promise<void> {
   const session = await currentSession();
   if (!session) throw new Error("You're signed out. Sign in again and retry.");
-  const { error } = await getSupabase()
-    .from("profiles")
-    .update({ designation: designation.trim() })
-    .eq("id", session.user.id);
-  if (error) throw new Error("Couldn't save your job title. Try again in a moment.");
+
+  /* Only what was passed, so saving a phone number does not blank a job
+     title somebody set on another screen a moment ago. */
+  const update: Record<string, string> = {};
+  if (patch.designation !== undefined) update.designation = patch.designation.trim();
+  if (patch.phone !== undefined) update.phone = patch.phone.trim();
+  if (!Object.keys(update).length) return;
+
+  const { error } = await getSupabase().from("profiles").update(update).eq("id", session.user.id);
+  if (error) throw new Error("Couldn't save your details. Try again in a moment.");
 }

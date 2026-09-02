@@ -24,6 +24,9 @@ export interface TeamMember {
    *  customer — not the company's authorised signatory, which is one shared
    *  value in Settings and prints on the document itself. */
   designation?: string;
+  /** Their own mobile, printed the same way. A customer replying to a
+   *  quotation is trying to reach a person, not the switchboard. */
+  phone?: string;
 }
 
 export interface TeamScreenProps {
@@ -105,7 +108,7 @@ export function TeamScreen({ api, members, currentUser, onChange }: TeamScreenPr
           <div className="table-wrap">
             <table className="table">
               <thead>
-                <tr><th>Name</th><th>Designation</th><th>Email</th><th>Role</th><th /></tr>
+                <tr><th>Name</th><th>Designation</th><th>Email</th><th>Mobile</th><th>Role</th><th /></tr>
               </thead>
               <tbody>
                 {members.map((m) => (
@@ -116,6 +119,7 @@ export function TeamScreen({ api, members, currentUser, onChange }: TeamScreenPr
                     </td>
                     <td data-label="Designation">{m.designation || <span className="muted">—</span>}</td>
                     <td data-label="Email" className="mono">{m.email || "—"}</td>
+                    <td data-label="Mobile" className="mono">{m.phone || <span className="muted">—</span>}</td>
                     <td>
                       {isAdmin ? (
                         <Select
@@ -215,6 +219,7 @@ function AddMember({
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [designation, setDesignation] = useState("");
+  const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState("Sales");
   const [busy, setBusy] = useState(false);
@@ -228,13 +233,15 @@ function AddMember({
     setError(""); setBusy(true);
     try {
       const result = await api.createTeamMember({
-        name: name.trim(), email: email.trim().toLowerCase(), designation: designation.trim(), password, role,
+        name: name.trim(), email: email.trim().toLowerCase(), designation: designation.trim(),
+        phone: phone.trim(), password, role,
       });
       onAdded({
         id: result.userId,
         name: name.trim() || email.split("@")[0] || "New member",
         email: email.trim().toLowerCase(),
         designation: designation.trim(),
+        phone: phone.trim(),
         role,
       });
       if (result.emailSent) {
@@ -310,9 +317,14 @@ function AddMember({
             <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
           </Field>
         </div>
-        <Field label="Designation" hint={'Printed under their name when they email a customer, e.g. "Sales Manager".'}>
-          <Input value={designation} onChange={(e) => setDesignation(e.target.value)} />
-        </Field>
+        <div className="grid grid-2">
+          <Field label="Designation" hint={'Printed under their name when they email a customer, e.g. "Sales Manager".'}>
+            <Input value={designation} onChange={(e) => setDesignation(e.target.value)} />
+          </Field>
+          <Field label="Mobile" hint="Printed under their name too, and used by {{sender_phone}} in campaigns. They can change it themselves later.">
+            <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+91 98100 12345" />
+          </Field>
+        </div>
         <Field
           label="Starting password"
           hint="They should change it once they're in."
@@ -338,13 +350,14 @@ function EditMember({
 }: {
   api: IntegrationsApi;
   member: TeamMember;
-  onSaved: (patch: { name: string; email: string; designation: string }) => void;
+  onSaved: (patch: { name: string; email: string; designation: string; phone: string }) => void;
   onClose: () => void;
 }) {
   const toast = useToast();
   const [name, setName] = useState(member.name);
   const [email, setEmail] = useState(member.email ?? "");
   const [designation, setDesignation] = useState(member.designation ?? "");
+  const [phone, setPhone] = useState(member.phone ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -353,8 +366,12 @@ function EditMember({
     try {
       await api.updateTeamMember(member.id, {
         name: name.trim(), email: email.trim().toLowerCase(), designation: designation.trim(),
+        phone: phone.trim(),
       });
-      onSaved({ name: name.trim(), email: email.trim().toLowerCase(), designation: designation.trim() });
+      onSaved({
+        name: name.trim(), email: email.trim().toLowerCase(),
+        designation: designation.trim(), phone: phone.trim(),
+      });
       toast("Details updated", "good");
     } catch (err) {
       setError(err instanceof IntegrationError ? err.message : "Couldn't update those details.");
@@ -378,9 +395,14 @@ function EditMember({
     >
       <div className="stack">
         <Field label="Name"><Input value={name} onChange={(e) => setName(e.target.value)} /></Field>
-        <Field label="Designation" hint={'Printed under their name when they email a customer, e.g. "Sales Manager".'}>
-          <Input value={designation} onChange={(e) => setDesignation(e.target.value)} />
-        </Field>
+        <div className="grid grid-2">
+          <Field label="Designation" hint={'Printed under their name when they email a customer, e.g. "Sales Manager".'}>
+            <Input value={designation} onChange={(e) => setDesignation(e.target.value)} />
+          </Field>
+          <Field label="Mobile" hint="Printed under their name too, and used by {{sender_phone}} in campaigns.">
+            <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+91 98100 12345" />
+          </Field>
+        </div>
         <Field label="Email" hint="Changing this changes what they sign in with.">
           <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
         </Field>

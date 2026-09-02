@@ -1,0 +1,24 @@
+-- Each person's own mobile number.
+--
+-- SCHEMA CHANGE: adds one column to public.profiles. Nothing else is
+-- touched, no policy changes, no data deleted. Safe to re-run.
+--
+-- WHY A PERSON'S NUMBER AND NOT THE COMPANY'S. The signature block and the
+-- {{sender_phone}} variable both read a phone number, and until now the only
+-- one either could reach was settings.company.phone. That put the same
+-- number under everybody's name — so a purchase manager who wanted to ring
+-- the salesperson who wrote to them got a switchboard, and a salesperson who
+-- wanted their own mobile in their own signature had no way to put it there.
+-- A customer replying to a quotation is trying to reach a person.
+--
+-- The company number does not go away: it stays in Settings and remains the
+-- fallback for anyone who has not set their own. Both exist because both are
+-- real — one belongs to the business, one belongs to a person.
+--
+-- No policy is needed: profiles_update_self_or_admin already lets a person
+-- edit their own row and an Admin edit anyone's, and that policy's `with
+-- check` clause continues to be what stops anyone changing their own role.
+-- The same reasoning as 007_profile_designation.sql, and for the same
+-- column on the same table.
+
+alter table public.profiles add column if not exists phone text not null default '';

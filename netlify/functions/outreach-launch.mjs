@@ -141,7 +141,9 @@ export async function handler(event) {
     email: caller.profile?.email ?? "",
     company: String(company.name ?? ""),
     designation: caller.profile?.designation ?? "",
-    phone: String(company.phone ?? ""),
+    /* Their own mobile, falling back to the company's. A purchase manager
+       who rings the number under the name expects the person who wrote. */
+    phone: String(caller.profile?.phone ?? "").trim() || String(company.phone ?? ""),
     signature: caller.profile?.designation ?? "",
   };
 
@@ -150,6 +152,7 @@ export async function handler(event) {
      times would put four hundred copies of a base64 logo into the queue. */
   const signature = renderSignature(signatureFrom(settings, {
     name: sender.name, email: sender.email, designation: sender.designation,
+    phone: caller.profile?.phone ?? "",
   }));
 
   const audience = buildAudience({

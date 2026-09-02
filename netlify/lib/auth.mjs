@@ -44,7 +44,7 @@ export async function signedInProfile(event) {
   const user = await signedInUser(event);
   if (!user) return null;
   try {
-    const { data } = await adminClient().from("profiles").select("id, name, email, role, designation").eq("id", user.id).single();
+    const { data } = await adminClient().from("profiles").select("id, name, email, role, designation, phone").eq("id", user.id).single();
     return { user, profile: data ?? null, role: data?.role ?? "Sales" };
   } catch {
     return { user, profile: null, role: "Sales" };

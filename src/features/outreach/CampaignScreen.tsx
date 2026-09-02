@@ -40,7 +40,7 @@ import type { Block } from "../../domain/outreach/emailHtml";
  */
 
 export interface CampaignScreenProps {
-  currentUser: { id: string; name: string; email?: string; designation?: string; role: string };
+  currentUser: { id: string; name: string; email?: string; designation?: string; phone?: string; role: string };
   settings: Record<string, unknown>;
   /** Prospect ids arriving from the Prospects screen's "Write to selected". */
   preselected?: string[];
@@ -135,8 +135,10 @@ export function CampaignScreen({ currentUser, settings, preselected, onDoneWithP
      immediately. The profile is loaded by the app shell, so rather than
      plumb a callback all the way up, the freshly saved value is held here
      and wins over the copy this screen was handed. */
-  const [designationOverride, setDesignationOverride] = useState<string | null>(null);
-  const designation = designationOverride ?? currentUser.designation ?? "";
+  const [mine, setMine] = useState<{ designation?: string; phone?: string }>({});
+  const designation = mine.designation ?? currentUser.designation ?? "";
+  const myPhone = mine.phone ?? currentUser.phone ?? "";
+  const companyPhone = String((settings["company"] as { phone?: string } | undefined)?.phone ?? "");
 
   const sender = useMemo(
     () => ({
@@ -144,10 +146,12 @@ export function CampaignScreen({ currentUser, settings, preselected, onDoneWithP
       email: currentUser.email ?? "",
       company,
       designation,
-      phone: String((settings["company"] as { phone?: string } | undefined)?.phone ?? ""),
+      /* Their own number first. The company's is a fallback, not a default:
+         a customer ringing the number under a name wants that person. */
+      phone: myPhone.trim() || companyPhone,
       signature: designation,
     }),
-    [currentUser, company, settings, designation],
+    [currentUser, company, designation, myPhone, companyPhone],
   );
 
   const candidates = useMemo(
@@ -190,8 +194,8 @@ export function CampaignScreen({ currentUser, settings, preselected, onDoneWithP
      A preview that says "Hello {{first_name}}" proves nothing about whether
      the data behind the campaign is any good. */
   const signatureHtml = useMemo(
-    () => renderSignature(signatureFrom(settings, { ...currentUser, designation })),
-    [settings, currentUser, designation],
+    () => renderSignature(signatureFrom(settings, { ...currentUser, designation, phone: myPhone })),
+    [settings, currentUser, designation, myPhone],
   );
 
   const preview = useMemo(() => {
@@ -420,9 +424,11 @@ export function CampaignScreen({ currentUser, settings, preselected, onDoneWithP
 
         <SenderPanel
           sender={sender}
+          myPhone={myPhone}
+          companyPhone={companyPhone}
           subject={subject}
           body={body}
-          onDesignationSaved={setDesignationOverride}
+          onSaved={(patch) => setMine((m) => ({ ...m, ...patch }))}
         />
 
         {audience.unknownVariables.length ? (

@@ -56,6 +56,7 @@ async function createUser(event, admin, body) {
   const name = str(body.name, 120) || email.split("@")[0];
   const role = str(body.role, 20) || "Sales";
   const designation = str(body.designation, 120);
+  const phone = str(body.phone, 40);
 
   if (!email || !password) return fail(event, 400, "An email address and a password are both required.");
   if (!isEmail(email)) return fail(event, 400, `"${email}" doesn't look like an email address.`);
@@ -83,7 +84,7 @@ async function createUser(event, admin, body) {
   /* A trigger creates the profile row as Sales. Set the name and the chosen
      role now. If this fails the sign-in exists but is mis-labelled, which is
      confusing rather than harmless — so say so instead of reporting success. */
-  const { error: profileErr } = await admin.from("profiles").update({ name, role, designation }).eq("id", userId);
+  const { error: profileErr } = await admin.from("profiles").update({ name, role, designation, phone }).eq("id", userId);
   if (profileErr) {
     console.error("profile update after createUser failed:", profileErr.message);
     return json(event, 200, {
@@ -161,9 +162,11 @@ async function updateUser(event, admin, body) {
      edit, and "" is exactly what that looks like arriving here. */
   const hasDesignation = Object.prototype.hasOwnProperty.call(body, "designation");
   const designation = str(body.designation, 120);
+  const hasPhone = Object.prototype.hasOwnProperty.call(body, "phone");
+  const phone = str(body.phone, 40);
 
   if (!userId) return fail(event, 400, "Which account? No user was given.");
-  if (!name && !email && !hasDesignation) return fail(event, 400, "Nothing to change.");
+  if (!name && !email && !hasDesignation && !hasPhone) return fail(event, 400, "Nothing to change.");
   if (email && !isEmail(email)) return fail(event, 400, `"${email}" doesn't look like an email address.`);
 
   /* The sign-in address lives on the auth record; the name lives in both the
@@ -182,6 +185,7 @@ async function updateUser(event, admin, body) {
   if (name) profilePatch.name = name;
   if (email) profilePatch.email = email;
   if (hasDesignation) profilePatch.designation = designation;
+  if (hasPhone) profilePatch.phone = phone;
   const { error: profileErr } = await admin.from("profiles").update(profilePatch).eq("id", userId);
   if (profileErr) {
     return fail(event, 400, "The sign-in was updated, but the team record wasn't. Reload and check the details.", profileErr.message);

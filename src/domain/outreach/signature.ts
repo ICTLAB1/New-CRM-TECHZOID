@@ -221,7 +221,7 @@ function office(label: string, address: string): string {
 /** Build the input from the workspace settings and the person sending. */
 export function signatureFrom(
   settings: Record<string, unknown>,
-  user: { name?: string; email?: string; designation?: string },
+  user: { name?: string; email?: string; designation?: string; phone?: string },
 ): SignatureInput {
   const company = (settings["company"] ?? {}) as Record<string, unknown>;
   const uae = (settings["uaeOffice"] ?? {}) as Record<string, unknown>;
@@ -235,7 +235,13 @@ export function signatureFrom(
     name: user.name ?? "",
     designation: user.designation ?? String(settings["signatoryDesignation"] ?? ""),
     email: user.email ?? String(company.email ?? ""),
-    mobile: String(company.phone ?? ""),
+    /* THEIR mobile, not the company's. Until 031 the only number either
+       renderer could reach was settings.company.phone, so every salesperson's
+       signature carried the switchboard and a customer trying to ring the
+       person who wrote to them got somebody else. The company number stays as
+       the fallback for anyone who has not set their own — it is still a real
+       number, just not a personal one. */
+    mobile: String(user.phone ?? "").trim() || String(company.phone ?? ""),
 
     companyName: String(company.name ?? ""),
     tagline: String(company.tagline ?? ""),
