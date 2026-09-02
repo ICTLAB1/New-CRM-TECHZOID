@@ -25,8 +25,34 @@ export async function handler(event) {
   if (params.error) {
     /* Microsoft's own text, escaped. It is a query-string value and so is
        attacker-controlled. */
+    const raw = String(params.error_description || params.error || "");
+
+    /* THE ONE WORTH NAMING. "Need admin approval" is not a fault the person
+       staring at it can fix, and Microsoft's wording ("needs permission to
+       access resources in your organization") sends people to IT with no
+       idea what to ask for. It happens whenever the app requests a scope
+       beyond what the tenant has already consented to — adding one to this
+       CRM invalidates the existing grant for EVERYBODY at once, which is
+       exactly how this was first seen.
+       AADSTS65001 is "no consent", AADSTS90094 is "admin consent
+       required". */
+    const needsAdmin = /AADSTS65001|AADSTS90094|consent_required|admin_consent_required/i.test(
+      raw + " " + String(params.error || ""));
+
+    if (needsAdmin) {
+      return page(200, "Your Microsoft administrator has to approve this once",
+        "This is not something you can fix from here, and nothing is wrong with your account. "
+        + "The CRM is asking for a permission your organisation has not approved yet, so Microsoft "
+        + "is holding it until an administrator says yes. "
+        + "Ask whoever manages your Microsoft 365 tenant to open Entra admin centre → App "
+        + "registrations → TechZoid CRM → API permissions, and press \u201cGrant admin consent\u201d. "
+        + "It takes a moment and only needs doing once for the whole company \u2014 after that, "
+        + "come back to Settings \u2192 Integrations and connect your mailbox again.",
+        false);
+    }
+
     return page(200, "Connection cancelled",
-      "Microsoft reported: " + (params.error_description || params.error), false);
+      "Microsoft reported: " + raw, false);
   }
 
   const { code, state } = params;
