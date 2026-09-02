@@ -165,6 +165,11 @@ export async function handler(event) {
       campaign_id: campaignId,
       prospect_id: r.id,
       send_to: r.email.trim(),
+      /* Step one. A campaign's later steps are queued with their own
+         step_no and due_at — see supabase/030_outreach_sequences.sql — and
+         the unique index is (campaign, prospect, step) so the same person
+         can receive all four without colliding. */
+      step_no: 1,
       subject: rendered.subject,
       body: rendered.body,
       html: rendered.html,
@@ -178,7 +183,7 @@ export async function handler(event) {
        were not already queued rather than failing the whole batch. */
     const { data, error } = await admin
       .from("outreach_sends")
-      .upsert(rows.slice(i, i + CHUNK), { onConflict: "campaign_id,prospect_id", ignoreDuplicates: true })
+      .upsert(rows.slice(i, i + CHUNK), { onConflict: "campaign_id,prospect_id,step_no", ignoreDuplicates: true })
       .select("id");
     if (error) {
       console.error("outreach-launch: could not queue —", error.message);
