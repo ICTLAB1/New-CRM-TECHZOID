@@ -12,10 +12,30 @@
  * Returns a plain result. Nothing here knows what an HTTP response is.
  */
 
-/* MUST MATCH ms-oauth-start.mjs exactly. A refresh asking for fewer scopes
-   than were granted quietly returns a token that can do less — which is how
-   reply detection would break with nothing in any log to say why. */
-const SCOPES = "openid profile offline_access User.Read Mail.Send Mail.Read";
+/**
+ * WHAT A REFRESH MAY ASK FOR — a subset of what was consented, never more.
+ *
+ * This nearly took the company's quotation email offline. When Mail.Read was
+ * added to the consent request, this string was changed to match it "so they
+ * could not drift". That is backwards: refresh tokens already in the database
+ * were issued when only Mail.Send had been consented, and OAuth permits a
+ * refresh to request a SUBSET of the granted scopes and rejects a SUPERSET
+ * (AADSTS65001). Every existing mailbox would have started failing to refresh,
+ * and sendMail returns "your connection has expired" WITHOUT falling back to
+ * Resend — so quotations from three connected mailboxes would simply have
+ * stopped, blamed on Microsoft.
+ *
+ * Sending needs Mail.Send. It does not need Mail.Read, so it does not ask for
+ * it, and this works for a token granted before Mail.Read existed and one
+ * granted after. Reply detection asks for Mail.Read separately, where a
+ * refusal means "this mailbox predates that permission" — which is
+ * actionable, and only affects reading.
+ */
+const SEND_SCOPES = "openid profile offline_access User.Read Mail.Send";
+
+/** For reply detection. Only usable by a mailbox connected after Mail.Read
+ *  was added to the consent screen. */
+export const READ_SCOPES = "openid profile offline_access User.Read Mail.Read";
 
 /** @returns {{ok: true, via: "microsoft"|"resend", from?: string} | {ok: false, error: string, retryable?: boolean}} */
 export async function sendMail({
@@ -52,7 +72,7 @@ async function sendViaMicrosoft({ admin, userId, mailbox, to, cc, subject, messa
         client_secret: process.env.MS_CLIENT_SECRET,
         refresh_token: mailbox.refresh_token,
         grant_type: "refresh_token",
-        scope: SCOPES,
+        scope: SEND_SCOPES,
       }).toString(),
     });
     const tok = await tokenResp.json().catch(() => ({}));

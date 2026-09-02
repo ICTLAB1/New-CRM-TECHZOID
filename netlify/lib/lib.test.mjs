@@ -553,38 +553,48 @@ describe("how long a verification token is held", () => {
 });
 
 describe("Microsoft Graph scopes", () => {
-  /* THE FAILURE THIS PINS. The OAuth start requests one scope string and the
-     mailer refreshes with another. If they drift, the refresh quietly returns
-     a token with FEWER permissions than were granted — sending keeps working,
-     reply detection silently does not, and nothing in any log says why.
-     Reading both files is ugly; a scope mismatch found in production is
-     uglier. */
-  it("are identical in ms-oauth-start and the mailer", async () => {
+  const scopesIn = async (file) => {
     const { readFileSync } = await import("node:fs");
     const { fileURLToPath } = await import("node:url");
     const { dirname, join } = await import("node:path");
-    const here = dirname(fileURLToPath(import.meta.url));
+    const src = readFileSync(join(dirname(fileURLToPath(import.meta.url)), file), "utf8");
+    const m = /const (?:SCOPES|SEND_SCOPES) = "([^"]+)"/.exec(src);
+    return m ? m[1].split(/\s+/).sort() : null;
+  };
 
-    const scopeIn = (file) => {
-      const src = readFileSync(join(here, file), "utf8");
-      const m = /const SCOPES = "([^"]+)"/.exec(src);
-      return m ? m[1].split(/\s+/).sort() : null;
-    };
+  /* THE INVARIANT, AND IT IS NOT EQUALITY. An earlier version of this test
+     asserted the two strings were identical, and enforcing that is what
+     nearly took quotation email offline: when Mail.Read was added to the
+     consent request, the mailer's refresh string was changed to match, and
+     every refresh token already in the database had been issued before
+     Mail.Read was consented.
 
-    const start = scopeIn("../functions/ms-oauth-start.mjs");
-    const mailer = scopeIn("./mailer.mjs");
-    expect(start, "ms-oauth-start.mjs declares no SCOPES").not.toBeNull();
-    expect(mailer, "mailer.mjs declares no SCOPES").not.toBeNull();
-    expect(mailer).toEqual(start);
+     OAuth permits a refresh to request a SUBSET of what was granted and
+     rejects a SUPERSET. So the rule is containment, not equality — sending
+     must never ask for more than the consent screen obtained, and asking for
+     less is not only allowed but required for tokens that predate a new
+     permission. */
+  it("the mailer never asks for a scope the consent screen did not obtain", async () => {
+    const consented = await scopesIn("../functions/ms-oauth-start.mjs");
+    const refreshed = await scopesIn("./mailer.mjs");
+    expect(consented, "ms-oauth-start.mjs declares no SCOPES").not.toBeNull();
+    expect(refreshed, "mailer.mjs declares no SEND_SCOPES").not.toBeNull();
+
+    const excess = refreshed.filter((s) => !consented.includes(s));
+    expect(excess, "the mailer would request a scope that was never consented").toEqual([]);
   });
 
-  it("include Mail.Read, which reply detection depends on", async () => {
-    const { readFileSync } = await import("node:fs");
-    const { fileURLToPath } = await import("node:url");
-    const { dirname, join } = await import("node:path");
-    const src = readFileSync(
-      join(dirname(fileURLToPath(import.meta.url)), "../functions/ms-oauth-start.mjs"), "utf8");
-    expect(/const SCOPES = "([^"]+)"/.exec(src)?.[1]).toContain("Mail.Read");
+  /* Sending is the one thing that must keep working for a mailbox connected
+     before any of this. */
+  it("still asks for Mail.Send, and does NOT ask for Mail.Read when sending", async () => {
+    const refreshed = await scopesIn("./mailer.mjs");
+    expect(refreshed).toContain("Mail.Send");
+    expect(refreshed).toContain("offline_access");
+    expect(refreshed).not.toContain("Mail.Read");
+  });
+
+  it("asks for Mail.Read at consent time, which reply detection needs", async () => {
+    expect(await scopesIn("../functions/ms-oauth-start.mjs")).toContain("Mail.Read");
   });
 });
 
