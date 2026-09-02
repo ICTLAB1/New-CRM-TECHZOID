@@ -126,16 +126,31 @@ export async function handler(event) {
     .eq("campaign_id", campaignId);
   const already = new Set((existing ?? []).map((r) => String(r.send_to).trim().toLowerCase()));
 
+  /* THE SENDER'S OWN DETAILS, and this was wrong. company was the empty
+     string and the designation was never passed at all, so a message using
+     {{sender_company}} or {{sender_designation}} rendered them as literal
+     braces in the email that went out — while the composer's preview, which
+     reads the same values from settings, showed them filled. A preview that
+     disagrees with what is sent is the one failure this feature cannot
+     afford, and it was sitting in the difference between two files. */
+  const settings = await loadSettings(admin);
+  const company = (settings.company ?? {});
+
   const sender = {
     name: caller.profile?.name ?? "",
     email: caller.profile?.email ?? "",
-    company: "",
+    company: String(company.name ?? ""),
+    designation: caller.profile?.designation ?? "",
+    phone: String(company.phone ?? ""),
+    signature: caller.profile?.designation ?? "",
   };
 
-  /* The signature, rendered ONCE for the campaign rather than per recipient:
-     it is the same block for everybody, and rendering it four hundred times
-     would put four hundred copies of a base64 logo into the queue. */
-  const signature = await renderSignatureFor(admin, caller);
+  /* The signature block, rendered ONCE for the campaign rather than per
+     recipient: it is the same for everybody, and rendering it four hundred
+     times would put four hundred copies of a base64 logo into the queue. */
+  const signature = renderSignature(signatureFrom(settings, {
+    name: sender.name, email: sender.email, designation: sender.designation,
+  }));
 
   const audience = buildAudience({
     candidates: (prospects ?? []).map((p) => ({
@@ -232,25 +247,20 @@ export async function handler(event) {
 }
 
 /**
- * Build the signature from the workspace settings.
+ * The workspace settings.
  *
  * Read server-side rather than accepted from the request, so a compromised
  * session cannot put arbitrary HTML into mail leaving this company's domain.
+ * An empty object on failure: a campaign with no company name in it is worse
+ * than one with, and better than no campaign at all.
  */
-async function renderSignatureFor(admin, caller) {
+async function loadSettings(admin) {
   try {
     const { data } = await admin.from("settings").select("data").eq("id", "main").maybeSingle();
-    const settings = data?.data ?? {};
-    return renderSignature(signatureFrom(settings, {
-      name: caller.profile?.name ?? "",
-      email: caller.profile?.email ?? "",
-      designation: caller.profile?.designation ?? "",
-    }));
+    return data?.data ?? {};
   } catch (err) {
-    /* A campaign without a signature is worse than one with, and better than
-       no campaign — so this is logged and the send goes on. */
-    console.warn("outreach-launch: could not build the signature —", err?.message ?? err);
-    return "";
+    console.warn("outreach-launch: could not read settings —", err?.message ?? err);
+    return {};
   }
 }
 

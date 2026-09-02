@@ -89,6 +89,17 @@ export async function handler(event) {
     }
   }
 
+  /* Read once, and before the values are built: the sender's company name
+     comes from here, and building the values first would leave
+     {{sender_company}} empty in the test but filled in the real send. */
+  let settings = {};
+  try {
+    const { data } = await admin.from("settings").select("data").eq("id", "main").maybeSingle();
+    settings = data?.data ?? {};
+  } catch (err) {
+    console.warn("outreach-test-send: could not read settings —", err?.message ?? err);
+  }
+
   /* Rendered against a REAL prospect where one was named, so the test shows
      what a recipient would actually receive rather than a template. Falls
      back to the caller's own details, which is honest about being a stand-in. */
@@ -100,29 +111,23 @@ export async function handler(event) {
       .select("*")
       .eq("id", prospectId)
       .maybeSingle();
-    if (p) values = buildValues(p, senderOf(caller));
+    if (p) values = buildValues(p, senderOf(caller, settings));
   }
   if (!values) {
     values = buildValues(
       { first_name: caller.profile?.name?.split(" ")[0] ?? "", company: "", email: to },
-      senderOf(caller),
+      senderOf(caller, settings),
     );
   }
   values = withGreetingFallback(values, !!body.greetUnnamed);
 
   /* The same signature the real send carries — whether it looks right is one
      of the main things a test is for. */
-  let signature = "";
-  try {
-    const { data } = await admin.from("settings").select("data").eq("id", "main").maybeSingle();
-    signature = renderSignature(signatureFrom(data?.data ?? {}, {
-      name: caller.profile?.name ?? "",
-      email: caller.profile?.email ?? "",
-      designation: caller.profile?.designation ?? "",
-    }));
-  } catch (err) {
-    console.warn("outreach-test-send: could not build the signature —", err?.message ?? err);
-  }
+  const signature = renderSignature(signatureFrom(settings, {
+    name: caller.profile?.name ?? "",
+    email: caller.profile?.email ?? "",
+    designation: caller.profile?.designation ?? "",
+  }));
 
   const rendered = renderCampaignFor({ subject, body: message }, values, signature);
 
@@ -158,11 +163,19 @@ export async function handler(event) {
   return json(200, { sent: true, to, via: result.via ?? "" });
 }
 
-const senderOf = (caller) => ({
-  name: caller.profile?.name ?? "",
-  email: caller.profile?.email ?? "",
-  company: "",
-});
+/** The same shape outreach-launch.mjs builds, from the same places. A test
+ *  that filled these differently from a launch would be worse than no test. */
+const senderOf = (caller, settings = {}) => {
+  const company = settings.company ?? {};
+  return {
+    name: caller.profile?.name ?? "",
+    email: caller.profile?.email ?? "",
+    company: String(company.name ?? ""),
+    designation: caller.profile?.designation ?? "",
+    phone: String(company.phone ?? ""),
+    signature: caller.profile?.designation ?? "",
+  };
+};
 
 const json = (statusCode, payload) => ({
   statusCode,

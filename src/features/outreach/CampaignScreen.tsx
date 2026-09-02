@@ -125,9 +125,21 @@ export function CampaignScreen({ currentUser, settings, preselected, onDoneWithP
     }
   }, [preselected, onDoneWithPreselection]);
 
+  /* The same fields the server builds at launch, from the same places — the
+     profile for who is writing, settings for the company. They were not the
+     same: this passed the designation only as `signature`, and the server
+     passed no company at all, so {{sender_company}} was filled here and
+     literal in the email. */
   const sender = useMemo(
-    () => ({ name: currentUser.name, email: currentUser.email ?? "", company, signature: currentUser.designation ?? "" }),
-    [currentUser, company],
+    () => ({
+      name: currentUser.name,
+      email: currentUser.email ?? "",
+      company,
+      designation: currentUser.designation ?? "",
+      phone: String((settings["company"] as { phone?: string } | undefined)?.phone ?? ""),
+      signature: currentUser.designation ?? "",
+    }),
+    [currentUser, company, settings],
   );
 
   const candidates = useMemo(

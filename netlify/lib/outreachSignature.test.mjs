@@ -3,6 +3,8 @@ import * as server from "./outreachSignature.mjs";
 import { renderSignature as clientRender, signatureFrom as clientFrom }
   from "../../src/domain/outreach/signature";
 import { inlineFormat, renderHtml, stripMarkers } from "./outreachRender.mjs";
+import { buildValues, fill } from "./outreachAudience.mjs";
+import { readFileSync } from "node:fs";
 
 /**
  * The signature in the preview and the signature in the email must be the
@@ -177,3 +179,66 @@ describe("the formatting a writer gets in the body", () => {
     expect(html.indexOf("<!--SIG-->")).toBeLessThan(html.indexOf("unsubscribe"));
   });
 });
+
+/* ── who the sender is ─────────────────────────────────────────────── */
+
+describe("the sender's own details reach the email", () => {
+  const settings = { company: { name: "TechZoid Technologies Private Limited", phone: "+91 97114 92098" } };
+  const caller = { profile: { name: "Abhinav Jain", email: "a@t.example", designation: "Managing Director" } };
+
+  /* The bug: the server built the sender with company:"" and no designation,
+     so a template using {{sender_company}} rendered literal braces in the
+     email that went out while the composer's preview showed it filled. */
+  it("fills the company name from settings, not the empty string", () => {
+    const values = buildValues({}, {
+      name: caller.profile.name,
+      email: caller.profile.email,
+      company: String(settings.company.name),
+      designation: caller.profile.designation,
+    });
+    expect(values.sender_company).toBe("TechZoid Technologies Private Limited");
+    expect(values.sender_name).toBe("Abhinav Jain");
+    expect(values.sender_designation).toBe("Managing Director");
+  });
+
+  it("renders the intro line the templates actually use", () => {
+    const values = buildValues({}, {
+      name: "Abhinav Jain", email: "a@t.example",
+      company: "TechZoid Technologies", designation: "Managing Director",
+    });
+    const out = fill(
+      "I'm {{sender_name}}, {{sender_designation}} at {{sender_company}}.", values,
+    );
+    expect(out.text).toBe("I'm Abhinav Jain, Managing Director at TechZoid Technologies.");
+    expect(out.missing).toEqual([]);
+  });
+
+  /* Both endpoints must build the sender the same way, or a test send and a
+     launch fill the same template differently. */
+  it("the launch and the test send read the sender from the same places", () => {
+    const launch = readFileSync(new URL("../functions/outreach-launch.mjs", import.meta.url), "utf8");
+    const test = readFileSync(new URL("../functions/outreach-test-send.mjs", import.meta.url), "utf8");
+    for (const src of [launch, test]) {
+      /* Read from settings, not invented; and the job title carried too. */
+      expect(src).toMatch(/company:\s*String\(company\.name/);
+      expect(src).toMatch(/designation:\s*caller\.profile\?\.designation/);
+      /* The sender is built in one place in each file, and that place must
+         not be the empty-string version the bug shipped. Checking the whole
+         file would trip over a fake prospect row's own blank company. */
+      const block = senderBlock(src);
+      expect(block).not.toMatch(/company:\s*""/);
+      expect(block).toMatch(/name:/);
+      expect(block).toMatch(/email:/);
+    }
+  });
+});
+
+/** The object literal each endpoint builds its sender from — from the line
+ *  that opens it to the closing brace. Used only by the test above, to keep
+ *  the assertion off unrelated `company:` keys elsewhere in the file. */
+function senderBlock(src) {
+  const at = src.search(/(const sender = \{|senderOf = \(caller[^)]*\) => \{)/);
+  expect(at).toBeGreaterThan(-1);
+  const end = src.indexOf("\n};", at);
+  return src.slice(at, end === -1 ? src.length : end);
+}
