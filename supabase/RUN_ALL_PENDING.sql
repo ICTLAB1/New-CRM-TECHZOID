@@ -1438,6 +1438,10 @@ revoke all on table public.portal_tokens from anon;
 -- they collide with nothing, and renaming them to gain symmetry would risk the
 -- mailboxes the company sends quotations from.
 --
+-- Index names are prefixed for the same reason. In Postgres an index shares
+-- its namespace with tables, views and sequences, so an unprefixed
+-- `prospects_email_key` would be exactly as collision-prone as the table was.
+--
 -- SCHEMA CHANGE: four new tables. Nothing existing is touched — least of all
 -- the other application's tables. Safe to re-run.
 
@@ -1512,13 +1516,13 @@ create table if not exists public.outreach_prospects (
 -- failure this prevents is two salespeople importing the same list and the
 -- prospect receiving the same introduction twice from two people at the same
 -- company, which is the single most damaging thing an outreach tool can do.
-create unique index if not exists prospects_email_key
+create unique index if not exists outreach_prospects_email_key
   on public.outreach_prospects (lower(email));
 
-create index if not exists prospects_owner_idx  on public.outreach_prospects (owner_id, created_at desc);
-create index if not exists prospects_status_idx on public.outreach_prospects (status) where not quarantined;
-create index if not exists prospects_verify_idx on public.outreach_prospects (verification_status) where not quarantined;
-create index if not exists prospects_import_idx on public.outreach_prospects (import_id);
+create index if not exists outreach_prospects_owner_idx  on public.outreach_prospects (owner_id, created_at desc);
+create index if not exists outreach_prospects_status_idx on public.outreach_prospects (status) where not quarantined;
+create index if not exists outreach_prospects_verify_idx on public.outreach_prospects (verification_status) where not quarantined;
+create index if not exists outreach_prospects_import_idx on public.outreach_prospects (import_id);
 
 -- ── what verification decided, and why ────────────────────────────────
 -- Keyed by ADDRESS, not by prospect: a re-import of the same list should
@@ -1537,9 +1541,9 @@ create table if not exists public.outreach_verifications (
   checked_at timestamptz not null default now()
 );
 
-create unique index if not exists email_verifications_latest_key
+create unique index if not exists outreach_verifications_latest_key
   on public.outreach_verifications (lower(email), provider);
-create index if not exists email_verifications_email_idx
+create index if not exists outreach_verifications_email_idx
   on public.outreach_verifications (lower(email), checked_at desc);
 
 -- ── never write to these people again ─────────────────────────────────
@@ -1554,24 +1558,24 @@ create table if not exists public.outreach_suppressions (
   created_at timestamptz not null default now()
 );
 
-create unique index if not exists suppression_email_key
+create unique index if not exists outreach_suppressions_email_key
   on public.outreach_suppressions (lower(email));
 
 -- ── who may see what ──────────────────────────────────────────────────
-alter table public.outreach_prospects           enable row level security;
-alter table public.outreach_imports    enable row level security;
+alter table public.outreach_prospects     enable row level security;
+alter table public.outreach_imports       enable row level security;
 alter table public.outreach_verifications enable row level security;
-alter table public.outreach_suppressions    enable row level security;
+alter table public.outreach_suppressions  enable row level security;
 
 -- Prospects follow the same rule as customers: yours, or you are privileged.
-drop policy if exists "prospects_rw" on public.outreach_prospects;
-create policy "prospects_rw" on public.outreach_prospects for all
+drop policy if exists "outreach_prospects_rw" on public.outreach_prospects;
+create policy "outreach_prospects_rw" on public.outreach_prospects for all
   to authenticated
   using (owner_id = auth.uid() or public.is_privileged())
   with check (owner_id = auth.uid() or public.is_privileged());
 
-drop policy if exists "prospect_imports_rw" on public.outreach_imports;
-create policy "prospect_imports_rw" on public.outreach_imports for all
+drop policy if exists "outreach_imports_rw" on public.outreach_imports;
+create policy "outreach_imports_rw" on public.outreach_imports for all
   to authenticated
   using (imported_by = auth.uid() or public.is_privileged())
   with check (imported_by = auth.uid() or public.is_privileged());
@@ -1579,8 +1583,8 @@ create policy "prospect_imports_rw" on public.outreach_imports for all
 -- A verdict about an address is not private to a salesperson — two people
 -- importing the same list must both see that it bounced. Read by anyone
 -- signed in; written only by the server, which holds the service role.
-drop policy if exists "email_verifications_read" on public.outreach_verifications;
-create policy "email_verifications_read" on public.outreach_verifications for select
+drop policy if exists "outreach_verifications_read" on public.outreach_verifications;
+create policy "outreach_verifications_read" on public.outreach_verifications for select
   to authenticated using (true);
 
 -- SUPPRESSION IS READ BY EVERYONE AND ADDED TO BY ANYONE SIGNED IN. Adding
@@ -1588,12 +1592,12 @@ create policy "email_verifications_read" on public.outreach_verifications for se
 -- deliberately absent: there is no policy for delete or update, so nobody
 -- can quietly take a person off the list from the UI. Undoing a suppression
 -- is a decision with a person behind it, not a button.
-drop policy if exists "suppression_read" on public.outreach_suppressions;
-create policy "suppression_read" on public.outreach_suppressions for select
+drop policy if exists "outreach_suppressions_read" on public.outreach_suppressions;
+create policy "outreach_suppressions_read" on public.outreach_suppressions for select
   to authenticated using (true);
 
-drop policy if exists "suppression_insert" on public.outreach_suppressions;
-create policy "suppression_insert" on public.outreach_suppressions for insert
+drop policy if exists "outreach_suppressions_insert" on public.outreach_suppressions;
+create policy "outreach_suppressions_insert" on public.outreach_suppressions for insert
   to authenticated with check (true);
 
 -- Supabase's default privileges already grant authenticated on new tables in
@@ -2021,3 +2025,39 @@ grant execute on function public.regenerate_webhook_secret(text) to authenticate
 -- Ten tables, four functions, no customer without an ID, and both a
 -- channel and a delivery_state column on follow_ups.
 -- ════════════════════════════════════════════════════════════════════
+
+
+-- ────────────────────────────────────────────────────────────────────
+-- 026_pin_trigger_search_path.sql
+-- Pin the search_path on the portal-link integrity trigger.
+-- ────────────────────────────────────────────────────────────────────
+
+-- 026 — pin the search_path on the portal-link integrity trigger.
+--
+-- `portal_tokens_pin_identity` is the trigger that refuses to let a portal
+-- link be repointed at a different customer: revoke it and issue a new one
+-- instead. It is SECURITY INVOKER, so an unpinned search_path is not the
+-- privilege-escalation hole it would be on a DEFINER function — but this
+-- function's whole job is to be un-bypassable, and a resolvable name inside
+-- it is a loose thread on exactly the wrong function. Every other function
+-- this CRM owns already pins its path; this one was missed.
+--
+-- `set_updated_at` is flagged by the same linter and is deliberately NOT
+-- touched here: it belongs to the other application sharing this database.
+--
+-- Body unchanged from 021. Safe to re-run.
+
+create or replace function public.portal_tokens_pin_identity()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  if new.customer_id is distinct from old.customer_id
+     or new.token_hash is distinct from old.token_hash
+     or new.created_by is distinct from old.created_by
+     or new.created_at is distinct from old.created_at then
+    raise exception 'A portal link cannot be repointed. Revoke it and issue a new one.';
+  end if;
+  return new;
+end; $$;

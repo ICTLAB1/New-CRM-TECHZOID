@@ -30,6 +30,10 @@
 -- they collide with nothing, and renaming them to gain symmetry would risk the
 -- mailboxes the company sends quotations from.
 --
+-- Index names are prefixed for the same reason. In Postgres an index shares
+-- its namespace with tables, views and sequences, so an unprefixed
+-- `prospects_email_key` would be exactly as collision-prone as the table was.
+--
 -- SCHEMA CHANGE: four new tables. Nothing existing is touched — least of all
 -- the other application's tables. Safe to re-run.
 
@@ -104,13 +108,13 @@ create table if not exists public.outreach_prospects (
 -- failure this prevents is two salespeople importing the same list and the
 -- prospect receiving the same introduction twice from two people at the same
 -- company, which is the single most damaging thing an outreach tool can do.
-create unique index if not exists prospects_email_key
+create unique index if not exists outreach_prospects_email_key
   on public.outreach_prospects (lower(email));
 
-create index if not exists prospects_owner_idx  on public.outreach_prospects (owner_id, created_at desc);
-create index if not exists prospects_status_idx on public.outreach_prospects (status) where not quarantined;
-create index if not exists prospects_verify_idx on public.outreach_prospects (verification_status) where not quarantined;
-create index if not exists prospects_import_idx on public.outreach_prospects (import_id);
+create index if not exists outreach_prospects_owner_idx  on public.outreach_prospects (owner_id, created_at desc);
+create index if not exists outreach_prospects_status_idx on public.outreach_prospects (status) where not quarantined;
+create index if not exists outreach_prospects_verify_idx on public.outreach_prospects (verification_status) where not quarantined;
+create index if not exists outreach_prospects_import_idx on public.outreach_prospects (import_id);
 
 -- ── what verification decided, and why ────────────────────────────────
 -- Keyed by ADDRESS, not by prospect: a re-import of the same list should
@@ -129,9 +133,9 @@ create table if not exists public.outreach_verifications (
   checked_at timestamptz not null default now()
 );
 
-create unique index if not exists email_verifications_latest_key
+create unique index if not exists outreach_verifications_latest_key
   on public.outreach_verifications (lower(email), provider);
-create index if not exists email_verifications_email_idx
+create index if not exists outreach_verifications_email_idx
   on public.outreach_verifications (lower(email), checked_at desc);
 
 -- ── never write to these people again ─────────────────────────────────
@@ -146,24 +150,24 @@ create table if not exists public.outreach_suppressions (
   created_at timestamptz not null default now()
 );
 
-create unique index if not exists suppression_email_key
+create unique index if not exists outreach_suppressions_email_key
   on public.outreach_suppressions (lower(email));
 
 -- ── who may see what ──────────────────────────────────────────────────
-alter table public.outreach_prospects           enable row level security;
-alter table public.outreach_imports    enable row level security;
+alter table public.outreach_prospects     enable row level security;
+alter table public.outreach_imports       enable row level security;
 alter table public.outreach_verifications enable row level security;
-alter table public.outreach_suppressions    enable row level security;
+alter table public.outreach_suppressions  enable row level security;
 
 -- Prospects follow the same rule as customers: yours, or you are privileged.
-drop policy if exists "prospects_rw" on public.outreach_prospects;
-create policy "prospects_rw" on public.outreach_prospects for all
+drop policy if exists "outreach_prospects_rw" on public.outreach_prospects;
+create policy "outreach_prospects_rw" on public.outreach_prospects for all
   to authenticated
   using (owner_id = auth.uid() or public.is_privileged())
   with check (owner_id = auth.uid() or public.is_privileged());
 
-drop policy if exists "prospect_imports_rw" on public.outreach_imports;
-create policy "prospect_imports_rw" on public.outreach_imports for all
+drop policy if exists "outreach_imports_rw" on public.outreach_imports;
+create policy "outreach_imports_rw" on public.outreach_imports for all
   to authenticated
   using (imported_by = auth.uid() or public.is_privileged())
   with check (imported_by = auth.uid() or public.is_privileged());
@@ -171,8 +175,8 @@ create policy "prospect_imports_rw" on public.outreach_imports for all
 -- A verdict about an address is not private to a salesperson — two people
 -- importing the same list must both see that it bounced. Read by anyone
 -- signed in; written only by the server, which holds the service role.
-drop policy if exists "email_verifications_read" on public.outreach_verifications;
-create policy "email_verifications_read" on public.outreach_verifications for select
+drop policy if exists "outreach_verifications_read" on public.outreach_verifications;
+create policy "outreach_verifications_read" on public.outreach_verifications for select
   to authenticated using (true);
 
 -- SUPPRESSION IS READ BY EVERYONE AND ADDED TO BY ANYONE SIGNED IN. Adding
@@ -180,12 +184,12 @@ create policy "email_verifications_read" on public.outreach_verifications for se
 -- deliberately absent: there is no policy for delete or update, so nobody
 -- can quietly take a person off the list from the UI. Undoing a suppression
 -- is a decision with a person behind it, not a button.
-drop policy if exists "suppression_read" on public.outreach_suppressions;
-create policy "suppression_read" on public.outreach_suppressions for select
+drop policy if exists "outreach_suppressions_read" on public.outreach_suppressions;
+create policy "outreach_suppressions_read" on public.outreach_suppressions for select
   to authenticated using (true);
 
-drop policy if exists "suppression_insert" on public.outreach_suppressions;
-create policy "suppression_insert" on public.outreach_suppressions for insert
+drop policy if exists "outreach_suppressions_insert" on public.outreach_suppressions;
+create policy "outreach_suppressions_insert" on public.outreach_suppressions for insert
   to authenticated with check (true);
 
 -- Supabase's default privileges already grant authenticated on new tables in
