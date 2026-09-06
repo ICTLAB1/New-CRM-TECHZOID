@@ -72,3 +72,51 @@ export async function nextDocSeq(kind: DocSeqKind, fallback: number): Promise<nu
     return local;
   }
 }
+
+/* ── numbering that restarts each financial year ───────────────────── */
+
+/**
+ * The next number in a series, for one document type in one financial year.
+ *
+ * WHAT THIS REPLACES AND WHY. `nextDocSeq` above draws from a single counter
+ * per document kind that has never reset. The financial year is printed on
+ * every document number, so on 1 April 2027 a quotation would come out as
+ * TZ/QT/2027-28/0025 — a new year opening at twenty-five, the label and the
+ * number disagreeing with each other. `public.next_doc_number` (migration
+ * 032) keeps one counter per (type, year), so April starts at 0001.
+ *
+ * THE YEAR IS SENT, NOT INFERRED. This browser computes the financial year
+ * it is about to print and asks for a number in that year. If the database
+ * worked it out instead, a server on UTC and a person in India would
+ * disagree for five and a half hours across the night of 31 March — the
+ * label printed and the counter incremented would be for different years,
+ * on the one night when that matters most.
+ *
+ * The fallback chain is deliberate: the new function, then the old one, then
+ * the local counter. A numbering hiccup must never be the reason somebody
+ * loses a document they have just spent ten minutes on.
+ */
+export async function nextDocNumber(
+  objType: number,
+  fy: string,
+  kind: DocSeqKind,
+  fallback: number,
+): Promise<number> {
+  const local = Math.max(1, Math.floor(Number(fallback) || 1));
+  if (!isSupabaseConfigured()) return local;
+  try {
+    const { data, error } = await getSupabase()
+      .rpc("next_doc_number", { p_obj_type: objType, p_fy: fy });
+    if (!error && data !== null && data !== undefined) {
+      const seq = Math.floor(Number(data));
+      if (Number.isFinite(seq) && seq > 0) return seq;
+    }
+    /* Migration 032 not applied yet — an older workspace, or a deployment
+       that got ahead of the database. The old counter is wrong across an
+       April boundary but is not destructive, which is the right way round. */
+    console.error("next_doc_number unavailable, falling back to next_doc_seq:", error);
+  } catch {
+    /* fall through */
+  }
+  return nextDocSeq(kind, local);
+}

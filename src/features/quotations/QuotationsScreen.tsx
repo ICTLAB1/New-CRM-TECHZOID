@@ -15,8 +15,9 @@ import {
 import type { Customer } from "../../domain/customers/customer";
 import { advancesPipeline, concludedAt, isConcluded, stageAfterQuotation } from "../../domain/pipeline/advance";
 import { stageOf } from "../../domain/pipeline/stages";
-import { buildDocNumber } from "../../domain/numbering/docNumber";
-import { SEQ_KEY, nextDocSeq, seqKindOf } from "../../data/docNumber";
+import { buildDocNumber, fyLabel } from "../../domain/numbering/docNumber";
+import { SEQ_KEY, nextDocNumber, seqKindOf } from "../../data/docNumber";
+import { OBJ_TYPE, OBJ_TYPE_OF_DOC_TYPE } from "../../domain/documents/objType";
 import { orderFromProforma, type SalesOrder } from "../../domain/orders/create";
 import type { CatalogProduct } from "../../domain/catalog/types";
 import { computeDocument } from "../../domain/tax/compute";
@@ -101,8 +102,17 @@ export function QuotationsScreen({
    */
   const allocateNumber = async (doc: SalesDocument): Promise<{ doc: SalesDocument; seq: number | null }> => {
     if (!doc.autoNumber) return { doc, seq: null };
-    const seq = await nextDocSeq(seqKind, Number(settings[seqKey]) || 1);
-    return { doc: { ...doc, number: buildDocNumber(prefix, seq), autoNumber: false }, seq };
+    /* One instant for both the series and the label, so a save at the stroke
+       of midnight on 31 March cannot draw from one financial year and print
+       the other. */
+    const now = new Date();
+    const seq = await nextDocNumber(
+      OBJ_TYPE_OF_DOC_TYPE[docType] ?? OBJ_TYPE.quotation,
+      fyLabel(now),
+      seqKind,
+      Number(settings[seqKey]) || 1,
+    );
+    return { doc: { ...doc, number: buildDocNumber(prefix, seq, now), autoNumber: false }, seq };
   };
 
   /** Keep this browser's copy of the counter level with the database, which
@@ -227,10 +237,11 @@ export function QuotationsScreen({
   const confirmOrder = async (doc: SalesDocument) => {
     /* The order number comes from the same database counter every other
        document uses, so two people confirming at once cannot collide. */
-    const seq = await nextDocSeq("order", Number(settings["orderSeq"]) || 1);
+    const now = new Date();
+    const seq = await nextDocNumber(OBJ_TYPE.order, fyLabel(now), "order", Number(settings["orderSeq"]) || 1);
     const order = {
       ...orderFromProforma(doc, settings as DocSettings),
-      number: buildDocNumber(String(settings["orderPrefix"] ?? "TZ/SO"), seq),
+      number: buildDocNumber(String(settings["orderPrefix"] ?? "TZ/SO"), seq, now),
     };
     onCreateOrder?.(order);
     onSettingsNote?.({ ...settings, orderSeq: seq + 1 });

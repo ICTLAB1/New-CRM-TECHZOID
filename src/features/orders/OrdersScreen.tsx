@@ -6,8 +6,9 @@ import { useToast } from "../../components/Toast";
 import { Modal } from "../../components/Modal";
 import { AttachmentsPanel } from "../attachments/AttachmentsPanel";
 import { ORDER_STAGES, orderStageOf, type OrderStageId } from "../../domain/orders/stages";
-import { buildDocNumber } from "../../domain/numbering/docNumber";
-import { nextDocSeq } from "../../data/docNumber";
+import { buildDocNumber, fyLabel } from "../../domain/numbering/docNumber";
+import { nextDocNumber } from "../../data/docNumber";
+import { OBJ_TYPE } from "../../domain/documents/objType";
 import { orderFulfilment, type Challan } from "../../domain/orders/fulfilment";
 import { newChallan, suggestedStage, type DeliveryChallan, type SalesOrder } from "../../domain/orders/create";
 import { computeDocument } from "../../domain/tax/compute";
@@ -58,8 +59,9 @@ export function OrdersScreen({ orders, challans, settings, currentUser, onChange
        every other document counter is: `settings` is writable only by an
        admin or a manager, so the browser's bump was silently rejected for
        everybody else and two challans came out with one number. */
-    const seq = await nextDocSeq("dispatch", Number(settings["dispatchSeq"]) || 1);
-    const numbered = { ...dc, number: buildDocNumber(String(settings["dispatchPrefix"] ?? "TZ/DC"), seq) };
+    const now = new Date();
+    const seq = await nextDocNumber(OBJ_TYPE.delivery, fyLabel(now), "dispatch", Number(settings["dispatchSeq"]) || 1);
+    const numbered = { ...dc, number: buildDocNumber(String(settings["dispatchPrefix"] ?? "TZ/DC"), seq, now) };
     onChange(orders, [numbered, ...challans], settings);
     onSettingsNote?.({ ...settings, dispatchSeq: seq + 1 });
     toast(`Challan ${numbered.number} raised for ${numbered.items.length} pending line${numbered.items.length === 1 ? "" : "s"}.`, "good");
