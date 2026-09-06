@@ -38,3 +38,18 @@
   from = "/*"
   to = "/index.html"
   status = 200
+
+# IndiaMART leads. Five minutes is THEIR floor, not a preference: calls
+# closer together earn CODE 429, and more than five inside one minute gets
+# the API key disabled for a quarter of an hour.
+#
+# It runs even when there is nothing to fetch, deliberately. The key expires
+# after seven consecutive days unused, so a poller that went quiet over a
+# long holiday would put the whole integration to sleep and nobody would
+# find out until the leads stopped arriving.
+#
+# Declared here as well as in the function file: the schedule is the whole
+# feature, and a scheduled function that silently is not scheduled looks
+# exactly like an IndiaMART account with no enquiries.
+[functions."indiamart-pull"]
+  schedule = "*/5 * * * *"

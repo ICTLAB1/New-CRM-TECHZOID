@@ -24,6 +24,14 @@ import { join } from "node:path";
  * anywhere and needs no credentials. It is deliberately strict about
  * expressions: a conflict target is a column list, so an index carrying
  * `lower(...)` or any other call cannot satisfy one.
+ *
+ * PRIMARY KEYS COUNT TOO, and missing that was a hole in the first version
+ * of this test. Postgres backs a primary key with a unique index and matches
+ * a conflict target against it like any other, so `on conflict (id)` against
+ * `id text primary key` is correct — verified on a real Postgres, not
+ * assumed. Reading only `create unique index` meant this test called a
+ * perfectly good upsert broken, which is the failure mode that gets a guard
+ * deleted rather than fixed.
  */
 
 const ROOT = join(__dirname, "..", "..");
@@ -65,6 +73,34 @@ function upsertTargets(): { file: string; table: string; columns: string[] }[] {
   walk(join(ROOT, "src"));
   walk(join(ROOT, "netlify"));
   return found;
+}
+
+/** Every `create table` in the migrations and in schema.sql, and the columns
+ *  its primary key covers. Both the inline form (`id text primary key`) and
+ *  the table-constraint form (`primary key (a, b)`) are read. */
+function primaryKeys(): Map<string, string[]> {
+  const byTable = new Map<string, string[]>();
+
+  const files = readdirSync(SQL_DIR).filter((f) => /\.sql$/.test(f)).sort();
+  for (const file of files) {
+    const text = readFileSync(join(SQL_DIR, file), "utf8");
+    const re = /create\s+table\s+(?:if\s+not\s+exists\s+)?(?:public\.)?([a-z0-9_]+)\s*\(([\s\S]*?)\n\s*\)\s*;/gi;
+    for (const m of text.matchAll(re)) {
+      const [, table, body] = m;
+      if (byTable.has(table!)) continue; // the first definition wins
+
+      const composite = body!.match(/\bprimary\s+key\s*\(([^)]+)\)/i);
+      if (composite) {
+        byTable.set(table!, composite[1]!.split(",").map((c) => c.trim()).filter(Boolean));
+        continue;
+      }
+      for (const line of body!.split("\n")) {
+        const inline = line.match(/^\s*([a-z0-9_]+)\s+[^,]*\bprimary\s+key\b/i);
+        if (inline) { byTable.set(table!, [inline[1]!]); break; }
+      }
+    }
+  }
+  return byTable;
 }
 
 /**
@@ -115,6 +151,13 @@ function uniqueIndexes(): Map<string, string[][]> {
 describe("every upsert names a conflict target the database can match", () => {
   const targets = upsertTargets();
   const indexes = uniqueIndexes();
+  const keys = primaryKeys();
+
+  it("reads primary keys as well as unique indexes", () => {
+    /* If this parse breaks, every primary-key upsert below starts failing
+       for a reason that has nothing to do with the code under test. */
+    expect(keys.get("customers")).toEqual(["id"]);
+  });
 
   it("finds the upserts to check", () => {
     /* If this drops to zero the walk has broken and every case below would
@@ -124,7 +167,8 @@ describe("every upsert names a conflict target the database can match", () => {
 
   for (const t of targets) {
     it(`${t.table} (${t.columns.join(", ")}) — ${t.file}`, () => {
-      const candidates = indexes.get(t.table) ?? [];
+      const pk = keys.get(t.table);
+      const candidates = [...(indexes.get(t.table) ?? []), ...(pk ? [pk] : [])];
       const match = candidates.some(
         (cols) =>
           cols.length === t.columns.length &&
@@ -134,7 +178,7 @@ describe("every upsert names a conflict target the database can match", () => {
       expect(
         match,
         `${t.file} upserts into ${t.table} with onConflict "${t.columns.join(",")}", but no ` +
-          `plain-column unique index matches it. Unique indexes on that table: ` +
+          `plain-column unique index or primary key matches it. Candidates on that table: ` +
           (candidates.length
             ? candidates.map((c) => `(${c.join(", ")})`).join(", ")
             : "none that are plain columns — an index on lower(email) or any other " +
