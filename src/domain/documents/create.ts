@@ -5,6 +5,7 @@ import type { LineItem } from "../tax/types";
 import type { PaymentEntry } from "../payments/ledger";
 import type { GoodsReceipt } from "../purchasing/receipts";
 import { DOMESTIC_TERMS, PURCHASE_ORDER_TERMS, suggestTermsSet } from "./terms";
+import { OBJ_TYPE, type ObjType } from "./objType";
 
 /**
  * Creating and converting documents.
@@ -58,6 +59,11 @@ export interface DocSettings {
 
 export interface SalesDocument {
   id: string;
+  /** What this document IS — 23 quotation, 13 invoice, and so on. See
+   *  objType.ts. Optional only because records written before it existed do
+   *  not carry it; store.ts fills it in on load from the table the row came
+   *  out of, so anything the app has in its hands has one. */
+  objType?: ObjType;
   number: string;
   /** True while the number is still the one the app suggested. The database
    *  allocates the real one on first save (see src/data/docNumber.ts), and
@@ -263,6 +269,7 @@ export function newQuotation({ settings, user, customer = null, today = TODAY() 
   const fields = documentFieldsFrom(customer, settings);
   return {
     id: uid(),
+    objType: OBJ_TYPE.quotation,
     number: buildDocNumber(settings.quotePrefix ?? "TZ/QT", settings.quoteSeq),
     /* The number above is a preview of what this document will get. The
        real one is allocated by the database when it is first saved — see
@@ -294,6 +301,7 @@ export function newProforma({ settings, user, customer = null, today = TODAY() }
   const fields = documentFieldsFrom(customer, settings);
   return {
     id: uid(),
+    objType: OBJ_TYPE.proforma,
     number: buildDocNumber(settings.proformaPrefix ?? "TZ/PI", settings.proformaSeq),
     /* The number above is a preview of what this document will get. The
        real one is allocated by the database when it is first saved — see
@@ -345,6 +353,7 @@ export function newPurchaseOrder({ settings, user, customer = null, today = TODA
   const dropShip = !!customer;
   return {
     id: uid(),
+    objType: OBJ_TYPE.purchase_order,
     number: buildDocNumber(settings.purchaseOrderPrefix ?? "TZ/PO", settings.purchaseOrderSeq),
     /* The number above is a preview of what this document will get. The
        real one is allocated by the database when it is first saved — see
@@ -432,6 +441,7 @@ export function proformaFromQuotation(
 ): SalesDocument {
   return {
     id: uid(),
+    objType: OBJ_TYPE.proforma,
     number: buildDocNumber(settings.proformaPrefix ?? "TZ/PI", settings.proformaSeq),
     /* The number above is a preview of what this document will get. The
        real one is allocated by the database when it is first saved — see
@@ -503,6 +513,7 @@ export function invoiceFrom(
 
   return {
     id: uid(),
+    objType: OBJ_TYPE.invoice,
     number: buildDocNumber(settings.invoicePrefix ?? "TZ/INV", settings.invoiceSeq),
     /* The number above is a preview of what this document will get. The
        real one is allocated by the database when it is first saved — see
@@ -539,6 +550,7 @@ export function duplicateQuotation(
   return {
     ...quote,
     id: uid(),
+    objType: OBJ_TYPE.quotation,
     number: buildDocNumber(settings.quotePrefix ?? "TZ/QT", settings.quoteSeq),
     /* The number above is a preview of what this document will get. The
        real one is allocated by the database when it is first saved — see

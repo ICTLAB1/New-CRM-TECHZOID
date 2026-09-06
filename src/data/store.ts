@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { getSupabase } from "./supabase";
 import { ENTITY_EXTRA_COLS, ENTITY_TABLES, rowToItem, type EntityBase, type EntityRow, type EntityTable } from "./entities";
 import { normalizeCustomer, normalizeDocument } from "./normalize";
+import { OBJ_TYPE, type ObjType } from "../domain/documents/objType";
 import type { Customer } from "../domain/customers/customer";
 import type { SalesDocument } from "../domain/documents/create";
 import type { SalesOrder, DeliveryChallan } from "../domain/orders/create";
@@ -112,17 +113,19 @@ export function createStore(client: SupabaseClient) {
 
     const asCustomer = (c: Customer): Customer =>
       normalizeCustomer(c as unknown as Record<string, unknown>) as unknown as Customer;
-    const asDoc = <T,>(d: T): T =>
-      normalizeDocument(d as unknown as Record<string, unknown>) as unknown as T;
+    /* Curried by type, because the type is the one thing the record itself
+       may not know — see the note on normalizeDocument. */
+    const asDoc = (objType: ObjType) => <T,>(d: T): T =>
+      normalizeDocument(d as unknown as Record<string, unknown>, objType) as unknown as T;
 
     return {
       data: {
         customers: customers.map(asCustomer),
-        quotations: quotations.map(asDoc),
-        proformas: proformas.map(asDoc),
-        purchaseOrders: purchaseOrders.map(asDoc),
-        invoices: invoices.map(asDoc),
-        orders: orders.map(asDoc),
+        quotations: quotations.map(asDoc(OBJ_TYPE.quotation)),
+        proformas: proformas.map(asDoc(OBJ_TYPE.proforma)),
+        purchaseOrders: purchaseOrders.map(asDoc(OBJ_TYPE.purchase_order)),
+        invoices: invoices.map(asDoc(OBJ_TYPE.invoice)),
+        orders: orders.map(asDoc(OBJ_TYPE.order)),
         challans,
         subscriptions,
       },
