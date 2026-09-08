@@ -145,3 +145,99 @@ export function resolveActiveCompany(companies: Company[], remembered: string | 
  *  another, and the CRM has to believe the company, not the person. */
 export const roleIn = (companies: Company[], companyId: string | null): string =>
   companies.find((c) => c.id === companyId)?.role ?? "Sales";
+
+/* ── who belongs to a company ──────────────────────────────────────── */
+
+export interface Member {
+  userId: string;
+  name: string;
+  email: string;
+  role: string;
+}
+
+/** Everybody in one company, with the role they hold there. */
+export async function listMembers(companyId: string): Promise<Member[]> {
+  const { data, error } = await getSupabase()
+    .from("company_members")
+    .select("user_id, role, profiles!inner(name, email)")
+    .eq("company_id", companyId);
+  if (error) throw error;
+
+  type Row = { user_id: string; role: string; profiles: { name?: string; email?: string } | { name?: string; email?: string }[] };
+  return ((data as Row[] | null) ?? [])
+    .map((r) => {
+      const p = Array.isArray(r.profiles) ? r.profiles[0] : r.profiles;
+      return {
+        userId: r.user_id,
+        name: String(p?.name ?? "").trim() || String(p?.email ?? "") || "Somebody",
+        email: String(p?.email ?? ""),
+        role: r.role,
+      };
+    })
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+export async function addMember(companyId: string, userId: string, role: string): Promise<void> {
+  const { error } = await getSupabase()
+    .from("company_members")
+    .insert({ company_id: companyId, user_id: userId, role });
+  if (error) throw new Error(readableMemberError(error.message));
+}
+
+export async function setMemberRole(companyId: string, userId: string, role: string): Promise<void> {
+  const { error } = await getSupabase()
+    .from("company_members")
+    .update({ role })
+    .eq("company_id", companyId)
+    .eq("user_id", userId);
+  if (error) throw new Error(readableMemberError(error.message));
+}
+
+export async function removeMember(companyId: string, userId: string): Promise<void> {
+  const { error } = await getSupabase()
+    .from("company_members")
+    .delete()
+    .eq("company_id", companyId)
+    .eq("user_id", userId);
+  if (error) throw new Error(readableMemberError(error.message));
+}
+
+export async function renameCompany(companyId: string, name: string): Promise<void> {
+  const clean = name.trim();
+  if (!clean) throw new Error("A company needs a name.");
+  const { error } = await getSupabase().from("companies").update({ name: clean }).eq("id", companyId);
+  if (error) throw new Error("Couldn't rename that company. Try again in a moment.");
+}
+
+export function readableMemberError(message: string): string {
+  const m = String(message ?? "").toLowerCase();
+  /* The database's own words for this one, because they say exactly what to
+     do about it — see the trigger in migration 034. */
+  if (m.includes("only admin")) return "That's the only admin of this company. Make somebody else an admin first.";
+  if (m.includes("duplicate key")) return "They're already in this company.";
+  if (m.includes("row-level security") || m.includes("violates row-level")) {
+    return "You need to be an admin of this company to change who's in it.";
+  }
+  return "Couldn't save that change. Try again in a moment.";
+}
+
+/**
+ * Whether removing or demoting this person would leave the company with no
+ * admin at all.
+ *
+ * The database refuses it either way (migration 034) — this is so somebody
+ * is told BEFORE they try, and so the control is visibly disabled rather
+ * than failing with an error when pressed. The rule is enforced in one
+ * place; this only anticipates it.
+ */
+export function isLastAdmin(members: Member[], userId: string): boolean {
+  const admins = members.filter((m) => m.role === "Admin");
+  return admins.length === 1 && admins[0]!.userId === userId;
+}
+
+/** People who could be added — everybody with an account who is not already
+ *  in this company. */
+export function addableTo<T extends { id: string }>(everybody: T[], members: Member[]): T[] {
+  const already = new Set(members.map((m) => m.userId));
+  return everybody.filter((p) => !already.has(p.id));
+}

@@ -157,6 +157,9 @@ function LiveWorkbench({ user }: { user: SignedInUser }) {
       onSignOut={() => void signOut()}
       events={ws.events}
       onEventsSeen={ws.clearEvents}
+      companies={companies.companies}
+      activeCompanyId={companies.activeId}
+      onCompaniesChanged={() => void companies.refresh()}
       companyPicker={
         <CompanySwitcher
           companies={companies.companies}

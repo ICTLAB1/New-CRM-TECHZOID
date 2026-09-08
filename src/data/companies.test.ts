@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { dedupeById, readableCompanyError, resolveActiveCompany, roleIn, type Company } from "./companies";
+import {
+  addableTo, dedupeById, isLastAdmin, readableCompanyError, readableMemberError,
+  resolveActiveCompany, roleIn, type Company,
+} from "./companies";
 
 /**
  * Which company is on screen.
@@ -111,5 +114,70 @@ describe("one entry per company, not one per colleague", () => {
       { id: "fx", name: "Foxpopz Trading", role: "Admin" },
     ];
     expect(roleIn(dedupeById(asSales), "fx")).toBe("Sales");
+  });
+});
+
+describe("the last admin of a company", () => {
+  const ADMIN = { userId: "u1", name: "Abhinav", email: "a@t.example", role: "Admin" };
+  const SALES = { userId: "u2", name: "Rashmi", email: "r@t.example", role: "Sales" };
+  const ADMIN2 = { userId: "u3", name: "Chandan", email: "c@t.example", role: "Admin" };
+
+  /* Not tidiness. A company with no admin cannot be GIVEN one — adding a
+     member requires being privileged in that company — so its customers,
+     quotations and invoices become unreachable through the CRM and only a
+     SQL prompt can undo it. The database refuses it; this is so the control
+     is disabled rather than failing when pressed. */
+  it("is recognised when they are the only one", () => {
+    expect(isLastAdmin([ADMIN, SALES], "u1")).toBe(true);
+  });
+
+  it("is not the only one once there are two", () => {
+    expect(isLastAdmin([ADMIN, ADMIN2, SALES], "u1")).toBe(false);
+    expect(isLastAdmin([ADMIN, ADMIN2, SALES], "u3")).toBe(false);
+  });
+
+  it("does not protect somebody who is not an admin", () => {
+    expect(isLastAdmin([ADMIN, SALES], "u2")).toBe(false);
+  });
+
+  it("says no rather than crashing on an empty or unknown company", () => {
+    expect(isLastAdmin([], "u1")).toBe(false);
+    expect(isLastAdmin([SALES], "u1")).toBe(false);
+  });
+});
+
+describe("who can still be added", () => {
+  const EVERYBODY = [{ id: "u1", name: "Abhinav" }, { id: "u2", name: "Rashmi" }, { id: "u3", name: "Chandan" }];
+  const MEMBERS = [{ userId: "u1", name: "Abhinav", email: "", role: "Admin" }];
+
+  it("leaves out the people already in the company", () => {
+    expect(addableTo(EVERYBODY, MEMBERS).map((p) => p.id)).toEqual(["u2", "u3"]);
+  });
+
+  it("offers everybody when the company is empty", () => {
+    expect(addableTo(EVERYBODY, [])).toHaveLength(3);
+  });
+
+  it("offers nobody when they are all in already", () => {
+    const all = EVERYBODY.map((p) => ({ userId: p.id, name: p.name, email: "", role: "Sales" }));
+    expect(addableTo(EVERYBODY, all)).toEqual([]);
+  });
+});
+
+describe("what somebody is told when a membership change fails", () => {
+  it("passes on the database's own words for the last admin, which say what to do", () => {
+    expect(readableMemberError("That is the only admin of this company. Make somebody else an admin first."))
+      .toMatch(/only admin/i);
+  });
+
+  it("explains a duplicate rather than showing the constraint", () => {
+    const said = readableMemberError('duplicate key value violates unique constraint "company_members_pkey"');
+    expect(said).toMatch(/already in this company/i);
+    expect(said).not.toMatch(/constraint|pkey/i);
+  });
+
+  it("explains a refusal as a permission, not as a failure", () => {
+    expect(readableMemberError("new row violates row-level security policy for table \"company_members\""))
+      .toMatch(/admin of this company/i);
   });
 });

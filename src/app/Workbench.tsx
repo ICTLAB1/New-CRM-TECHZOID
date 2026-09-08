@@ -33,6 +33,8 @@ import type { WorkspaceData } from "../data/useWorkspace";
 import type { Customer } from "../domain/customers/customer";
 import type { Workspace as OwnershipWorkspace } from "../domain/customers/cascade";
 import { detectCustomerEvents } from "../domain/integrations/webhooks";
+import { CompaniesPanel } from "../features/companies/CompaniesPanel";
+import type { Company } from "../data/companies";
 
 /**
  * Every screen, and the routing between them.
@@ -65,6 +67,14 @@ export interface WorkbenchProps {
   /** The company picker for the top bar, when this CRM holds more than one
    *  business. Built by the app root, which is what knows the list. */
   companyPicker?: React.ReactNode;
+  /** Every company this person belongs to, and which is on screen — for the
+   *  Companies panel. Read by the app root, passed down rather than fetched
+   *  twice. */
+  companies?: Company[];
+  activeCompanyId?: string | null;
+  /** Membership or a name changed; the root refetches the list so the picker
+   *  and this panel agree. */
+  onCompaniesChanged?: () => void;
   /** What has changed in the workspace since this screen last looked. */
   events?: CrmEvent[];
   onEventsSeen?: () => void;
@@ -81,7 +91,7 @@ const ownershipOf = (data: WorkspaceData): OwnershipWorkspace => ({
 
 export function Workbench({
   data, settings, team, user, onChange, onSettingsChange, onSettingsNote, onTeamChange, onRestore, onSignOut, banner,
-  events = [], onEventsSeen, companyPicker,
+  events = [], onEventsSeen, companyPicker, companies = [], activeCompanyId = null, onCompaniesChanged,
 }: WorkbenchProps) {
   const [view, setView] = useState("dashboard");
   /* Prospects handed from the Prospects screen to the composer. */
@@ -351,6 +361,19 @@ export function Workbench({
         />
       ) : view === "team" ? (
         <TeamScreen api={integrations} members={team} currentUser={user} onChange={onTeamChange} />
+      ) : view === "companies" ? (
+        <main className="page">
+          <PageHead
+            title="Companies"
+            sub="Which business each person works in, and what they may do there."
+          />
+          <CompaniesPanel
+            companies={companies}
+            activeId={activeCompanyId}
+            everybody={team}
+            onChanged={() => onCompaniesChanged?.()}
+          />
+        </main>
       ) : view === "incentives" ? (
         <IncentivesScreen workspace={analytics} settings={settings} users={team} currentUser={user} />
       ) : view === "settings" ? (

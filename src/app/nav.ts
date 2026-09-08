@@ -69,6 +69,10 @@ export const NAV: NavSection[] = [
     items: [
       { id: "catalog", label: "Product catalog" },
       { id: "team", label: "Team" },
+      /* Team is who can sign in; Companies is which business each of them
+         works in, and with what authority there. Neighbours because that is
+         the order somebody does them in. */
+      { id: "companies", label: "Companies" },
       { id: "integrations", label: "Integrations" },
       { id: "settings", label: "Settings" },
       { id: "components", label: "Components" },
