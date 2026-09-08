@@ -62,6 +62,9 @@ export interface WorkbenchProps {
   onSignOut?: () => void;
   /** Shown across the top when it is worth interrupting for. */
   banner?: React.ReactNode;
+  /** The company picker for the top bar, when this CRM holds more than one
+   *  business. Built by the app root, which is what knows the list. */
+  companyPicker?: React.ReactNode;
   /** What has changed in the workspace since this screen last looked. */
   events?: CrmEvent[];
   onEventsSeen?: () => void;
@@ -78,7 +81,7 @@ const ownershipOf = (data: WorkspaceData): OwnershipWorkspace => ({
 
 export function Workbench({
   data, settings, team, user, onChange, onSettingsChange, onSettingsNote, onTeamChange, onRestore, onSignOut, banner,
-  events = [], onEventsSeen,
+  events = [], onEventsSeen, companyPicker,
 }: WorkbenchProps) {
   const [view, setView] = useState("dashboard");
   /* Prospects handed from the Prospects screen to the composer. */
@@ -179,6 +182,7 @@ export function Workbench({
       onSignOut={onSignOut}
       banner={banner}
       bell={<NotificationBell events={events} onOpen={() => onEventsSeen?.()} />}
+      companyPicker={companyPicker}
     >
       {/* At the shell, not on a screen: a message from an admin has to reach
           somebody wherever they happen to be looking. */}

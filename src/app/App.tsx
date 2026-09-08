@@ -13,6 +13,8 @@ import { isConfigured, loadProfile, onSessionChange, signOut, type SignedInUser 
 import { CHALLANS, CUSTOMERS, ORDERS, INVOICES, PROFORMAS, PURCHASE_ORDERS, QUOTATIONS, SETTINGS, SUBSCRIPTIONS, USERS } from "./demoData";
 import type { TeamMember } from "../features/team/TeamScreen";
 import type { Session } from "@supabase/supabase-js";
+import { useCompanies } from "../data/useCompanies";
+import { CompanySwitcher } from "../features/companies/CompanySwitcher";
 
 /**
  * Which mode the app is in.
@@ -111,9 +113,23 @@ function LiveApp() {
 }
 
 function LiveWorkbench({ user }: { user: SignedInUser }) {
-  const ws = useWorkspace(true, user.id);
+  /* Which company, THEN the workspace. Every query the store makes is
+     narrowed to the active company, so loading the other way round fetches
+     one company's records only to discard them — and for somebody who
+     belongs to two, briefly shows both mixed together. */
+  const companies = useCompanies(true);
+  const ws = useWorkspace(companies.ready, user.id);
 
-  if (ws.state === "loading") return <Splash message="Loading your workspace…" />;
+  /* Switching company changes what every screen behind it is showing, so the
+     workspace is refetched rather than filtered in place: the records for
+     the other company were never loaded. */
+  const switchCompany = (id: string) => {
+    if (id === companies.activeId) return;
+    companies.switchTo(id);
+    void ws.reload();
+  };
+
+  if (!companies.ready || ws.state === "loading") return <Splash message="Loading your workspace…" />;
   if (ws.state === "failed") {
     return (
       <Splash
@@ -141,6 +157,14 @@ function LiveWorkbench({ user }: { user: SignedInUser }) {
       onSignOut={() => void signOut()}
       events={ws.events}
       onEventsSeen={ws.clearEvents}
+      companyPicker={
+        <CompanySwitcher
+          companies={companies.companies}
+          activeId={companies.activeId}
+          onSwitch={switchCompany}
+          onAdded={() => void companies.refresh()}
+        />
+      }
       banner={ws.saveError ? (
         <div className="page-banner notice notice-bad">
           <span>{ws.saveError}</span>

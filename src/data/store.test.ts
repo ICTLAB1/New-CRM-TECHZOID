@@ -42,7 +42,14 @@ function fakeClient(options: FakeOptions = {}) {
         ops.push({ table, kind: "select" });
         const rowsFor = rows[table] ?? [];
         const chain = {
-          eq: () => ({ single: () => result(table, rowsFor[0] ?? null) }),
+          /* `maybeSingle` as well as `single`: a company whose settings row
+             has not been created yet is an empty workspace to fill in, not
+             an error that stops the CRM loading, so the store asks for at
+             most one row rather than exactly one. */
+          eq: () => ({
+            single: () => result(table, rowsFor[0] ?? null),
+            maybeSingle: () => result(table, rowsFor[0] ?? null),
+          }),
           order: () => result(table, rowsFor),
           then: (resolve: (v: unknown) => unknown) => result(table, rowsFor).then(resolve),
         };

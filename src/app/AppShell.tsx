@@ -4,6 +4,7 @@ import { ShortcutsHelp } from "../components/ShortcutsHelp";
 import { NAV } from "./nav";
 import { ConnectionBanner } from "../components/ConnectionBanner";
 import { Button } from "../components/primitives";
+import { fyLabel } from "../domain/numbering/docNumber";
 
 export interface AppShellProps {
   view: string;
@@ -20,13 +21,17 @@ export interface AppShellProps {
   /** Rendered in the topbar. Passed in rather than built here so the shell
    *  stays free of any opinion about where notifications come from. */
   bell?: ReactNode;
+  /** The company picker, when this CRM holds more than one business. Passed
+   *  in for the same reason as the bell: the shell lays the bar out, it does
+   *  not decide what a company is. */
+  companyPicker?: ReactNode;
   children: ReactNode;
 }
 
 const initials = (name: string): string =>
   name.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? "").join("");
 
-export function AppShell({ view, onNavigate, user, brand, onSignOut, banner, bell, children }: AppShellProps) {
+export function AppShell({ view, onNavigate, user, brand, onSignOut, banner, bell, companyPicker, children }: AppShellProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const section = NAV.find((s) => s.items.some((i) => i.id === view));
@@ -119,8 +124,15 @@ export function AppShell({ view, onNavigate, user, brand, onSignOut, banner, bel
           </nav>
           <span className="grow" />
           <input className="topsearch" type="search" placeholder="Search customers, quotations, orders…" aria-label="Search" />
+          {companyPicker}
           {bell}
-          <span className="topbar-crumb">FY 2026-27</span>
+          {/* Computed, not written down. This said "FY 2026-27" as a literal
+              string, which was right on the day it was typed and would have
+              gone on saying it through April 2027 and every year after —
+              while the numbers on the documents underneath moved on without
+              it. A date on the screen that never changes is worse than no
+              date, because people read it and believe it. */}
+          <span className="topbar-crumb" title={`Financial year ${fyLabel()}`}>FY {fyLabel()}</span>
         </header>
         {/* Connectivity first: when the network is gone it explains every
             other failure on the screen, so it belongs above them. */}

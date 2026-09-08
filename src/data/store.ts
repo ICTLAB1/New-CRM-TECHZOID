@@ -66,15 +66,46 @@ export interface LoadedWorkspace {
   profiles: Profile[];
 }
 
-export function createStore(client: SupabaseClient) {
+/**
+ * @param companyId Which company's records this store reads and writes.
+ *
+ * WHY THE CLIENT FILTERS AS WELL AS THE DATABASE. Row-level security already
+ * limits every read to companies this person belongs to — but somebody who
+ * belongs to TWO would then get both companies' customers in one list, which
+ * is not a security failure, it is a nonsense screen. RLS decides what may
+ * be seen; this decides what is being looked at. Both are needed, and the
+ * one that must never be relied on alone is this one.
+ */
+export function createStore(client: SupabaseClient, companyId: () => string | null = () => null) {
+
   async function fetchEntity<T extends EntityBase>(table: EntityTable): Promise<T[]> {
-    const { data, error } = await client.from(table).select("id, owner_id, data");
+    /* Narrowed to the company on screen when there is one. A workspace that
+       has not run migration 033 has no company column, so no filter is
+       applied and everything behaves exactly as it did before. */
+    const id = companyId();
+    const query = client.from(table).select("id, owner_id, data");
+    const { data, error } = await (id ? query.eq("company_id", id) : query);
     if (error) throw error;
     return ((data as EntityRow[] | null) || []).map((r) => rowToItem<T>(r));
   }
 
+  /**
+   * The settings of the company on screen.
+   *
+   * Each company has its own row: its own name, GSTIN, logo, bank details,
+   * document prefixes and terms. Carrying one set across two businesses is
+   * how a second company ends up invoicing under the first one's tax number.
+   *
+   * `maybeSingle`, not `single`: a company whose settings row has not been
+   * created yet is an empty workspace to fill in, not an error that stops
+   * the CRM loading.
+   */
   async function fetchSettings(): Promise<Record<string, unknown>> {
-    const { data, error } = await client.from("settings").select("data").eq("id", "main").single();
+    const id = companyId();
+    const query = client.from("settings").select("data");
+    const { data, error } = id
+      ? await query.eq("company_id", id).maybeSingle()
+      : await query.eq("id", "main").maybeSingle();
     if (error) throw error;
     return ((data as { data?: Record<string, unknown> } | null)?.data) ?? {};
   }
@@ -165,6 +196,12 @@ export function createStore(client: SupabaseClient) {
           owner_id: ownerId,
           data: rest,
           updated_at: now(),
+          /* Stamped on every write. The column has a database default that
+             resolves to the writer's own company, which keeps an older
+             deployment working — but a browser that KNOWS which company it
+             is in must say so, or somebody who belongs to two would file
+             the second company's work under the first. */
+          ...(companyId() ? { company_id: companyId() } : {}),
           ...ENTITY_EXTRA_COLS[table](item),
         }) as unknown as PromiseLike<{ error: unknown }>,
       );
@@ -186,10 +223,9 @@ export function createStore(client: SupabaseClient) {
     now: () => string = () => new Date().toISOString(),
   ): Promise<void> {
     if (JSON.stringify(prev) === JSON.stringify(next)) return;
-    const { error } = await client
-      .from("settings")
-      .update({ data: next, updated_at: now() })
-      .eq("id", "main");
+    const id = companyId();
+    const write = client.from("settings").update({ data: next, updated_at: now() });
+    const { error } = id ? await write.eq("company_id", id) : await write.eq("id", "main");
     if (error) throw error;
   }
 
@@ -214,8 +250,29 @@ export function createStore(client: SupabaseClient) {
 export type Store = ReturnType<typeof createStore>;
 
 /** The app's store, bound to the live client on first use. */
+/**
+ * The company every screen is currently looking at.
+ *
+ * A module-level value rather than a parameter threaded through fifty call
+ * sites: the store is a singleton and the company changes rarely. Set by the
+ * app shell when somebody switches; read on every query.
+ *
+ * It is a VIEW, not a permission. Setting it to a company you do not belong
+ * to gets you an empty workspace, because the database refuses the rows —
+ * see the note in src/data/companies.ts.
+ */
+let activeCompanyId: string | null = null;
+
+export function setActiveCompanyId(id: string | null): void {
+  activeCompanyId = id;
+}
+
+export function getActiveCompanyId(): string | null {
+  return activeCompanyId;
+}
+
 let live: Store | null = null;
 export function store(): Store {
-  if (!live) live = createStore(getSupabase());
+  if (!live) live = createStore(getSupabase(), () => activeCompanyId);
   return live;
 }

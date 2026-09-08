@@ -82,6 +82,18 @@
 .crumb-current { color: var(--ink-2); font-weight: 500; }
 .topbar-crumb { font-size: var(--t-small); color: var(--ink-4); font-family: var(--mono); }
 
+/* The company picker. Sized to the name rather than stretched to the bar:
+   it sits between a search box and a bell, and a select that grows to fill
+   the space would dominate a row of controls it is not more important than.
+   Capped, because a registered Indian company name runs long. */
+.topbar-company {
+  max-width: 220px;
+  height: 30px;
+  padding-block: 0;
+  font-size: var(--t-small);
+}
+@media (max-width: 720px) { .topbar-company { max-width: 130px; } }
+
 .topsearch {
   width: 260px; height: 26px;
   padding: 0 9px;
