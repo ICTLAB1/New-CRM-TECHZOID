@@ -18,6 +18,10 @@ import { consume, tooManyMessage } from "../lib/ratelimit.mjs";
  *  silently stored, so a typo can't create a role no policy grants. */
 const ASSIGNABLE_ROLES = ["Admin", "Manager", "Sales", "Accounts"];
 
+/** What profiles.role is allowed to hold. Narrower than the list above by
+ *  its own check constraint — see the note where it is applied. */
+const PROFILE_ROLES = ["Admin", "Manager", "Sales"];
+
 const MIN_PASSWORD = 8;
 
 export async function handler(event) {
@@ -57,6 +61,11 @@ async function createUser(event, admin, body) {
   const role = str(body.role, 20) || "Sales";
   const designation = str(body.designation, 120);
   const phone = str(body.phone, 40);
+  /* Which company this person is being hired into. Sent by the browser,
+     which knows what is on screen; verified below, because the service key
+     this function holds bypasses row-level security and would otherwise put
+     somebody into a company the caller has nothing to do with. */
+  const companyId = str(body.companyId, 64);
 
   if (!email || !password) return fail(event, 400, "An email address and a password are both required.");
   if (!isEmail(email)) return fail(event, 400, `"${email}" doesn't look like an email address.`);
@@ -66,6 +75,12 @@ async function createUser(event, admin, body) {
   if (!ASSIGNABLE_ROLES.includes(role)) {
     return fail(event, 400, `"${role}" isn't a role. Choose one of: ${ASSIGNABLE_ROLES.join(", ")}.`);
   }
+
+  /* The company must be one the caller may actually staff. RLS is not doing
+     this for us here — the admin client is above it — so the check is
+     explicit and the failure is a refusal, not a silent success. */
+  const company = await companyToJoin(admin, caller, companyId);
+  if (company.error) return fail(event, 403, company.error);
 
   const { data, error } = await admin.auth.admin.createUser({
     email,
@@ -84,7 +99,17 @@ async function createUser(event, admin, body) {
   /* A trigger creates the profile row as Sales. Set the name and the chosen
      role now. If this fails the sign-in exists but is mis-labelled, which is
      confusing rather than harmless — so say so instead of reporting success. */
-  const { error: profileErr } = await admin.from("profiles").update({ name, role, designation, phone }).eq("id", userId);
+  /* TWO ROLES, ON PURPOSE, and they are not always the same string.
+     profiles.role governs things that are not about one company — reaching
+     this endpoint at all — and its constraint allows only Admin, Manager and
+     Sales. company_members.role governs what somebody may do INSIDE a
+     company and also allows Accounts. Writing "Accounts" to the profile
+     silently failed its check constraint and left the person a Sales user
+     with a puzzling warning; it is now clamped deliberately, and the role
+     they were actually given is the one that lands on the membership. */
+  const profileRole = PROFILE_ROLES.includes(role) ? role : "Sales";
+  const { error: profileErr } = await admin.from("profiles")
+    .update({ name, role: profileRole, designation, phone }).eq("id", userId);
   if (profileErr) {
     console.error("profile update after createUser failed:", profileErr.message);
     return json(event, 200, {
@@ -95,12 +120,30 @@ async function createUser(event, admin, body) {
     });
   }
 
+  /* Into the company, in the same breath. Somebody with a sign-in and no
+     membership can log in and see an empty CRM — every record is scoped to a
+     company they are not in — which looks exactly like a broken account. */
+  let joined = "";
+  if (company.id) {
+    const { error: memberErr } = await admin
+      .from("company_members")
+      .insert({ company_id: company.id, user_id: userId, role });
+    if (memberErr) {
+      console.error("could not add the new user to a company:", memberErr.message);
+    } else {
+      joined = company.name || "";
+    }
+  }
+
   const mail = await sendWelcome({ email, password, name });
 
   /* The account exists whether or not the email went out. Reporting failure
      here would tell an Admin to try again and hit "already registered", so
      the result is a success that states plainly what did and didn't happen. */
-  return json(event, 200, { success: true, userId, emailSent: mail.sent, emailError: mail.error });
+  return json(event, 200, {
+    success: true, userId, joinedCompany: joined,
+    emailSent: mail.sent, emailError: mail.error,
+  });
 }
 
 /**
@@ -230,4 +273,38 @@ async function deleteUser(event, admin, body, callerId) {
   const { error } = await admin.auth.admin.deleteUser(userId);
   if (error) return fail(event, 400, str(error.message, 300) || "That account could not be removed.");
   return json(event, 200, { success: true });
+}
+
+
+/**
+ * The company a new sign-in should join, and whether the caller may.
+ *
+ * Falls back to the caller's own company when the browser did not say which
+ * — an older deployment, or a workspace with one company — so a new person
+ * always lands somewhere. Landing nowhere is the worst outcome: they can
+ * sign in and every screen is empty, which reads as a broken account rather
+ * than as missing membership.
+ */
+async function companyToJoin(admin, caller, requested) {
+  const { data: mine } = await admin
+    .from("company_members")
+    .select("company_id, role, companies(name)")
+    .eq("user_id", caller.user.id);
+
+  const rows = mine ?? [];
+  if (!rows.length) return { id: "", name: "" };
+
+  const chosen = requested
+    ? rows.find((r) => String(r.company_id) === requested)
+    : rows[0];
+
+  if (requested && !chosen) {
+    return { error: "You can only add somebody to a company you belong to." };
+  }
+  if (!["Admin", "Manager"].includes(String(chosen?.role ?? ""))) {
+    return { error: "Only an admin or manager of that company can add somebody to it." };
+  }
+
+  const company = Array.isArray(chosen.companies) ? chosen.companies[0] : chosen.companies;
+  return { id: String(chosen.company_id), name: String(company?.name ?? "") };
 }

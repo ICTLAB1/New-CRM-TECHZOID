@@ -33,6 +33,13 @@ export interface TeamScreenProps {
   api: IntegrationsApi;
   members: TeamMember[];
   currentUser: { id: string; role: string };
+  /** The company on screen. Somebody given a sign-in here joins it in the
+   *  same step: an account with no company membership can sign in and finds
+   *  every screen empty, because every record is scoped to a company they
+   *  are not in — which reads as a broken account rather than as an
+   *  unfinished one. */
+  companyId?: string | null;
+  companyName?: string;
   onChange: (next: TeamMember[]) => void;
 }
 
@@ -45,7 +52,7 @@ const ROLE_NOTE: Record<string, string> = {
   Accounts: "Sees everything, for invoicing and collections.",
 };
 
-export function TeamScreen({ api, members, currentUser, onChange }: TeamScreenProps) {
+export function TeamScreen({ api, members, currentUser, companyId, companyName, onChange }: TeamScreenProps) {
   const toast = useToast();
   const isAdmin = currentUser.role === "Admin";
   const [adding, setAdding] = useState(false);
@@ -173,6 +180,8 @@ export function TeamScreen({ api, members, currentUser, onChange }: TeamScreenPr
       {adding ? (
         <AddMember
           api={api}
+          companyId={companyId}
+          companyName={companyName}
           onClose={() => setAdding(false)}
           onAdded={(member) => { onChange([...members, member]); setAdding(false); }}
         />
@@ -213,8 +222,14 @@ export function TeamScreen({ api, members, currentUser, onChange }: TeamScreenPr
 /* ── adding ────────────────────────────────────────────────────────── */
 
 function AddMember({
-  api, onAdded, onClose,
-}: { api: IntegrationsApi; onAdded: (m: TeamMember) => void; onClose: () => void }) {
+  api, companyId, companyName, onAdded, onClose,
+}: {
+  api: IntegrationsApi;
+  companyId?: string | null;
+  companyName?: string;
+  onAdded: (m: TeamMember) => void;
+  onClose: () => void;
+}) {
   const toast = useToast();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -235,6 +250,8 @@ function AddMember({
       const result = await api.createTeamMember({
         name: name.trim(), email: email.trim().toLowerCase(), designation: designation.trim(),
         phone: phone.trim(), password, role,
+        /* They join the company on screen in the same step. */
+        companyId: companyId ?? undefined,
       });
       onAdded({
         id: result.userId,
@@ -245,7 +262,8 @@ function AddMember({
         role,
       });
       if (result.emailSent) {
-        toast(`${name || email} can now sign in — their details have been emailed`, "good");
+        const where = result.joinedCompany ? ` at ${result.joinedCompany}` : "";
+        toast(`${name || email} can now sign in${where} — their details have been emailed`, "good");
       } else {
         setEmailProblem({
           name: name.trim() || email,
@@ -332,7 +350,15 @@ function AddMember({
         >
           <Input value={password} onChange={(e) => setPassword(e.target.value)} invalid={tooShort} />
         </Field>
-        <Field label="Role" hint={ROLE_NOTE[role]}>
+        <Field
+          label={companyName ? `Role at ${companyName}` : "Role"}
+          hint={
+            (ROLE_NOTE[role] ?? "") +
+            (companyName
+              ? ` They join ${companyName} with this role, and can be added to another company later under Companies.`
+              : "")
+          }
+        >
           <Select value={role} onChange={(e) => setRole(e.target.value)}>
             {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
           </Select>

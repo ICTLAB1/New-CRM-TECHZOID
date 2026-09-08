@@ -360,7 +360,14 @@ export function Workbench({
           onChange={(next) => onSettingsChange({ ...settings, productCatalog: next })}
         />
       ) : view === "team" ? (
-        <TeamScreen api={integrations} members={team} currentUser={user} onChange={onTeamChange} />
+        <TeamScreen
+          api={integrations}
+          members={team}
+          currentUser={user}
+          companyId={activeCompanyId}
+          companyName={companies.find((c) => c.id === activeCompanyId)?.name}
+          onChange={onTeamChange}
+        />
       ) : view === "companies" ? (
         <main className="page">
           <PageHead

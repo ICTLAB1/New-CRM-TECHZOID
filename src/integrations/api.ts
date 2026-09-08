@@ -53,10 +53,16 @@ export interface TeamMemberInput {
   designation?: string;
   /** Their own mobile, for the same signature. */
   phone?: string;
+  /** The company they are being hired into — whichever is on screen. The
+   *  server verifies the caller may staff it before using it. */
+  companyId?: string;
 }
 
 export interface CreatedMember {
   userId: string;
+  /** The company they were added to, when there was one. Reported so the
+   *  screen can say where they landed rather than leaving it to be guessed. */
+  joinedCompany?: string;
   emailSent: boolean;
   /** Present when the account was created but the welcome email wasn't sent.
    *  Not an error — the account is real either way. */
