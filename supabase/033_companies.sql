@@ -27,6 +27,13 @@
 -- everybody belongs to exactly one company, which is true until a second one
 -- is created — so DEPLOY THE APP BEFORE ADDING THE SECOND COMPANY. There is
 -- a note about this in the runbook and it is not a formality.
+--
+-- APPLIED TO PRODUCTION on 2026-09-08. Verified afterwards: 65 customers,
+-- 42 quotations, 15 proformas, 9 orders, 3 invoices and every follow-up and
+-- attachment carry the TechZoid company; nothing was left unassigned; all
+-- six people are members with the roles they already held; the settings row
+-- is linked; and every one of the ten tables is company-scoped with exactly
+-- the commands it allowed before — attachments still has three, not four.
 
 create table if not exists public.companies (
   id uuid primary key default gen_random_uuid(),
