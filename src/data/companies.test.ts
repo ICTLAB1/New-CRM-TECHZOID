@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { readableCompanyError, resolveActiveCompany, roleIn, type Company } from "./companies";
+import { dedupeById, readableCompanyError, resolveActiveCompany, roleIn, type Company } from "./companies";
 
 /**
  * Which company is on screen.
@@ -68,5 +68,48 @@ describe("what somebody is told when adding a company fails", () => {
     const said = readableCompanyError('duplicate key value violates unique constraint "companies_pkey"');
     expect(said).not.toMatch(/constraint|pkey|violates/i);
     expect(said).toMatch(/try again/i);
+  });
+});
+
+
+describe("one entry per company, not one per colleague", () => {
+  /* The bug, exactly as it shipped: the policy on company_members lets you
+     see everyone in a company you belong to, and the query did not filter to
+     your own rows — so six people at TechZoid produced a picker listing
+     TechZoid six times. */
+  const SIX_COLLEAGUES: Company[] = [
+    { id: "tz", name: "TechZoid Technologies", role: "Admin" },
+    { id: "tz", name: "TechZoid Technologies", role: "Sales" },
+    { id: "tz", name: "TechZoid Technologies", role: "Sales" },
+    { id: "tz", name: "TechZoid Technologies", role: "Sales" },
+    { id: "tz", name: "TechZoid Technologies", role: "Sales" },
+    { id: "tz", name: "TechZoid Technologies", role: "Sales" },
+  ];
+
+  it("collapses repeats of the same company", () => {
+    expect(dedupeById(SIX_COLLEAGUES)).toHaveLength(1);
+    expect(dedupeById(SIX_COLLEAGUES)[0]!.name).toBe("TechZoid Technologies");
+  });
+
+  it("keeps genuinely different companies", () => {
+    const two = dedupeById([...SIX_COLLEAGUES, { id: "fx", name: "Foxpopz Trading", role: "Admin" }]);
+    expect(two.map((c) => c.id)).toEqual(["tz", "fx"]);
+  });
+
+  it("leaves an already-clean list alone", () => {
+    expect(dedupeById([TZ, FX])).toEqual([TZ, FX]);
+    expect(dedupeById([])).toEqual([]);
+  });
+
+  /* The visible half was the duplicate names. The dangerous half is that the
+     role on each of those rows belonged to a DIFFERENT PERSON, so the role
+     reported was whichever member came back first — and with two companies
+     that decides what somebody is allowed to do. */
+  it("does not let a colleague's role decide what you may do", () => {
+    const asSales: Company[] = [
+      { id: "fx", name: "Foxpopz Trading", role: "Sales" },
+      { id: "fx", name: "Foxpopz Trading", role: "Admin" },
+    ];
+    expect(roleIn(dedupeById(asSales), "fx")).toBe("Sales");
   });
 });

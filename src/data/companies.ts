@@ -1,4 +1,5 @@
 import { getSupabase, isSupabaseConfigured } from "./supabase";
+import { currentSession } from "./session";
 
 /**
  * Which company you are working in.
@@ -26,23 +27,57 @@ export interface Company {
 
 const ACTIVE_KEY = "crm.activeCompany";
 
-/** Every company this person belongs to, with the role they hold in each. */
+/**
+ * Every company this person belongs to, with the role they hold in each.
+ *
+ * FILTERED TO THEIR OWN MEMBERSHIP ROWS, and this is not optional. The
+ * policy on company_members lets you see everyone in a company you belong to
+ * — which is right, you should be able to see your own team — so a query
+ * without this filter returns one row PER COLLEAGUE. The first version did
+ * exactly that: six people at TechZoid produced a picker listing TechZoid
+ * six times.
+ *
+ * The duplicate names were the visible half. The dangerous half is that
+ * `role` on each of those rows is THAT COLLEAGUE'S role, not yours, so the
+ * role this function reports was whichever member happened to come back
+ * first. With one company it looked like it worked; with two it would decide
+ * what somebody may do from another person's permissions.
+ */
 export async function myCompanies(): Promise<Company[]> {
   if (!isSupabaseConfigured()) return [];
+  const session = await currentSession();
+  if (!session) return [];
+
   const { data, error } = await getSupabase()
     .from("company_members")
     .select("role, companies!inner(id, name)")
+    .eq("user_id", session.user.id)
     .order("created_at", { ascending: true });
   if (error) throw error;
 
   type Row = { role: string; companies: { id: string; name: string } | { id: string; name: string }[] };
-  return ((data as Row[] | null) ?? []).flatMap((row) => {
+  const rows = ((data as Row[] | null) ?? []).flatMap((row) => {
     /* PostgREST returns the joined row as an object or an array depending on
        how it infers the relationship; both shapes are handled rather than
        one being assumed and the list silently coming back empty. */
     const list = Array.isArray(row.companies) ? row.companies : [row.companies];
     return list.filter(Boolean).map((c) => ({ id: c.id, name: c.name, role: row.role }));
   });
+  return dedupeById(rows);
+}
+
+/**
+ * One entry per company, keeping the first.
+ *
+ * A belt to the filter's braces. The filter above is the fix; this makes the
+ * list correct even if a future query, a changed policy or a second
+ * membership row for the same pair ever produces two entries for one
+ * company. A picker that lists the same business twice is the kind of thing
+ * somebody works around rather than reports.
+ */
+export function dedupeById(rows: Company[]): Company[] {
+  const seen = new Set<string>();
+  return rows.filter((c) => (seen.has(c.id) ? false : (seen.add(c.id), true)));
 }
 
 /**
