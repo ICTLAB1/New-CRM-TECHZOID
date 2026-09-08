@@ -1,5 +1,5 @@
 import { TODAY } from "../dates";
-import { buildDocNumber } from "../numbering/docNumber";
+import { DEFAULT_PREFIX, buildDocNumber } from "../numbering/docNumber";
 import type { SalesDocument, DocSettings } from "../documents/create";
 import type { LineItem } from "../tax/types";
 import { COURIERS, type DispatchStatus, type OrderStageId } from "./stages";
@@ -89,7 +89,7 @@ export function orderFromProforma(
 ): SalesOrder {
   return {
     id: uid(),
-    number: buildDocNumber(settings.orderPrefix ?? "TZ/SO", settings.orderSeq),
+    number: buildDocNumber(settings.orderPrefix ?? DEFAULT_PREFIX.order, settings.orderSeq),
     ownerId: pf.ownerId,
     customerId: pf.customerId,
     proformaId: pf.id,
@@ -138,7 +138,7 @@ export function newChallan(
 ): DeliveryChallan {
   return {
     id: uid(),
-    number: buildDocNumber(settings.dispatchPrefix ?? "TZ/DC", settings.dispatchSeq),
+    number: buildDocNumber(settings.dispatchPrefix ?? DEFAULT_PREFIX.dispatch, settings.dispatchSeq),
     ownerId: order.ownerId,
     orderId: order.id,
     orderNumber: order.number,

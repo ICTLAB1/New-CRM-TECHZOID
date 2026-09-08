@@ -15,7 +15,7 @@ import {
 import type { Customer } from "../../domain/customers/customer";
 import { advancesPipeline, concludedAt, isConcluded, stageAfterQuotation } from "../../domain/pipeline/advance";
 import { stageOf } from "../../domain/pipeline/stages";
-import { buildDocNumber, fyLabel } from "../../domain/numbering/docNumber";
+import { DEFAULT_PREFIX, buildDocNumber, fyLabel } from "../../domain/numbering/docNumber";
 import { SEQ_KEY, nextDocNumber, seqKindOf } from "../../data/docNumber";
 import { OBJ_TYPE, OBJ_TYPE_OF_DOC_TYPE } from "../../domain/documents/objType";
 import { orderFromProforma, type SalesOrder } from "../../domain/orders/create";
@@ -86,7 +86,8 @@ export function QuotationsScreen({
   const seqKey = SEQ_KEY[seqKind];
   const prefix = String(
     settings[isPo ? "purchaseOrderPrefix" : isInvoice ? "invoicePrefix" : docType === "proforma" ? "proformaPrefix" : "quotePrefix"]
-      ?? (isPo ? "TZ/PO" : isInvoice ? "TZ/INV" : docType === "proforma" ? "TZ/PI" : "TZ/QT"),
+      ?? (isPo ? DEFAULT_PREFIX.purchaseOrder : isInvoice ? DEFAULT_PREFIX.invoice
+        : docType === "proforma" ? DEFAULT_PREFIX.proforma : DEFAULT_PREFIX.quotation),
   );
 
   /**
@@ -241,7 +242,7 @@ export function QuotationsScreen({
     const seq = await nextDocNumber(OBJ_TYPE.order, fyLabel(now), "order", Number(settings["orderSeq"]) || 1);
     const order = {
       ...orderFromProforma(doc, settings as DocSettings),
-      number: buildDocNumber(String(settings["orderPrefix"] ?? "TZ/SO"), seq, now),
+      number: buildDocNumber(String(settings["orderPrefix"] ?? DEFAULT_PREFIX.order), seq, now),
     };
     onCreateOrder?.(order);
     onSettingsNote?.({ ...settings, orderSeq: seq + 1 });

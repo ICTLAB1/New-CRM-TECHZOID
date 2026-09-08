@@ -6,7 +6,7 @@ import { useToast } from "../../components/Toast";
 import { Modal } from "../../components/Modal";
 import { AttachmentsPanel } from "../attachments/AttachmentsPanel";
 import { ORDER_STAGES, orderStageOf, type OrderStageId } from "../../domain/orders/stages";
-import { buildDocNumber, fyLabel } from "../../domain/numbering/docNumber";
+import { DEFAULT_PREFIX, buildDocNumber, fyLabel } from "../../domain/numbering/docNumber";
 import { nextDocNumber } from "../../data/docNumber";
 import { OBJ_TYPE } from "../../domain/documents/objType";
 import { orderFulfilment, type Challan } from "../../domain/orders/fulfilment";
@@ -61,7 +61,7 @@ export function OrdersScreen({ orders, challans, settings, currentUser, onChange
        everybody else and two challans came out with one number. */
     const now = new Date();
     const seq = await nextDocNumber(OBJ_TYPE.delivery, fyLabel(now), "dispatch", Number(settings["dispatchSeq"]) || 1);
-    const numbered = { ...dc, number: buildDocNumber(String(settings["dispatchPrefix"] ?? "TZ/DC"), seq, now) };
+    const numbered = { ...dc, number: buildDocNumber(String(settings["dispatchPrefix"] ?? DEFAULT_PREFIX.dispatch), seq, now) };
     onChange(orders, [numbered, ...challans], settings);
     onSettingsNote?.({ ...settings, dispatchSeq: seq + 1 });
     toast(`Challan ${numbered.number} raised for ${numbered.items.length} pending line${numbered.items.length === 1 ? "" : "s"}.`, "good");

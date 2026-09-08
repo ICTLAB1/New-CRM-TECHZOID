@@ -54,3 +54,26 @@ export function monthBounds(date: Date = new Date()): { startMs: number; endMs: 
     label: date.toLocaleDateString("en-IN", { month: "long", year: "numeric" }),
   };
 }
+
+/**
+ * The prefix a document number starts with, when the company has not set one.
+ *
+ * NEUTRAL, NOT "TZ". These defaulted to TZ/QT, TZ/INV and so on — the first
+ * company's initials, written into the code. That was harmless while there
+ * was one company and wrong the moment there were two: the second company's
+ * first quotation came out as TZ/QT/2026-27/0027, carrying another
+ * business's identity on a document sent to its customer.
+ *
+ * TechZoid's own prefixes are set explicitly in its settings, so nothing it
+ * has issued or will issue changes. A company that has not chosen one gets a
+ * plain QT or INV until somebody sets it in Settings, which is a document
+ * number that says nothing untrue.
+ */
+export const DEFAULT_PREFIX = {
+  quotation: "QT",
+  proforma: "PI",
+  purchaseOrder: "PO",
+  invoice: "INV",
+  order: "SO",
+  dispatch: "DC",
+} as const;

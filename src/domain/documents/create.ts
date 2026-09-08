@@ -1,5 +1,5 @@
 import { addDays, TODAY } from "../dates";
-import { buildDocNumber } from "../numbering/docNumber";
+import { DEFAULT_PREFIX, buildDocNumber } from "../numbering/docNumber";
 import type { Customer } from "../customers/customer";
 import type { LineItem } from "../tax/types";
 import type { PaymentEntry } from "../payments/ledger";
@@ -270,7 +270,7 @@ export function newQuotation({ settings, user, customer = null, today = TODAY() 
   return {
     id: uid(),
     objType: OBJ_TYPE.quotation,
-    number: buildDocNumber(settings.quotePrefix ?? "TZ/QT", settings.quoteSeq),
+    number: buildDocNumber(settings.quotePrefix ?? DEFAULT_PREFIX.quotation, settings.quoteSeq),
     /* The number above is a preview of what this document will get. The
        real one is allocated by the database when it is first saved — see
        src/data/docNumber.ts. Typing over it in the editor clears this
@@ -302,7 +302,7 @@ export function newProforma({ settings, user, customer = null, today = TODAY() }
   return {
     id: uid(),
     objType: OBJ_TYPE.proforma,
-    number: buildDocNumber(settings.proformaPrefix ?? "TZ/PI", settings.proformaSeq),
+    number: buildDocNumber(settings.proformaPrefix ?? DEFAULT_PREFIX.proforma, settings.proformaSeq),
     /* The number above is a preview of what this document will get. The
        real one is allocated by the database when it is first saved — see
        src/data/docNumber.ts. Typing over it in the editor clears this
@@ -354,7 +354,7 @@ export function newPurchaseOrder({ settings, user, customer = null, today = TODA
   return {
     id: uid(),
     objType: OBJ_TYPE.purchase_order,
-    number: buildDocNumber(settings.purchaseOrderPrefix ?? "TZ/PO", settings.purchaseOrderSeq),
+    number: buildDocNumber(settings.purchaseOrderPrefix ?? DEFAULT_PREFIX.purchaseOrder, settings.purchaseOrderSeq),
     /* The number above is a preview of what this document will get. The
        real one is allocated by the database when it is first saved — see
        src/data/docNumber.ts. Typing over it in the editor clears this
@@ -442,7 +442,7 @@ export function proformaFromQuotation(
   return {
     id: uid(),
     objType: OBJ_TYPE.proforma,
-    number: buildDocNumber(settings.proformaPrefix ?? "TZ/PI", settings.proformaSeq),
+    number: buildDocNumber(settings.proformaPrefix ?? DEFAULT_PREFIX.proforma, settings.proformaSeq),
     /* The number above is a preview of what this document will get. The
        real one is allocated by the database when it is first saved — see
        src/data/docNumber.ts. Typing over it in the editor clears this
@@ -514,7 +514,7 @@ export function invoiceFrom(
   return {
     id: uid(),
     objType: OBJ_TYPE.invoice,
-    number: buildDocNumber(settings.invoicePrefix ?? "TZ/INV", settings.invoiceSeq),
+    number: buildDocNumber(settings.invoicePrefix ?? DEFAULT_PREFIX.invoice, settings.invoiceSeq),
     /* The number above is a preview of what this document will get. The
        real one is allocated by the database when it is first saved — see
        src/data/docNumber.ts. Typing over it in the editor clears this
@@ -551,7 +551,7 @@ export function duplicateQuotation(
     ...quote,
     id: uid(),
     objType: OBJ_TYPE.quotation,
-    number: buildDocNumber(settings.quotePrefix ?? "TZ/QT", settings.quoteSeq),
+    number: buildDocNumber(settings.quotePrefix ?? DEFAULT_PREFIX.quotation, settings.quoteSeq),
     /* The number above is a preview of what this document will get. The
        real one is allocated by the database when it is first saved — see
        src/data/docNumber.ts. Typing over it in the editor clears this

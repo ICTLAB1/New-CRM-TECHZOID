@@ -1,4 +1,5 @@
 import { getSupabase, isSupabaseConfigured } from "./supabase";
+import { getActiveCompanyId } from "./store";
 
 /**
  * The next number in a document series, taken from the database.
@@ -105,8 +106,19 @@ export async function nextDocNumber(
   const local = Math.max(1, Math.floor(Number(fallback) || 1));
   if (!isSupabaseConfigured()) return local;
   try {
-    const { data, error } = await getSupabase()
-      .rpc("next_doc_number", { p_obj_type: objType, p_fy: fy });
+    /* THE COMPANY ON SCREEN, not whichever one this person belongs to
+       first. The two-argument form of next_doc_number falls back to
+       default_company_id(), which is the oldest membership — so the second
+       company's first quotation drew a number from the first company's
+       series and came out as TZ/QT/2026-27/0027. It happened in the live
+       workspace before this was fixed. */
+    const company = getActiveCompanyId();
+    const { data, error } = await getSupabase().rpc(
+      "next_doc_number",
+      company
+        ? { p_company: company, p_obj_type: objType, p_fy: fy }
+        : { p_obj_type: objType, p_fy: fy },
+    );
     if (!error && data !== null && data !== undefined) {
       const seq = Math.floor(Number(data));
       if (Number.isFinite(seq) && seq > 0) return seq;

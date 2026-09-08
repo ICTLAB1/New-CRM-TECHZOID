@@ -13,7 +13,7 @@ import { STATE_NAMES } from "../../domain/geo/states";
 import { normalizeDocTemplate, SECTION_ORDER_META, type DocTemplate, type SectionKey } from "../../domain/documents/template";
 import { DOMESTIC_TERMS } from "../../domain/documents/terms";
 import { DEFAULT_REVENUE_BASIS, REVENUE_BASES, type IncentiveScheme, type IncentiveSlab } from "../../domain/incentives/incentives";
-import { buildDocNumber } from "../../domain/numbering/docNumber";
+import { DEFAULT_PREFIX, buildDocNumber } from "../../domain/numbering/docNumber";
 
 /**
  * Settings.
@@ -475,9 +475,9 @@ function DocumentPanel({ settings, canEdit, onChange }: { settings: Record<strin
 function NumberingPanel({ settings, canEdit, onChange }: { settings: Record<string, unknown>; canEdit: boolean; onChange: (s: Record<string, unknown>) => void }) {
   const { draft, setDraft, dirty, save, reset } = useDraft(
     {
-      quotePrefix: String(settings["quotePrefix"] ?? "TZ/QT"),
+      quotePrefix: String(settings["quotePrefix"] ?? DEFAULT_PREFIX.quotation),
       quoteSeq: Number(settings["quoteSeq"] ?? 1),
-      proformaPrefix: String(settings["proformaPrefix"] ?? "TZ/PI"),
+      proformaPrefix: String(settings["proformaPrefix"] ?? DEFAULT_PREFIX.proforma),
       proformaSeq: Number(settings["proformaSeq"] ?? 1),
       defaultCurrency: String(settings["defaultCurrency"] ?? "INR"),
       defaultTaxType: String(settings["defaultTaxType"] ?? "gst"),
