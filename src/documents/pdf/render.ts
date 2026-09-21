@@ -236,11 +236,8 @@ export function renderDocumentPdf(opts: RenderOptions): jsPDF {
     const colW = unit;
     const top = y;
 
-    const detailsHeading = m.docType === "purchase_order"
-      ? "PURCHASE ORDER DETAILS"
-      : m.isProforma ? "INVOICE DETAILS" : "QUOTATION DETAILS";
     pdf.setFont("helvetica", "bold").setFontSize(7.6).setTextColor(...NAVY);
-    pdf.text(detailsHeading, M, top + 4);
+    pdf.text(m.detailsHeading, M, top + 4);
     const detailsEnd = colonRows(m.details, M, detailsW, top + 10, detailsW * 0.4, 7.2);
 
     /* Each party: navy header bar over a bordered box. */

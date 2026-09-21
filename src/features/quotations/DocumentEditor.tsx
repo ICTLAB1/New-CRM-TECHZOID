@@ -6,7 +6,11 @@ import { AttachmentsPanel } from "../attachments/AttachmentsPanel";
 import { askBeforeSave, useConfirmedAction } from "../../components/useConfirmedAction";
 import { useHotkeys } from "../../components/hotkeys";
 import { previewPdf } from "../../documents/pdf/deliver";
-import { accountSummary, pickBankAccount, readAccounts } from "../../domain/banking/accounts";
+import {
+  accountSummary, blankAccount, pickBankAccount, readAccounts,
+  type BankAccount,
+} from "../../domain/banking/accounts";
+import { BankAccountFields } from "../settings/BankAccountForm";
 import { documentMargin, marginNote, marginTone } from "../../domain/margin/margin";
 import { effectiveCost } from "../../domain/catalog/vendors";
 import type { DocImages } from "../../documents/pdf/render";
@@ -19,7 +23,7 @@ import type { DocType } from "../../domain/documents/model";
 import { LineItemsEditor } from "./LineItemsEditor";
 import { useDocumentModel } from "./useDocumentModel";
 import {
-  applyCustomer, PROFORMA_STATUSES, PURCHASE_ORDER_STATUSES, QUOTE_STATUSES,
+  applyCustomer, INVOICE_STATUSES, PROFORMA_STATUSES, PURCHASE_ORDER_STATUSES, QUOTE_STATUSES,
   type SalesDocument, type DocSettings,
 } from "../../domain/documents/create";
 import type { Customer } from "../../domain/customers/customer";
@@ -85,6 +89,11 @@ export interface DocumentEditorProps {
    *  cannot write to the workspace itself, so the screen that owns the list
    *  does it and the new record comes back through `customers`. */
   onCreateCustomer?: (customer: Customer) => void;
+  /** Save a bank account added from inside this editor, the same way
+   *  onCreateCustomer saves a customer. Undefined for anyone who may not
+   *  change settings — the accounts list is a company-wide record, and a
+   *  salesperson's write to it is refused by the database anyway. */
+  onCreateBankAccount?: (account: BankAccount) => void;
   /** Whose name and address a sent quotation carries. */
   currentUser: { id: string; name: string; email?: string; role?: string };
   /** Whether this document already exists in the workspace. A file attached
@@ -99,7 +108,7 @@ type Tab = "document" | "items" | "terms" | "files";
 
 export function DocumentEditor({
   doc: initial, docType, customers, catalog, settings, brandLogos, docImages, api, currentUser,
-  team = [], customFields = [], onCreateCustomer, saved = false, onSave, onClose,
+  team = [], customFields = [], onCreateCustomer, onCreateBankAccount, saved = false, onSave, onClose,
 }: DocumentEditorProps) {
   const [doc, setDoc] = useState<SalesDocument>(initial);
   const [tab, setTab] = useState<Tab>("document");
@@ -124,7 +133,31 @@ export function DocumentEditor({
   const isIndia = !doc.billCountry || doc.billCountry === "India";
   const showTax = doc.taxType !== "none";
   const isPo = docType === "purchase_order";
-  const statuses = isPo ? PURCHASE_ORDER_STATUSES : docType === "proforma" ? PROFORMA_STATUSES : QUOTE_STATUSES;
+  const isInvoice = docType === "invoice";
+
+  /**
+   * The statuses this kind of document can be in.
+   *
+   * A TAX INVOICE HAS ITS OWN SET and was not given it — it offered the
+   * quotation's Sent / Accepted / Rejected / Expired, so invoices in the
+   * live workspace are sitting in states an invoice cannot be in, while
+   * the invoice list filters by Draft / Issued / Cancelled and cannot find
+   * them. An invoice is not accepted or rejected; it is issued or it is
+   * cancelled.
+   *
+   * WHATEVER A DOCUMENT IS ALREADY IN STAYS ON THE LIST. Dropping it would
+   * make the picker show the first option instead, and a silent save would
+   * then rewrite a status nobody touched.
+   */
+  const statuses = (() => {
+    const set = isPo ? PURCHASE_ORDER_STATUSES
+      : isInvoice ? INVOICE_STATUSES
+      : docType === "proforma" ? PROFORMA_STATUSES
+      : QUOTE_STATUSES;
+    return (set as readonly string[]).includes(doc.status)
+      ? (set as readonly string[])
+      : [...(set as readonly string[]), doc.status];
+  })();
 
   /* The customer picker is the real entry point for the party, currency and
      tax fields — new documents are always created unlinked. */
@@ -149,6 +182,33 @@ export function DocumentEditor({
    * warning, and a second form would drift from the first within a month.
    */
   const [newCustomer, setNewCustomer] = useState<Customer | null>(null);
+
+  /**
+   * Adding the account this document is about to ask to be paid into.
+   *
+   * THE SAME ARGUMENT AS THE CUSTOMER BUTTON NEXT TO THE PICKER. The moment
+   * an account turns out to be missing is the moment an invoice is being
+   * raised against it — an export in dirhams when everything on file is a
+   * rupee account. Being sent to Settings then means leaving a half-typed
+   * invoice to go and find a different screen, and the picker was hidden
+   * altogether when the list was empty, so there was not even anything to
+   * be sent from.
+   */
+  const [newAccount, setNewAccount] = useState<BankAccount | null>(null);
+
+  const startNewAccount = () =>
+    /* Preset to THIS document's currency, which is the whole reason an
+       account is usually being added here. Still editable. */
+    setNewAccount({ ...blankAccount(), currency: doc.currency || baseCurrency });
+
+  const saveNewAccount = (account: BankAccount) => {
+    onCreateBankAccount?.(account);
+    /* Named on the document straight away. Somebody who has just typed an
+       account into an invoice has already chosen it, and leaving it on
+       "Choose automatically" would quietly print a different one. */
+    setDoc((d) => ({ ...d, bankAccountId: account.id }));
+    setNewAccount(null);
+  };
 
   const startNewCustomer = () =>
     setNewCustomer(blankCustomer(currentUser.id, Math.random().toString(36).slice(2, 14)));
@@ -221,6 +281,23 @@ export function DocumentEditor({
           onClose={() => setNewCustomer(null)}
         />
       ) : null}
+
+      {/* Over the document, like the customer form: closing it returns to
+          an invoice that never went anywhere. */}
+      <Modal
+        open={!!newAccount}
+        title="New bank account"
+        onClose={() => setNewAccount(null)}
+        onSubmit={() => newAccount && saveNewAccount(newAccount)}
+        footer={
+          <>
+            <Button tone="quiet" onClick={() => setNewAccount(null)}>Cancel</Button>
+            <Button tone="primary" onClick={() => newAccount && saveNewAccount(newAccount)}>Save account</Button>
+          </>
+        }
+      >
+        {newAccount ? <BankAccountFields account={newAccount} onChange={setNewAccount} /> : null}
+      </Modal>
 
       <div className="split">
         <div className="stack-wide">
@@ -316,28 +393,49 @@ export function DocumentEditor({
                         </Select>
                       </Field>
                       <Field label="Date"><Input type="date" value={doc.date} onChange={set("date")} /></Field>
-                      <Field label={isPo ? "Required by" : "Valid until"}><Input type="date" value={doc.validUntil} onChange={set("validUntil")} /></Field>
+                      {/* The same date means a different thing on each
+                          document: when a supplier must deliver, when
+                          payment falls due, when an offer lapses. Calling
+                          an invoice's due date "Valid until" invited
+                          somebody to read it as an expiry. */}
+                      <Field label={isPo ? "Required by" : isInvoice ? "Payment due" : "Valid until"}>
+                        <Input type="date" value={doc.validUntil} onChange={set("validUntil")} />
+                      </Field>
                       {/* NOT on a purchase order: bank details tell someone
                           where to pay US, and on a document where we are the
                           buyer our own account is at best noise and at worst
                           an invitation to misdirect a payment. */}
-                      {!isPo && bankAccounts.length ? (
+                      {/* SHOWN EVEN WITH NOTHING IN THE LIST. This was
+                          hidden whenever there were no accounts, so a
+                          workspace with none printed no payment details and
+                          offered no clue why — the field that would have
+                          said so was the one being hidden. */}
+                      {!isPo ? (
                         <Field
                           label="Bank account"
                           hint={
-                            doc.bankAccountId
-                              ? "Printed in the payment details on this document."
-                              : autoAccount
-                                ? `Using ${accountSummary(autoAccount)} — the one that matches this document. Pick another to override it.`
-                                : "No account matches; nothing will print."
+                            !bankAccounts.length
+                              ? "No account on file, so nothing will print in the payment details."
+                              : doc.bankAccountId
+                                ? "Printed in the payment details on this document."
+                                : autoAccount
+                                  ? `Using ${accountSummary(autoAccount)} — the one that matches this document. Pick another to override it.`
+                                  : "No account matches; nothing will print."
                           }
                         >
-                          <Select value={doc.bankAccountId ?? ""} onChange={set("bankAccountId")}>
-                            <option value="">Choose automatically</option>
-                            {bankAccounts.map((a) => (
-                              <option key={a.id} value={a.id}>{accountSummary(a)}</option>
-                            ))}
-                          </Select>
+                          <div className="row-tight" style={{ gap: 8 }}>
+                            <Select className="grow" value={doc.bankAccountId ?? ""} onChange={set("bankAccountId")}>
+                              <option value="">
+                                {bankAccounts.length ? "Choose automatically" : "No account on file"}
+                              </option>
+                              {bankAccounts.map((a) => (
+                                <option key={a.id} value={a.id}>{accountSummary(a)}</option>
+                              ))}
+                            </Select>
+                            {onCreateBankAccount ? (
+                              <Button tone="quiet" onClick={startNewAccount}>+ New</Button>
+                            ) : null}
+                          </div>
                         </Field>
                       ) : null}
                       <Field label={isPo ? "Supplier reference" : "Customer reference"}><Input value={doc.referenceNo} onChange={set("referenceNo")} placeholder={isPo ? "Their quotation number" : "PO/ABC/2425/078"} /></Field>

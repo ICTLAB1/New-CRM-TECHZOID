@@ -16,8 +16,8 @@ import type { Customer } from "../../domain/customers/customer";
 import { advancesPipeline, concludedAt, isConcluded, stageAfterQuotation } from "../../domain/pipeline/advance";
 import { stageOf } from "../../domain/pipeline/stages";
 import { DEFAULT_PREFIX, buildDocNumber, fyLabel } from "../../domain/numbering/docNumber";
-import { SEQ_KEY, nextDocNumber, seqKindOf } from "../../data/docNumber";
-import { OBJ_TYPE, OBJ_TYPE_OF_DOC_TYPE } from "../../domain/documents/objType";
+import { docSeries, nextDocNumber } from "../../data/docNumber";
+import { OBJ_TYPE } from "../../domain/documents/objType";
 import { orderFromProforma, type SalesOrder } from "../../domain/orders/create";
 import type { CatalogProduct } from "../../domain/catalog/types";
 import { computeDocument } from "../../domain/tax/compute";
@@ -26,6 +26,8 @@ import { fmtDate, isOverdue } from "../../domain/dates";
 import { receiptStatusLabel, summarizeReceipts } from "../../domain/purchasing/receipts";
 import type { Tone } from "../../components/primitives";
 import type { DocImages } from "../../documents/pdf/render";
+import type { DocType } from "../../domain/documents/model";
+import type { BankAccount } from "../../domain/banking/accounts";
 import type { IntegrationsApi } from "../../integrations/api";
 
 const STATUS_TONE: Record<string, Tone> = {
@@ -63,6 +65,11 @@ export interface QuotationsScreenProps {
   team?: { id: string; name: string }[];
   customFields?: { id: string; label: string }[];
   /** Raising a proforma from a quotation hands it to the proformas screen. */
+  /** Save a bank account added from inside the document editor. The editor
+   *  cannot write settings itself, so this screen — which already owns the
+   *  settings write on save — does it. Undefined for anyone who may not
+   *  change settings. */
+  onCreateBankAccount?: (account: BankAccount) => void;
   onCreateProforma?: (proforma: SalesDocument) => void;
   /** Raising a tax invoice hands it to the invoices screen. */
   onCreateInvoice?: (invoice: SalesDocument) => void;
@@ -74,7 +81,7 @@ export interface QuotationsScreenProps {
 
 export function QuotationsScreen({
   docType, documents, customers, catalog, settings, brandLogos, docImages, api, currentUser,
-  onChange, onCustomerStage, onSettingsNote, onCreateProforma, onCreateInvoice, onCreateOrder,
+  onChange, onCustomerStage, onSettingsNote, onCreateBankAccount, onCreateProforma, onCreateInvoice, onCreateOrder,
   onCreateCustomer, team = [], customFields = [],
 }: QuotationsScreenProps) {
   const toast = useToast();
@@ -91,13 +98,11 @@ export function QuotationsScreen({
   const label = isPo ? "Purchase order" : isInvoice ? "Tax invoice" : docType === "proforma" ? "Proforma" : "Quotation";
   const sellerState = ((settings["company"] as { state?: string })?.state) ?? "Delhi";
 
-  const seqKind = seqKindOf(docType);
-  const seqKey = SEQ_KEY[seqKind];
-  const prefix = String(
-    settings[isPo ? "purchaseOrderPrefix" : isInvoice ? "invoicePrefix" : docType === "proforma" ? "proformaPrefix" : "quotePrefix"]
-      ?? (isPo ? DEFAULT_PREFIX.purchaseOrder : isInvoice ? DEFAULT_PREFIX.invoice
-        : docType === "proforma" ? DEFAULT_PREFIX.proforma : DEFAULT_PREFIX.quotation),
-  );
+  /* Which series each document type draws from — a function of the TYPE,
+     because this screen also raises documents of other types. See
+     docSeries in src/data/docNumber.ts for what went wrong when it was not. */
+  const seriesFor = (of: DocType) => docSeries(of, settings);
+  const seqKey = seriesFor(docType).seqKey;
 
   /**
    * The number a document about to be saved for the first time should carry.
@@ -110,27 +115,26 @@ export function QuotationsScreen({
    *
    * A number somebody typed over is theirs and is returned untouched.
    */
-  const allocateNumber = async (doc: SalesDocument): Promise<{ doc: SalesDocument; seq: number | null }> => {
+  const allocateNumber = async (
+    doc: SalesDocument,
+    of: DocType = docType,
+  ): Promise<{ doc: SalesDocument; seq: number | null }> => {
     if (!doc.autoNumber) return { doc, seq: null };
+    const { objType, kind, seqKey: key, prefix } = seriesFor(of);
     /* One instant for both the series and the label, so a save at the stroke
        of midnight on 31 March cannot draw from one financial year and print
        the other. */
     const now = new Date();
-    const seq = await nextDocNumber(
-      OBJ_TYPE_OF_DOC_TYPE[docType] ?? OBJ_TYPE.quotation,
-      fyLabel(now),
-      seqKind,
-      Number(settings[seqKey]) || 1,
-    );
+    const seq = await nextDocNumber(objType, fyLabel(now), kind, Number(settings[key]) || 1);
     return { doc: { ...doc, number: buildDocNumber(prefix, seq, now), autoNumber: false }, seq };
   };
 
   /** Keep this browser's copy of the counter level with the database, which
    *  the allocation above has just moved. Not a settings edit — nothing is
    *  written back, which is what makes it safe for a salesperson to do. */
-  const noteSequence = (seq: number | null) => {
+  const noteSequence = (seq: number | null, key: string = seqKey) => {
     if (seq === null) return;
-    onSettingsNote?.({ ...settings, [seqKey]: seq + 1 });
+    onSettingsNote?.({ ...settings, [key]: seq + 1 });
   };
 
   const shown = useMemo(() => {
@@ -238,9 +242,25 @@ export function QuotationsScreen({
     toast(`Duplicated as ${copy.number}, back to Draft.`, "good");
   };
 
-  const raiseInvoice = (doc: SalesDocument) => {
-    const inv = invoiceFrom(doc, settings as DocSettings, currentUser);
+  /**
+   * A tax invoice raised against this document.
+   *
+   * IT TAKES A NUMBER OUT OF THE INVOICE SERIES BEFORE IT IS FILED. It did
+   * not, and the number `invoiceFrom` puts on the draft is only a preview
+   * drawn from this browser's copy of the counter — so every tax invoice
+   * raised this way came out as INV/2026-27/0001, over and over, while the
+   * database series sat untouched. Three identical numbers reached the live
+   * workspace before this was found. A tax invoice series that repeats
+   * itself is not a cosmetic problem: it is the number a customer pays
+   * against and the number a GST return is filed under.
+   */
+  const raiseInvoice = async (doc: SalesDocument) => {
+    const { doc: inv, seq } = await allocateNumber(
+      invoiceFrom(doc, settings as DocSettings, currentUser),
+      "invoice",
+    );
     onCreateInvoice?.(inv);
+    noteSequence(seq, seriesFor("invoice").seqKey);
     toast(`Tax invoice ${inv.number} raised from ${doc.number}.`, "good");
   };
 
@@ -258,9 +278,15 @@ export function QuotationsScreen({
     toast(`Sales order ${order.number} confirmed from ${doc.number}.`, "good");
   };
 
-  const raiseProforma = (doc: SalesDocument) => {
-    const pf = proformaFromQuotation(doc, settings as DocSettings, currentUser);
+  /** Same as raiseInvoice, and it had the same hole: the proforma was filed
+   *  carrying the preview number rather than one out of its own series. */
+  const raiseProforma = async (doc: SalesDocument) => {
+    const { doc: pf, seq } = await allocateNumber(
+      proformaFromQuotation(doc, settings as DocSettings, currentUser),
+      "proforma",
+    );
     onCreateProforma?.(pf);
+    noteSequence(seq, seriesFor("proforma").seqKey);
     toast(`Proforma ${pf.number} raised from ${doc.number}.`, "good");
   };
 
@@ -284,6 +310,7 @@ export function QuotationsScreen({
           team={team}
           customFields={customFields}
           onCreateCustomer={onCreateCustomer}
+          onCreateBankAccount={onCreateBankAccount}
           /* Attaching a file needs a record that exists. A document the
              editor has only just built is not in the workspace yet. */
           saved={documents.some((d) => d.id === editing.id)}

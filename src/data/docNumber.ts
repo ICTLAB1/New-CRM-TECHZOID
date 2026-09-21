@@ -1,5 +1,8 @@
 import { getSupabase, isSupabaseConfigured } from "./supabase";
 import { getActiveCompanyId } from "./store";
+import { DEFAULT_PREFIX } from "../domain/numbering/docNumber";
+import { OBJ_TYPE, OBJ_TYPE_OF_DOC_TYPE } from "../domain/documents/objType";
+import type { DocType } from "../domain/documents/model";
 
 /**
  * The next number in a document series, taken from the database.
@@ -131,4 +134,53 @@ export async function nextDocNumber(
     /* fall through */
   }
   return nextDocSeq(kind, local);
+}
+
+/* ── which series a document type draws from ───────────────────────── */
+
+export interface DocSeries {
+  /** The SAP object type the database counter is keyed by. */
+  objType: number;
+  /** The legacy counter's kind, used only by the fallback path. */
+  kind: DocSeqKind;
+  /** Where this browser keeps its copy of that counter. */
+  seqKey: string;
+  /** What the number is printed with. */
+  prefix: string;
+}
+
+/**
+ * Everything needed to draw a number for one kind of document.
+ *
+ * WHY THIS IS A FUNCTION OF THE TYPE AND NOT OF THE SCREEN. The quotations
+ * screen also raises documents of other types — a tax invoice and a
+ * proforma are both started from a quotation — and it held the object type,
+ * the counter key and the prefix as three constants fixed to its own
+ * docType. Those two paths therefore had no series to draw from and drew
+ * from none at all: an invoice raised from a quotation kept the preview
+ * number its draft was built with, so every one of them came out as
+ * INV/2026-27/0001. Three reached the live workspace carrying the same
+ * number before it was noticed.
+ *
+ * A tax invoice series that repeats itself is not cosmetic: it is the
+ * number a customer pays against and the number a GST return is filed
+ * under. Keeping the mapping in one tested function is what stops a fourth
+ * document type being added with no branch here.
+ */
+export function docSeries(docType: DocType, settings: Record<string, unknown>): DocSeries {
+  const kind = seqKindOf(docType);
+  const prefixKey = docType === "purchase_order" ? "purchaseOrderPrefix"
+    : docType === "invoice" ? "invoicePrefix"
+    : docType === "proforma" ? "proformaPrefix"
+    : "quotePrefix";
+  const fallback = docType === "purchase_order" ? DEFAULT_PREFIX.purchaseOrder
+    : docType === "invoice" ? DEFAULT_PREFIX.invoice
+    : docType === "proforma" ? DEFAULT_PREFIX.proforma
+    : DEFAULT_PREFIX.quotation;
+  return {
+    objType: OBJ_TYPE_OF_DOC_TYPE[docType] ?? OBJ_TYPE.quotation,
+    kind,
+    seqKey: SEQ_KEY[kind],
+    prefix: String(settings[prefixKey] ?? fallback),
+  };
 }

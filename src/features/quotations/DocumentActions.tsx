@@ -61,8 +61,30 @@ export interface DocumentActionsProps {
   onSent?: () => void;
 }
 
+/**
+ * What this document calls itself, everywhere it is named to a customer:
+ * the email subject, the sentence naming the attachment, and the facts a
+ * follow-up is built from.
+ *
+ * EVERY TYPE HAS A BRANCH. A tax invoice had none and fell through to
+ * "Quotation", so a customer emailed an invoice received a subject line
+ * reading "Quotation TZ/INV/2026-27/0001" and a body asking them to find
+ * the attached quotation. An invoice that calls itself a quotation is not
+ * a wording slip — it is a demand for payment that says it is an offer.
+ */
 const label = (docType: DocType): string =>
-  docType === "purchase_order" ? "Purchase Order" : docType === "proforma" ? "Proforma Invoice" : "Quotation";
+  docType === "purchase_order" ? "Purchase Order"
+    : docType === "proforma" ? "Proforma Invoice"
+    : docType === "invoice" ? "Tax Invoice"
+    : "Quotation";
+
+/** The send button. Says what is being sent and to whom — a supplier for a
+ *  purchase order, the customer for everything else. */
+const sendLabel = (docType: DocType): string =>
+  docType === "purchase_order" ? "Send purchase order to supplier"
+    : docType === "invoice" ? "Send invoice to customer"
+    : docType === "proforma" ? "Send proforma to customer"
+    : "Send quote to customer";
 
 /** What we say when sending a document out. Kept short: it is read on a
  *  phone, usually while the sender is on a call. */
@@ -276,7 +298,7 @@ export function DocumentActions({
   return (
     <>
       <Button tone="primary" onClick={() => setEmailOpen(true)}>
-        {isPo ? "Send purchase order to supplier" : `Send ${docType === "proforma" ? "proforma" : "quote"} to customer`}
+        {sendLabel(docType)}
       </Button>
       <Button tone="default" onClick={download}>Download PDF</Button>
       <Button tone="quiet" onClick={() => previewPdf(renderOpts)}>Open PDF</Button>

@@ -1,12 +1,12 @@
 import { useState } from "react";
-import { Button, Card, Chip, Empty, Field, Input, Select } from "../../components/primitives";
+import { Button, Card, Chip, Empty } from "../../components/primitives";
 import { Confirm } from "../../components/Modal";
 import { useToast } from "../../components/Toast";
+import { BankAccountFields } from "./BankAccountForm";
 import {
-  ACCOUNT_TYPES, accountSummary, addAccount, blankAccount, readAccounts, removeAccount,
-  setDefaultAccount, updateAccount, warningsFor, type BankAccount,
+  accountSummary, addAccount, blankAccount, readAccounts, removeAccount,
+  setDefaultAccount, updateAccount, type BankAccount,
 } from "../../domain/banking/accounts";
-import { CURRENCIES } from "../../domain/currency/currencies";
 
 /**
  * The accounts customers are told to pay into.
@@ -52,11 +52,6 @@ export function BankAccountsPanel({
   };
 
   if (editing) {
-    const warnings = warningsFor(editing);
-    const set = <K extends keyof BankAccount>(k: K) => (e: { target: { value: string } }) =>
-      setEditing((a) => (a ? { ...a, [k]: e.target.value } : a));
-    const warningFor = (field: string) => warnings.find((w) => w.field === field)?.message;
-
     return (
       <Card
         title={accounts.some((a) => a.id === editing.id) ? "Edit bank account" : "New bank account"}
@@ -67,69 +62,7 @@ export function BankAccountsPanel({
           </div>
         }
       >
-        <div className="stack-wide">
-          <div className="grid grid-2">
-            <Field label="Name it" hint="For your own list — “HDFC Current”, “Export account”. Prints after the heading when it differs from the bank.">
-              <Input value={editing.label} onChange={set("label")} placeholder="HDFC Current" />
-            </Field>
-            <Field label="Currency" hint="Which currency this account is for. A document in that currency picks it automatically.">
-              <Select value={editing.currency} onChange={set("currency")}>
-                <option value="">Any currency</option>
-                {CURRENCIES.map(([code, , name]) => <option key={code} value={code}>{code} — {name}</option>)}
-              </Select>
-            </Field>
-          </div>
-
-          <div className="grid grid-2">
-            <Field label="Bank" hint={warningFor("name")}>
-              <Input value={editing.name} onChange={set("name")} placeholder="HDFC Bank Ltd" invalid={!!warningFor("name")} />
-            </Field>
-            <Field label="Account holder" hint="Leave blank to print the company name.">
-              <Input value={editing.accountName} onChange={set("accountName")} />
-            </Field>
-          </div>
-
-          <div className="grid grid-2">
-            <Field label="Account number" hint={warningFor("account")}>
-              <Input value={editing.account} onChange={set("account")} invalid={!!warningFor("account")} />
-            </Field>
-            <Field label="Account type">
-              <Select value={editing.accountType} onChange={set("accountType")}>
-                {ACCOUNT_TYPES.map((t) => <option key={t}>{t}</option>)}
-              </Select>
-            </Field>
-          </div>
-
-          <div className="grid grid-2">
-            <Field label="IFSC" hint={warningFor("ifsc") ?? "For payments within India."}>
-              <Input
-                value={editing.ifsc}
-                onChange={(e) => setEditing((a) => (a ? { ...a, ifsc: e.target.value.toUpperCase() } : a))}
-                placeholder="HDFC0000123"
-                invalid={!!warningFor("ifsc")}
-              />
-            </Field>
-            <Field label="SWIFT / BIC" hint={warningFor("swift") ?? "For payments from outside India."}>
-              <Input
-                value={editing.swift}
-                onChange={(e) => setEditing((a) => (a ? { ...a, swift: e.target.value.toUpperCase() } : a))}
-                placeholder="HDFCINBB"
-                invalid={!!warningFor("swift")}
-              />
-            </Field>
-          </div>
-
-          <Field label="Branch"><Input value={editing.branch} onChange={set("branch")} placeholder="Netaji Subhash Place, New Delhi" /></Field>
-
-          {warnings.length ? (
-            <div className="notice notice-warn">
-              <span>
-                <strong>These print on every document a customer pays against.</strong> Nothing here stops you
-                saving — a foreign account has no IFSC — but a bank will reject what it cannot read.
-              </span>
-            </div>
-          ) : null}
-        </div>
+        <BankAccountFields account={editing} onChange={setEditing} />
       </Card>
     );
   }

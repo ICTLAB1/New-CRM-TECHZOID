@@ -26,6 +26,7 @@ import { ActivityScreen } from "../features/activity/ActivityScreen";
 import { AssistantScreen } from "../features/assistant/AssistantScreen";
 import { ProspectsScreen } from "../features/outreach/ProspectsScreen";
 import { CampaignScreen } from "../features/outreach/CampaignScreen";
+import { addAccount, readAccounts, type BankAccount } from "../domain/banking/accounts";
 import { integrations } from "../integrations";
 import { BRAND_LOGOS, DOC_IMAGES } from "./demoData";
 import type { CatalogProduct } from "../domain/catalog/types";
@@ -101,6 +102,20 @@ export function Workbench({
   const { customers, quotations, proformas, purchaseOrders, invoices, orders, challans, subscriptions } = data;
   const isAdmin = user.role === "Admin";
   const canEditSettings = isAdmin || user.role === "Manager";
+
+  /**
+   * A bank account added from inside a document editor.
+   *
+   * WRITTEN HERE RATHER THAN IN THE EDITOR because the accounts list lives
+   * in settings, which is one record for the whole company — the editor
+   * holds a document. Offered only to someone who may change settings:
+   * row-level security refuses a salesperson's write anyway, and a button
+   * that fails silently is worse than one that is not there.
+   */
+  const addBankAccount = canEditSettings
+    ? (account: BankAccount) =>
+        onSettingsChange({ ...settings, bankAccounts: addAccount(readAccounts(settings), account) })
+    : undefined;
 
   /* Both of these live in the settings row, exactly as they did in v1 —
      the catalog and the customer form's extra fields are configuration, not
@@ -261,6 +276,7 @@ export function Workbench({
           team={team}
           customFields={customFields}
           onCreateCustomer={(c: Customer) => handleCustomersChange([c, ...customers])}
+          onCreateBankAccount={addBankAccount}
           onCustomerStage={advanceCustomer}
           onCreateProforma={(pf) => { onChange("proformas", [pf, ...proformas]); setView("proformas"); }}
           onCreateInvoice={(inv) => { onChange("invoices", [inv, ...invoices]); setView("invoices"); }}
@@ -281,6 +297,7 @@ export function Workbench({
           team={team}
           customFields={customFields}
           onCreateCustomer={(c: Customer) => handleCustomersChange([c, ...customers])}
+          onCreateBankAccount={addBankAccount}
           onCreateOrder={(order) => { onChange("orders", [order, ...orders]); setView("orders"); }}
           onCustomerStage={advanceCustomer}
           onCreateInvoice={(inv) => { onChange("invoices", [inv, ...invoices]); setView("invoices"); }}
@@ -301,6 +318,7 @@ export function Workbench({
           team={team}
           customFields={customFields}
           onCreateCustomer={(c: Customer) => handleCustomersChange([c, ...customers])}
+          onCreateBankAccount={addBankAccount}
         />
       ) : view === "receivables" ? (
         <ReceivablesScreen
@@ -326,6 +344,7 @@ export function Workbench({
           team={team}
           customFields={customFields}
           onCreateCustomer={(c: Customer) => handleCustomersChange([c, ...customers])}
+          onCreateBankAccount={addBankAccount}
         />
       ) : view === "orders" ? (
         <OrdersScreen

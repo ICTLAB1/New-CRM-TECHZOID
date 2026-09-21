@@ -99,6 +99,19 @@ export interface DocumentModel {
    *  customer id, sales executive, enquiry reference. */
   details: Pair[];
 
+  /**
+   * The heading over that column.
+   *
+   * ON THE MODEL, not worked out inside each renderer. Both of them had
+   * their own copy of the same conditional and neither had a branch for a
+   * tax invoice, so an invoice printed "QUOTATION DETAILS" over its own
+   * invoice number — in the PDF a customer receives and in the preview
+   * beside the editor, identically wrong in both places. Derived once
+   * here, where the rows underneath it are built, so the heading and the
+   * rows cannot disagree about what this document is.
+   */
+  detailsHeading: string;
+
   /** Bill To and Ship To. The design shows exactly these two, boxed. */
   parties: PartyModel[];
 
@@ -289,6 +302,11 @@ export function buildDocumentModel(input: BuildModelInput): DocumentModel {
         ["Sales Executive", doc.preparedBy || "—"],
         ["Enquiry Reference", doc.enquiryRef || "—"],
       ];
+
+  const detailsHeading = isPurchaseOrder ? "PURCHASE ORDER DETAILS"
+    : isInvoice ? "TAX INVOICE DETAILS"
+    : isProforma ? "INVOICE DETAILS"
+    : "QUOTATION DETAILS";
 
   const references: RefCell[] = [
     { label: isPurchaseOrder ? "Supplier Reference" : "Customer Reference", value: doc.referenceNo || "—" },
@@ -611,6 +629,7 @@ export function buildDocumentModel(input: BuildModelInput): DocumentModel {
       addressLines: headerAddressLines, contactLine, registration, uaeOffice, meta,
     },
     details,
+    detailsHeading,
     parties,
     references,
     intro: {

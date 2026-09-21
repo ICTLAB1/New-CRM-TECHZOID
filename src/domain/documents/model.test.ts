@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildDocumentModel, packLogoRows, rowWidth, type LogoCell } from "./model";
+import { buildDocumentModel, packLogoRows, rowWidth, type DocType, type LogoCell } from "./model";
 import { DEFAULT_DOC_TEMPLATE, normalizeDocTemplate } from "./template";
 import { computeDocument } from "../tax/compute";
 
@@ -29,7 +29,7 @@ const DOC = {
   terms: ["Payment 100% advance.", "Delivery in 3 working days."],
 };
 
-const build = (docOverrides = {}, docType: "quotation" | "proforma" = "quotation", settingsOverrides = {}, bank = {}) => {
+const build = (docOverrides = {}, docType: DocType = "quotation", settingsOverrides = {}, bank = {}) => {
   const doc = { ...DOC, ...docOverrides };
   const totals = computeDocument(doc, "Delhi");
   return buildDocumentModel({
@@ -267,6 +267,29 @@ describe("header and details", () => {
 
   it("carries the company tagline", () => {
     expect(build().header.tagline).toContain("Technology Procurement");
+  });
+
+  /**
+   * A TAX INVOICE MUST NOT CALL ITSELF A QUOTATION.
+   *
+   * The heading over the details column was worked out separately inside
+   * each renderer, and neither had a branch for an invoice — so a tax
+   * invoice printed "QUOTATION DETAILS" over its own invoice number, in
+   * the PDF sent to a customer and in the preview beside the editor. An
+   * invoice that says it is a quotation is a demand for payment claiming
+   * to be an offer.
+   */
+  it("heads the details column with what the document actually is", () => {
+    expect(build({}, "quotation").detailsHeading).toBe("QUOTATION DETAILS");
+    expect(build({}, "proforma").detailsHeading).toBe("INVOICE DETAILS");
+    expect(build({}, "invoice").detailsHeading).toBe("TAX INVOICE DETAILS");
+    expect(build({}, "purchase_order").detailsHeading).toBe("PURCHASE ORDER DETAILS");
+  });
+
+  it("says nothing about a quotation anywhere on a tax invoice's own fields", () => {
+    const m = build({}, "invoice");
+    const own = JSON.stringify([m.title, m.detailsHeading, m.details]).toLowerCase();
+    expect(own).not.toContain("quotation");
   });
 });
 

@@ -150,11 +150,7 @@ export function DocumentPreview({ model: m, rows, brandLogos = {}, scale = 1 }: 
           }}
         >
           <div>
-            <div className="doc-block-title">
-              {m.docType === "purchase_order"
-                ? "PURCHASE ORDER DETAILS"
-                : m.isProforma ? "INVOICE DETAILS" : "QUOTATION DETAILS"}
-            </div>
+            <div className="doc-block-title">{m.detailsHeading}</div>
             <Rows pairs={m.details} />
           </div>
           {m.parties.map((party) => (
