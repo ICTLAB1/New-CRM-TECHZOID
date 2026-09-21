@@ -1,4 +1,5 @@
 import { crmIdFor, customerFieldsFrom, noteFrom, queryId, queryTimeMs, queryTypeLabel } from "./indiamart.mjs";
+import { companyForOwner, withCompany } from "./company.mjs";
 
 /**
  * Writing an IndiaMART lead into the CRM.
@@ -81,9 +82,12 @@ export async function applyLead(admin, lead, owner) {
   if (!next.currency) next.currency = "INR";
   if (!next.taxType) next.taxType = "gst";
 
+  /* Only on a first write: an existing lead keeps the company it is
+     already filed under, so a re-fetch cannot move somebody's work. */
+  const companyId = existing ? null : await companyForOwner(admin, ownerId);
   const { error } = await admin
     .from("customers")
-    .upsert({ id, owner_id: ownerId, data: next }, { onConflict: "id" });
+    .upsert(withCompany({ id, owner_id: ownerId, data: next }, companyId), { onConflict: "id" });
 
   if (error) return { status: "failed", reason: error.message, id };
   return {

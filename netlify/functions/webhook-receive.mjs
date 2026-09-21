@@ -4,6 +4,7 @@ import { isValidEventKind, verifySignature } from "../lib/webhookSign.mjs";
 import {
   crmIdForWebsiteDeal, customerFieldsFromEvent, noteFromEvent, normaliseStage, websiteDealId,
 } from "../lib/inboundMap.mjs";
+import { companyForOwner, withCompany } from "../lib/company.mjs";
 
 /**
  * Receives events from the company's own website.
@@ -195,12 +196,13 @@ async function apply(admin, kind, envelope) {
     next.notes = notes.some((n) => n?.id === note.id) ? notes : [...notes, note];
   }
 
-  const { error } = await admin.from("customers").upsert({
+  const companyId = existing ? null : await companyForOwner(admin, owner);
+  const { error } = await admin.from("customers").upsert(withCompany({
     id,
     owner_id: owner,
     data: next,
     updated_at: new Date().toISOString(),
-  });
+  }, companyId));
   if (error) throw new Error(error.message);
 
   return { ok: true };

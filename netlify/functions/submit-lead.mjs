@@ -4,6 +4,7 @@ import { adminClient } from "../lib/auth.mjs";
 import { isEmail, isGstin, isPan, str } from "../lib/validate.mjs";
 import { consume, tooManyMessage } from "../lib/ratelimit.mjs";
 import { resolveRef } from "../lib/leadRef.mjs";
+import { companyForOwner, withCompany } from "../lib/company.mjs";
 
 /**
  * The public customer registration form.
@@ -176,15 +177,22 @@ export async function handler(event) {
     updatedAt: now,
   };
 
+  /* Which business this enquiry belongs to. The registration link names a
+     salesperson, so the company is theirs — see companyForOwner. Resolved
+     here rather than left to the column default, which answers "the company
+     of whoever is signed in" and is therefore null for a public form. */
+  const companyId = await companyForOwner(admin, ownerId);
+
   try {
-    const { error } = await admin.from("customers").insert({
+    const { error } = await admin.from("customers").insert(withCompany({
       id,
       owner_id: ownerId,
       data: record,
       updated_at: new Date().toISOString(),
-    });
+    }, companyId));
     if (error) throw error;
   } catch (err) {
+    console.error("submit-lead: could not save the enquiry —", err?.message ?? err);
     return fail(event, 500, "Something went wrong submitting your details. Please try again in a moment.", err?.message);
   }
 
