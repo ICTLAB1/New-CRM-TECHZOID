@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { newPurchaseOrder } from "./create";
 import { buildDocumentModel } from "./model";
 import { DEFAULT_DOC_TEMPLATE } from "./template";
-import { PURCHASE_ORDER_TERMS } from "./terms";
+import { PURCHASE_ORDER_TERMS, SELLER_TOKEN, forCompany } from "./terms";
 import { computeDocument } from "../tax/compute";
 import type { Customer } from "../customers/customer";
 
@@ -52,10 +52,19 @@ describe("raising a purchase order", () => {
 
   it("carries the buyer-side terms, not the quotation's seller-side ones", () => {
     const po = newPurchaseOrder({ settings: SETTINGS, user: USER, today: "2026-08-24" });
-    expect(po.terms).toEqual([...PURCHASE_ORDER_TERMS]);
+    expect(po.terms).toEqual(forCompany(PURCHASE_ORDER_TERMS, SETTINGS.company.name));
     /* The quotation set disclaims what the company promises. On a purchase
        order that would disclaim the supplier's obligations to us. */
     expect(po.terms.join(" ")).not.toContain("Quotation is valid for 30 days");
+  });
+
+  it("names the company whose order it is, and never a token", () => {
+    /* The buyer's name is in the delay, set-off and indemnity clauses. It
+       used to be written into the text, so a second company's purchase
+       order would have bound a supplier to the first company's name. */
+    const joined = newPurchaseOrder({ settings: SETTINGS, user: USER, today: "2026-08-24" }).terms.join(" ");
+    expect(joined).toContain("TechZoid Technologies Private Limited");
+    expect(joined).not.toContain(SELLER_TOKEN);
   });
 
   it("leaves the billing party empty — on a purchase order that party is us", () => {

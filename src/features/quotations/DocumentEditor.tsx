@@ -27,7 +27,7 @@ import {
   type SalesDocument, type DocSettings,
 } from "../../domain/documents/create";
 import type { Customer } from "../../domain/customers/customer";
-import { TERMS_SETS, suggestTermsSet, LEGAL_NOTICE } from "../../domain/documents/terms";
+import { forCompany, termsSetsFor, suggestTermsSet, LEGAL_NOTICE } from "../../domain/documents/terms";
 import { CURRENCIES } from "../../domain/currency/currencies";
 import { TAX_TYPES } from "../../domain/tax/types";
 import { STATE_NAMES } from "../../domain/geo/states";
@@ -163,7 +163,7 @@ export function DocumentEditor({
      tax fields — new documents are always created unlinked. */
   const pickCustomer = (id: string) => {
     const customer = customers.find((c) => c.id === id) ?? null;
-    setDoc((d) => applyCustomer(d, customer, settings as DocSettings));
+    setDoc((d) => applyCustomer(d, customer, settings as DocSettings, docType));
   };
 
   /**
@@ -218,7 +218,7 @@ export function DocumentEditor({
     /* Linked straight away: somebody who has just typed a customer into a
        quotation has already chosen them. Making them pick again from the
        list is a step that exists only because of how this was built. */
-    setDoc((d) => applyCustomer(d, c, settings as DocSettings));
+    setDoc((d) => applyCustomer(d, c, settings as DocSettings, docType));
     setNewCustomer(null);
   };
 
@@ -241,7 +241,14 @@ export function DocumentEditor({
     setShowCatalog(false);
   };
 
-  const suggested = suggestTermsSet(doc.billCountry);
+  /* The pair this KIND of document chooses between — an invoice has its
+     own, because the quotation set opens with a validity clause an invoice
+     does not have. Within the pair, the customer's country picks one. */
+  const termsSets = termsSetsFor(docType);
+  const suggested = suggestTermsSet(doc.billCountry, docType);
+  /* The seller's own name, filled into whichever set is applied. Never
+     another company's: these terms promise and disclaim on its behalf. */
+  const sellerName = String((settings["company"] as { name?: string } | undefined)?.name ?? "");
 
   /* Saving a document is the moment a number gets committed and a customer
      may be sent it, so this asks first — the same question the shortcut
@@ -561,12 +568,12 @@ export function DocumentEditor({
                 <div className="stack-wide">
                   <div className="stack">
                     <div className="row-tight wrap">
-                      {TERMS_SETS.map((s) => (
+                      {termsSets.map((s) => (
                         <Button
                           key={s.id}
                           tone={s.id === suggested.id ? "primary" : "default"}
                           size="sm"
-                          onClick={() => setDoc((d) => ({ ...d, terms: [...s.terms] }))}
+                          onClick={() => setDoc((d) => ({ ...d, terms: forCompany(s.terms, sellerName) }))}
                         >
                           Use {s.label}
                         </Button>

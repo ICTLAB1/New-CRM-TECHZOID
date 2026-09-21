@@ -142,6 +142,37 @@ Decided explicitly. Terms remain fully editable per document, so the clause
 can be re-added to any individual quotation, and `terms.ts` records where it
 went. Restoring it as a default is a one-line change to `DOMESTIC_TERMS`.
 
+### 4b-ii. The tax invoice has its own terms, and part of that cover is back
+
+A tax invoice used to carry the quotation's terms, so every invoice this CRM
+raised opened with "Quotation is valid for 30 days from the date of issue" and
+closed with "Acceptance of this quotation constitutes acceptance of the
+applicable terms". An invoice is not an offer and has no validity window.
+
+`INVOICE_TERMS` and `INVOICE_EXPORT_TERMS` in `terms.ts` are new and were
+written for this CRM — they are not from the supplied quotation design, which
+covers a quotation only. They are commercial boilerplate and **have not been
+reviewed by a legal adviser**; the interest, title-retention, warranty and
+liability clauses in particular should be before they are relied on.
+
+Two decisions worth recording:
+
+- **The returns cover from 4b is partly back**, phrased around what the
+  publisher and distributor allow rather than around licence keys and
+  activation: "Goods and services correctly supplied are not returnable or
+  cancellable except by prior written agreement, and then only on the terms
+  the manufacturer, publisher or distributor allows." The spec's instruction
+  not to mention licence keys, activation or provisioning is still followed
+  to the letter, and a test asserts it for the invoice sets too. The spec
+  governs the *quotation* design; an invoice is a different document, and a
+  business selling software licences with no returns clause on its invoices
+  is carrying a real commercial risk for a wording preference.
+
+- **A clause warning against a change of bank details by email** is on both
+  invoice sets. It is not in any supplied design. Invoice redirection fraud
+  is the most common way a business of this size loses money, and the warning
+  is only useful on the document the customer is paying against.
+
 ### 4c. Tax rows follow the tax mode, not the reference image
 
 The reference image prints CGST, SGST **and** IGST together with zeros in the

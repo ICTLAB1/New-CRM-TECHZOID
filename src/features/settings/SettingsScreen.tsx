@@ -472,13 +472,34 @@ function DocumentPanel({ settings, canEdit, onChange }: { settings: Record<strin
 
 /* ── numbering and tax ─────────────────────────────────────────────── */
 
+/** Every numbered document, and the three settings keys behind each one.
+ *  A list rather than four pairs of fields, so adding a fifth kind cannot
+ *  quietly leave one of them out of this screen — which is how tax invoices
+ *  and purchase orders came to have no fields here at all. */
+const SERIES = [
+  { label: "Quotation", prefixKey: "quotePrefix", seqKey: "quoteSeq", startKey: "quoteStart" },
+  { label: "Proforma invoice", prefixKey: "proformaPrefix", seqKey: "proformaSeq", startKey: "proformaStart" },
+  { label: "Tax invoice", prefixKey: "invoicePrefix", seqKey: "invoiceSeq", startKey: "invoiceStart" },
+  { label: "Purchase order", prefixKey: "purchaseOrderPrefix", seqKey: "purchaseOrderSeq", startKey: "purchaseOrderStart" },
+] as const;
+
 function NumberingPanel({ settings, canEdit, onChange }: { settings: Record<string, unknown>; canEdit: boolean; onChange: (s: Record<string, unknown>) => void }) {
   const { draft, setDraft, dirty, save, reset } = useDraft(
     {
       quotePrefix: String(settings["quotePrefix"] ?? DEFAULT_PREFIX.quotation),
       quoteSeq: Number(settings["quoteSeq"] ?? 1),
+      quoteStart: Number(settings["quoteStart"] ?? 1),
       proformaPrefix: String(settings["proformaPrefix"] ?? DEFAULT_PREFIX.proforma),
       proformaSeq: Number(settings["proformaSeq"] ?? 1),
+      proformaStart: Number(settings["proformaStart"] ?? 1),
+      /* Tax invoices and purchase orders had no fields here at all, so
+         their prefix and counter could only be changed in the database. */
+      invoicePrefix: String(settings["invoicePrefix"] ?? DEFAULT_PREFIX.invoice),
+      invoiceSeq: Number(settings["invoiceSeq"] ?? 1),
+      invoiceStart: Number(settings["invoiceStart"] ?? 1),
+      purchaseOrderPrefix: String(settings["purchaseOrderPrefix"] ?? DEFAULT_PREFIX.purchaseOrder),
+      purchaseOrderSeq: Number(settings["purchaseOrderSeq"] ?? 1),
+      purchaseOrderStart: Number(settings["purchaseOrderStart"] ?? 1),
       defaultCurrency: String(settings["defaultCurrency"] ?? "INR"),
       defaultTaxType: String(settings["defaultTaxType"] ?? "gst"),
       defaultGst: Number(settings["defaultGst"] ?? 18),
@@ -495,22 +516,63 @@ function NumberingPanel({ settings, canEdit, onChange }: { settings: Record<stri
           The financial-year segment and the four-digit padding are fixed: documents already in the database
           carry this exact shape, and a number that changes shape stops matching what a customer has on file.
         </p>
-        <div className="grid grid-2" style={{ marginTop: 12 }}>
-          <Field label="Quotation prefix" hint={`Next: ${buildDocNumber(draft.quotePrefix, draft.quoteSeq)}`}>
-            <Input value={draft.quotePrefix} disabled={!canEdit} onChange={(e) => setDraft((d) => ({ ...d, quotePrefix: e.target.value }))} />
-          </Field>
-          <Field label="Next quotation number" hint="Only ever advances when a document is actually saved.">
-            <Input numeric type="number" value={draft.quoteSeq} disabled={!canEdit}
-              onChange={(e) => setDraft((d) => ({ ...d, quoteSeq: Number(e.target.value) || 1 }))} />
-          </Field>
-          <Field label="Proforma prefix" hint={`Next: ${buildDocNumber(draft.proformaPrefix, draft.proformaSeq)}`}>
-            <Input value={draft.proformaPrefix} disabled={!canEdit} onChange={(e) => setDraft((d) => ({ ...d, proformaPrefix: e.target.value }))} />
-          </Field>
-          <Field label="Next proforma number">
-            <Input numeric type="number" value={draft.proformaSeq} disabled={!canEdit}
-              onChange={(e) => setDraft((d) => ({ ...d, proformaSeq: Number(e.target.value) || 1 }))} />
-          </Field>
+        {/* ONE ROW PER DOCUMENT TYPE, all four of them. Tax invoices and
+            purchase orders were missing from this card entirely, so the
+            only way to set an invoice prefix or counter was in the
+            database — which is where TechZoid's invoice series had to be
+            repaired after every invoice came out numbered 0001. */}
+        <div className="table-wrap" style={{ marginTop: 12 }}>
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Document</th>
+                <th>Prefix</th>
+                <th>Starts each year at</th>
+                <th>Next number</th>
+              </tr>
+            </thead>
+            <tbody>
+              {SERIES.map((row) => {
+                const prefix = draft[row.prefixKey] as string;
+                const seq = draft[row.seqKey] as number;
+                return (
+                  <tr key={row.label}>
+                    <td data-label="Document">
+                      <strong>{row.label}</strong>
+                      <div className="field-hint">Next: {buildDocNumber(prefix, seq)}</div>
+                    </td>
+                    <td data-label="Prefix">
+                      <Input
+                        value={prefix}
+                        disabled={!canEdit}
+                        onChange={(e) => setDraft((d) => ({ ...d, [row.prefixKey]: e.target.value }))}
+                      />
+                    </td>
+                    <td data-label="Starts each year at">
+                      <Input
+                        numeric type="number" value={draft[row.startKey] as number} disabled={!canEdit}
+                        onChange={(e) => setDraft((d) => ({ ...d, [row.startKey]: Number(e.target.value) || 1 }))}
+                      />
+                    </td>
+                    <td data-label="Next number">
+                      <Input
+                        numeric type="number" value={seq} disabled={!canEdit}
+                        onChange={(e) => setDraft((d) => ({ ...d, [row.seqKey]: Number(e.target.value) || 1 }))}
+                      />
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
+        <p className="field-hint" style={{ marginTop: 12 }}>
+          <strong>Starts each year at</strong> is where the series opens on 1 April, when the financial year
+          turns over. Changing it does nothing to the year already running — a series that renumbered itself
+          mid-year would hand out a number twice. <strong>Next number</strong> is this browser&rsquo;s copy of
+          the counter; the database hands out the real one when a document is saved, so two people raising an
+          invoice at once cannot get the same number.
+        </p>
       </Card>
 
       <Card title="Defaults for a new document">

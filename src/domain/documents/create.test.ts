@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   applyCustomer, CARRIED_FIELDS, CUSTOMER_DERIVED_FIELDS, documentFieldsFrom,
-  duplicateQuotation, effectiveStatus, newQuotation,
+  duplicateQuotation, effectiveStatus, invoiceFrom, newQuotation,
   proformaFromQuotation, shippingFieldsFrom, taxTypeFor,
   type DocSettings, type SalesDocument,
 } from "./create";
@@ -323,5 +323,46 @@ describe("where the goods go", () => {
     const doc = newQuotation({ settings: SETTINGS, user: USER, customer: withDelivery(), today: TODAY });
     expect(doc.shipSameAsBilling).toBe(false);
     expect(doc.shipAddress).toContain("Bhiwadi");
+  });
+});
+
+describe("terms follow the customer", () => {
+  const invoice = () => invoiceFrom(null, SETTINGS, USER, TODAY);
+
+  it("gives a new tax invoice invoice terms, not the quotation's", () => {
+    /* The reported symptom: every tax invoice opened with "Quotation is
+       valid for 30 days from the date of issue". */
+    const terms = invoice().terms.join(" ");
+    expect(terms).toContain("Payment is due by the date stated on this invoice");
+    expect(terms.toLowerCase()).not.toContain("quotation");
+  });
+
+  it("switches a domestic invoice to the export set when the customer is abroad", () => {
+    const linked = applyCustomer(invoice(), foreign(), SETTINGS, "invoice");
+    const terms = linked.terms.join(" ");
+    expect(terms).toContain("zero-rated");
+    expect(terms).toContain("importer of record");
+    /* GST charged and Delhi courts on a Sharjah invoice is a tax figure
+       and a jurisdiction, not a wording. */
+    expect(terms).not.toContain("Goods and services tax has been charged");
+  });
+
+  it("and back again", () => {
+    const abroad = applyCustomer(invoice(), foreign(), SETTINGS, "invoice");
+    const home = applyCustomer(abroad, domestic(), SETTINGS, "invoice");
+    expect(home.terms.join(" ")).toContain("Goods and services tax has been charged");
+  });
+
+  it("never overwrites a clause somebody has edited", () => {
+    /* A negotiated term is an agreement. Replacing it because the customer
+       field changed would lose it with nothing on screen to show for it. */
+    const negotiated = { ...invoice(), terms: ["Payment within 7 days, agreed by phone."] };
+    expect(applyCustomer(negotiated, foreign(), SETTINGS, "invoice").terms)
+      .toEqual(["Payment within 7 days, agreed by phone."]);
+  });
+
+  it("does the same for a quotation, which is where it was already right", () => {
+    const q = newQuotation({ settings: SETTINGS, user: USER });
+    expect(applyCustomer(q, foreign(), SETTINGS).terms.join(" ")).toContain("Incoterms 2020");
   });
 });

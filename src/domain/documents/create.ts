@@ -4,7 +4,10 @@ import type { Customer } from "../customers/customer";
 import type { LineItem } from "../tax/types";
 import type { PaymentEntry } from "../payments/ledger";
 import type { GoodsReceipt } from "../purchasing/receipts";
-import { DOMESTIC_TERMS, PURCHASE_ORDER_TERMS, suggestTermsSet } from "./terms";
+import {
+  DOMESTIC_TERMS, INTERNATIONAL_TERMS, INVOICE_EXPORT_TERMS, INVOICE_TERMS,
+  PURCHASE_ORDER_TERMS, forCompany, suggestTermsSet,
+} from "./terms";
 import { OBJ_TYPE, type ObjType } from "./objType";
 
 /**
@@ -54,6 +57,9 @@ export interface DocSettings {
   defaultGst?: number;
   defaultValidityDays?: number;
   defaultTerms?: readonly string[];
+  /** Only the name is read here, and only to fill the seller's own name
+   *  into the default terms — see SELLER_TOKEN in ./terms. */
+  company?: { name?: string };
   quoteTemplates?: { id: string; name: string; intro?: string; footer?: string; terms?: readonly string[] }[];
 }
 
@@ -205,8 +211,46 @@ export function documentFieldsFrom(customer: Customer | null, settings: DocSetti
  * so the picker — not the constructor — is the real entry point for these
  * fields. That is exactly why dropping four of them here went unnoticed.
  */
-export function applyCustomer<T extends SalesDocument>(doc: T, customer: Customer | null, settings: DocSettings): T {
-  return { ...doc, ...documentFieldsFrom(customer, settings), updatedAt: Date.now() };
+/**
+ * Whether these terms are still exactly a set this app applied, with not a
+ * word changed.
+ *
+ * The question behind it: may the terms be swapped out from under somebody
+ * who has just changed the customer? Yes if they are untouched boilerplate
+ * — no if a clause has been negotiated, where silently replacing it would
+ * lose an agreement nobody could see being lost.
+ */
+function untouchedTerms(terms: readonly string[] | undefined, settings: DocSettings): boolean {
+  if (!terms?.length) return true;
+  const company = settings.company?.name;
+  const same = (other: readonly string[]) =>
+    other.length === terms.length && other.every((t, i) => t === terms[i]);
+  const sets = [DOMESTIC_TERMS, INTERNATIONAL_TERMS, INVOICE_TERMS, INVOICE_EXPORT_TERMS, PURCHASE_ORDER_TERMS];
+  return sets.some((set) => same(forCompany(set, company)))
+    || (!!settings.defaultTerms && same(forCompany(settings.defaultTerms, company)));
+}
+
+/**
+ * Point a document at a customer: their billing party, currency and tax
+ * regime, and — where nothing has been negotiated — the terms that match
+ * where they are.
+ *
+ * THE TERMS MOVE TOO, which they did not. A tax invoice raised with no
+ * customer and then pointed at one in Sharjah kept the domestic set, so a
+ * UAE customer received an invoice saying goods and services tax had been
+ * charged and that disputes go to the courts at New Delhi. The suggestion
+ * was on screen with a button next to it, and the button is still there —
+ * but a default that is wrong until somebody notices is not a default.
+ */
+export function applyCustomer<T extends SalesDocument>(
+  doc: T,
+  customer: Customer | null,
+  settings: DocSettings,
+  docType: string = "quotation",
+): T {
+  const next = { ...doc, ...documentFieldsFrom(customer, settings), updatedAt: Date.now() };
+  if (!untouchedTerms(doc.terms, settings)) return next;
+  return { ...next, terms: termsFor(customer, settings, undefined, docType) };
 }
 
 export function blankItem(gst: number | undefined): LineItem {
@@ -250,11 +294,20 @@ export function shippingFieldsFrom(customer: Customer | null) {
 
 /** Terms that match the customer: an export quotation carrying GST clauses
  *  and Indian jurisdiction is a real commercial problem. Always editable. */
-function termsFor(customer: Customer | null, settings: DocSettings, templateTerms?: readonly string[]): string[] {
-  const set = suggestTermsSet(customer?.country);
-  if (set.id === "international") return [...set.terms];
+function termsFor(
+  customer: Customer | null,
+  settings: DocSettings,
+  templateTerms?: readonly string[],
+  docType: string = "quotation",
+): string[] {
+  const company = settings.company?.name;
+  const set = suggestTermsSet(customer?.country, docType);
+  /* An export set and an invoice set both REPLACE the workspace default,
+     which is written for a domestic quotation: GST clauses on an export,
+     or a validity window on an invoice, are not cosmetic. */
+  if (set.id === "international" || docType === "invoice") return forCompany(set.terms, company);
   if (templateTerms?.length) return [...templateTerms];
-  return [...(settings.defaultTerms ?? DOMESTIC_TERMS)];
+  return forCompany(settings.defaultTerms ?? DOMESTIC_TERMS, company);
 }
 
 export interface NewDocOptions {
@@ -398,7 +451,7 @@ export function newPurchaseOrder({ settings, user, customer = null, today = TODA
     validUntil: addDays(today, settings.defaultValidityDays ?? 15),
     status: "Draft",
     items: [blankItem(settings.defaultGst)],
-    terms: [...PURCHASE_ORDER_TERMS],
+    terms: forCompany(PURCHASE_ORDER_TERMS, settings.company?.name),
     /* Nothing has arrived against an order that has not been placed. */
     receipts: [],
     notes: "",
@@ -521,6 +574,19 @@ export function invoiceFrom(
        flag, and a number somebody chose by hand is then left alone. */
     autoNumber: true,
     ...base,
+    /* AFTER the spread, so it overrides whatever the source carried.
+       A tax invoice does not inherit the quotation's terms: the first of
+       those reads "Quotation is valid for 30 days from the date of issue",
+       which is meaningless on an invoice and was printing on every one.
+       What was actually agreed for this deal travels on the Payment Terms
+       and Delivery Terms fields, which ARE carried across. */
+    terms: forCompany(
+      suggestTermsSet(
+        (base as { billCountry?: string }).billCountry,
+        "invoice",
+      ).terms,
+      settings.company?.name,
+    ),
     ownerId: base.ownerId || user.id,
     subject: "Tax invoice for IT products and services",
     date: today,
