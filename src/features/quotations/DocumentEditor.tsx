@@ -12,6 +12,8 @@ import { effectiveCost } from "../../domain/catalog/vendors";
 import type { DocImages } from "../../documents/pdf/render";
 import type { IntegrationsApi } from "../../integrations/api";
 import { Modal } from "../../components/Modal";
+import { CustomerSheet } from "../customers/CustomerSheet";
+import { blankCustomer } from "../../domain/customers/customer";
 import { DocumentPreview } from "../../documents/preview/DocumentPreview";
 import type { DocType } from "../../domain/documents/model";
 import { LineItemsEditor } from "./LineItemsEditor";
@@ -74,6 +76,15 @@ export interface DocumentEditorProps {
   /** Artwork for the PDF, which needs pixel dimensions the preview does not. */
   docImages?: DocImages;
   api: IntegrationsApi;
+  /** Everybody who could own a customer, and the workspace's extra customer
+   *  fields — both only needed by the customer form opened from the picker
+   *  below, which is the same form the Customers screen uses. */
+  team?: { id: string; name: string }[];
+  customFields?: { id: string; label: string }[];
+  /** Save a customer created from inside this editor. The document editor
+   *  cannot write to the workspace itself, so the screen that owns the list
+   *  does it and the new record comes back through `customers`. */
+  onCreateCustomer?: (customer: Customer) => void;
   /** Whose name and address a sent quotation carries. */
   currentUser: { id: string; name: string; email?: string; role?: string };
   /** Whether this document already exists in the workspace. A file attached
@@ -87,7 +98,8 @@ export interface DocumentEditorProps {
 type Tab = "document" | "items" | "terms" | "files";
 
 export function DocumentEditor({
-  doc: initial, docType, customers, catalog, settings, brandLogos, docImages, api, currentUser, saved = false, onSave, onClose,
+  doc: initial, docType, customers, catalog, settings, brandLogos, docImages, api, currentUser,
+  team = [], customFields = [], onCreateCustomer, saved = false, onSave, onClose,
 }: DocumentEditorProps) {
   const [doc, setDoc] = useState<SalesDocument>(initial);
   const [tab, setTab] = useState<Tab>("document");
@@ -119,6 +131,35 @@ export function DocumentEditor({
   const pickCustomer = (id: string) => {
     const customer = customers.find((c) => c.id === id) ?? null;
     setDoc((d) => applyCustomer(d, customer, settings as DocSettings));
+  };
+
+  /**
+   * Making the customer without leaving the document.
+   *
+   * WHY IT IS HERE AND NOT "GO TO CUSTOMERS AND COME BACK". Half the time a
+   * quotation is being typed for somebody who is not on file yet — the
+   * enquiry arrived this morning. Sending that person away means losing the
+   * half-finished document, or keeping two tabs and remembering which one is
+   * real. The picker is where the absence is noticed, so it is where the
+   * remedy belongs.
+   *
+   * IT IS THE SAME FORM THE CUSTOMERS SCREEN USES, deliberately — not a
+   * stripped-down one. A customer created in a hurry mid-quotation is
+   * exactly the one that most needs the GSTIN check and the duplicate
+   * warning, and a second form would drift from the first within a month.
+   */
+  const [newCustomer, setNewCustomer] = useState<Customer | null>(null);
+
+  const startNewCustomer = () =>
+    setNewCustomer(blankCustomer(currentUser.id, Math.random().toString(36).slice(2, 14)));
+
+  const saveNewCustomer = (c: Customer) => {
+    onCreateCustomer?.(c);
+    /* Linked straight away: somebody who has just typed a customer into a
+       quotation has already chosen them. Making them pick again from the
+       list is a step that exists only because of how this was built. */
+    setDoc((d) => applyCustomer(d, c, settings as DocSettings));
+    setNewCustomer(null);
   };
 
   const addFromCatalog = (product: CatalogProduct) => {
@@ -164,6 +205,23 @@ export function DocumentEditor({
 
   return (
     <>
+      {/* The full customer form, over the document rather than instead of
+          it: closing it returns to a quotation that never went anywhere. */}
+      {newCustomer ? (
+        <CustomerSheet
+          open
+          isNew
+          customer={newCustomer}
+          users={team}
+          customFields={customFields}
+          canReassign={false}
+          currentUser={currentUser}
+          settings={settings}
+          onSave={saveNewCustomer}
+          onClose={() => setNewCustomer(null)}
+        />
+      ) : null}
+
       <div className="split">
         <div className="stack-wide">
           <Card padded={false}>
@@ -219,10 +277,19 @@ export function DocumentEditor({
                       </Field>
                     ) : (
                       <Field label="Customer" hint="Sets the billing party, currency and tax regime.">
-                        <Select value={doc.customerId} onChange={(e) => pickCustomer(e.target.value)}>
-                          <option value="">Not linked to a customer</option>
-                          {customers.map((c) => <option key={c.id} value={c.id}>{c.company}</option>)}
-                        </Select>
+                        <div className="row-tight" style={{ gap: 8 }}>
+                          <Select
+                            className="grow"
+                            value={doc.customerId}
+                            onChange={(e) => pickCustomer(e.target.value)}
+                          >
+                            <option value="">Not linked to a customer</option>
+                            {customers.map((c) => <option key={c.id} value={c.id}>{c.company}</option>)}
+                          </Select>
+                          {onCreateCustomer ? (
+                            <Button tone="quiet" onClick={startNewCustomer}>+ New</Button>
+                          ) : null}
+                        </div>
                       </Field>
                     )}
 

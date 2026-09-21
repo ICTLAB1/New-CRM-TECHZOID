@@ -54,6 +54,14 @@ export interface QuotationsScreenProps {
    *  Local only — it writes nothing back, so it works for a salesperson,
    *  who may not edit settings. */
   onSettingsNote?: (settings: Record<string, unknown>) => void;
+  /** A customer created from inside the document editor. This screen does
+   *  not own the customer list, so it passes the new record up to whoever
+   *  does; it comes back down through `customers`. */
+  onCreateCustomer?: (customer: Customer) => void;
+  /** Everybody who could own a customer, and the workspace's extra customer
+   *  fields — for that same form. */
+  team?: { id: string; name: string }[];
+  customFields?: { id: string; label: string }[];
   /** Raising a proforma from a quotation hands it to the proformas screen. */
   onCreateProforma?: (proforma: SalesDocument) => void;
   /** Raising a tax invoice hands it to the invoices screen. */
@@ -67,6 +75,7 @@ export interface QuotationsScreenProps {
 export function QuotationsScreen({
   docType, documents, customers, catalog, settings, brandLogos, docImages, api, currentUser,
   onChange, onCustomerStage, onSettingsNote, onCreateProforma, onCreateInvoice, onCreateOrder,
+  onCreateCustomer, team = [], customFields = [],
 }: QuotationsScreenProps) {
   const toast = useToast();
   const [editing, setEditing] = useState<SalesDocument | null>(null);
@@ -272,6 +281,9 @@ export function QuotationsScreen({
           docImages={docImages}
           api={api}
           currentUser={currentUser}
+          team={team}
+          customFields={customFields}
+          onCreateCustomer={onCreateCustomer}
           /* Attaching a file needs a record that exists. A document the
              editor has only just built is not in the workspace yet. */
           saved={documents.some((d) => d.id === editing.id)}

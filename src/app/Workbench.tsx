@@ -258,6 +258,9 @@ export function Workbench({
           currentUser={user}
           onChange={(docs, s) => { onChange("quotations", docs); onSettingsChange(s); }}
           onSettingsNote={onSettingsNote}
+          team={team}
+          customFields={customFields}
+          onCreateCustomer={(c: Customer) => handleCustomersChange([c, ...customers])}
           onCustomerStage={advanceCustomer}
           onCreateProforma={(pf) => { onChange("proformas", [pf, ...proformas]); setView("proformas"); }}
           onCreateInvoice={(inv) => { onChange("invoices", [inv, ...invoices]); setView("invoices"); }}
@@ -275,6 +278,9 @@ export function Workbench({
           currentUser={user}
           onChange={(docs, s) => { onChange("proformas", docs); onSettingsChange(s); }}
           onSettingsNote={onSettingsNote}
+          team={team}
+          customFields={customFields}
+          onCreateCustomer={(c: Customer) => handleCustomersChange([c, ...customers])}
           onCreateOrder={(order) => { onChange("orders", [order, ...orders]); setView("orders"); }}
           onCustomerStage={advanceCustomer}
           onCreateInvoice={(inv) => { onChange("invoices", [inv, ...invoices]); setView("invoices"); }}
@@ -292,6 +298,9 @@ export function Workbench({
           currentUser={user}
           onChange={(docs, s) => { onChange("invoices", docs); onSettingsChange(s); }}
           onSettingsNote={onSettingsNote}
+          team={team}
+          customFields={customFields}
+          onCreateCustomer={(c: Customer) => handleCustomersChange([c, ...customers])}
         />
       ) : view === "receivables" ? (
         <ReceivablesScreen
@@ -314,6 +323,9 @@ export function Workbench({
           currentUser={user}
           onChange={(docs, s) => { onChange("purchaseOrders", docs); onSettingsChange(s); }}
           onSettingsNote={onSettingsNote}
+          team={team}
+          customFields={customFields}
+          onCreateCustomer={(c: Customer) => handleCustomersChange([c, ...customers])}
         />
       ) : view === "orders" ? (
         <OrdersScreen
