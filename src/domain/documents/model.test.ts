@@ -430,3 +430,42 @@ describe("what a customer must never be able to read", () => {
     expect(model.money.grandValue).toBeTruthy();
   });
 });
+
+describe("bank details on the document", () => {
+  const uae = {
+    label: "Wio UAE", name: "Wio Bank PJSC", accountName: "TECHZOID TECHNOLOGIES - F.Z.E",
+    account: "", iban: "AE310860000009239742660", swift: "WIOBAEADXXX", ifsc: "",
+    branch: "Etihad Airways Centre 5th Floor, Abu Dhabi, UAE",
+    accountType: "Current Account", currency: "AED",
+  };
+
+  it("prints an IBAN under its own heading, not as an account number", () => {
+    /* A UAE account has no domestic account number. Printing its IBAN
+       under "Account Number" tells the payer's bank the wrong thing about
+       what it is looking at. */
+    const rows = build({}, "invoice", {}, uae).money.bank?.rows ?? [];
+    expect(rows).toContainEqual(["IBAN", "AE310860000009239742660"]);
+    expect(rows.map(([k]) => k)).not.toContain("Account Number");
+    expect(rows).toContainEqual(["SWIFT Code", "WIOBAEADXXX"]);
+  });
+
+  it("prints the block at all for an account that has only an IBAN", () => {
+    /* The block was drawn only when there was a name or an account
+       number, so a UAE account printed nothing below the totals. */
+    expect(build({}, "invoice", {}, uae).money.bank).not.toBeNull();
+    expect(build({}, "invoice", {}, { iban: "AE310860000009239742660" }).money.bank).not.toBeNull();
+  });
+
+  it("leaves an Indian account exactly as it was", () => {
+    const inr = { name: "HDFC Bank Ltd", account: "50200012345678", ifsc: "HDFC0000123", branch: "NSP" };
+    const rows = build({}, "invoice", {}, inr).money.bank?.rows ?? [];
+    expect(rows).toContainEqual(["Account Number", "50200012345678"]);
+    expect(rows.map(([k]) => k)).not.toContain("IBAN");
+  });
+
+  it("never prints our own account on a purchase order", () => {
+    /* We are the buyer there; our account is at best noise and at worst
+       an invitation to misdirect a payment. */
+    expect(build({}, "purchase_order", {}, uae).money.bank).toBeNull();
+  });
+});

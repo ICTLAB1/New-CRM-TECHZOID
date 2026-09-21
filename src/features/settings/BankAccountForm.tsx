@@ -69,6 +69,18 @@ export function BankAccountFields({
           </Field>
         </div>
 
+        <Field
+          label="IBAN"
+          hint={warningFor("iban") ?? "For an account outside India, this is what the customer pays into. Leave blank for an Indian account."}
+        >
+          <Input
+            value={account.iban}
+            onChange={(e) => onChange({ ...account, iban: e.target.value.toUpperCase() })}
+            placeholder="AE31 0860 0000 0923 9742 660"
+            invalid={!!warningFor("iban")}
+          />
+        </Field>
+
         <div className="grid grid-2">
           <Field label="IFSC" hint={warningFor("ifsc") ?? "For payments within India."}>
             <Input

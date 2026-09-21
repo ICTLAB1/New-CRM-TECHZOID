@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   accountIsUsable, accountSummary, addAccount, blankAccount,
+  ibanChecksumOk, IBAN_SHAPE, normalizeAccount,
   pickBankAccount, readAccounts, removeAccount, setDefaultAccount, updateAccount, warningsFor,
   type BankAccount,
 } from "./accounts";
@@ -173,5 +174,51 @@ describe("what a bank will not accept", () => {
     expect(warningsFor(acc({ name: "HDFC", account: "50200-abc", ifsc: "HDFC0000123" })).some((w) => w.field === "account")).toBe(true);
     // Spaces are how people type them and are not an error.
     expect(warningsFor(acc({ name: "HDFC", account: "5020 0045 6789", ifsc: "HDFC0000123" })).some((w) => w.field === "account")).toBe(false);
+  });
+});
+
+describe("an account outside India", () => {
+  const uae = (over: Partial<BankAccount> = {}): BankAccount => normalizeAccount({
+    label: "Wio UAE", name: "Wio Bank PJSC", accountName: "TECHZOID TECHNOLOGIES - F.Z.E",
+    account: "", iban: "AE310860000009239742660", swift: "WIOBAEADXXX", ifsc: "",
+    branch: "Etihad Airways Centre 5th Floor, Abu Dhabi, UAE",
+    accountType: "Current Account", currency: "AED", ...over,
+  });
+
+  it("is usable on an IBAN alone", () => {
+    /* It was not: usability demanded an account number, which a UAE
+       account does not have, so the form said it would never print. */
+    expect(accountIsUsable(uae())).toBe(true);
+    expect(accountIsUsable(uae({ iban: "", account: "" }))).toBe(false);
+  });
+
+  it("is not told off for having no account number", () => {
+    const fields = warningsFor(uae()).map((w) => w.field);
+    expect(fields).not.toContain("account");
+  });
+
+  it("accepts a real IBAN, with or without the spaces a bank prints", () => {
+    expect(warningsFor(uae({ iban: "AE31 0860 0000 0923 9742 660" })).map((w) => w.field)).not.toContain("iban");
+    expect(ibanChecksumOk("AE31 0860 0000 0923 9742 660")).toBe(true);
+  });
+
+  it("catches a transposition the shape cannot", () => {
+    /* Two digits swapped still looks like an IBAN and still bounces —
+       days later, at the customer's bank, with the charges deducted. */
+    const swapped = "AE310860000009239747260";
+    expect(IBAN_SHAPE.test(swapped)).toBe(true);
+    expect(ibanChecksumOk(swapped)).toBe(false);
+    expect(warningsFor(uae({ iban: swapped })).map((w) => w.field)).toContain("iban");
+  });
+
+  it("is told apart from another account in the picker", () => {
+    expect(accountSummary(uae())).toContain("2660");
+  });
+
+  it("is preselected for a document in its own currency", () => {
+    const inr = normalizeAccount({ id: "inr", name: "HDFC", account: "50200012345678", currency: "INR", isDefault: true });
+    const accounts = [inr, uae({ id: "ae" })];
+    expect(pickBankAccount(accounts, "", "AED")?.id).toBe("ae");
+    expect(pickBankAccount(accounts, "", "INR")?.id).toBe("inr");
   });
 });

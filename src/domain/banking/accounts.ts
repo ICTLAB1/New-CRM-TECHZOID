@@ -25,6 +25,17 @@ export interface BankAccount {
   /** Whose account it is. Falls back to the company name when blank. */
   accountName: string;
   account: string;
+  /**
+   * The international account number, where the account has one.
+   *
+   * SEPARATE FROM `account`, not a use of it. Outside India the IBAN IS how
+   * a customer is told to pay — a UAE account has an IBAN and a SWIFT code
+   * and no domestic account number a payer would ever type — and printing
+   * one under the heading "Account Number" tells the payer's bank the wrong
+   * thing about what it is looking at. An Indian account has an account
+   * number and no IBAN, and prints exactly as it did.
+   */
+  iban: string;
   ifsc: string;
   swift: string;
   branch: string;
@@ -47,9 +58,9 @@ const uid = (): string => "bank_" + Math.random().toString(36).slice(2, 9);
 
 export function blankAccount(): BankAccount {
   return {
-    id: uid(), label: "", name: "", accountName: "", account: "", ifsc: "",
-    swift: "", branch: "", accountType: "Current Account", currency: "INR",
-    isDefault: false,
+    id: uid(), label: "", name: "", accountName: "", account: "", iban: "",
+    ifsc: "", swift: "", branch: "", accountType: "Current Account",
+    currency: "INR", isDefault: false,
   };
 }
 
@@ -132,12 +143,14 @@ export function pickBankAccount(
 
 /** Enough of an account to be worth printing. A block naming a bank with no
  *  number tells a customer nothing and looks like a mistake on a document. */
-export const accountIsUsable = (a: Pick<BankAccount, "name" | "account">): boolean =>
-  !!(a.name ?? "").trim() && !!(a.account ?? "").trim();
+export const accountIsUsable = (a: Partial<Pick<BankAccount, "name" | "account" | "iban">>): boolean =>
+  !!(a.name ?? "").trim() && (!!(a.account ?? "").trim() || !!(a.iban ?? "").trim());
 
 /** How an account reads in a picker. */
 export function accountSummary(a: BankAccount): string {
-  const tail = (a.account ?? "").trim().slice(-4);
+  /* The IBAN's last four where there is no account number — a UAE account
+     shown as just "Wio · AED" is indistinguishable from another one. */
+  const tail = ((a.account ?? "").trim() || (a.iban ?? "").trim()).slice(-4);
   return [a.label || a.name, tail ? "····" + tail : "", a.currency].filter(Boolean).join(" · ");
 }
 
@@ -153,8 +166,34 @@ export const IFSC_SHAPE = /^[A-Z]{4}0[A-Z0-9]{6}$/;
 /** SWIFT/BIC: 4 bank, 2 country, 2 location, optionally 3 branch. */
 export const SWIFT_SHAPE = /^[A-Z]{4}[A-Z]{2}[A-Z0-9]{2}([A-Z0-9]{3})?$/;
 
+/** IBAN: country, two check digits, then up to thirty more. Spaces are how
+ *  every bank prints one, so they are stripped before checking rather than
+ *  held against the person who copied it faithfully. */
+export const IBAN_SHAPE = /^[A-Z]{2}[0-9]{2}[A-Z0-9]{11,30}$/;
+
+/** An IBAN as a bank prints and validates it: no spaces, upper case. */
+export const compactIban = (v: string): string => (v ?? "").replace(/\s+/g, "").toUpperCase();
+
+/**
+ * The check digits, by ISO 13616's own arithmetic: move the first four
+ * characters to the end, turn letters into numbers, and the whole thing
+ * mod 97 must be 1. This is what catches a transposed pair of digits, which
+ * a shape check cannot and which a customer's bank finds days later.
+ */
+export function ibanChecksumOk(value: string): boolean {
+  const v = compactIban(value);
+  if (!IBAN_SHAPE.test(v)) return false;
+  const rearranged = v.slice(4) + v.slice(0, 4);
+  let remainder = 0;
+  for (const ch of rearranged) {
+    const digits = ch >= "A" && ch <= "Z" ? String(ch.charCodeAt(0) - 55) : ch;
+    for (const d of digits) remainder = (remainder * 10 + Number(d)) % 97;
+  }
+  return remainder === 1;
+}
+
 export interface AccountWarning {
-  field: "name" | "account" | "ifsc" | "swift" | "label";
+  field: "name" | "account" | "iban" | "ifsc" | "swift" | "label";
   message: string;
 }
 
@@ -163,11 +202,25 @@ export function warningsFor(a: BankAccount): AccountWarning[] {
   const ifsc = (a.ifsc ?? "").trim().toUpperCase();
   const swift = (a.swift ?? "").trim().toUpperCase();
   const account = (a.account ?? "").replace(/\s/g, "");
+  const iban = compactIban(a.iban ?? "");
 
   if (!(a.name ?? "").trim()) out.push({ field: "name", message: "Without a bank name this account will not print at all." });
-  if (!account) out.push({ field: "account", message: "Without an account number this will not print at all." });
-  else if (!/^\d{6,20}$/.test(account)) {
+
+  /* AN ACCOUNT NUMBER **OR** AN IBAN. Demanding the first was right while
+     every account was Indian and wrong the moment one was not: a UAE
+     account has an IBAN and nothing a payer would recognise as an account
+     number, and the form told its owner the account would not print. */
+  if (!account && !iban) {
+    out.push({ field: "account", message: "Without an account number or an IBAN this will not print at all." });
+  } else if (account && !/^\d{6,20}$/.test(account)) {
     out.push({ field: "account", message: "Indian account numbers are 6 to 20 digits. Check this one — it prints on every invoice." });
+  }
+  if (iban && !IBAN_SHAPE.test(iban)) {
+    out.push({ field: "iban", message: "An IBAN is two letters, two digits, then up to thirty more — like AE310860000009239742660." });
+  } else if (iban && !ibanChecksumOk(iban)) {
+    /* The arithmetic, not the shape. This is what catches two digits
+       swapped, which looks right on the page and bounces at the far end. */
+    out.push({ field: "iban", message: "This IBAN fails its own check digits — two characters are probably transposed. Check it against the bank's own app." });
   }
   if (ifsc && !IFSC_SHAPE.test(ifsc)) {
     out.push({ field: "ifsc", message: "An IFSC is four letters, a zero, then six more characters — like HDFC0000123." });

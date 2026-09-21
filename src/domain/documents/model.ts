@@ -481,6 +481,10 @@ export function buildDocumentModel(input: BuildModelInput): DocumentModel {
       ["Bank Name", bank.name],
       ["Account Name", bank.accountName || c.name],
       ["Account Number", bank.account],
+      /* Outside India this IS the number the customer pays into, and it
+         has to be labelled as an IBAN or the payer's bank reads it as
+         something else. Printed only when the account has one. */
+      ["IBAN", bank.iban],
       ["IFSC Code", bank.ifsc],
       ["SWIFT Code", bank.swift],
       ["Branch", bank.branch],
@@ -498,7 +502,7 @@ export function buildDocumentModel(input: BuildModelInput): DocumentModel {
      best noise and at worst an invitation to misdirect a payment. The
      supplier's details go on their invoice, not on our order. */
   const bankBlock =
-    !isPurchaseOrder && isOn(SEC.bankDetails) && (bank.name || bank.account)
+    !isPurchaseOrder && isOn(SEC.bankDetails) && (bank.name || bank.account || bank.iban)
       ? {
           heading:
             (L.bankHeading || "Bank Details").toUpperCase() +
@@ -548,7 +552,7 @@ export function buildDocumentModel(input: BuildModelInput): DocumentModel {
     weAccept:
       /* "We Accept UPI / NEFT" is how WE take money. Meaningless on an order
          where we are the one paying. */
-      !showAcceptance && !isProforma && !isPurchaseOrder && (bank.name || bank.account)
+      !showAcceptance && !isProforma && !isPurchaseOrder && (bank.name || bank.account || bank.iban)
         ? { label: (L.weAcceptLabel || "We Accept").toUpperCase(), methods: ["UPI", "NEFT / RTGS", "Bank Transfer"] }
         : null,
   };
