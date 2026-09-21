@@ -223,6 +223,15 @@ export function fitBox(dims: { w: number; h: number } | null, maxW: number, maxH
  * decides CONTENT — which rows, which labels, which figures, in what order —
  * belongs here. Only geometry and drawing primitives belong in a renderer.
  */
+/** The same account, written two ways. Banks print an IBAN in groups of
+ *  four and people copy it with or without them, so the spaces and the case
+ *  are not a difference. */
+const sameNumber = (a: unknown, b: unknown): boolean => {
+  const norm = (v: unknown) => String(v ?? "").replace(/\s+/g, "").toUpperCase();
+  const left = norm(a);
+  return !!left && left === norm(b);
+};
+
 export function buildDocumentModel(input: BuildModelInput): DocumentModel {
   const { doc, settings: s, totals: t, docType, template: dt } = input;
   const isProforma = docType === "proforma";
@@ -480,7 +489,13 @@ export function buildDocumentModel(input: BuildModelInput): DocumentModel {
     [
       ["Bank Name", bank.name],
       ["Account Name", bank.accountName || c.name],
-      ["Account Number", bank.account],
+      /* NOT WHEN IT IS THE IBAN AGAIN. Until this document had an IBAN
+         field, the only way to make a foreign account print was to type
+         the IBAN into the account-number box — so accounts carrying it in
+         both places exist, and a customer reading the same long string
+         twice under two different headings reasonably wonders which one
+         to pay. The IBAN wins, because that is what it is. */
+      ["Account Number", sameNumber(bank.account, bank.iban) ? "" : bank.account],
       /* Outside India this IS the number the customer pays into, and it
          has to be labelled as an IBAN or the payer's bank reads it as
          something else. Printed only when the account has one. */

@@ -456,6 +456,24 @@ describe("bank details on the document", () => {
     expect(build({}, "invoice", {}, { iban: "AE310860000009239742660" }).money.bank).not.toBeNull();
   });
 
+  it("prints the number once when the IBAN sits in both fields", () => {
+    /* Before there was an IBAN field, the only way to make a foreign
+       account print was to type the IBAN into the account-number box, so
+       accounts carrying it twice exist. The same long string under two
+       headings on a document asking for money is a question, not a
+       detail. Spaces and case are not a difference. */
+    const both = { ...uae, account: "AE31 0860 0000 0923 9742 660" };
+    const rows = build({}, "invoice", {}, both).money.bank?.rows ?? [];
+    expect(rows.map(([k]) => k)).not.toContain("Account Number");
+    expect(rows).toContainEqual(["IBAN", "AE310860000009239742660"]);
+  });
+
+  it("still prints both when they are genuinely different", () => {
+    const rows = build({}, "invoice", {}, { ...uae, account: "50200012345678" }).money.bank?.rows ?? [];
+    expect(rows).toContainEqual(["Account Number", "50200012345678"]);
+    expect(rows).toContainEqual(["IBAN", "AE310860000009239742660"]);
+  });
+
   it("leaves an Indian account exactly as it was", () => {
     const inr = { name: "HDFC Bank Ltd", account: "50200012345678", ifsc: "HDFC0000123", branch: "NSP" };
     const rows = build({}, "invoice", {}, inr).money.bank?.rows ?? [];
