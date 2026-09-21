@@ -157,3 +157,36 @@ export function getCurrency(code: string | null | undefined): Currency {
   if (!found) return FALLBACK;
   return { code: found[0], symbol: found[1], name: found[2], decimals: found[3] ?? 2 };
 }
+
+/**
+ * What a currency's small change is called, for the amount-in-words line.
+ *
+ * "Three Thousand Six Hundred Thirty Seven UAE Dirham and Fifty Cents Only"
+ * on an invoice to Dubai is wrong in a way a Gulf customer notices
+ * immediately: a dirham has fils. Every currency here was falling back to
+ * "Cents" because the rupee was the only one that had ever been thought
+ * about.
+ *
+ * Only the ones this business is likely to invoice in are named. Anything
+ * else still says Cents, which is at least the common word for a hundredth
+ * and is what the fallback has always produced.
+ */
+export const MINOR_UNIT: Readonly<Record<string, string>> = {
+  AED: "Fils", SAR: "Halalas", QAR: "Dirhams", KWD: "Fils", BHD: "Fils",
+  OMR: "Baisa", JOD: "Piastres", IQD: "Fils", LYD: "Dirhams", TND: "Millimes",
+  YER: "Fils", EGP: "Piastres", LBP: "Piastres", SYP: "Piastres", MAD: "Centimes",
+  DZD: "Centimes", GBP: "Pence", EUR: "Cents", CHF: "Rappen",
+  NOK: "Ore", SEK: "Ore", DKK: "Ore", ISK: "Aurar",
+  PKR: "Paisa", BDT: "Poisha", LKR: "Cents", NPR: "Paisa", AFN: "Pul",
+  RUB: "Kopeks", UAH: "Kopiyky", PLN: "Grosz", CZK: "Haleru", HUF: "Filler",
+  TRY: "Kurus", ILS: "Agorot", ZAR: "Cents", KES: "Cents", NGN: "Kobo",
+  GHS: "Pesewas", TZS: "Cents", UGX: "Cents", MUR: "Cents", BWP: "Thebe",
+  THB: "Satang", MYR: "Sen", IDR: "Sen", PHP: "Centavos", VND: "Hao",
+  CNY: "Fen", MNT: "Mongo", KZT: "Tiyn", UZS: "Tiyin", AZN: "Qapik",
+  GEL: "Tetri", AMD: "Luma", MXN: "Centavos", BRL: "Centavos", ARS: "Centavos",
+};
+
+/** The word for a hundredth of this currency. Falls back to "Cents", which
+ *  is what every currency used to get. */
+export const minorUnitName = (code: string): string =>
+  MINOR_UNIT[String(code ?? "").toUpperCase()] ?? "Cents";

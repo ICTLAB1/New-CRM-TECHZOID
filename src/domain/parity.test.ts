@@ -144,13 +144,54 @@ describe("amount in words parity", () => {
     return Math.round((abs - Math.floor(abs)) * 100) >= 100;
   };
 
+  /** Currencies whose small change v1 called "Cents" whatever it actually
+   *  was. Held apart and asserted below, because matching v1 here would mean
+   *  keeping the bug. */
+  const RENAMED_MINOR = ["AED", "KWD", "GBP"];
+
   it("matches v1 across scales and currencies", () => {
     for (const amt of AMOUNTS.filter((a) => !minorCarries(a))) {
       expect(amountInWords(amt)).toBe(v1.amountInWords(amt));
-      for (const code of ["INR", "USD", "EUR", "AED", "JPY", "KWD", "KRW", "GBP"]) {
+      for (const code of ["INR", "USD", "EUR", "JPY", "KRW"]) {
         expect(amountInWordsForCurrency(amt, code)).toBe(v1.amountInWordsForCurrency(amt, code));
       }
     }
+  });
+
+  it("matches v1 on the renamed ones once the renamed word is put back", () => {
+    /* ONLY the word for the hundredths changed. Putting "Cents" back must
+       reproduce v1 exactly — including for an amount smaller than one whole
+       unit, where the minor part is the entire sentence and there is no
+       "and" to split on. If anything else has moved, this catches it. */
+    const asV1 = (s: string) => s.replace(/\b(Fils|Pence)\b/g, "Cents");
+    for (const amt of AMOUNTS.filter((a) => !minorCarries(a))) {
+      for (const code of RENAMED_MINOR) {
+        expect(asV1(amountInWordsForCurrency(amt, code)), `${code} ${amt}`)
+          .toBe(v1.amountInWordsForCurrency(amt, code));
+      }
+    }
+  });
+
+  describe("deviation: the small change is named after the currency", () => {
+    /* v1 printed "Cents" for every currency except the rupee, because the
+       rupee was the only one anybody had thought about. On an invoice to
+       Dubai "and Fifty Cents Only" is wrong in a way a Gulf customer notices
+       at once — a dirham has fils — and "One Cents" is not English either.
+       Deliberate, and this is where it is written down. */
+    it("v1 called a dirham's fils cents", () => {
+      expect(v1.amountInWordsForCurrency(1.01, "AED")).toContain("Cents");
+    });
+
+    it("names them properly now", () => {
+      expect(amountInWordsForCurrency(1.01, "AED")).toContain("Fils");
+      expect(amountInWordsForCurrency(1.01, "GBP")).toContain("Pence");
+      expect(amountInWordsForCurrency(1.01, "KWD")).toContain("Fils");
+    });
+
+    it("leaves the rupee and the dollar exactly as they were", () => {
+      expect(amountInWordsForCurrency(1.01, "INR")).toBe(v1.amountInWordsForCurrency(1.01, "INR"));
+      expect(amountInWordsForCurrency(1.01, "USD")).toBe(v1.amountInWordsForCurrency(1.01, "USD"));
+    });
   });
 
   describe("deviation: minor unit rounding up to a whole unit", () => {

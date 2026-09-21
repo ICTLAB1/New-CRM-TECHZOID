@@ -5,6 +5,7 @@ import { isEmail, isGstin, isPan, str } from "../lib/validate.mjs";
 import { consume, tooManyMessage } from "../lib/ratelimit.mjs";
 import { resolveRef } from "../lib/leadRef.mjs";
 import { companyForOwner, withCompany } from "../lib/company.mjs";
+import { currencyForCountry } from "../lib/currencyForCountry.mjs";
 
 /**
  * The public customer registration form.
@@ -162,7 +163,13 @@ export async function handler(event) {
        quotation raised for an overseas customer carried the workspace
        default — Indian rupees and GST — until somebody noticed. They are
        derived from the country here, exactly as the app derives them. */
-    currency: isIndia ? "INR" : "",
+    /* A CURRENCY, NOT A BLANK. This was "" for anybody outside India, and
+       normalisation then filled the blank with INR — so a customer in Dubai
+       was set up to be quoted in rupees. Nobody had to make a mistake for
+       that to happen. See domain/geo/currencyForCountry. */
+    currency: currencyForCountry(country),
+    /* An export from India is zero-rated, so a quotation to one carries no
+       tax lines at all rather than GST the customer does not owe. */
     taxType: isIndia ? "gst" : "none",
     source: "Customer Registration Form",
     stage: "lead",

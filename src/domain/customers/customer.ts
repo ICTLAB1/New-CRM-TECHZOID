@@ -1,5 +1,6 @@
 import { validateGSTIN } from "../gstin/validate";
 import type { StageId } from "../pipeline/stages";
+import { currencyForCountry } from "../geo/currencyForCountry";
 
 /** Every field the customer record carries. Legacy rows may have almost
  *  none of them, so nothing here beyond `id` is required. */
@@ -152,10 +153,19 @@ export function applyGstin(customer: Customer, raw: string): Customer {
  */
 export function applyCountry(customer: Customer, country: string): Customer {
   const isIndia = country === "India";
+  /* THE CURRENCY MOVES WITH THE COUNTRY, but only while it is still the one
+     the last country chose. Somebody who has deliberately set a customer in
+     Germany to be billed in dollars — which plenty of this trade is — must
+     not have that undone by correcting their address afterwards. */
+  const suggested = currencyForCountry(customer.country);
+  const currency = !customer.currency || customer.currency === suggested
+    ? currencyForCountry(country)
+    : customer.currency;
   return {
     ...customer,
     country,
     state: isIndia ? "Delhi" : "",
+    currency,
     taxType: !isIndia && customer.taxType === "gst" ? "none" : customer.taxType,
   };
 }

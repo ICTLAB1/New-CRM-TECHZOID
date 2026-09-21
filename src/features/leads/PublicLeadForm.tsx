@@ -4,6 +4,8 @@ import { STATE_NAMES } from "../../domain/geo/states";
 import { SEGMENTS } from "../../domain/pipeline/stages";
 import { COUNTRIES } from "../../domain/geo/countries";
 import { gstinMessage, validateGSTIN } from "../../domain/gstin/validate";
+import { currencyForCountry } from "../../domain/geo/currencyForCountry";
+import { CURRENCIES } from "../../domain/currency/currencies";
 
 /**
  * The public registration form.
@@ -41,6 +43,14 @@ const BLANK = {
   /* The honeypot. Never shown to a person; a value here means a bot. */
   website: "",
 };
+
+/** "UAE Dirham (AED)" — the name as well as the code, because somebody
+ *  reading a form they have never seen before should not have to know what
+ *  three letters mean. */
+function currencyLabel(code: string): string {
+  const row = CURRENCIES.find((c) => c[0] === code);
+  return row ? `${row[2]} (${code})` : code;
+}
 
 export function PublicLeadForm({ refId }: { refId: string }) {
   const [status, setStatus] = useState<Status>("loading");
@@ -185,7 +195,15 @@ export function PublicLeadForm({ refId }: { refId: string }) {
                 <Field label="Website" hint="Optional.">
                   <Input value={form.companyWebsite} onChange={set("companyWebsite")} placeholder="www.example.com" />
                 </Field>
-                <Field label="Country">
+                <Field
+                  label="Country"
+                  /* Shown to the person filling the form, because a country
+                     chosen by accident is caught here in a second and on an
+                     invoice weeks later. */
+                  hint={isIndia
+                    ? undefined
+                    : `We'll quote you in ${currencyLabel(currencyForCountry(form.country))}, with no Indian GST.`}
+                >
                   <Select value={form.country} onChange={set("country")}>
                     {COUNTRIES.map((c) => <option key={c} value={c}>{c}</option>)}
                   </Select>

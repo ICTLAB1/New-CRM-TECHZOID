@@ -1,4 +1,4 @@
-import { getCurrency } from "../currency/currencies";
+import { minorUnitName, getCurrency } from "../currency/currencies";
 
 const ONES = [
   "", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten",
@@ -91,5 +91,8 @@ export function amountInWordsForCurrency(amount: unknown, currencyCode: string |
   if (!currencyCode || currencyCode === "INR") return amountInWords(amount);
   const cur = getCurrency(currencyCode);
   if (cur.decimals === 0) return amountInWordsWestern(amount, cur.name, "");
-  return amountInWordsWestern(amount, cur.name, "Cents");
+  /* A dirham has fils, not cents. Every currency used to say "Cents"
+     because the rupee was the only one anybody had thought about, and on an
+     invoice to Dubai that is wrong in a way the customer notices. */
+  return amountInWordsWestern(amount, cur.name, minorUnitName(cur.code));
 }
