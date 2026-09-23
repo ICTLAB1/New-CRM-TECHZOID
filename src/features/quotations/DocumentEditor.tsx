@@ -58,7 +58,12 @@ function useFitScale() {
       const next = Math.min(1, pane.clientWidth / A4_PX);
       setScale(next);
       const page = pageRef.current;
-      if (page) setHeight(page.getBoundingClientRect().height);
+      /* SCALED, not the raw box. The page is laid out at full A4 and drawn
+         through a transform, so its own rectangle is the UNSCALED height —
+         reserving that much left the preview column nearly a fifth taller
+         than anything drawn in it, a band of empty space under the
+         document and a sticky column taller than the window. */
+      if (page) setHeight(page.getBoundingClientRect().height * next);
     };
     measure();
     const ro = new ResizeObserver(measure);

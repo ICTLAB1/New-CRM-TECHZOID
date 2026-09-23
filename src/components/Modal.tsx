@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { lockBodyScroll } from "./scrollLock";
 import { isMod } from "./hotkeys";
 import { usePresence } from "./usePresence";
 import { Button } from "./primitives";
@@ -81,12 +82,14 @@ export function Modal({ open, title, description, onClose, footer, side, unsaved
       else onClose();
     };
     document.addEventListener("keydown", onKey);
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    /* Counted, not saved-and-restored per dialog: two open at once and the
+       one that closed first used to hand the page back to the other's idea
+       of what it had been, leaving it unscrollable. See ./scrollLock. */
+    const unlock = lockBodyScroll();
     panel.current?.focus();
     return () => {
       document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = previous;
+      unlock();
     };
   }, [open, onClose]);
 
