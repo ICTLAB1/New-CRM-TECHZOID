@@ -5,20 +5,21 @@
 .shell { display: grid; grid-template-columns: var(--sidebar-w) minmax(0, 1fr); min-height: 100vh; }
 
 /* ── sidebar ───────────────────────────────────────────────────────────
-   DARK, against a light canvas. Navigation is chrome: you use it to get
-   somewhere and then stop looking at it, and a white rail beside white
-   cards competes with the work for the whole width of the screen. Dark,
-   it recedes and the records are the brightest thing in view.
+   WHITE, with the canvas a shade grey-green behind the cards, so the rail
+   reads as part of the page rather than a panel stuck to it. It keeps its
+   own token group even now that it is light: the day the chrome is asked
+   to change again, it changes without dragging every card with it.
 
-   The active item is a filled block now, not a left rule. On a dark rail
-   a hairline accent is nearly invisible, and "which screen am I on" is
-   the one question this column has to answer at a glance. */
+   The active item stays a filled green block rather than the hairline it
+   once was. "Which screen am I on" is the one question this column has to
+   answer at a glance, and a 3px rule does not answer it across a nav of
+   twenty items. */
 .sidebar {
   position: sticky; top: 0; align-self: start;
   height: 100vh;
   display: flex; flex-direction: column;
   background: var(--shell);
-  border-right: 0;
+  border-right: 1px solid var(--shell-rule);
   overflow-y: auto;
 }
 .sidebar-brand { display: flex; align-items: center; gap: 9px; height: var(--topbar-h); padding: 0 var(--gap-wide); border-bottom: 1px solid var(--shell-rule); flex: none; }

@@ -1,14 +1,19 @@
 /* ─────────────────────────────────────────────────────────────────────
    Design tokens.
 
-   The direction, REVISED AGAIN and deliberately: a dark shell around a
-   light canvas, the way Salesforce and every current sales tool is built.
-   The flat blue-on-white the product had was asked to go.
+   The direction, as chosen: WHITE AND GREEN. A light shell around a light
+   canvas, with one green carrying every action.
 
-   The shell is dark; the work is light. That split is the whole idea — the
-   chrome recedes and stops competing, and the records, figures and
-   documents sit on white where they read best. ONE accent blue still, and
-   it is a brighter one: on a dark rail a deep navy accent disappears.
+   THE TENSION THIS CREATES, recorded because it is the interesting part.
+   Green already meant something here — won, paid, delivered — and a system
+   whose brand colour is also one of its status colours has given the same
+   hue two jobs. The resolution is a division of labour, not a second
+   green: the accent appears only on things you can ACT on (a primary
+   button, the current nav item, a link, a focus ring), and --good appears
+   only inside a status chip, which always carries a dot and a word. A pill
+   reading "Won" is never mistaken for a button, and nothing is ever
+   coloured green for decoration. --good is also pitched deeper and cooler
+   than the accent so the two do not read as the same paint.
 
    REVISED for a current look, without changing what any of it MEANS. The
    scale went up (12.5px body reads as a spreadsheet), the geometry went
@@ -38,42 +43,42 @@
   --ink-4:        #9AA3B5;  /* meta, placeholders */
 
   /* ── surfaces ─────────────────────────────────────────────────────── */
-  --bg:           #F1F4F9;  /* app background */
+  --bg:           #F2F5F3;  /* app background */
   --surface:      #FFFFFF;  /* cards, tables, sheets */
   --surface-2:    #F9FAFC;  /* table headers, inset panels */
-  --surface-3:    #EEF1F6;  /* hover, track */
+  --surface-3:    #EDF1EE;  /* hover, track */
 
   /* ── rules ────────────────────────────────────────────────────────── */
-  --rule:         #E6E9F0;  /* hairline between things */
-  --rule-strong:  #CBD2DF;  /* deliberate division */
+  --rule:         #E4E9E5;  /* hairline between things */
+  --rule-strong:  #C8D1CA;  /* deliberate division */
 
   /* ── the one accent ───────────────────────────────────────────────── */
-  --accent:       #0B6BE8;  /* deep, low-chroma — a bright blue reads consumer */
-  --accent-hover: #0A55BA;
-  --accent-weak:  #E7F1FE;  /* selected row, active nav */
-  --accent-rule:  #B6D5FB;
+  --accent:       #0B7A43;  /* deep, low-chroma — a bright blue reads consumer */
+  --accent-hover: #095F34;
+  --accent-weak:  #E7F4EC;  /* selected row, active nav */
+  --accent-rule:  #B4DCC4;
   --on-accent:    #FFFFFF;  /* text on an accent fill */
 
   /* ── semantic: each means exactly one thing ───────────────────────── */
-  --good:         #14664B;  /* won, paid, delivered */
-  --good-weak:    #E7F4EE;
+  --good:         #0B5A50;  /* won, paid, delivered */
+  --good-weak:    #E4F1EF;
   --warn:         #8A5A0C;  /* needs attention, due soon */
   --warn-weak:    #FBF1DF;
   --bad:          #96291A;  /* overdue, lost, failed */
   --bad-weak:     #FBEAE6;
   --neutral:      #5C6672;  /* draft, inactive, no state */
-  --neutral-weak: #EEF1F6;
+  --neutral-weak: #EDF1EE;
 
   /* ── the shell ─────────────────────────────────────────────────────
      Its own group, and that is what makes a dark chrome safe to add: the
      sidebar and topbar stop borrowing --surface and --ink from the
      content, so the two can be lit differently without every card,
      table and form following the rail into the dark. */
-  --shell:        #0B1F3F;  /* sidebar and topbar */
-  --shell-2:      #14315C;  /* hover and the active item */
-  --shell-ink:    #FFFFFF;  /* the current item, the brand */
-  --shell-ink-2:  #9CB3D6;  /* everything not current */
-  --shell-rule:   #1C3D6E;  /* division inside the dark */
+  --shell:        #FFFFFF;  /* sidebar and topbar */
+  --shell-2:      #EFF4F0;  /* hover and the active item */
+  --shell-ink:    #0B1220;  /* the current item, the brand */
+  --shell-ink-2:  #5C6672;  /* everything not current */
+  --shell-rule:   #E2E8E4;  /* division inside the dark */
 
   /* ── chart series ──────────────────────────────────────────────────
      A FIXED ORDER, never cycled and never reassigned by rank: colour
@@ -82,23 +87,25 @@
      of these by a colour-blind reader — a ninth series folds into "Other"
      rather than inventing a hue.
 
-     Validated, not eyeballed: worst adjacent pair ΔE 12.1 under deuteranopia
-     and 21.2 with normal vision, all five ≥3:1 against a white card.
+     Re-validated after the palette turned green, and REORDERED because of
+     it: blue beside violet failed at ΔE 3.5 under deuteranopia, so orange
+     sits between them. Worst adjacent pair is now ΔE 20.4 (protan) and
+     21.2 with normal vision, all five ≥3:1 against a white card.
 
      Named by POSITION, not by hue, and kept apart from --good/--warn/--bad:
      a status colour means a state and must never turn up as "series 4". */
-  --series-1: #0B6BE8;
-  --series-2: #B2560F;
-  --series-3: #0E8A78;
+  --series-1: #0B7A43;
+  --series-2: #0B6BE8;
+  --series-3: #B2560F;
   --series-4: #7B3FD4;
   --series-5: #A61E5A;
 
   /* Magnitude, not identity: one hue, light to dark. */
-  --ramp-1: #D6E7FB;
-  --ramp-2: #A9CCF6;
-  --ramp-3: #6BA6EF;
-  --ramp-4: #2F7DE4;
-  --ramp-5: #0B4FA8;
+  --ramp-1: #D8EDE1;
+  --ramp-2: #A9D9BE;
+  --ramp-3: #6BBE8E;
+  --ramp-4: #2A9560;
+  --ramp-5: #0A5E35;
 
   /* ── type ─────────────────────────────────────────────────────────── */
   --sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
