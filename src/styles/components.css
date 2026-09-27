@@ -965,3 +965,50 @@ button.tile:hover { background: var(--surface-2); }
   .record-side   { order: 2; }
   .record-stream { order: 3; }
 }
+
+/* ── the stage path ────────────────────────────────────────────────────
+   Chevrons, because the shape itself carries the direction of travel — a
+   row of equal rectangles would need an arrow drawn between each pair to
+   say the same thing. Cut with clip-path rather than borders or a
+   background image: one shape, no artwork, and it scales with the type. */
+.path { display: flex; gap: 3px; list-style: none; margin: 0; padding: 0; width: 100%; }
+.path-step {
+  flex: 1 1 0; min-width: 0;
+  background: var(--surface-3);
+  color: var(--ink-3);
+  clip-path: polygon(0 0, calc(100% - 13px) 0, 100% 50%, calc(100% - 13px) 100%, 0 100%, 13px 50%);
+  transition: background-color var(--t-quick) var(--ease), color var(--t-quick) var(--ease);
+}
+/* The ends are flat: a notch on the first step points at nothing, and a
+   point on the last one promises a step that does not exist. */
+.path-step:first-child { clip-path: polygon(0 0, calc(100% - 13px) 0, 100% 50%, calc(100% - 13px) 100%, 0 100%); }
+.path-step:last-child  { clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%, 13px 50%); }
+.path-step:only-child  { clip-path: none; border-radius: var(--radius); }
+
+.path-hit {
+  display: flex; align-items: center; justify-content: center; gap: 5px;
+  width: 100%; height: 34px; padding: 0 14px 0 22px;
+  border: 0; background: none; font: inherit;
+  font-size: var(--t-small); font-weight: 600; color: inherit;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.path-step:first-child .path-hit { padding-left: 14px; }
+button.path-hit { cursor: pointer; }
+
+.path-tick { font-size: var(--t-small); line-height: 1; }
+.path-label { overflow: hidden; text-overflow: ellipsis; }
+
+.path-step.is-done { background: var(--accent-weak); color: var(--accent); }
+.path-step.is-current.is-accent { background: var(--accent); color: var(--on-accent); }
+.path-step.is-current.is-good   { background: var(--good);   color: var(--on-accent); }
+.path-step.is-current.is-bad    { background: var(--bad);    color: var(--on-accent); }
+.path-step.is-todo { background: var(--surface-3); color: var(--ink-4); }
+
+/* A path is the one thing on a record header worth a whole row on a
+   phone; below this it stacks rather than squeezing six words into 40px. */
+@media (max-width: 720px) {
+  .path { flex-wrap: wrap; gap: 4px; }
+  .path-step, .path-step:first-child, .path-step:last-child { flex: 1 1 42%; clip-path: none; border-radius: var(--radius); }
+  .path-hit, .path-step:first-child .path-hit { padding: 0 10px; height: 30px; }
+}
+.record-path { margin-top: var(--gap-wide); }

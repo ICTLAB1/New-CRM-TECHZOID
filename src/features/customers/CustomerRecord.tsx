@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Button, Card, Chip, Empty, Field, Select, Textarea } from "../../components/primitives";
-import { stageOf } from "../../domain/pipeline/stages";
+import { stageOf, STAGES } from "../../domain/pipeline/stages";
+import { Path } from "../../components/Path";
 import { groupEntriesByDay, recordTimeline, type RecordDocument, type RecordEntry } from "../../domain/customers/record";
 import { blankNote, NOTE_OUTCOMES, NOTE_TYPES, noteIsEmpty, type NoteDraft } from "../../domain/customers/notes";
 import { likelihood, weightedValue, type Deal } from "../../domain/deals/deal";
@@ -95,12 +96,20 @@ function Entry({ entry }: { entry: RecordEntry }) {
   );
 }
 
+/** The ladder plus the conclusion this record actually reached. Showing
+ *  both Won and Lost on every path would put a step on it that can never
+ *  be taken, and draw the eye to the one nobody wants. */
+const PATH_STEPS = (stage: string | undefined) => {
+  const ladder = STAGES.filter((s) => s.id !== "won" && s.id !== "lost");
+  const end = STAGES.find((s) => s.id === (stage === "lost" ? "lost" : "won"));
+  return [...ladder, ...(end ? [end] : [])].map((s) => ({ id: s.id, label: s.label }));
+};
+
 export function CustomerRecord({
   customer, deals = [], documents = [], ownerName, onAddNote,
   onEdit, onNewDeal, onOpenDocument, onBack,
 }: CustomerRecordProps) {
   const [draft, setDraft] = useState<NoteDraft>(blankNote());
-  const stage = stageOf(customer.stage);
   const days = groupEntriesByDay(recordTimeline(customer, documents));
   const open = deals.filter((d) => d.stage !== "won" && d.stage !== "lost");
 
@@ -124,7 +133,6 @@ export function CustomerRecord({
           {onBack ? <Button tone="quiet" size="sm" onClick={onBack}>← Customers</Button> : null}
           <h1 className="record-name">{customer.company || "Unnamed customer"}</h1>
           <div className="record-sub">
-            <Chip tone={stage.tone} solid>{stage.label}</Chip>
             {customer.code ? <span className="record-code">{customer.code}</span> : null}
             {ownerName ? <span className="record-owner">Owned by {ownerName}</span> : null}
           </div>
@@ -134,6 +142,19 @@ export function CustomerRecord({
           {onEdit ? <Button tone="default" onClick={onEdit}>Edit details</Button> : null}
         </div>
       </header>
+
+      {/* The path, not a chip. A chip says where they are; this says what
+          came before, what is next, and how far along — which is what
+          somebody opening a record actually wants to know. Read-only
+          here: a stage belongs to a DEAL, and this is the account's
+          roll-up of them. */}
+      <div className="record-path">
+        <Path
+          steps={PATH_STEPS(customer.stage)}
+          current={customer.stage ?? "lead"}
+          tone={customer.stage === "won" ? "good" : customer.stage === "lost" ? "bad" : "accent"}
+        />
+      </div>
 
       <div className="record-grid">
         {/* ── who they are ─────────────────────────────────────────── */}

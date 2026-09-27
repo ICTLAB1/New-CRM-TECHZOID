@@ -5,20 +5,25 @@
 .shell { display: grid; grid-template-columns: var(--sidebar-w) minmax(0, 1fr); min-height: 100vh; }
 
 /* ── sidebar ───────────────────────────────────────────────────────────
-   Light, like the rest of the product. An active item is marked by a left
-   accent rule and near-black text, not a filled pill — the same structural
-   device the cards and table rows use. */
+   DARK, against a light canvas. Navigation is chrome: you use it to get
+   somewhere and then stop looking at it, and a white rail beside white
+   cards competes with the work for the whole width of the screen. Dark,
+   it recedes and the records are the brightest thing in view.
+
+   The active item is a filled block now, not a left rule. On a dark rail
+   a hairline accent is nearly invisible, and "which screen am I on" is
+   the one question this column has to answer at a glance. */
 .sidebar {
   position: sticky; top: 0; align-self: start;
   height: 100vh;
   display: flex; flex-direction: column;
-  background: var(--surface);
-  border-right: 1px solid var(--rule);
+  background: var(--shell);
+  border-right: 0;
   overflow-y: auto;
 }
-.sidebar-brand { display: flex; align-items: center; gap: 9px; height: var(--topbar-h); padding: 0 var(--gap-wide); border-bottom: 1px solid var(--rule); flex: none; }
-.brand-mark { width: 20px; height: 20px; border-radius: 2px; background: var(--accent); color: var(--on-accent); display: grid; place-items: center; font-size: 10px; font-weight: 700; letter-spacing: -.02em; flex: none; }
-.brand-name { font-size: var(--t-mid); font-weight: 600; color: var(--ink); letter-spacing: -0.01em; }
+.sidebar-brand { display: flex; align-items: center; gap: 9px; height: var(--topbar-h); padding: 0 var(--gap-wide); border-bottom: 1px solid var(--shell-rule); flex: none; }
+.brand-mark { width: 22px; height: 22px; border-radius: var(--radius); background: var(--accent); color: var(--on-accent); display: grid; place-items: center; font-size: 10px; font-weight: 700; letter-spacing: -.02em; flex: none; }
+.brand-name { font-size: var(--t-mid); font-weight: 600; color: var(--shell-ink); letter-spacing: -0.01em; }
 /* Bounded by the sidebar header's own height, so an uploaded logo of any
    proportion cannot push it taller than every other row in the shell. */
 .brand-logo { max-width: 150px; max-height: 26px; object-fit: contain; object-position: left center; display: block; }
@@ -26,43 +31,45 @@
 .nav { padding: var(--gap) var(--gap-tight) var(--gap-block); }
 /* Section labels are orientation, not headlines: small, grey, sentence
    case. Tracked-out mono capitals here compete with the items under them. */
-.nav-section { padding: var(--gap-wide) 10px 4px; font-size: var(--t-small); font-weight: 600; color: var(--ink-4); letter-spacing: 0; text-transform: none; font-family: var(--sans); }
+.nav-section { padding: var(--gap-wide) 10px 4px; font-size: var(--t-micro); font-weight: 600; color: var(--shell-ink-2); letter-spacing: .08em; text-transform: uppercase; font-family: var(--sans); opacity: .75; }
 .nav-section:first-child { padding-top: 4px; }
 
 .nav-item {
   display: flex; align-items: center; gap: 9px;
   width: 100%;
-  padding: 5px 10px;
-  border: 0; border-left: var(--edge) solid transparent;
+  padding: 7px 10px;
+  border: 0;
   background: transparent;
-  border-radius: 0 var(--radius) var(--radius) 0;
+  border-radius: var(--radius);
   font: inherit; font-size: var(--t-body); font-weight: 500;
-  color: var(--ink-3); text-align: left; cursor: pointer;
+  color: var(--shell-ink-2); text-align: left; cursor: pointer;
 }
 .nav-item {
   transition:
     background-color var(--t-quick) var(--ease),
-    color var(--t-quick) var(--ease),
-    border-left-color var(--t-enter) var(--ease);
+    color var(--t-quick) var(--ease);
 }
-.nav-item:hover { background: var(--surface-3); color: var(--ink); }
-.nav-item[aria-current="page"] { border-left-color: var(--accent); color: var(--ink); font-weight: 600; }
-.nav-item[aria-current="page"]:hover { background: var(--surface-3); }
+.nav-item:hover { background: var(--shell-2); color: var(--shell-ink); }
+.nav-item[aria-current="page"] { background: var(--accent); color: var(--on-accent); font-weight: 600; }
+.nav-item[aria-current="page"]:hover { background: var(--accent); }
 .nav-icon { width: 15px; height: 15px; flex: none; color: currentColor; }
+/* On a dark rail the tinted badge the light one used disappears, so the
+   count is drawn as a solid pill instead. */
 .nav-badge {
   margin-left: auto;
-  min-width: 18px; height: 17px; padding: 0 5px;
+  min-width: 19px; height: 18px; padding: 0 6px;
   display: inline-grid; place-items: center;
-  border-radius: 3px;
-  background: var(--warn-weak); color: var(--warn);
-  font-family: var(--mono); font-size: var(--t-micro); font-weight: 500;
+  border-radius: 999px;
+  background: var(--warn); color: var(--on-accent);
+  font-family: var(--mono); font-size: var(--t-micro); font-weight: 600;
 }
+.nav-item[aria-current="page"] .nav-badge { background: var(--shell-ink); color: var(--accent); }
 
-.sidebar-foot { margin-top: auto; padding: var(--gap) var(--gap-wide) var(--gap-wide); border-top: 1px solid var(--rule); }
+.sidebar-foot { margin-top: auto; padding: var(--gap) var(--gap-wide) var(--gap-wide); border-top: 1px solid var(--shell-rule); }
 .who { display: flex; align-items: center; gap: 9px; }
-.who-mark { width: 26px; height: 26px; border-radius: 50%; background: var(--surface-3); color: var(--ink-2); display: grid; place-items: center; font-size: var(--t-small); font-weight: 600; flex: none; }
-.who-name { font-size: var(--t-body); font-weight: 500; color: var(--ink); }
-.who-role { font-size: var(--t-small); color: var(--ink-4); }
+.who-mark { width: 28px; height: 28px; border-radius: 50%; background: var(--shell-2); color: var(--shell-ink); display: grid; place-items: center; font-size: var(--t-small); font-weight: 600; flex: none; }
+.who-name { font-size: var(--t-body); font-weight: 500; color: var(--shell-ink); }
+.who-role { font-size: var(--t-small); color: var(--shell-ink-2); }
 
 /* ── main column ───────────────────────────────────────────────────── */
 .main { min-width: 0; display: flex; flex-direction: column; }
@@ -71,16 +78,16 @@
   position: sticky; top: 0; z-index: 30;
   display: flex; align-items: center; gap: var(--gap);
   height: var(--topbar-h); padding: 0 var(--gap-page);
-  background: var(--surface);
-  border-bottom: 1px solid var(--rule);
+  background: var(--shell);
+  border-bottom: 1px solid var(--shell-rule);
 }
 /* The topbar orients; it does not repeat the page title in the same weight
    directly above it. Section in grey, current screen in ink, both small. */
 .crumb { display: flex; align-items: center; gap: 6px; font-size: var(--t-small); min-width: 0; }
-.crumb-section { color: var(--ink-4); }
-.crumb-sep { color: var(--rule-strong); }
-.crumb-current { color: var(--ink-2); font-weight: 500; }
-.topbar-crumb { font-size: var(--t-small); color: var(--ink-4); font-family: var(--mono); }
+.crumb-section { color: var(--shell-ink-2); }
+.crumb-sep { color: var(--shell-rule); }
+.crumb-current { color: var(--shell-ink); font-weight: 500; }
+.topbar-crumb { font-size: var(--t-small); color: var(--shell-ink-2); font-family: var(--mono); }
 
 /* The company picker. Sized to the name rather than stretched to the bar:
    it sits between a search box and a bell, and a select that grows to fill
@@ -89,22 +96,25 @@
 .topbar-company {
   max-width: 220px;
   height: 30px;
+  color: var(--shell-ink);
+  background: var(--shell-2);
+  border-color: var(--shell-rule);
   padding-block: 0;
   font-size: var(--t-small);
 }
 @media (max-width: 720px) { .topbar-company { max-width: 130px; } }
 
 .topsearch {
-  width: 260px; height: 26px;
-  padding: 0 9px;
+  width: 280px; height: 30px;
+  padding: 0 11px;
   font: inherit; font-size: var(--t-small);
-  color: var(--ink);
-  background: var(--surface-2);
-  border: 1px solid var(--rule);
-  border-radius: var(--radius);
+  color: var(--shell-ink);
+  background: var(--shell-2);
+  border: 1px solid var(--shell-rule);
+  border-radius: 999px;
 }
-.topsearch::placeholder { color: var(--ink-4); }
-.topsearch:focus { outline: none; background: var(--surface); border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-weak); }
+.topsearch::placeholder { color: var(--shell-ink-2); }
+.topsearch:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-weak); }
 @media (max-width: 760px) { .topsearch { display: none; } }
 
 /* Each screen arrives rather than replacing the last one between frames.
