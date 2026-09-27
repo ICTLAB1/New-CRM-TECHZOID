@@ -12,7 +12,7 @@
   justify-content: center;
   gap: var(--gap-tight);
   height: var(--control-h);
-  padding: 0 12px;
+  padding: 0 14px;
   border: 1px solid transparent;
   border-radius: var(--radius);
   font: inherit;
@@ -64,10 +64,10 @@
 .btn-danger { background: var(--surface); color: var(--bad); border-color: var(--rule-strong); }
 .btn-danger:hover:not(:disabled) { background: var(--bad-weak); border-color: var(--bad); }
 
-.btn-sm { height: 26px; padding: 0 9px; font-size: var(--t-small); }
-.btn-lg { height: var(--control-h-lg); padding: 0 16px; }
+.btn-sm { height: 28px; padding: 0 11px; font-size: var(--t-small); }
+.btn-lg { height: var(--control-h-lg); padding: 0 20px; }
 .btn-icon { width: var(--control-h); padding: 0; }
-.btn-icon.btn-sm { width: 26px; }
+.btn-icon.btn-sm { width: 28px; }
 
 /* ── inputs ────────────────────────────────────────────────────────── */
 .input, .select, .textarea {
@@ -127,10 +127,10 @@
 /* Cards sitting side by side share a bottom edge. Ragged bottoms across a
    row read as unfinished, however tidy each card is on its own. */
 .card > .card-pad { flex: 1 1 auto; }
-.card-pad { padding: 13px var(--gap-wide) var(--gap-wide); }
+.card-pad { padding: 15px var(--gap-wide) var(--gap-wide); }
 .card-head {
   display: flex; align-items: center; justify-content: space-between; gap: var(--gap);
-  padding: 9px var(--gap-wide);
+  padding: 12px var(--gap-wide);
   border-bottom: 1px solid var(--rule);
 }
 .card-title { font-size: var(--t-mid); font-weight: 600; color: var(--ink); }
@@ -157,7 +157,7 @@
   overflow: hidden;
 }
 .tile {
-  padding: 11px var(--gap-wide) 13px; border-left: 1px solid var(--rule); min-width: 0;
+  padding: 14px var(--gap-wide) 16px; border-left: 1px solid var(--rule); min-width: 0;
   transition: background-color var(--t-quick) var(--ease);
 }
 /* A tile rendered as a button filters the list below it. Making that
@@ -167,7 +167,7 @@ button.tile:hover { background: var(--surface-2); }
 button.tile:active { background: var(--surface-3); }
 .tile:first-child { border-left: 0; }
 .tile-label { font-size: var(--t-small); font-weight: 500; color: var(--ink-3); }
-.tile-value { margin-top: 5px; font-size: var(--t-xl); font-weight: 600; color: var(--ink); letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.tile-value { margin-top: 6px; font-size: var(--t-xl); font-weight: 600; color: var(--ink); letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
 .tile-meta { margin-top: 2px; font-size: var(--t-small); color: var(--ink-4); }
 .tile-value.is-good { color: var(--good); }
 .tile-value.is-bad  { color: var(--bad); }
@@ -207,7 +207,10 @@ button.tile:hover { background: var(--surface-2); }
 .chip-bad     { color: var(--bad); }
 .chip-accent  { color: var(--accent); }
 
-.chip-solid { height: 18px; padding: 0 7px; border-radius: 2px; }
+/* A PILL, not a 2px rectangle. A state is a thing you scan for across a
+   list of forty rows, and a rounded tinted shape is found faster than a
+   square one. The dot stays: hue alone is not a signal for everyone. */
+.chip-solid { height: 22px; padding: 0 10px; border-radius: 999px; }
 .chip-solid.chip-neutral { background: var(--neutral-weak); }
 .chip-solid.chip-good    { background: var(--good-weak); }
 .chip-solid.chip-warn    { background: var(--warn-weak); }

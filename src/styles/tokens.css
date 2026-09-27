@@ -2,6 +2,13 @@
    Design tokens.
 
    The agreed direction: light, professional, restrained. ONE accent blue.
+
+   REVISED for a current look, without changing what any of it MEANS. The
+   scale went up (12.5px body reads as a spreadsheet), the geometry went
+   soft (3px corners read as 2015), the hairlines went lighter so structure
+   comes from space rather than from lines, and the navy was lifted just
+   far enough to look present-day — it still has to sit beside the navy on
+   the documents this company sends, so it was not replaced.
    Colour is reserved for meaning — green for won/paid, amber for attention,
    red for overdue — and never used decoratively. Structure is carried by
    hairline rules and a left edge on things that need action, not by
@@ -18,70 +25,70 @@
   /* ── ink ───────────────────────────────────────────────────────────
      Values are near-black and large; labels are grey and small. That
      contrast is what makes a dense screen readable without boxes. */
-  --ink:          #10151F;  /* values, headings */
-  --ink-2:        #39424F;  /* body copy */
-  --ink-3:        #6B7480;  /* labels */
-  --ink-4:        #99A1AC;  /* meta, placeholders */
+  --ink:          #0B1220;  /* values, headings */
+  --ink-2:        #3C4657;  /* body copy */
+  --ink-3:        #6E7891;  /* labels */
+  --ink-4:        #9AA3B5;  /* meta, placeholders */
 
   /* ── surfaces ─────────────────────────────────────────────────────── */
-  --bg:           #F4F5F7;  /* app background */
+  --bg:           #F7F8FA;  /* app background */
   --surface:      #FFFFFF;  /* cards, tables, sheets */
-  --surface-2:    #FAFBFC;  /* table headers, inset panels */
-  --surface-3:    #EFF1F4;  /* hover, track */
+  --surface-2:    #F9FAFC;  /* table headers, inset panels */
+  --surface-3:    #EEF1F6;  /* hover, track */
 
   /* ── rules ────────────────────────────────────────────────────────── */
-  --rule:         #DFE3E8;  /* hairline between things */
-  --rule-strong:  #C6CCD4;  /* deliberate division */
+  --rule:         #E6E9F0;  /* hairline between things */
+  --rule-strong:  #CBD2DF;  /* deliberate division */
 
   /* ── the one accent ───────────────────────────────────────────────── */
-  --accent:       #1F4B99;  /* deep, low-chroma — a bright blue reads consumer */
-  --accent-hover: #17396F;
-  --accent-weak:  #EEF2F9;  /* selected row, active nav */
-  --accent-rule:  #C6D3E6;
+  --accent:       #2458B8;  /* deep, low-chroma — a bright blue reads consumer */
+  --accent-hover: #1B4494;
+  --accent-weak:  #EDF2FC;  /* selected row, active nav */
+  --accent-rule:  #C3D3EE;
   --on-accent:    #FFFFFF;  /* text on an accent fill */
 
   /* ── semantic: each means exactly one thing ───────────────────────── */
   --good:         #14664B;  /* won, paid, delivered */
-  --good-weak:    #E9F2EE;
+  --good-weak:    #E7F4EE;
   --warn:         #8A5A0C;  /* needs attention, due soon */
-  --warn-weak:    #F7F0E3;
+  --warn-weak:    #FBF1DF;
   --bad:          #96291A;  /* overdue, lost, failed */
-  --bad-weak:     #F7EAE7;
+  --bad-weak:     #FBEAE6;
   --neutral:      #5C6672;  /* draft, inactive, no state */
-  --neutral-weak: #EFF1F4;
+  --neutral-weak: #EEF1F6;
 
   /* ── type ─────────────────────────────────────────────────────────── */
   --sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 
-  --t-micro:  10px;    /* eyebrow / column head */
-  --t-small:  11.5px;  /* labels, meta */
-  --t-body:   12.5px;  /* the default */
-  --t-mid:    13.5px;
-  --t-lg:     15.5px;  /* card values */
-  --t-xl:     19px;    /* summary figures */
-  --t-page:   16px;    /* page title */
+  --t-micro:  10.5px;    /* eyebrow / column head */
+  --t-small:  12px;  /* labels, meta */
+  --t-body:   13.5px;  /* the default */
+  --t-mid:    14.5px;
+  --t-lg:     17px;  /* card values */
+  --t-xl:     24px;    /* summary figures */
+  --t-page:   20px;    /* page title */
 
   /* ── space: a 4px grid, named by use not size ─────────────────────── */
   --gap-hair:  2px;
   --gap-tight: 6px;
   --gap:       10px;
-  --gap-wide:  16px;
-  --gap-block: 24px;
-  --gap-page:  32px;
+  --gap-wide:  18px;
+  --gap-block: 26px;
+  --gap-page:  34px;
 
   /* ── geometry ─────────────────────────────────────────────────────── */
-  --radius:      3px;   /* controls */
-  --radius-card: 4px;   /* panels */
-  --control-h:   30px;
-  --control-h-lg:36px;
-  --edge:        2px;   /* the action edge on a card that needs one */
+  --radius:      7px;   /* controls */
+  --radius-card: 12px;   /* panels */
+  --control-h:   34px;
+  --control-h-lg:40px;
+  --edge:        3px;   /* the action edge on a card that needs one */
 
   /* The only shadow in the system, for things genuinely above the page. */
-  --lift: 0 4px 16px rgba(16, 21, 31, .10), 0 1px 2px rgba(16, 21, 31, .07);
+  --lift: 0 10px 30px rgba(11, 18, 32, .10), 0 2px 6px rgba(11, 18, 32, .05);
 
-  --sidebar-w: 208px;
-  --topbar-h:  46px;
+  --sidebar-w: 216px;
+  --topbar-h:  52px;
 }
 
 /* ── motion ──────────────────────────────────────────────────────────
