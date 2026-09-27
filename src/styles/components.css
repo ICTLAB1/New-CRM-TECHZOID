@@ -864,3 +864,104 @@ button.tile:hover { background: var(--surface-2); }
   display: inline-flex; align-items: center; gap: 4px;
 }
 .deal-flag::before { content: "●"; font-size: 8px; }
+
+/* ── the customer record ───────────────────────────────────────────────
+   Three columns answering three different questions: who they are, what
+   has happened, what is open. The middle is widest because it is the one
+   you READ — the rail is reference you glance at and the right is a list
+   you scan, and giving all three equal width would claim they matter
+   equally. */
+.record-head {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: var(--gap-wide); flex-wrap: wrap;
+  padding-bottom: var(--gap-wide);
+  border-bottom: 1px solid var(--rule);
+}
+.record-id { display: flex; flex-direction: column; gap: var(--gap-tight); min-width: 0; }
+.record-name { margin: 0; font-size: var(--t-page); font-weight: 650; color: var(--ink); letter-spacing: -0.01em; }
+.record-sub { display: flex; align-items: center; gap: var(--gap); flex-wrap: wrap; font-size: var(--t-small); color: var(--ink-3); }
+.record-code { font-family: var(--mono); color: var(--ink-4); }
+
+.record-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 260px) minmax(0, 1fr) minmax(0, 300px);
+  gap: var(--gap-block);
+  align-items: start;
+  margin-top: var(--gap-block);
+}
+.record-rail, .record-side, .record-stream { display: flex; flex-direction: column; gap: var(--gap-wide); min-width: 0; }
+/* Reference and lists follow you down a long history. */
+.record-rail, .record-side { position: sticky; top: calc(var(--topbar-h) + var(--gap-block)); }
+
+/* ── a labelled fact ──────────────────────────────────────────────── */
+.fact { padding: var(--gap-tight) 0; border-top: 1px solid var(--rule); }
+.fact:first-child { border-top: 0; padding-top: 0; }
+.fact-label { font-size: var(--t-small); color: var(--ink-3); }
+.fact-value { margin-top: 1px; font-size: var(--t-body); color: var(--ink); word-break: break-word; }
+.fact-value a { color: var(--accent); text-decoration: none; }
+.fact-value a:hover { text-decoration: underline; }
+
+/* ── the history ──────────────────────────────────────────────────────
+   A rail down the left with a pip per entry. The pip carries the outcome
+   as a colour, so a run of bad news is visible before any of it is read —
+   and it is a shape as well as a hue, for the same reason chips have dots. */
+.entry-day + .entry-day { margin-top: var(--gap-wide); }
+.entry-date {
+  font-size: var(--t-micro); font-weight: 600; letter-spacing: .07em; text-transform: uppercase;
+  color: var(--ink-4); padding-bottom: var(--gap-tight);
+}
+.entry-list { list-style: none; margin: 0; padding: 0; border-left: 1px solid var(--rule); }
+.entry { position: relative; display: flex; gap: var(--gap); padding: var(--gap-tight) 0 var(--gap) var(--gap-wide); }
+.entry-pip {
+  position: absolute; left: 0; top: 11px; transform: translateX(-50%);
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--neutral); border: 2px solid var(--surface); box-sizing: content-box;
+}
+.entry-pip.is-accent { background: var(--accent); }
+.entry-pip.is-good   { background: var(--good); }
+.entry-pip.is-warn   { background: var(--warn); }
+.entry-pip.is-bad    { background: var(--bad); }
+.entry-body { min-width: 0; flex: 1 1 auto; }
+.entry-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--gap); }
+.entry-label { font-size: var(--t-body); font-weight: 600; color: var(--ink); }
+.entry-amount { font-size: var(--t-body); color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.entry-text { margin-top: 2px; font-size: var(--t-body); color: var(--ink-2); }
+.entry-by { margin-top: 2px; font-size: var(--t-small); color: var(--ink-4); }
+
+/* ── deals and documents ──────────────────────────────────────────── */
+.doc-row {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: var(--gap);
+  padding: var(--gap) 0; border-top: 1px solid var(--rule); width: 100%; text-align: left;
+}
+/* A deal stacks instead of splitting: the name needs the whole rail. */
+.deal-row {
+  display: flex; flex-direction: column; gap: 5px;
+  padding: var(--gap) 0; border-top: 1px solid var(--rule); width: 100%; text-align: left;
+}
+.deal-line { display: flex; align-items: center; justify-content: space-between; gap: var(--gap); }
+.deal-row:first-child, .doc-row:first-child { border-top: 0; padding-top: 0; }
+.doc-row-main { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.doc-row-side { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex: none; }
+.deal-name, .doc-number { font-size: var(--t-body); font-weight: 600; color: var(--ink); }
+.doc-number { font-family: var(--mono); font-weight: 500; }
+.deal-meta, .doc-meta { font-size: var(--t-small); color: var(--ink-4); }
+.deal-value, .doc-amount { font-size: var(--t-body); font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; }
+.doc-status { font-size: var(--t-small); color: var(--ink-3); }
+.doc-row { background: none; border-left: 0; border-right: 0; border-bottom: 0; font: inherit; cursor: pointer; }
+.doc-row:hover .doc-number { color: var(--accent); }
+.deal-total {
+  display: flex; align-items: baseline; justify-content: space-between; gap: var(--gap);
+  margin-top: var(--gap); padding-top: var(--gap); border-top: 1px solid var(--rule-strong);
+  font-size: var(--t-small); color: var(--ink-3);
+}
+.deal-total strong { font-size: var(--t-mid); color: var(--ink); font-variant-numeric: tabular-nums; }
+
+/* One column on anything narrow, in reading order: who, what is open,
+   then the history — the list you act on beats the log you browse. */
+@media (max-width: 1100px) {
+  .record-grid { grid-template-columns: minmax(0, 1fr); }
+  .record-rail, .record-side { position: static; }
+  .record-rail   { order: 1; }
+  .record-side   { order: 2; }
+  .record-stream { order: 3; }
+}
