@@ -69,7 +69,8 @@ replaying all 41 migrations against production:
 
 ## What the verification then found, which was not the question asked
 
-**The WhatsApp migrations have never been applied to production.**
+**The WhatsApp migrations had never been applied to production.**
+APPLIED on 28 September 2026, on request — see "Applying them" below.
 `015_followups_whatsapp.sql` and `016_whatsapp_status.sql` are in this
 repository and are absent from production's migration history. That accounts
 for every remaining difference, in both directions:
@@ -81,11 +82,45 @@ for every remaining difference, in both directions:
 - `regenerate_webhook_secret` accepts a `'whatsapp'` secret kind in the repo
   and only `'main'` and `'inbound'` in production.
 
-So the WhatsApp follow-up code is deployed and the database it needs is not.
-Sending one, or rotating its webhook secret, fails in production today.
-Nothing in this migration work caused that and nothing here fixes it: the
-two migrations need applying, which is a deliberate change to production and
-therefore a decision, not a cleanup.
+So the WhatsApp follow-up code was deployed and the database it needed was
+not. Sending one, or rotating its webhook secret, failed.
+
+### Applying them
+
+Both were applied to production on 28 September 2026, through
+`supabase.apply_migration` so they are recorded in the migration history
+rather than applied invisibly — which is how this drift started.
+
+Both are additive: `add column if not exists` with defaults, guarded
+constraints, `create index if not exists`, and one `create or replace
+function` that widens an allowed-value list. Nothing dropped, no policy
+changed, no row rewritten.
+
+Checked before and after, rather than assumed:
+
+| | before | after |
+|---|---|---|
+| rows in `follow_ups` | 4 | 4 |
+| checksum of existing column values | `d8ce00b6…` | `d8ce00b6…` — unchanged |
+| columns | 23 | 32 |
+| constraints | 8 | 10 |
+| `channel` on existing rows | — | all `email` |
+| `regenerate_webhook_secret` code | repo ≠ production | **identical** |
+
+The one thing that still differs is the PHYSICAL COLUMN ORDER of
+`follow_ups`, and only that. Production has `company_id` at position 23 and
+the nine WhatsApp columns at 24–32; a database built from these migrations
+has them the other way round, because here 015 and 016 run before 033 and in
+production 033 ran months earlier. Fingerprinted with columns sorted by name
+the two are byte-identical (`286f53d9…` both sides): same columns, types,
+defaults and nullability.
+
+Nothing depends on it — every write in this codebase names its columns — and
+there is no way to change a column's position in PostgreSQL short of
+rebuilding the table, which would be a genuine risk taken for a cosmetic
+gain. `infra/compare-schema.sh` will keep reporting it, which is correct:
+the fingerprint is order-sensitive on purpose, because a column inserted in
+the middle on one side and at the end on the other is usually worth seeing.
 
 ## Telling a real difference from a formatting one
 
@@ -136,8 +171,9 @@ compared the two.
 
 ## Still outstanding
 
-- The two WhatsApp migrations are unapplied in production. Applying them is
-  a production change and needs a decision.
+- ~~The two WhatsApp migrations are unapplied in production.~~ Applied
+  28 September 2026. `follow_ups` column order differs cosmetically and
+  permanently; see above.
 - `038_crm_objects.sql` has never been applied anywhere, by design.
 - Production's own `supabase_migrations` history still names 37 migrations
   whose SQL is not in this repository. The files here now produce the same
