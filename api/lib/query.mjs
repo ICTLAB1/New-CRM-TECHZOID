@@ -297,34 +297,43 @@ function buildSelectList(catalog, table, parsed, params) {
 function buildWhere(catalog, table, filters, params) {
   if (!Array.isArray(filters) || filters.length === 0) return "";
   const clauses = filters.map((f) => {
-    if (!f || typeof f !== "object") throw new QueryError("Malformed filter.");
-    const col = checkColumn(catalog, table, f.col);
-    const target = `${quote(table)}.${quote(col)}`;
-
-    if (f.op === "is") {
-      /* `is` takes only null or a boolean — it is a keyword position, not a
-         value position, so nothing else is allowed anywhere near it. */
-      if (f.value === null) return `${target} is null`;
-      if (f.value === true) return `${target} is true`;
-      if (f.value === false) return `${target} is false`;
-      throw new QueryError("`is` accepts only null, true or false.");
-    }
-
-    if (f.op === "in") {
-      if (!Array.isArray(f.value)) throw new QueryError("`in` needs a list.");
-      /* An empty list is `in ()` in SQL, which is a syntax error. PostgREST
-         returns nothing for it, so that is what is reproduced. */
-      if (f.value.length === 0) return "false";
-      params.push(f.value);
-      return `${target} = any($${params.length})`;
-    }
-
-    const sql = OPERATORS[f.op];
-    if (!sql) throw new QueryError("Unknown operator.");
-    params.push(f.value);
-    return `${target} ${sql} $${params.length}`;
+    const clause = buildClause(catalog, table, f, params);
+    /* `.not(col, "is", null)` in PostgREST. Wrapped rather than given its
+       own operator table, so a negated filter cannot drift from the one it
+       negates — and parenthesised, because `not a = b` and `not (a = b)`
+       part company the moment a clause has more than one term in it. */
+    return f.negate ? `not (${clause})` : clause;
   });
   return ` where ${clauses.join(" and ")}`;
+}
+
+function buildClause(catalog, table, f, params) {
+  if (!f || typeof f !== "object") throw new QueryError("Malformed filter.");
+  const col = checkColumn(catalog, table, f.col);
+  const target = `${quote(table)}.${quote(col)}`;
+
+  if (f.op === "is") {
+    /* `is` takes only null or a boolean — it is a keyword position, not a
+       value position, so nothing else is allowed anywhere near it. */
+    if (f.value === null) return `${target} is null`;
+    if (f.value === true) return `${target} is true`;
+    if (f.value === false) return `${target} is false`;
+    throw new QueryError("`is` accepts only null, true or false.");
+  }
+
+  if (f.op === "in") {
+    if (!Array.isArray(f.value)) throw new QueryError("`in` needs a list.");
+    /* An empty list is `in ()` in SQL, which is a syntax error. PostgREST
+       returns nothing for it, so that is what is reproduced. */
+    if (f.value.length === 0) return "false";
+    params.push(f.value);
+    return `${target} = any($${params.length})`;
+  }
+
+  const sql = OPERATORS[f.op];
+  if (!sql) throw new QueryError("Unknown operator.");
+  params.push(f.value);
+  return `${target} ${sql} $${params.length}`;
 }
 
 function buildOrder(catalog, table, order) {

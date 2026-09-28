@@ -189,6 +189,36 @@ d("the query translator", () => {
       expect(none.data).toEqual([]);
     });
 
+    it("a negated filter, which is `.not(col, op, value)`", async () => {
+      /* One call site needs this: netlify/lib/company.mjs asks for the rows
+         whose company_id is NOT null. */
+      const withCompany = await asUser(RAVI, (c) => runQuery(c, {
+        op: "select", table: "customers", select: "id",
+        filters: [{ col: "company_id", op: "is", value: null, negate: true }],
+      }));
+      const withoutCompany = await asUser(RAVI, (c) => runQuery(c, {
+        op: "select", table: "customers", select: "id",
+        filters: [{ col: "company_id", op: "is", value: null }],
+      }));
+      const all = await asUser(RAVI, (c) => runQuery(c, {
+        op: "select", table: "customers", select: "id",
+      }));
+      /* The two halves partition the whole. Asserting that rather than a
+         fixed number keeps the test honest whatever else is in the table. */
+      expect(withCompany.data.length + withoutCompany.data.length).toBe(all.data.length);
+      expect(withCompany.data.length).toBeGreaterThan(0);
+    });
+
+    it("negates an equality as well, parenthesised", () => {
+      const { text } = compile({
+        op: "select", table: "customers", select: "id",
+        filters: [{ col: "id", op: "eq", value: "x", negate: true }],
+      }, catalog);
+      /* Parenthesised because `not a = b` and `not (a = b)` part company as
+         soon as a clause has more than one term in it. */
+      expect(text).toContain("not (");
+    });
+
     it("order, limit and range", async () => {
       const desc = await asUser(RAVI, (c) => runQuery(c, {
         op: "select", table: "customers", select: "id",
