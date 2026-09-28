@@ -146,6 +146,33 @@ if [ ${#missing[@]} -gt 0 ]; then
   die "Export those and run again. (--from N skips the steps that need them.)"
 fi
 
+# pg_dump must be at least as new as the server it reads.
+#
+# This is the one that wastes an afternoon. Azure Cloud Shell is the obvious
+# place to run this from -- it has az, it is inside Azure's network -- and
+# the psql it ships can be older than the Supabase server. pg_dump refuses
+# outright with "server version mismatch", but only after step 1 has built a
+# resource group, and the message does not say what to do about it. Asked
+# here instead, before anything exists.
+if { runs 2 || runs 5; } && [ "$PLAN" != 1 ]; then
+  dump_major="$(pg_dump --version | grep -oE '[0-9]+' | head -1)"
+  src_num="$(psql "$SOURCE_URL" -At -c 'show server_version_num' 2>/dev/null || true)"
+  if [ -z "$src_num" ]; then
+    die "Could not reach the source database with SOURCE_URL. Check the string, and that this machine is allowed to connect."
+  fi
+  src_major=$(( src_num / 10000 ))
+  note "postgres: source is ${src_major}, pg_dump here is ${dump_major}"
+  if [ "$dump_major" -lt "$src_major" ]; then
+    die "pg_dump is ${dump_major} and the source server is ${src_major}. It will refuse to read it.
+
+  On Cloud Shell or Ubuntu:
+    sudo sh -c 'echo \"deb http://apt.postgresql.org/pub/repos/apt \$(lsb_release -cs)-pgdg main\" > /etc/apt/sources.list.d/pgdg.list'
+    curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add -
+    sudo apt-get update && sudo apt-get install -y postgresql-client-${src_major}
+    export PATH=/usr/lib/postgresql/${src_major}/bin:\$PATH"
+  fi
+fi
+
 # -- step 1: the resources ---------------------------------------------
 
 if runs 1; then
@@ -318,6 +345,14 @@ if runs 4; then
   note "installing the API's dependencies"
   do_it npm --prefix "${ROOT}/api" install --omit=dev --no-audit --no-fund
 
+  # And the site's. On a fresh clone -- which is what Cloud Shell is --
+  # there is no node_modules at the root, and `npm run build` further down
+  # fails on the first import rather than on anything to do with Azure.
+  if [ ! -d "${ROOT}/node_modules" ]; then
+    note "installing the site's dependencies (fresh clone)"
+    do_it npm --prefix "$ROOT" install --no-audit --no-fund
+  fi
+
   if [ "$PLAN" = 1 ]; then
     note "would zip api/ and deploy it to $FUNCTION_APP"
   else
@@ -356,7 +391,11 @@ if runs 5; then
   # somebody committing the migration notes afterwards and it is in a
   # public repository. .gitignore covers it too, for anyone following the
   # README by hand; this makes it not be there in the first place.
-  export MIGRATION_DIR="${MIGRATION_DIR:-$(mktemp -d -t crm-migration-XXXXXX)}"
+  if [ "$PLAN" = 1 ]; then
+    MIGRATION_DIR="${MIGRATION_DIR:-<a temporary directory outside the checkout>}"
+  else
+    export MIGRATION_DIR="${MIGRATION_DIR:-$(mktemp -d -t crm-migration-XXXXXX)}"
+  fi
   note "working in ${MIGRATION_DIR} (outside the checkout, and it holds real rows)"
   confirm "This copies every row from Supabase into ${PG_HOST}.
   Supabase is NOT touched and keeps serving. The target must be empty."
