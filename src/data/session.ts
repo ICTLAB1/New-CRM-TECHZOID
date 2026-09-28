@@ -1,5 +1,6 @@
 import { getSupabase, isSupabaseConfigured } from "./supabase";
-import { getDb } from "./backend";
+import { getDb, signInWithEntra } from "./backend";
+import { entraAccount, entraSignIn, entraSignOut } from "./entraAuth";
 import type { Session } from "@supabase/supabase-js";
 
 /**
@@ -26,7 +27,48 @@ export interface SignedInUser {
  *  decide between the live workspace and the preview fixtures. */
 export const isConfigured = isSupabaseConfigured;
 
+/** True when the sign-in screen should offer Microsoft rather than a password. */
+export const usesMicrosoftSignIn = signInWithEntra;
+
+/**
+ * The signed-in person, in the shape the app has always read.
+ *
+ * WHY THIS IS NOT JUST THE MSAL ACCOUNT. Callers read `session.user.id` and
+ * use it to ask the database questions — `companies.ts` looks up company
+ * membership with it. That id has to be THIS CRM's, and Entra's object id
+ * is not: the rows are owned by the id they have always been owned by, and
+ * the API translates on the way in (see supabase/042_entra_identity.sql).
+ *
+ * So under Entra the object id is exchanged for the internal one here, the
+ * same way the API does it — by asking the database, which is the only
+ * place the mapping exists. A person who has signed in with Microsoft but
+ * whose account is not linked gets null: signed in as far as Microsoft is
+ * concerned, and not a user here, which is exactly what they are.
+ */
+let entraSessionCache: Session | null = null;
+
+async function entraSessionFor(): Promise<Session | null> {
+  if (entraSessionCache) return entraSessionCache;
+  const account = await entraAccount();
+  if (!account) return null;
+
+  const { data } = await getDb()
+    .from("profiles")
+    .select("id, email")
+    .eq("entra_oid", account.id)
+    .maybeSingle();
+
+  const row = data as { id?: string; email?: string } | null;
+  if (!row?.id) return null;
+
+  entraSessionCache = {
+    user: { id: row.id, email: row.email || account.email },
+  } as unknown as Session;
+  return entraSessionCache;
+}
+
 export async function currentSession(): Promise<Session | null> {
+  if (signInWithEntra()) return entraSessionFor();
   const { data } = await getSupabase().auth.getSession();
   return data.session ?? null;
 }
@@ -66,6 +108,12 @@ export async function loadProfile(session: Session): Promise<SignedInUser | null
   };
 }
 
+/** Start a Microsoft sign-in. Only meaningful when `VITE_AUTH=entra`. */
+export async function signInWithMicrosoft(): Promise<void> {
+  entraSessionCache = null;
+  await entraSignIn();
+}
+
 export async function signIn(email: string, password: string): Promise<void> {
   const { error } = await getSupabase().auth.signInWithPassword({ email: email.trim(), password });
   if (error) throw new Error(readableAuthError(error.message));
@@ -79,6 +127,11 @@ export async function sendPasswordReset(email: string): Promise<void> {
 }
 
 export async function signOut(): Promise<void> {
+  if (signInWithEntra()) {
+    entraSessionCache = null;
+    await entraSignOut();
+    return;
+  }
   await getSupabase().auth.signOut();
 }
 

@@ -446,13 +446,77 @@ one back without the other is worth a second setting.
 rather than moves, skips what is already there, and verifies by listing the
 container against the database rather than trusting its own counters.
 
+## Step 7 — sign-in (built)
+
+The one step that asks something of every user, and the one where the
+obvious approach is wrong.
+
+**Entra issues each person a uuid of its own, and it is not the one the rows
+already hold.** Every `owner_id` in this database is a Supabase uuid, and 77
+policies compare it against `auth.uid()`. Rewriting them all is a mass
+update across fifteen tables and three foreign keys, on live data, for
+cosmetic gain — and a half-finished one presents as every salesperson
+opening an empty CRM. There is no partial failure that looks like anything
+other than total data loss to the person looking at it.
+
+So nobody's id changes. `profiles.entra_oid` records the Microsoft id beside
+the existing one, and `api/lib/identity.mjs` translates before it stamps an
+identity. One column, one function, and every policy untouched.
+
+### The shape that prevents the mistake
+
+`verifyToken` no longer returns `userId`. It returns `subject` and
+`directory`, because for a Supabase token the subject IS this application's
+user id and for an Entra token it is an id in somebody else's. Calling both
+`userId` is precisely how the second one ends up stamped on a connection —
+so the type makes you go through `resolveCaller` to get one.
+
+It **fails closed**, and the direction was chosen deliberately: an unlinked
+account is refused outright rather than passed through, because stamping the
+Entra id would leave every policy comparing against a uuid that owns nothing.
+"Your account is not linked" is a worse experience than working, and a much
+better one than "you have no customers".
+
+### Linking
+
+On first sign-in, matched by email to an existing profile — never creating
+one, because being in the tenant is not the same as having an account here.
+Matching on email is only sound because the token's signature, issuer and
+audience have already established it came from this company's directory for
+this application, which is why `JWT_ISSUER` and `JWT_AUDIENCE` are not
+optional at this step. After the first time the link is on the object id, so
+an address changing in the directory cannot detach somebody from their work.
+
+`link_entra_identity` is service-role only, with the grant revoked and an
+`auth.role()` check inside. A caller who could run it could hand themselves
+somebody else's records by naming their email address.
+
+### What was proven
+
+`api/lib/entra.test.mjs`, against the real migration and the real policies:
+a linked person resolves to their existing id and sees the records that were
+already theirs; an unlinked one is refused rather than passed through; a
+second Microsoft account naming a linked person's address is refused rather
+than handed their records; the link survives an address change; and a
+Supabase token still works throughout, with no lookup at all — the
+changeover has to be gradual or everybody links at once.
+
+### What is NOT covered by tests
+
+MSAL itself. `src/data/entraAuth.ts` cannot be exercised without a real
+tenant, so it is written to be as small and as obvious as possible and the
+two mistakes worth naming are named in it: the API accepts the ACCESS token
+and not the id token, and the cache is `sessionStorage` rather than
+`localStorage`. The first presents as a 401 with an audience mismatch that
+reads like a configuration fault.
+
 ## What still has to be built
 
 | Piece | Today | On Azure | Size |
 |---|---|---|---|
 | Browser → database | ~~16 direct calls via PostgREST~~ | **Done** — Steps 3 and 5 | — |
 | The HTTP endpoints in front of the translator | ~~—~~ | **Done** — see Step 4 | — |
-| Sign-in | Supabase Auth, email + password | Entra ID / MSAL | Moderate; every user re-links once |
+| Sign-in | ~~Supabase Auth, email + password~~ | **Done** — see Step 7 | — |
 | Realtime | `supabase_realtime`, 12 tables | Web PubSub, or polling | Moderate — and now **optional**: the change feed is a separate argument to `createStore`, and a store without one falls back to the poll and the refetch-on-focus that were always underneath it |
 | Attachments | ~~Supabase Storage bucket~~ | **Done** — see Step 6 | — |
 | Scheduled sender | `netlify.toml` cron | Functions timer trigger | Small |

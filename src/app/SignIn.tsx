@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Button, Card, Field, Input } from "../components/primitives";
-import { sendPasswordReset, signIn } from "../data/session";
+import { sendPasswordReset, signIn, signInWithMicrosoft, usesMicrosoftSignIn } from "../data/session";
 
 /**
  * Sign in.
@@ -42,6 +42,46 @@ export function SignIn() {
       setError(err instanceof Error ? err.message : "Couldn't send that.");
     }
   };
+
+  /* WHEN MICROSOFT SIGN-IN IS ON, THE PASSWORD FORM IS NOT SHOWN AT ALL.
+     Not disabled, not hidden behind a tab — absent. Leaving it there would
+     invite somebody to type a password that no longer signs anybody in, and
+     then to conclude their account is broken. */
+  if (usesMicrosoftSignIn()) {
+    return (
+      <main className="signin">
+        <div className="signin-panel">
+          <div className="signin-brand">
+            <span className="brand-mark">TZ</span>
+            <span className="brand-name">TechZoid</span>
+          </div>
+
+          <Card title="Sign in">
+            <div className="stack">
+              <p className="muted">Use your TechZoid Microsoft account.</p>
+              <Button
+                tone="primary"
+                loading={busy}
+                loadingLabel="Opening Microsoft…"
+                disabled={busy}
+                onClick={() => {
+                  setBusy(true);
+                  setError("");
+                  signInWithMicrosoft()
+                    .catch((err: unknown) => setError(
+                      err instanceof Error ? err.message : "Microsoft sign-in did not complete."))
+                    .finally(() => setBusy(false));
+                }}
+              >
+                Sign in with Microsoft
+              </Button>
+              {error ? <p className="error">{error}</p> : null}
+            </div>
+          </Card>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="signin">

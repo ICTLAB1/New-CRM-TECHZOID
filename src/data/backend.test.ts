@@ -18,12 +18,23 @@ afterEach(() => {
 });
 
 /** Fresh import, because the decision is cached after the first call. */
-async function backendWith(apiBase: string | undefined, blobStorage?: string) {
+async function backendWith(apiBase: string | undefined, blobStorage?: string, auth?: Record<string, string>) {
   vi.resetModules();
   vi.stubEnv("VITE_API_BASE", apiBase ?? "");
   vi.stubEnv("VITE_BLOB_STORAGE", blobStorage ?? "");
+  vi.stubEnv("VITE_AUTH", auth?.VITE_AUTH ?? "");
+  vi.stubEnv("VITE_ENTRA_CLIENT_ID", auth?.VITE_ENTRA_CLIENT_ID ?? "");
+  vi.stubEnv("VITE_ENTRA_TENANT_ID", auth?.VITE_ENTRA_TENANT_ID ?? "");
+  vi.stubEnv("VITE_ENTRA_API_SCOPE", auth?.VITE_ENTRA_API_SCOPE ?? "");
   return import("./backend");
 }
+
+const ENTRA_SET = {
+  VITE_AUTH: "entra",
+  VITE_ENTRA_CLIENT_ID: "11111111-1111-1111-1111-111111111111",
+  VITE_ENTRA_TENANT_ID: "22222222-2222-2222-2222-222222222222",
+  VITE_ENTRA_API_SCOPE: "api://techzoid-crm/.default",
+};
 
 describe("which backend the CRM talks to", () => {
   it("stays on Supabase when nothing is configured", async () => {
@@ -115,6 +126,48 @@ describe("where attached files live", () => {
     expect((await backendWith("/api", " ON ")).attachmentsOnAzure()).toBe(true);
     expect((await backendWith("/api", "off")).attachmentsOnAzure()).toBe(false);
     expect((await backendWith("/api", "true")).attachmentsOnAzure()).toBe(false);
+  });
+});
+
+describe("where sign-in happens", () => {
+  it("stays on Supabase Auth by default", async () => {
+    const { signInWithEntra } = await backendWith("/api");
+    expect(signInWithEntra()).toBe(false);
+  });
+
+  it("moves to Microsoft when asked and configured", async () => {
+    const { signInWithEntra } = await backendWith("/api", "on", ENTRA_SET);
+    expect(signInWithEntra()).toBe(true);
+  });
+
+  /* -- THE ONE THAT MATTERS ------------------------------------------
+     Asking for Entra without configuring it must NOT produce a sign-in
+     screen that cannot sign anybody in. Whoever mistyped the setting
+     cannot fix it from inside an app they can no longer enter. */
+  it("falls back rather than locking everyone out when half-configured", async () => {
+    const { signInWithEntra } = await backendWith("/api", "", { VITE_AUTH: "entra" });
+    expect(signInWithEntra()).toBe(false);
+
+    const partial = await backendWith("/api", "", {
+      VITE_AUTH: "entra", VITE_ENTRA_CLIENT_ID: ENTRA_SET.VITE_ENTRA_CLIENT_ID,
+    });
+    expect(partial.signInWithEntra()).toBe(false);
+  });
+
+  it("moves independently of the data and attachment switches", async () => {
+    /* Three migrations, three switches, three rollbacks. Identity is the
+       one that makes every user link their account, so it gets its own. */
+    const { signInWithEntra, isOnAzure, attachmentsOnAzure } =
+      await backendWith("/api", "", ENTRA_SET);
+    expect(signInWithEntra()).toBe(true);
+    expect(isOnAzure()).toBe(true);
+    expect(attachmentsOnAzure()).toBe(false);
+  });
+
+  it("hands the API tier whichever token source is active", async () => {
+    const supa = await backendWith("/api");
+    const entra = await backendWith("/api", "", ENTRA_SET);
+    expect(supa.getToken()).not.toBe(entra.getToken());
   });
 });
 

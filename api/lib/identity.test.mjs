@@ -1,6 +1,6 @@
 import { describe, expect, it, beforeEach } from "vitest";
 import { createHmac, generateKeyPairSync, sign as signWith } from "node:crypto";
-import { AuthError, callerOf, forgetJwks, identityConfig, verifyToken } from "./identity.mjs";
+import { AuthError, callerOf, forgetJwks, identityConfig, resolveCaller, verifyToken } from "./identity.mjs";
 
 /**
  * The attack cases are the point of this file.
@@ -40,26 +40,29 @@ function rs256(payload = {}, { header = {}, key = privateKey } = {}) {
   return `${head}.${body}.${sig}`;
 }
 
-const hsConfig = { alg: "HS256", secret: SECRET, issuer: null, audience: null, clockSkewSeconds: 60 };
-const rsConfig = { alg: "RS256", publicKeyPem: PUBLIC_PEM, issuer: null, audience: null, clockSkewSeconds: 60 };
+const hsConfig = { alg: "HS256", secret: SECRET, issuer: null, audience: null, clockSkewSeconds: 60, directory: "supabase" };
+const rsConfig = { alg: "RS256", publicKeyPem: PUBLIC_PEM, issuer: null, audience: null, clockSkewSeconds: 60, directory: "supabase" };
 
 describe("a token that is genuine", () => {
   it("identifies the caller", async () => {
-    const { userId } = await verifyToken(hs256(), { config: hsConfig });
-    expect(userId).toBe(USER);
+    const { subject, directory } = await verifyToken(hs256(), { config: hsConfig });
+    expect(subject).toBe(USER);
+    /* `subject`, not `userId`. For a Supabase token they are the same value,
+       but the verifier does not get to assume that — see resolveCaller. */
+    expect(directory).toBe("supabase");
   });
 
   it("works the same signed with a key pair", async () => {
-    const { userId } = await verifyToken(rs256(), { config: rsConfig });
-    expect(userId).toBe(USER);
+    const { subject } = await verifyToken(rs256(), { config: rsConfig });
+    expect(subject).toBe(USER);
   });
 
   it("reads Entra ID's `oid` when there is no `sub`", async () => {
     /* Supabase puts the user id in `sub`; Entra ID puts it in `oid`. The
        same verifier has to serve both sides of the cutover. */
     const token = hs256({ sub: undefined, oid: USER });
-    const { userId } = await verifyToken(token, { config: hsConfig });
-    expect(userId).toBe(USER);
+    const { subject } = await verifyToken(token, { config: { ...hsConfig, directory: "entra" } });
+    expect(subject).toBe(USER);
   });
 });
 
@@ -133,9 +136,9 @@ describe("a token that is not genuine", () => {
 
   it("accepts an audience given as a list containing ours", async () => {
     const config = { ...hsConfig, audience: "api://techzoid-crm" };
-    const { userId } = await verifyToken(
+    const { subject } = await verifyToken(
       hs256({ aud: ["api://other", "api://techzoid-crm"] }), { config });
-    expect(userId).toBe(USER);
+    expect(subject).toBe(USER);
   });
 
   it("refuses a token whose subject is not a user id", async () => {
@@ -226,7 +229,7 @@ describe("fetched signing keys", () => {
   const jwksConfig = {
     alg: "RS256",
     jwksUri: "https://login.microsoftonline.com/t/discovery/v2.0/keys",
-    issuer: null, audience: null, clockSkewSeconds: 60,
+    issuer: null, audience: null, clockSkewSeconds: 60, directory: "supabase",
   };
 
   /* Exported straight off the key object: `createPublicKey` refuses one
@@ -243,8 +246,8 @@ describe("fetched signing keys", () => {
 
   it("fetches the key set and verifies against it", async () => {
     const server = serving([jwkFor(publicKey, "key-1")]);
-    const { userId } = await verifyToken(rs256(), { config: jwksConfig, fetch: server.fetch });
-    expect(userId).toBe(USER);
+    const { subject } = await verifyToken(rs256(), { config: jwksConfig, fetch: server.fetch });
+    expect(subject).toBe(USER);
   });
 
   it("caches, so every request is not a network round trip", async () => {
@@ -270,8 +273,8 @@ describe("fetched signing keys", () => {
 
     current = [jwkFor(rotated.publicKey, "key-2")];
     const token = rs256({}, { header: { kid: "key-2" }, key: rotated.privateKey });
-    const { userId } = await verifyToken(token, { config: jwksConfig, fetch });
-    expect(userId).toBe(USER);
+    const { subject } = await verifyToken(token, { config: jwksConfig, fetch });
+    expect(subject).toBe(USER);
     expect(calls).toBe(2);
   });
 

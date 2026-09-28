@@ -13,6 +13,7 @@
     "verify": "bash scripts/verify.sh"
   },
   "dependencies": {
+    "@azure/msal-browser": "^5.23.0",
     "@supabase/supabase-js": "^2.45.4",
     "jspdf": "2.5.1",
     "jspdf-autotable": "3.8.2",

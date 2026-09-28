@@ -5,6 +5,8 @@ import type { FileStore } from "./storage";
 import { createBlobStore } from "./blobStore";
 import { createSupabaseStore } from "./supabaseStore";
 import { supabaseToken } from "./apiClient";
+import type { TokenSource } from "./apiClient";
+import { entraSettings, entraToken } from "./entraAuth";
 import { isSupabaseConfigured } from "./supabase";
 
 /**
@@ -28,12 +30,9 @@ import { isSupabaseConfigured } from "./supabase";
  *
  * Stays on Supabase, for now, and on purpose:
  *
- *   · SIGN-IN. Supabase Auth issues the token; the Azure API verifies it
- *     with the project's JWT secret (HS256). This is why `identity.mjs`
- *     implements HS256 as well as RS256 — so the data can move on one day
- *     and identity on another, rather than both on the same day. Moving
- *     identity is the step that makes every user re-link their account, and
- *     it does not have to happen at the same time as anything else.
+ *   · SIGN-IN, unless `VITE_AUTH=entra` says otherwise. Its own switch
+ *     again, because moving identity is the step that makes every user link
+ *     their account once and it should not ride along with anything else.
  *
  *   · ATTACHMENTS, unless `VITE_BLOB_STORAGE` says otherwise. Its own
  *     switch, separate from the data one, so the two can move on different
@@ -81,7 +80,7 @@ let storeCache: FileStore | null = null;
 export function getDb(): Db {
   if (cached) return cached;
   const base = apiBase();
-  cached = base ? createApiClient(base) : supabaseDb();
+  cached = base ? createApiClient(base, getToken()) : supabaseDb();
   return cached;
 }
 
@@ -118,7 +117,7 @@ export function getFileStore(): FileStore {
   const base = apiBase();
   const wantsBlob = String(import.meta.env.VITE_BLOB_STORAGE ?? "").trim().toLowerCase() === "on";
   storeCache = wantsBlob && base
-    ? createBlobStore(base, supabaseToken)
+    ? createBlobStore(base, getToken())
     : createSupabaseStore();
   return storeCache;
 }
@@ -126,6 +125,33 @@ export function getFileStore(): FileStore {
 /** True when attachments are on Azure Blob Storage. */
 export function attachmentsOnAzure(): boolean {
   return String(import.meta.env.VITE_BLOB_STORAGE ?? "").trim().toLowerCase() === "on" && !!apiBase();
+}
+
+/**
+ * Where the caller's token comes from.
+ *
+ * ITS OWN SWITCH. `VITE_AUTH=entra` signs in with Microsoft; anything else
+ * keeps Supabase Auth. Moving identity is the one step that makes every
+ * user link their account, so it gets to happen on a day of its own.
+ *
+ * Both sides have to work at once during that changeover — somebody who has
+ * not linked yet still needs to get in — which is why the API verifies
+ * HS256 and RS256 and why `042_entra_identity.sql` leaves every existing
+ * user id exactly as it was.
+ *
+ * Asking for Entra without configuring it falls back rather than locking
+ * everybody out, which is the failure mode worth avoiding here: a sign-in
+ * screen that cannot sign anybody in is not something the person who
+ * mistyped the setting can fix from inside the app.
+ */
+export function signInWithEntra(): boolean {
+  const wants = String(import.meta.env.VITE_AUTH ?? "").trim().toLowerCase() === "entra";
+  return wants && entraSettings() !== null;
+}
+
+/** The token every request carries. */
+export function getToken(): TokenSource {
+  return signInWithEntra() ? entraToken : supabaseToken;
 }
 
 /** Drop the cached clients. For tests, and after a configuration change. */

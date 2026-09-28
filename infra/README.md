@@ -158,7 +158,62 @@ there. It finishes by listing the container and checking it against the
 database rather than against its own counters, and refuses to report success
 if any row's file is missing.
 
-## 7. Point the CRM at Azure
+## 7. Sign-in with Entra ID — optional, and last
+
+The one step that asks something of every user: each person links their
+Microsoft account once, by signing in with it.
+
+**Nobody's user id changes.** Entra issues a uuid of its own, and it is not
+the one every `owner_id` in your database already holds. Rewriting those
+would be a mass update across fifteen tables on live data, and a half-done
+one shows up as every salesperson opening an empty CRM. Instead
+`profiles.entra_oid` records the Microsoft id beside the existing one and
+the API translates on the way in — all 77 policies go on comparing exactly
+what they compared before. See `supabase/042_entra_identity.sql`.
+
+In the Azure portal, register an application:
+
+- **Redirect URI** — Single-page application, `https://<staticSiteHost>`
+- **Expose an API** — an application ID URI and a scope, e.g. `access_as_user`
+- Note the **client id**, the **tenant id** and the scope
+
+Then on the Function App:
+
+```bash
+az functionapp config appsettings set -g techzoid-crm -n <functionAppName> --settings \
+  JWT_ALG=RS256 \
+  JWT_JWKS_URI="https://login.microsoftonline.com/<tenantId>/discovery/v2.0/keys" \
+  JWT_ISSUER="https://login.microsoftonline.com/<tenantId>/v2.0" \
+  JWT_AUDIENCE="<application ID URI>"
+```
+
+`JWT_ISSUER` and `JWT_AUDIENCE` are **not optional here.** The link step
+matches a Microsoft account to a CRM user by email address, and an address
+only identifies a person inside one company's own directory. Those two
+settings are what establish the token came from your tenant, for your
+application.
+
+Then rebuild with the third switch:
+
+```bash
+VITE_API_BASE=/api VITE_BLOB_STORAGE=on VITE_AUTH=entra \
+VITE_ENTRA_CLIENT_ID=<clientId> \
+VITE_ENTRA_TENANT_ID=<tenantId> \
+VITE_ENTRA_API_SCOPE="<application ID URI>/access_as_user" \
+npm run build
+```
+
+### The changeover is gradual, on purpose
+
+The API verifies HS256 and RS256, so a Supabase token and a Microsoft token
+both work while people are still linking. Somebody in your tenant who is
+**not** already a CRM user is refused — being an employee is not the same as
+having an account here, and nothing auto-creates one.
+
+Rolling back is dropping `VITE_AUTH` and rebuilding. The `entra_oid` column
+stays, harmlessly, so re-doing it later needs no relinking.
+
+## 8. Point the CRM at Azure
 
 Everything so far builds the new home. This is the move.
 
@@ -169,15 +224,14 @@ npx @azure/static-web-apps-cli deploy dist --deployment-token "$(
     --query properties.apiKey -o tsv)"
 ```
 
-**Two environment variables, not a code change.** `VITE_API_BASE` moves
-every query and stored-function call to the Azure API tier; `VITE_BLOB_STORAGE=on`
-moves attachments to Blob Storage. Leave either unset and that half stays
-where it is.
+**Three environment variables, not a code change.** `VITE_API_BASE` moves
+the queries, `VITE_BLOB_STORAGE=on` the attachments, `VITE_AUTH=entra` the
+sign-in. Leave any of them unset and that part stays where it is.
 
 They are separate on purpose. A bad data cutover shows up immediately, on
 every screen. A bad attachment cutover shows up the first time somebody
-opens a contract, which might be Thursday. Being able to roll one back
-without the other is worth the second setting — and blob storage needs the
+opens a contract, which might be Thursday. A bad sign-in cutover locks
+everybody out at once. Three failure modes, three rollbacks — and blob storage needs the
 API tier to sign its URLs, so turning it on alone falls back rather than
 failing at the moment somebody opens a file. A cutover that needs a code change needs a
 build, a deploy and a rollback plan. A cutover that needs a setting can be
@@ -201,7 +255,7 @@ it simply stops being asked.
 | Customers, quotations, invoices, the whole pipeline | **Azure** |
 | The 26 scheduled jobs and webhook handlers | **Azure** |
 | Attached files | **Azure Blob Storage** |
-| Sign-in | **Supabase Auth**, still |
+| Sign-in | **Entra ID**, once step 7 is done |
 
 That is a deliberate stopping point, not an unfinished one.
 
@@ -213,8 +267,7 @@ implements HS256 as well as RS256. When you are ready, it is a configuration
 change: `JWT_ALG=RS256` plus `JWT_JWKS_URI`, `JWT_ISSUER` and
 `JWT_AUDIENCE`, and no code moves.
 
-Sign-in can move later, on its own, and be reverted without disturbing
-anything else.
+Each of the three can be reverted without disturbing the others.
 
 ### Live updates
 
@@ -227,8 +280,6 @@ the eventual replacement and is not required for anything to work.
 ## What is still to do after this
 
 
-- **Entra ID sign-in.** A configuration change plus a tenant app
-  registration; see above. Every user links their account once.
 - **`admin-users`.** The one handler that did not come across, because it
   manages accounts and accounts are what Entra ID takes over. It answers
   501 with a reason rather than 404.

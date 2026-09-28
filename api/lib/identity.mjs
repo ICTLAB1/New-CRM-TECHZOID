@@ -67,6 +67,15 @@ export function identityConfig(env = process.env) {
     clockSkewSeconds: Number(env.JWT_CLOCK_SKEW_SECONDS || 60),
   };
 
+  /* Which directory the token comes from, and therefore whether its
+     subject IS this application's user id or merely points at one.
+     Defaults from the algorithm because that is how the two providers
+     actually differ here, and can be stated outright when it is not. */
+  config.directory = (env.JWT_DIRECTORY || (alg === "RS256" ? "entra" : "supabase")).toLowerCase();
+  if (config.directory !== "entra" && config.directory !== "supabase") {
+    throw new AuthError("Unsupported JWT_DIRECTORY: expected entra or supabase.", 500);
+  }
+
   if (alg === "HS256") {
     const secret = env.JWT_SECRET || env.SUPABASE_JWT_SECRET;
     if (!secret) {
@@ -253,14 +262,62 @@ export async function verifyToken(token, options = {}) {
     }
   }
 
-  /* Entra ID puts the user's object id in `oid`; Supabase uses `sub`. Both
-     are read so the same verifier serves before and after cutover. */
-  const subject = String(claims.sub ?? claims.oid ?? "");
+  /* Entra ID puts the user's object id in `oid`; Supabase uses `sub`. */
+  const subject = String(
+    config.directory === "entra" ? (claims.oid ?? claims.sub ?? "") : (claims.sub ?? ""));
   if (!UUID.test(subject)) {
     throw new AuthError("Token does not identify a user.");
   }
 
-  return { userId: subject, claims };
+  /* NOT `userId`. For Supabase the subject IS this application's user id;
+     for Entra it is an id in somebody else's directory that has to be
+     translated first. Calling both of them `userId` is how the second one
+     ends up stamped on a connection, where it matches no row and every
+     screen comes up empty — or, with a policy written the other way round,
+     matches more than it should. `callerOf` does the translating. */
+  return { subject, directory: config.directory, claims };
+}
+
+/**
+ * Turn a verified token's subject into the user id this application knows.
+ *
+ * For Supabase they are the same value and this does nothing. For Entra the
+ * subject is an object id in the company's directory, and the internal id is
+ * whatever `profiles.entra_oid` points at — see supabase/042_entra_identity.sql
+ * for why nobody's id was rewritten.
+ *
+ * FAILS CLOSED, AND THE DIRECTION MATTERS. An unlinked account is refused
+ * outright rather than passed through: stamping the Entra id would leave
+ * every policy comparing against a uuid that owns nothing, which shows up
+ * as a CRM that signs you in and then says you have no customers. That is a
+ * worse failure than being told your account is not linked, because the
+ * first one looks like the data is gone.
+ */
+export async function resolveCaller(verified, options = {}) {
+  if (verified.directory !== "entra") return { userId: verified.subject, claims: verified.claims };
+
+  const link = options.linkIdentity ?? defaultLinkIdentity;
+  const email = String(
+    verified.claims.email ?? verified.claims.preferred_username ?? verified.claims.upn ?? "");
+
+  const userId = await link(verified.subject, email);
+  if (!userId) {
+    throw new AuthError(
+      "This Microsoft account is not linked to a CRM user. Ask an administrator to add you.",
+      403);
+  }
+  return { userId, claims: verified.claims };
+}
+
+/* Imported lazily so that a deployment still signing in with Supabase does
+   not pull the database gate in just to verify a token. */
+async function defaultLinkIdentity(oid, email) {
+  const { asService } = await import("./db.mjs");
+  return asService(async (client) => {
+    const res = await client.query(
+      "select public.link_entra_identity($1, $2) as id", [oid, email]);
+    return res.rows[0]?.id ?? null;
+  });
 }
 
 /**
@@ -277,5 +334,5 @@ export async function callerOf(authorizationHeader, options = {}) {
   if (!raw) return null;
   const match = /^Bearer\s+(.+)$/i.exec(raw);
   if (!match) throw new AuthError("Authorization header is not a bearer token.");
-  return verifyToken(match[1].trim(), options);
+  return resolveCaller(await verifyToken(match[1].trim(), options), options);
 }
