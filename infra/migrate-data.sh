@@ -114,10 +114,26 @@ say "Dumping the data"
 # --no-privileges:  nor do its grants; the migrations set up their own.
 # --disable-triggers: so foreign keys and audit triggers do not fire during
 #                   a bulk load that is, by definition, arriving out of order.
+#
+# BOTH TABLE PATTERNS ARE SCHEMA-QUALIFIED, AND THERE IS NO --schema.
+# This read `--schema=public --table=auth.users` until it was actually run.
+# `--table` does not ADD to `--schema`, it REPLACES the selection: the two
+# together dumped auth.users and nothing else, so 256 of 262 rows were
+# silently left behind. The dump was four kilobytes and reported success.
+# Only the row-count comparison below caught it — which is the entire reason
+# that comparison exists.
 pg_dump "${SOURCE_URL}" \
   --data-only --no-owner --no-privileges --disable-triggers \
-  --schema=public --table=auth.users \
+  --table='public.*' --table='auth.users' \
   --file="${DUMP}"
+
+# A dump that named no public tables is the bug above coming back. Cheap to
+# check, and the alternative is discovering it from a row count after a
+# restore that looked fine.
+if ! grep -q '^COPY public\.' "${DUMP}"; then
+  echo "The dump contains no public tables. Refusing to restore it." >&2
+  exit 1
+fi
 printf '  %s\n' "$(du -h "${DUMP}" | cut -f1) written to ${DUMP}"
 
 say "Restoring"

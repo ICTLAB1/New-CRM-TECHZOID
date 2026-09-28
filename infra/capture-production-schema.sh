@@ -44,12 +44,31 @@ pg_dump "${SOURCE_URL}" \
   --schema-only --no-owner --no-privileges --schema=public \
   --file="${OUT}.raw"
 
-# Supabase's dump refers to extensions that live in its own `extensions`
-# schema. On Azure they go in `public`, which bootstrap has already created
-# them in, so the CREATE EXTENSION lines are dropped rather than left to fail.
-# Everything else passes through untouched: this is a filter, not a rewrite.
-grep -v -E '^(CREATE EXTENSION|COMMENT ON EXTENSION|CREATE SCHEMA extensions)' \
-  "${OUT}.raw" > "${OUT}"
+# Four adjustments, and no others. This is a filter, not a rewrite: every
+# table, constraint, index, function, trigger, policy and view passes
+# through exactly as pg_dump produced it.
+#
+# Each of these was found by running the thing, not by reading it:
+#
+#   CREATE SCHEMA public    -> IF NOT EXISTS. pg_dump 16 emits it
+#     unconditionally, and 000_bootstrap.sql has already run by the time
+#     this file is loaded. Made idempotent rather than dropped, so the dump
+#     still works on a genuinely empty database.
+#
+#   COMMENT ON SCHEMA public -> dropped. Only the schema's OWNER may set it,
+#     and on Azure Database for PostgreSQL the administrator is not a
+#     superuser and does not own `public`. It is a cosmetic string, and
+#     losing it is better than a restore that stops on line 32.
+#
+#   CREATE EXTENSION / COMMENT ON EXTENSION -> dropped. Supabase keeps its
+#     extensions in an `extensions` schema; bootstrap has already created
+#     the ones the CRM uses, in `public`.
+#
+#   CREATE SCHEMA extensions -> dropped, for the same reason.
+sed -e 's/^CREATE SCHEMA public;$/CREATE SCHEMA IF NOT EXISTS public;/' \
+    "${OUT}.raw" \
+  | grep -v -E "^(CREATE EXTENSION|COMMENT ON EXTENSION|CREATE SCHEMA extensions|COMMENT ON SCHEMA public)" \
+  > "${OUT}"
 rm -f "${OUT}.raw"
 
 printf '  %s lines written to %s\n' "$(wc -l < "${OUT}")" "${OUT}"

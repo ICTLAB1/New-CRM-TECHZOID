@@ -510,6 +510,66 @@ and not the id token, and the cache is `sessionStorage` rather than
 `localStorage`. The first presents as a 401 with an audience mismatch that
 reads like a configuration fault.
 
+## The rehearsal
+
+The whole pipeline was run end to end against real PostgreSQL before any of
+it was pointed at Azure: a source database standing in for Supabase, seeded
+at production's real shape (6 users, 2 companies, 89 customers, 68
+quotations, 27 prospects — 262 rows across 56 tables), a fresh target
+standing in for Flexible Server, and the actual scripts between them.
+
+**It found two bugs, and neither was visible by reading.**
+
+**`capture-production-schema.sh` produced a schema that would not load.**
+`pg_dump` emits `CREATE SCHEMA public` unconditionally, and `000_bootstrap.sql`
+has already run by then, so the restore stopped on line 25. It also emits
+`COMMENT ON SCHEMA public`, which only the schema's owner may set — and on
+Azure Database for PostgreSQL the administrator is not a superuser and does
+not own `public`, so that would have failed there even though it passes
+locally. The first is now made idempotent, the second dropped.
+
+**`migrate-data.sh` moved six rows out of 262 and reported success.** The
+dump was `--schema=public --table=auth.users`, and `--table` does not ADD to
+`--schema`, it REPLACES the selection. So the dump contained `auth.users`
+and nothing else: no customers, no quotations, no invoices. Four kilobytes,
+exit code zero.
+
+Only the row-count comparison caught it. That check was written on the
+principle that a migration you cannot verify is one you are guessing at, and
+this is the guess it caught. Both table patterns are now schema-qualified,
+and the script additionally refuses to restore a dump that names no public
+tables at all — the same bug, checked for directly, because it came back
+once already.
+
+### What the rehearsal then proved
+
+With both fixed, and run again from scratch: 680 schema objects identical
+between source and target, every table matching row for row, and then the
+**real `createStore`** loading the migrated database — 89 customers for an
+admin, a strict subset for a salesperson with every row their own, settings
+carried across, `next_doc_seq` resuming at 1001 rather than restarting at 1,
+and `v_send_queue` still joining prospects to campaigns to sequence steps
+through `render_merge`.
+
+That last one matters more than it looks: document numbering restarting at 1
+is the bug this entire project opened with, and it is what a lost `settings`
+row looks like.
+
+Both refusal gates were exercised too, because a safety rail nobody has
+tripped is a safety rail nobody knows the shape of. Loading onto a target
+that already holds rows is refused and says how many; loading onto a target
+whose schema differs is refused and names the 24 missing objects.
+
+### One false alarm, recorded because it is instructive
+
+The first run appeared to show `settings` failing to migrate — document
+numbering restarting at 1, the original bug, apparently reproduced by the
+migration. It was the seed: `schema.sql` already creates a `settings` row
+with `id='main'`, so the rehearsal's `on conflict (id) do nothing` silently
+skipped its own. The pipeline had carried the row it was given, correctly.
+Worth writing down because the failure was indistinguishable from a real one
+until it was chased, and the instinct to report it immediately was wrong.
+
 ## What still has to be built
 
 | Piece | Today | On Azure | Size |
