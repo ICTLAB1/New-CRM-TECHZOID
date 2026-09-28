@@ -216,12 +216,136 @@ stops compiling for reasons unrelated to it. A check that depends on what
 else is in the build is not a check, so it is a runtime conformance test
 instead, with the gap it leaves stated in the file rather than papered over.
 
+## Step 4 — the two endpoints (built)
+
+`POST /api/q` for queries, `POST /api/rpc` for stored functions. Together
+they are what the browser talks to instead of PostgREST.
+
+Every request goes through the same five checks, in this order:
+
+1. **Method and content type** — a plain HTML form on another site cannot
+   set `application/json`, so it is turned away before anything reads a body.
+2. **Size** — the declared `content-length` first, so an oversize body is
+   refused without being read, then the actual bytes, because the header is
+   whatever the caller wrote there.
+3. **The token** — verified, never merely decoded. See below.
+4. **`asUser(verified id)` or `asAnon()`** — opens a transaction and stamps
+   the identity with `SET LOCAL` so the policies can judge it.
+5. **The translator, or the RPC whitelist.**
+
+There is no step where a user id is taken from the request body, and no step
+where a query runs on a connection with nobody's identity on it.
+
+### Who is calling — `api/lib/identity.mjs`
+
+The most security-critical file in the migration. Everything downstream is
+correct only if the id handed to `asUser` is one the caller actually proved.
+
+**The signature is checked before the payload is believed.** A JWT is three
+pieces of base64 anybody can type; the claims inside are a request, not a
+fact. Nothing reads `sub` before `verify` has run.
+
+**The algorithm is not taken from the token.** That is the classic break on
+hand-written JWT code: `alg: "none"` skips verification, and an `HS256`
+token aimed at an RS256 verifier lets an attacker HMAC-sign with the public
+key — which is public. The expected algorithm comes from configuration and a
+mismatch dies first.
+
+Both algorithms are implemented, because this migration has two sign-ins:
+HS256 for Supabase today, RS256 with a fetched-and-cached JWKS for Entra ID
+after cutover, including the key-rotation case. The switch is then
+configuration, not a rewrite on the day.
+
+The tests are almost entirely attack cases — thirty-one of them, each a real
+published break of somebody else's verifier: `alg: none`, both directions of
+algorithm confusion, a tampered payload with a valid signature, wrong secret,
+wrong key, expired, no expiry at all, not-yet-valid, wrong issuer, wrong
+audience, and a subject that is not a user id.
+
+One distinction worth stating because getting it backwards is silent:
+**a missing token is anonymous; an invalid token is refused.** The
+registration form and the customer portal are meant to work signed out and
+do, as `anon`, seeing nothing. Falling back to anonymous on a *bad* token
+would make a forged one work on every public path.
+
+### What may be called — `api/lib/rpc.mjs`
+
+PostgREST exposed `/rpc/<name>` for every function in the schema. Copying
+that as "take the name from the request and call it" would be remote code
+execution with a public door on it — `pg_read_file`, `pg_sleep`, every
+`SECURITY DEFINER` helper, and anything a future migration adds without
+anyone thinking about it.
+
+Eight functions are callable, each with the exact argument names the CRM
+sends, using named notation so the two overloads of `next_doc_number`
+resolve by what was actually passed. Deliberately absent:
+`consume_rate_limit` and `may_manage_email_account` — both real, both
+called, but by the scheduled jobs, which run as `service_role`. A browser
+has no business asking the database whether it has exhausted its own rate
+limit.
+
+The whitelist is checked **before a connection is taken**, so a flood of
+requests naming functions that do not exist costs no transactions.
+
+### Errors
+
+Postgres errors pass through with their message and SQLSTATE, because that
+is what PostgREST did and the CRM reads them — "duplicate key" becomes "a
+company by that name already exists" on screen. `detail`, `hint` and `where`
+do not: `where` carries the body of the function that failed, which is
+internals. Anything with no SQLSTATE is a bug here, and the browser gets a
+flat 500 while the real error goes to the log. A stack trace in a response
+is a map of the server drawn for whoever asked.
+
+### What was proven
+
+| Proof | Where |
+|---|---|
+| Thirty-one forged, expired, confused and tampered tokens, all refused | `api/lib/identity.test.mjs` |
+| JWKS fetching, caching, and one refetch on rotation — but not unbounded refetching for a key that does not exist | same |
+| Six off-whitelist function names refused, including the two the scheduled jobs use | `api/lib/http.test.mjs` |
+| **Two valid tokens, two people, one query — each answered as themselves** | same |
+| A database refusal passing through with its SQLSTATE and without its internals | same |
+| `/api/q` reaches the query handler and `/api/rpc` the RPC one | `api/src/functions/register.test.mjs` |
+| **The whole CRM over a real socket**: real store, real client, real `fetch`, real handlers, real policies — still hiding one salesperson's customers from another | `src/data/apiOverHttp.test.ts` |
+
+That last one closes the gap Step 3 left open. Until it existed, nothing
+proved that what the browser client puts on the wire is what the endpoint
+expects to read off it — a field renamed on one side type-checks on both and
+fails only when a request is actually sent.
+
+### Deploying them
+
+The Functions app is `api/`, with its own `package.json` and `host.json`, and
+is what Static Web Apps expects to find. Same origin as the SPA, so there is
+no CORS to configure and no third-party cookie to worry about.
+
+`authLevel` is `anonymous` on both routes. That is not "no authentication" —
+it means no function key. Authentication is the bearer token. A function key
+would be a second shared secret whose only possible home is the browser
+bundle, where it is not a secret at all.
+
+Configuration, all through app settings or Key Vault, none of it in the
+repository:
+
+| Setting | Today | After the Entra ID step |
+|---|---|---|
+| `PGCONNECTION_STRING` | — | Flexible Server, TLS on |
+| `JWT_ALG` | `HS256` | `RS256` |
+| `JWT_SECRET` | the Supabase JWT secret | — |
+| `JWT_JWKS_URI` | — | the tenant's discovery keys |
+| `JWT_ISSUER` / `JWT_AUDIENCE` | optional | set both |
+
+`src/data/apiClient.ts` builds the browser client against these endpoints and
+is **not switched on**: `store()` still binds to Supabase. The cutover is one
+line, deliberately left for the day the Azure resources exist.
+
 ## What still has to be built
 
 | Piece | Today | On Azure | Size |
 |---|---|---|---|
 | Browser → database | ~~16 direct calls via PostgREST~~ | **Done** — see Step 3 | — |
-| The HTTP endpoints in front of the translator | — | Two Azure Functions, `/api/q` and `/api/rpc` | Small — the hard part is written and tested |
+| The HTTP endpoints in front of the translator | ~~—~~ | **Done** — see Step 4 | — |
 | Sign-in | Supabase Auth, email + password | Entra ID / MSAL | Moderate; every user re-links once |
 | Realtime | `supabase_realtime`, 12 tables | Web PubSub, or polling | Moderate — and now **optional**: the change feed is a separate argument to `createStore`, and a store without one falls back to the poll and the refetch-on-focus that were always underneath it |
 | Attachments | Supabase Storage bucket | Blob Storage + SAS URLs | Moderate — one file, `src/data/attachments.ts` |

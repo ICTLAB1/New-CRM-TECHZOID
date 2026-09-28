@@ -1,0 +1,91 @@
+import { describe, expect, it } from "vitest";
+import { register } from "./register.mjs";
+
+/**
+ * The wiring, which is the one part of the endpoints no other test covers.
+ *
+ * `http.test.mjs` proves both handlers do the right thing when called. It
+ * says nothing about whether `/api/q` reaches the query handler or the RPC
+ * one — and that mistake does not throw anywhere. It presents on the day of
+ * cutover as a CRM that cannot load, with every unit test green.
+ *
+ * A fake `app` stands in for the Functions host so none of this needs the
+ * host or the `@azure/functions` package installed.
+ */
+
+function fakeApp() {
+  const routes = new Map();
+  return {
+    app: { http: (name, config) => routes.set(name, config) },
+    routes,
+  };
+}
+
+/** A request the handlers will refuse early, so nothing touches a database:
+ *  which handler refused it is what identifies the route. */
+const probe = () => ({
+  method: "GET",
+  headers: { get: () => null },
+  text: async () => "",
+});
+
+describe("the routes", () => {
+  it("registers exactly q and rpc", () => {
+    const { app, routes } = fakeApp();
+    register(app);
+    expect([...routes.keys()].sort()).toEqual(["q", "rpc"]);
+  });
+
+  it("accepts only POST, on the paths the browser calls", () => {
+    const { app, routes } = fakeApp();
+    register(app);
+    for (const name of ["q", "rpc"]) {
+      expect(routes.get(name).methods).toEqual(["POST"]);
+      expect(routes.get(name).route).toBe(name);
+    }
+  });
+
+  /* Not an oversight — see the note in register.mjs. A function key would
+     be a second shared secret whose only home is the browser bundle. The
+     bearer token is the authentication. */
+  it("takes no function key, because the token is the authentication", () => {
+    const { app, routes } = fakeApp();
+    register(app);
+    expect(routes.get("q").authLevel).toBe("anonymous");
+    expect(routes.get("rpc").authLevel).toBe("anonymous");
+  });
+
+  it("points each route at its own handler, not at the same one twice", async () => {
+    const { app, routes } = fakeApp();
+    register(app);
+
+    /* Both refuse a GET with 405, so the status cannot tell them apart.
+       What can, WITHOUT NEEDING A DATABASE: only the RPC handler checks a
+       function name, and it does so before taking a connection. So "Unknown
+       function." identifies the rpc route, and the q route is whatever else
+       — which is the assertion, rather than a specific message, because
+       what q says depends on whether a database is configured and this test
+       must not. */
+    const post = (body) => ({
+      method: "POST",
+      headers: { get: (n) => (n === "content-type" ? "application/json" : null) },
+      text: async () => JSON.stringify(body),
+    });
+
+    const fromQ = await routes.get("q").handler(post({ table: "nope", op: "select" }));
+    const fromRpc = await routes.get("rpc").handler(post({ fn: "nope" }));
+
+    expect(fromRpc.jsonBody.error.message).toBe("Unknown function.");
+    expect(fromQ.jsonBody.error.message).not.toBe("Unknown function.");
+    expect(routes.get("q").handler).not.toBe(routes.get("rpc").handler);
+  });
+
+  it("refuses a GET on both, before reading anything", async () => {
+    const { app, routes } = fakeApp();
+    register(app);
+    for (const name of ["q", "rpc"]) {
+      const res = await routes.get(name).handler(probe());
+      expect(res.status).toBe(405);
+    }
+  });
+});
