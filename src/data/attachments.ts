@@ -1,5 +1,5 @@
-import { getSupabase, isSupabaseConfigured } from "./supabase";
-import { getDb } from "./backend";
+import { getDb, getFileStore, hasBackend } from "./backend";
+import { StorageError } from "./storage";
 import {
   checkFile, mimeFor, storagePath,
   type Attachment, type AttachableType,
@@ -8,19 +8,19 @@ import {
 /**
  * Uploading, listing and removing attached files.
  *
- * The only place in the app that touches Supabase Storage. Two halves are
- * always kept in step: the BYTES in the `attachments` bucket, and the ROW in
- * the `attachments` table saying what those bytes are and what they belong
- * to. A row without bytes is a broken download; bytes without a row are
+ * The only place in the app that touches a file store, whichever one is
+ * configured — Supabase Storage or Azure Blob Storage, decided in
+ * `backend.ts` and invisible from here. Two halves are always kept in step:
+ * the BYTES, and the ROW in the `attachments` table saying what those bytes
+ * are and what they belong to. A row without bytes is a broken download; bytes without a row are
  * invisible and never cleaned up — so `upload` deletes the object it just
  * wrote if the row fails to insert, and `remove` drops the row only after
  * the object is gone.
  *
- * The bucket is PRIVATE. Nothing here ever produces a permanent URL; every
- * read goes through a short-lived signed link issued to a signed-in user.
+ * Neither store is PUBLIC. Nothing here ever produces a permanent URL;
+ * every read goes through a short-lived signed link issued to a signed-in
+ * user whom the policies have agreed may see the row.
  */
-
-const BUCKET = "attachments";
 
 /** How long a download link stays good. Long enough to click, short enough
  *  that a link pasted into a chat is not a lasting way in. */
@@ -62,7 +62,7 @@ const uid = (): string => Math.random().toString(36).slice(2, 10) + Date.now().t
 
 /** Attachments are a live-workspace feature: there is nowhere to put a file
  *  in demo mode, and pretending otherwise would lose somebody's document. */
-export const attachmentsAvailable = (): boolean => isSupabaseConfigured();
+export const attachmentsAvailable = (): boolean => hasBackend();
 
 /** Everything attached to one record, newest first. */
 export async function listAttachments(
@@ -106,19 +106,18 @@ export async function uploadAttachment(opts: {
   const verdict = checkFile(file);
   if (!verdict.ok) throw new AttachmentError(verdict.reason ?? "That file can't be attached.");
 
-  const client = getSupabase();
-  /* The UPLOADER's folder, not the record owner's: the storage policy reads
-     the first path segment and will reject anything written outside your own. */
+  const store = getFileStore();
+  /* The UPLOADER's folder, not the record owner's: both stores read the
+     first path segment and reject anything written outside your own — the
+     Supabase one in a bucket policy, the Azure one in `api/lib/blob.mjs`. */
   const path = storagePath(uploaderId, recordType, recordId, file.name, uid());
   const mime = mimeFor(file.name, file.type);
 
-  const up = await client.storage.from(BUCKET).upload(path, file, {
-    contentType: mime,
-    /* Never overwrite. The path already carries a unique segment, so an
-       upsert here could only ever mean clobbering somebody else's bytes. */
-    upsert: false,
-  });
-  if (up.error) throw new AttachmentError(up.error.message);
+  try {
+    await store.upload(path, file, mime);
+  } catch (err) {
+    throw new AttachmentError(err instanceof StorageError ? err.message : String(err));
+  }
 
   const row: AttachmentRow = {
     id: uid(),
@@ -135,27 +134,29 @@ export async function uploadAttachment(opts: {
     created_at: new Date().toISOString(),
   };
 
-  const { data, error } = await client.from("attachments").insert(row).select().single();
+  const { data, error } = await getDb()
+    .from("attachments")
+    .insert(row as unknown as Record<string, unknown>)
+    .select()
+    .single();
   if (error) {
     /* The bytes are up but nothing points at them. Take them back out rather
-       than leaving an invisible file in the bucket that nobody will ever
-       find to delete. */
-    await client.storage.from(BUCKET).remove([path]).catch(() => {});
+       than leaving an invisible file nobody will ever find to delete. */
+    await store.remove([path]).catch(() => {});
     throw new AttachmentError(error.message);
   }
   return rowToAttachment(data as AttachmentRow);
 }
 
 /** A short-lived link to the bytes. Signed on demand — there is no permanent
- *  URL to leak, because the bucket is private. */
+ *  URL to leak, because neither store is public. */
 export async function attachmentUrl(attachment: Attachment): Promise<string> {
-  const { data, error } = await getSupabase()
-    .storage.from(BUCKET)
-    .createSignedUrl(attachment.path, SIGNED_URL_SECONDS);
-  if (error || !data?.signedUrl) {
-    throw new AttachmentError(error?.message ?? "Couldn't open that file.");
+  try {
+    return await getFileStore().signedUrl(attachment.path, SIGNED_URL_SECONDS);
+  } catch (err) {
+    throw new AttachmentError(
+      err instanceof StorageError ? err.message : "Couldn't open that file.");
   }
-  return data.signedUrl;
 }
 
 /**
@@ -167,10 +168,12 @@ export async function attachmentUrl(attachment: Attachment): Promise<string> {
  * still points at a real file and can simply be deleted again.
  */
 export async function removeAttachment(attachment: Attachment): Promise<void> {
-  const client = getSupabase();
-  const { error: storageError } = await client.storage.from(BUCKET).remove([attachment.path]);
-  if (storageError) throw new AttachmentError(storageError.message);
-  const { error } = await client.from("attachments").delete().eq("id", attachment.id);
+  try {
+    await getFileStore().remove([attachment.path]);
+  } catch (err) {
+    throw new AttachmentError(err instanceof StorageError ? err.message : String(err));
+  }
+  const { error } = await getDb().from("attachments").delete().eq("id", attachment.id);
   if (error) throw new AttachmentError(error.message);
 }
 
@@ -198,7 +201,6 @@ export async function removeAttachmentsFor(
   if (!attachmentsAvailable()) return;
   const rows = await listAttachments(recordType, recordId).catch(() => [] as Attachment[]);
   if (rows.length === 0) return;
-  const client = getSupabase();
-  await client.storage.from(BUCKET).remove(rows.map((r) => r.path)).catch(() => {});
-  await client.from("attachments").delete().in("id", rows.map((r) => r.id));
+  await getFileStore().remove(rows.map((r) => r.path)).catch(() => {});
+  await getDb().from("attachments").delete().in("id", rows.map((r) => r.id));
 }

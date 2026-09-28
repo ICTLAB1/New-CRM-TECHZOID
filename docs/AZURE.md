@@ -380,6 +380,72 @@ HS256, and `identity.mjs` implements RS256 alongside precisely so identity
 can move on a different day. `infra/README.md` step 6 has the detail and the
 rollback.
 
+## Step 6 — attachments (built)
+
+Supabase Storage answered three questions for the browser — write these
+bytes, give me a link that expires, delete them — and decided who was
+allowed to by running its own bucket policies. Azure Blob Storage does the
+first three and has no opinion about the fourth.
+
+`src/data/storage.ts` is the seam: three operations, two implementations,
+and `attachments.ts` no longer knows which is behind it.
+
+### Who is allowed, and where that is decided
+
+Not in the browser, and not in a second set of rules:
+
+- **Read.** `/api/blob` looks the `attachments` row up AS THE CALLER before
+  signing anything, so the policies that decide whether somebody may see an
+  attachment in a list decide whether they may open it. No row, no link —
+  and the answer is identical to the one for a file that does not exist,
+  because otherwise this becomes a way to ask whether a path is real.
+- **Write.** No row exists yet, so there is nothing to ask. The rule is the
+  one Supabase's bucket policy enforced: the first path segment is your own
+  user id. Checked against the verified token, never the request body. The
+  SAS is create-only (`c`, not `w`), so an upload cannot overwrite.
+- **Delete.** The row is deleted first, as the caller, so the policies
+  choose which. Only the paths that came back are removed from the store,
+  and if that fails the transaction rolls back and the rows return. This is
+  **stricter than the Supabase version**, which deleted the object first and
+  could leave a row pointing at nothing.
+
+### The bytes do not go through the API
+
+The browser gets a signed URL scoped to one blob and talks to Azure
+directly. A 20MB contract routed through a Function would be 20MB in and
+20MB out, billed by the second, for no benefit — the permission decision is
+the part that needs a server, and it is the only part that goes there.
+
+The SAS is a **user-delegation SAS**, signed with a key fetched from Entra
+ID by the function app's managed identity, because the storage account has
+shared-key access disabled outright. There is no account key in this system
+to leak, and a leaked SAS is one file for a few minutes.
+
+### What was proven
+
+`api/lib/blob.test.mjs` stubs the Azure SDK and keeps everything else real —
+real tokens, real database, real policies. That split is the point: the SDK
+call either works or throws, while the questions worth asking are whether
+one salesperson can open another's signed contract (no), whether anyone can
+write into somebody else's folder (no), and whether a failed byte-delete
+leaves an orphaned row (no, the transaction rolls back).
+
+`src/data/blobStore.test.ts` covers the wire protocol, including the
+`x-ms-blob-type: BlockBlob` header that Azure requires on every block-blob
+PUT and rejects the request without — a missing header there is a file the
+user watches fail to upload for no visible reason.
+
+### Its own switch
+
+`VITE_BLOB_STORAGE=on`, separate from `VITE_API_BASE`. Two migrations with
+two failure modes: a bad data cutover shows on every screen at once, a bad
+attachment cutover shows the first time somebody opens a contract. Rolling
+one back without the other is worth a second setting.
+
+`infra/migrate-attachments.sh` copies the existing bytes across. It copies
+rather than moves, skips what is already there, and verifies by listing the
+container against the database rather than trusting its own counters.
+
 ## What still has to be built
 
 | Piece | Today | On Azure | Size |
@@ -388,7 +454,7 @@ rollback.
 | The HTTP endpoints in front of the translator | ~~—~~ | **Done** — see Step 4 | — |
 | Sign-in | Supabase Auth, email + password | Entra ID / MSAL | Moderate; every user re-links once |
 | Realtime | `supabase_realtime`, 12 tables | Web PubSub, or polling | Moderate — and now **optional**: the change feed is a separate argument to `createStore`, and a store without one falls back to the poll and the refetch-on-focus that were always underneath it |
-| Attachments | Supabase Storage bucket | Blob Storage + SAS URLs | Moderate — one file, `src/data/attachments.ts` |
+| Attachments | ~~Supabase Storage bucket~~ | **Done** — see Step 6 | — |
 | Scheduled sender | `netlify.toml` cron | Functions timer trigger | Small |
 | Netlify Functions | 17 `.mjs` handlers | Azure Functions | Small — same Node, different envelope |
 | Secrets | Netlify env vars | Key Vault | Small |

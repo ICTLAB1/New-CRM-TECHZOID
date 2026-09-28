@@ -21,7 +21,14 @@ import { createPgClient } from "./pgClient";
  * downstream of it, stays as it is — only `tokenSource` changes.
  */
 
-export type TokenSource = () => Promise<string | null>;
+/**
+ * A source of the caller's access token.
+ *
+ * Allowed to be synchronous as well as async, because `pgClient` has always
+ * accepted either and a narrower alias here just made the two disagree.
+ * `supabaseToken` below is async; a test double usually is not.
+ */
+export type TokenSource = () => Promise<string | null> | string | null;
 
 /**
  * The signed-in person's access token, or null when nobody is signed in.

@@ -1,6 +1,10 @@
 import type { Db, DbRealtime } from "./db";
 import { createApiClient } from "./apiClient";
 import { supabaseDb, supabaseRealtime } from "./supabaseAsDb";
+import type { FileStore } from "./storage";
+import { createBlobStore } from "./blobStore";
+import { createSupabaseStore } from "./supabaseStore";
+import { supabaseToken } from "./apiClient";
 import { isSupabaseConfigured } from "./supabase";
 
 /**
@@ -31,16 +35,15 @@ import { isSupabaseConfigured } from "./supabase";
  *     identity is the step that makes every user re-link their account, and
  *     it does not have to happen at the same time as anything else.
  *
- *   · ATTACHMENTS. Still Supabase Storage. The browser talks to it
- *     directly, as it always has. Blob Storage is written but the swap is
- *     its own change with its own risk, and a quotation with a missing PDF
- *     is not a failure anybody wants folded into a larger one.
+ *   · ATTACHMENTS, unless `VITE_BLOB_STORAGE` says otherwise. Its own
+ *     switch, separate from the data one, so the two can move on different
+ *     days and either can be rolled back without the other. A quotation
+ *     with a missing PDF is not a failure worth folding into a larger one.
  *
  * So after the switch this is a CRM whose data is on Azure and whose
- * sign-in and file storage are not. That is a legitimate place to stand —
- * it is smaller than the alternative, each remaining piece can move on its
- * own afterwards, and every one of them can be reverted without touching
- * the others.
+ * sign-in is not. That is a legitimate place to stand — it is smaller than
+ * the alternative, each remaining piece can move on its own afterwards, and
+ * every one of them can be reverted without touching the others.
  */
 
 /**
@@ -66,6 +69,7 @@ export function apiBase(): string | null {
 }
 
 let cached: Db | null = null;
+let storeCache: FileStore | null = null;
 
 /**
  * The client every query goes through.
@@ -94,7 +98,38 @@ export function getRealtime(): DbRealtime | undefined {
   return isOnAzure() ? undefined : supabaseRealtime();
 }
 
-/** Drop the cached client. For tests, and after a configuration change. */
+/**
+ * Where attached files live.
+ *
+ * ITS OWN SWITCH, not the data one. `VITE_BLOB_STORAGE=on` moves
+ * attachments to Azure; `VITE_API_BASE` moves the queries. Two variables
+ * rather than one because they are two migrations with two failure modes —
+ * a bad data cutover shows up immediately on every screen, while a bad
+ * attachment cutover shows up the first time somebody opens a contract,
+ * which might be Thursday. Being able to roll one back without the other is
+ * worth the second setting.
+ *
+ * Blob storage needs the API tier to sign its URLs, so asking for it
+ * without `VITE_API_BASE` is a misconfiguration rather than a choice, and
+ * this falls back rather than failing at the moment somebody opens a file.
+ */
+export function getFileStore(): FileStore {
+  if (storeCache) return storeCache;
+  const base = apiBase();
+  const wantsBlob = String(import.meta.env.VITE_BLOB_STORAGE ?? "").trim().toLowerCase() === "on";
+  storeCache = wantsBlob && base
+    ? createBlobStore(base, supabaseToken)
+    : createSupabaseStore();
+  return storeCache;
+}
+
+/** True when attachments are on Azure Blob Storage. */
+export function attachmentsOnAzure(): boolean {
+  return String(import.meta.env.VITE_BLOB_STORAGE ?? "").trim().toLowerCase() === "on" && !!apiBase();
+}
+
+/** Drop the cached clients. For tests, and after a configuration change. */
 export function forgetBackend(): void {
   cached = null;
+  storeCache = null;
 }

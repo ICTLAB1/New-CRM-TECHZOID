@@ -1,4 +1,6 @@
 import { handleQuery, handleRpc } from "../../lib/http.mjs";
+import { handleBlob } from "../../lib/blob.mjs";
+import { getBlobs } from "../../lib/azureBlob.mjs";
 
 /**
  * Wire the two endpoints onto a Functions app.
@@ -30,5 +32,16 @@ export function register(app) {
     authLevel: "anonymous",
     route: "rpc",
     handler: (request) => handleRpc(request),
+  });
+
+  /* Attachments. The Azure client is resolved per request rather than at
+     registration, so a deployment with no storage account configured still
+     starts and still serves everything else — the endpoint answers "not
+     configured" instead of the whole app failing to come up. */
+  app.http("blob", {
+    methods: ["POST"],
+    authLevel: "anonymous",
+    route: "blob",
+    handler: async (request) => handleBlob(request, { blobs: await getBlobs() }),
   });
 }

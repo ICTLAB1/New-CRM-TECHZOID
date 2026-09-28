@@ -18,10 +18,10 @@ afterEach(() => {
 });
 
 /** Fresh import, because the decision is cached after the first call. */
-async function backendWith(apiBase: string | undefined) {
+async function backendWith(apiBase: string | undefined, blobStorage?: string) {
   vi.resetModules();
-  if (apiBase === undefined) vi.stubEnv("VITE_API_BASE", "");
-  else vi.stubEnv("VITE_API_BASE", apiBase);
+  vi.stubEnv("VITE_API_BASE", apiBase ?? "");
+  vi.stubEnv("VITE_BLOB_STORAGE", blobStorage ?? "");
   return import("./backend");
 }
 
@@ -74,6 +74,47 @@ describe("which backend the CRM talks to", () => {
        that has finished leaving Supabase. */
     const { hasBackend } = await backendWith("/api");
     expect(hasBackend()).toBe(true);
+  });
+});
+
+describe("where attached files live", () => {
+  it("stays on Supabase Storage by default", async () => {
+    const { attachmentsOnAzure } = await backendWith("/api");
+    expect(attachmentsOnAzure()).toBe(false);
+  });
+
+  /* ITS OWN SWITCH, not the data one. Two migrations with two failure
+     modes: a bad data cutover shows on every screen at once, while a bad
+     attachment cutover shows the first time somebody opens a contract —
+     which might be Thursday. Rolling one back without the other is worth a
+     second setting. */
+  it("moves independently of the data switch", async () => {
+    const { attachmentsOnAzure, isOnAzure } = await backendWith("/api", "on");
+    expect(attachmentsOnAzure()).toBe(true);
+    expect(isOnAzure()).toBe(true);
+  });
+
+  it("falls back rather than failing when asked for blob storage with no API", async () => {
+    /* Blob storage needs the API tier to sign its URLs, so this combination
+       is a misconfiguration, not a choice. Failing here would fail at the
+       moment somebody opens a file; falling back keeps attachments working
+       on the store that is actually reachable. */
+    const { attachmentsOnAzure, getFileStore } = await backendWith(undefined, "on");
+    expect(attachmentsOnAzure()).toBe(false);
+    expect(typeof getFileStore().upload).toBe("function");
+  });
+
+  it("caches the store, and forgets it on request", async () => {
+    const mod = await backendWith("/api", "on");
+    expect(mod.getFileStore()).toBe(mod.getFileStore());
+    mod.forgetBackend();
+    expect(mod.getFileStore()).toBeTruthy();
+  });
+
+  it("reads the flag case-insensitively and ignores whitespace", async () => {
+    expect((await backendWith("/api", " ON ")).attachmentsOnAzure()).toBe(true);
+    expect((await backendWith("/api", "off")).attachmentsOnAzure()).toBe(false);
+    expect((await backendWith("/api", "true")).attachmentsOnAzure()).toBe(false);
   });
 });
 

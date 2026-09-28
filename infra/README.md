@@ -138,20 +138,48 @@ duplicate invoice number in front of a customer.
 Supabase is untouched by all of this and keeps serving. If the counts do not
 match, nothing has been lost; look at `counts.diff` and run it again.
 
-## 6. Point the CRM at Azure
+## 6. Move the attached files
+
+The `attachments` ROWS move with everything else in step 5 — it is just a
+table. The BYTES they point at do not, and nothing will notice they are
+missing until somebody opens a quotation and the contract is not there.
+
+```bash
+export SUPABASE_URL='https://<project>.supabase.co'
+export SUPABASE_SERVICE_KEY='...'
+export AZURE_STORAGE_ACCOUNT='<storageAccount from step 1>'
+
+infra/migrate-attachments.sh
+```
+
+Copies, never moves. Supabase keeps every file, so the old store stays a
+working fallback and the script is safe to re-run — it skips what is already
+there. It finishes by listing the container and checking it against the
+database rather than against its own counters, and refuses to report success
+if any row's file is missing.
+
+## 7. Point the CRM at Azure
 
 Everything so far builds the new home. This is the move.
 
 ```bash
-VITE_API_BASE=/api npm run build
+VITE_API_BASE=/api VITE_BLOB_STORAGE=on npm run build
 npx @azure/static-web-apps-cli deploy dist --deployment-token "$(
   az staticwebapp secrets list -n <staticSiteName> -g techzoid-crm \
     --query properties.apiKey -o tsv)"
 ```
 
-**One environment variable, not a code change.** Set `VITE_API_BASE` and
-every query and stored-function call in the CRM goes to the Azure API tier;
-leave it unset and nothing moves. A cutover that needs a code change needs a
+**Two environment variables, not a code change.** `VITE_API_BASE` moves
+every query and stored-function call to the Azure API tier; `VITE_BLOB_STORAGE=on`
+moves attachments to Blob Storage. Leave either unset and that half stays
+where it is.
+
+They are separate on purpose. A bad data cutover shows up immediately, on
+every screen. A bad attachment cutover shows up the first time somebody
+opens a contract, which might be Thursday. Being able to roll one back
+without the other is worth the second setting — and blob storage needs the
+API tier to sign its URLs, so turning it on alone falls back rather than
+failing at the moment somebody opens a file. A cutover that needs a code change needs a
 build, a deploy and a rollback plan. A cutover that needs a setting can be
 undone by somebody who is not the person who wrote it. The day this is used
 will not be a calm day.
@@ -172,8 +200,8 @@ it simply stops being asked.
 |---|---|
 | Customers, quotations, invoices, the whole pipeline | **Azure** |
 | The 26 scheduled jobs and webhook handlers | **Azure** |
+| Attached files | **Azure Blob Storage** |
 | Sign-in | **Supabase Auth**, still |
-| Attachments | **Supabase Storage**, still |
 
 That is a deliberate stopping point, not an unfinished one.
 
@@ -185,12 +213,8 @@ implements HS256 as well as RS256. When you are ready, it is a configuration
 change: `JWT_ALG=RS256` plus `JWT_JWKS_URI`, `JWT_ISSUER` and
 `JWT_AUDIENCE`, and no code moves.
 
-**Attachments stay** because Blob Storage is provisioned and the swap is its
-own change with its own risk. A quotation with a missing PDF is not a
-failure worth folding into a larger one.
-
-Both can move later, separately, and either can be reverted without
-disturbing the other.
+Sign-in can move later, on its own, and be reverted without disturbing
+anything else.
 
 ### Live updates
 
@@ -205,9 +229,6 @@ the eventual replacement and is not required for anything to work.
 
 - **Entra ID sign-in.** A configuration change plus a tenant app
   registration; see above. Every user links their account once.
-- **Attachments to Blob Storage.** The container and the managed-identity
-  role assignment already exist; `src/data/attachments.ts` still talks to
-  Supabase Storage.
 - **`admin-users`.** The one handler that did not come across, because it
   manages accounts and accounts are what Entra ID takes over. It answers
   501 with a reason rather than 404.

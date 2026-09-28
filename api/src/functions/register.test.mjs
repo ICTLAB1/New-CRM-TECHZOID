@@ -30,16 +30,19 @@ const probe = () => ({
 });
 
 describe("the routes", () => {
-  it("registers exactly q and rpc", () => {
+  it("registers exactly q, rpc and blob", () => {
+    /* Pinned deliberately. A route appearing here that nobody meant to add
+       is a new public entry point, and it should take an edit to this line
+       and somebody noticing it in review. */
     const { app, routes } = fakeApp();
     register(app);
-    expect([...routes.keys()].sort()).toEqual(["q", "rpc"]);
+    expect([...routes.keys()].sort()).toEqual(["blob", "q", "rpc"]);
   });
 
   it("accepts only POST, on the paths the browser calls", () => {
     const { app, routes } = fakeApp();
     register(app);
-    for (const name of ["q", "rpc"]) {
+    for (const name of ["q", "rpc", "blob"]) {
       expect(routes.get(name).methods).toEqual(["POST"]);
       expect(routes.get(name).route).toBe(name);
     }
@@ -53,6 +56,22 @@ describe("the routes", () => {
     register(app);
     expect(routes.get("q").authLevel).toBe("anonymous");
     expect(routes.get("rpc").authLevel).toBe("anonymous");
+    expect(routes.get("blob").authLevel).toBe("anonymous");
+  });
+
+  it("answers on the blob route without storage configured, rather than not starting", async () => {
+    /* The Azure client is resolved per request, not at registration. A
+       deployment with no storage account still starts and still serves
+       everything else — this endpoint says "not configured" instead. */
+    const { app, routes } = fakeApp();
+    register(app);
+    const res = await routes.get("blob").handler({
+      method: "POST",
+      headers: { get: (n) => (n === "content-type" ? "application/json" : null) },
+      text: async () => JSON.stringify({ op: "read", path: "p" }),
+    });
+    /* 401 because there is no token; the point is that it answered. */
+    expect([401, 503]).toContain(res.status);
   });
 
   it("points each route at its own handler, not at the same one twice", async () => {
@@ -80,10 +99,10 @@ describe("the routes", () => {
     expect(routes.get("q").handler).not.toBe(routes.get("rpc").handler);
   });
 
-  it("refuses a GET on both, before reading anything", async () => {
+  it("refuses a GET on all of them, before reading anything", async () => {
     const { app, routes } = fakeApp();
     register(app);
-    for (const name of ["q", "rpc"]) {
+    for (const name of ["q", "rpc", "blob"]) {
       const res = await routes.get(name).handler(probe());
       expect(res.status).toBe(405);
     }
