@@ -27,6 +27,18 @@ d("the identity gate", () => {
           ($3,'boss@techzoid.in','{"name":"Boss"}')
         on conflict (id) do nothing`, [RAVI, MEENA, BOSS]);
       await c.query(`update public.profiles set role='Admin' where id=$1`, [BOSS]);
+
+      /* MEMBERSHIP, added when migration 033 made the CRM multi-company.
+         Every policy now reads is_member(company_id) BEFORE it looks at
+         ownership, so without this the seeded customer is invisible to
+         everyone — including the Admin — and the gate looks broken when
+         it is in fact working exactly as intended. The two tests that
+         caught this were failing for the right reason. */
+      await c.query(`insert into public.company_members (company_id, user_id, role)
+        select (select id from public.companies order by created_at limit 1), v.id::uuid, v.role
+        from (values ($1,'Sales'), ($2,'Sales'), ($3,'Admin')) as v(id, role)
+        on conflict do nothing`, [RAVI, MEENA, BOSS]);
+
       await c.query(`insert into public.customers (id, owner_id, data)
         values ('c-ravi',$1,'{"company":"Acme"}') on conflict (id) do nothing`, [RAVI]);
     });

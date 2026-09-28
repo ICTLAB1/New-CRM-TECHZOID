@@ -1,9 +1,25 @@
 # Moving to Azure
 
-> **PARKED — NOT IN USE. The CRM runs on Supabase and Netlify.**
+> **RESUMED — 28 September 2026, at the owner's request.** The CRM still
+> runs on Supabase and Netlify; nothing has moved. What follows below the
+> next block is the original parking note, kept because its reasoning is
+> still the honest argument against.
 >
-> This was explored in full and then deliberately stopped. The reasoning is
-> worth keeping because the question will come back:
+> **Re-verified on the CURRENT schema, not the one this was written for.**
+> The note below says 21 migrations and 17 functions; there are now 37 and
+> 26. Rebuilt from scratch on a plain PostgreSQL 16 with no Supabase
+> present: bootstrap, schema, then every migration in order — **all clean.
+> 43 tables, 100 policies, 64 functions.** The identity gate's 11 tests
+> pass against it, leak test included.
+>
+> One thing had rotted, and only running it showed which: the gate's test
+> SEED predated migration 033. Every policy now reads `is_member(company_id)`
+> before it looks at ownership, so a customer seeded with no membership is
+> invisible to everyone including an Admin — the gate looked broken while
+> behaving exactly as designed. The seed now creates memberships. Nothing
+> in the bootstrap or the gate itself needed changing.
+>
+> **The original reasoning, which still stands as the case against:**
 >
 > - **Nothing that was going wrong was caused by the platform.** The failures
 >   that day were a misplaced test file and a type error, both breaking the
