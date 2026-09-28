@@ -340,11 +340,51 @@ repository:
 is **not switched on**: `store()` still binds to Supabase. The cutover is one
 line, deliberately left for the day the Azure resources exist.
 
+## Step 5 — the switch (built)
+
+`src/data/backend.ts`. One environment variable, `VITE_API_BASE`: set it and
+every query and stored-function call goes to the Azure API tier; leave it
+unset and nothing moves.
+
+An environment variable rather than a code change, because a cutover that
+needs a code change needs a build, a deploy and a rollback plan, while a
+cutover that needs a setting can be undone from a hosting console by
+somebody who is not the person who wrote it.
+
+Getting there meant moving 31 call sites across eight files off
+`getSupabase()` and four more inside files that also use auth, storage or
+realtime. The compiler found things Supabase's types had been hiding:
+
+- **`.or()` was in use and unsupported.** One call site — the prospect
+  search, matching email or company or name in a single query so the count
+  comes back right. An earlier survey of the builder surface had missed it.
+  It is now in the translator, bracketed so `a and (b or c)` cannot decay
+  into `a and b or c`, bounded against nesting, and with every column and
+  operator inside still checked against the catalog. The PostgREST filter
+  string is parsed in the BROWSER, so the server never parses caller text.
+- **Fifteen rows were being read untyped.** Supabase's client returns `any`,
+  so `String(r.email ?? "")` looked like belt and braces. It was in fact the
+  only thing between a renamed column and a screen full of "undefined". The
+  narrower interface makes each one an explicit cast at the boundary.
+- **One `.storage.from(BUCKET)` sat directly under a `getSupabase()`**, in
+  among the query calls being switched. A mechanical replace would have
+  pointed file downloads at the query endpoint. Every switched line was
+  checked against the line below it before being changed.
+
+### What deliberately did not move
+
+Sign-in stays on Supabase Auth, and attachments on Supabase Storage. Both
+are separate changes with separate risks, and the token path already works
+across the boundary — Supabase issues it, the Azure API verifies it with
+HS256, and `identity.mjs` implements RS256 alongside precisely so identity
+can move on a different day. `infra/README.md` step 6 has the detail and the
+rollback.
+
 ## What still has to be built
 
 | Piece | Today | On Azure | Size |
 |---|---|---|---|
-| Browser → database | ~~16 direct calls via PostgREST~~ | **Done** — see Step 3 | — |
+| Browser → database | ~~16 direct calls via PostgREST~~ | **Done** — Steps 3 and 5 | — |
 | The HTTP endpoints in front of the translator | ~~—~~ | **Done** — see Step 4 | — |
 | Sign-in | Supabase Auth, email + password | Entra ID / MSAL | Moderate; every user re-links once |
 | Realtime | `supabase_realtime`, 12 tables | Web PubSub, or polling | Moderate — and now **optional**: the change feed is a separate argument to `createStore`, and a store without one falls back to the poll and the refetch-on-focus that were always underneath it |

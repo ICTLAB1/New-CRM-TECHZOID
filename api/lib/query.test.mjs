@@ -219,6 +219,59 @@ d("the query translator", () => {
       expect(text).toContain("not (");
     });
 
+    it("or, which is how the prospect search works", async () => {
+      /* One call site needs this: searching prospects by email OR company OR
+         name in a single query, so the count comes back right. */
+      const { data } = await asUser(RAVI, (c) => runQuery(c, {
+        op: "select", table: "customers", select: "id",
+        filters: [{ op: "or", terms: [
+          { col: "id", op: "eq", value: "c-ravi" },
+          { col: "id", op: "eq", value: "c-ravi-2" },
+        ] }],
+      }));
+      expect(data.map((r) => r.id).sort()).toEqual(["c-ravi", "c-ravi-2"]);
+    });
+
+    it("keeps an or bracketed, so a later filter still narrows it", async () => {
+      /* `a and (b or c)` and `a and b or c` are different queries and the
+         second one is the bug: it would show rows the `and` was meant to
+         exclude. The parentheses are the whole point. */
+      const { data } = await asUser(RAVI, (c) => runQuery(c, {
+        op: "select", table: "customers", select: "id",
+        filters: [
+          { col: "id", op: "eq", value: "c-ravi" },
+          { op: "or", terms: [
+            { col: "id", op: "eq", value: "c-ravi" },
+            { col: "id", op: "eq", value: "c-ravi-2" },
+          ] },
+        ],
+      }));
+      expect(data.map((r) => r.id)).toEqual(["c-ravi"]);
+    });
+
+    it("checks every column inside an or against the catalog", () => {
+      expect(() => compile({
+        op: "select", table: "customers", select: "id",
+        filters: [{ op: "or", terms: [{ col: "id; drop table customers", op: "eq", value: 1 }] }],
+      }, catalog)).toThrow(QueryError);
+      expect(() => compile({
+        op: "select", table: "customers", select: "id",
+        filters: [{ op: "or", terms: [{ col: "id", op: "= 1 or 1=1 --", value: 1 }] }],
+      }, catalog)).toThrow(QueryError);
+    });
+
+    it("refuses a nested or, and an empty one", () => {
+      /* Bounded so a request cannot nest its way into a stack overflow. */
+      expect(() => compile({
+        op: "select", table: "customers", select: "id",
+        filters: [{ op: "or", terms: [{ op: "or", terms: [{ col: "id", op: "eq", value: 1 }] }] }],
+      }, catalog)).toThrow(/nested/);
+      expect(() => compile({
+        op: "select", table: "customers", select: "id",
+        filters: [{ op: "or", terms: [] }],
+      }, catalog)).toThrow(QueryError);
+    });
+
     it("order, limit and range", async () => {
       const desc = await asUser(RAVI, (c) => runQuery(c, {
         op: "select", table: "customers", select: "id",

@@ -29,10 +29,45 @@ import type {
 
 type Op = "select" | "insert" | "upsert" | "update" | "delete";
 
+type Comparison = "eq" | "neq" | "gt" | "gte" | "lt" | "lte" | "like" | "ilike" | "is" | "in";
+
 interface Filter {
-  col: string;
-  op: "eq" | "neq" | "gt" | "gte" | "lt" | "lte" | "like" | "ilike" | "is" | "in";
-  value: unknown;
+  col?: string;
+  op: Comparison | "or";
+  value?: unknown;
+  negate?: boolean;
+  /** Set only when `op` is "or". */
+  terms?: { col: string; op: string; value: unknown }[];
+}
+
+/**
+ * PostgREST's `or` filter string, as structured terms.
+ *
+ * `"email.ilike.%acme%,company.eq.Acme"` becomes two terms. Split on the
+ * first two dots ONLY, because a value may contain dots — a domain, a
+ * decimal, a version number — and splitting on all of them would quietly
+ * truncate it.
+ *
+ * Parsed here rather than on the server so that no caller text is ever
+ * parsed there. It is not a security boundary either way: the server checks
+ * every column and operator against the live catalog and binds every value,
+ * so a term this mis-parses produces a rejected query, not a dangerous one.
+ */
+export function parseOrFilter(filter: string): { col: string; op: string; value: unknown }[] {
+  return String(filter)
+    .split(",")
+    .map((piece) => piece.trim())
+    .filter(Boolean)
+    .map((piece) => {
+      const first = piece.indexOf(".");
+      const second = piece.indexOf(".", first + 1);
+      if (first < 1 || second < 0) throw new Error(`Malformed or() term: ${piece}`);
+      return {
+        col: piece.slice(0, first),
+        op: piece.slice(first + 1, second),
+        value: piece.slice(second + 1),
+      };
+    });
 }
 
 export interface QuerySpec {
@@ -88,7 +123,7 @@ class Builder<T> implements DbQuery<T>, DbWrite<T> {
     return new Builder<T>(this.send, { ...this.spec, ...patch });
   }
 
-  private filter(col: string, op: Filter["op"], value: unknown): Builder<T> {
+  private filter(col: string, op: Comparison, value: unknown): Builder<T> {
     return this.with({ filters: [...(this.spec.filters ?? []), { col, op, value }] });
   }
 
@@ -102,6 +137,11 @@ class Builder<T> implements DbQuery<T>, DbWrite<T> {
   ilike(column: string, pattern: string) { return this.filter(column, "ilike", pattern); }
   is(column: string, value: null | boolean) { return this.filter(column, "is", value); }
   in(column: string, values: readonly unknown[]) { return this.filter(column, "in", [...values]); }
+
+  /** PostgREST's `.or("col.op.value,col.op.value")`. */
+  or(filter: string): Builder<T> {
+    return this.with({ filters: [...(this.spec.filters ?? []), { op: "or", terms: parseOrFilter(filter) }] });
+  }
 
   select(columns = "*", options?: SelectOptions): Builder<T> {
     return this.with({

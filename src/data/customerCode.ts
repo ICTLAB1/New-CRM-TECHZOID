@@ -1,4 +1,4 @@
-import { getSupabase, isSupabaseConfigured } from "./supabase";
+import { getDb, hasBackend } from "./backend";
 
 /**
  * The customer ID a person reads: CUST-000124.
@@ -28,9 +28,9 @@ export const previewCustomerCode = (seq: number, prefix = "CUST-"): string =>
  * a customer they have just typed in. The field stays editable.
  */
 export async function nextCustomerCode(previewSeq: number, prefix = "CUST-"): Promise<string> {
-  if (!isSupabaseConfigured()) return previewCustomerCode(previewSeq, prefix);
+  if (!hasBackend()) return previewCustomerCode(previewSeq, prefix);
   try {
-    const { data, error } = await getSupabase().rpc("next_customer_code");
+    const { data, error } = await getDb().rpc("next_customer_code");
     if (error || !data) return "";
     return String(data);
   } catch {

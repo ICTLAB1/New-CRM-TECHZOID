@@ -1,4 +1,5 @@
 import { getSupabase, isSupabaseConfigured } from "./supabase";
+import { getDb } from "./backend";
 import {
   checkFile, mimeFor, storagePath,
   type Attachment, type AttachableType,
@@ -68,7 +69,7 @@ export async function listAttachments(
   recordType: AttachableType,
   recordId: string,
 ): Promise<Attachment[]> {
-  const { data, error } = await getSupabase()
+  const { data, error } = await getDb()
     .from("attachments")
     .select("*")
     .eq("record_type", recordType)

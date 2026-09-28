@@ -36,6 +36,8 @@ describe("the same query, described the same way", () => {
     ["comparisons", (c) => c.from("quotes").select("id").gt("a", 1).gte("b", 2).lt("c", 3).lte("d", 4)],
     ["a pattern", (c) => c.from("customers").select("id").ilike("name", "%acme%")],
     ["a null check", (c) => c.from("customers").select("id").is("company_id", null)],
+    ["an or", (c) => c.from("outreach_prospects").select("id")
+      .or("email.ilike.%acme%,company.ilike.%acme%")],
     ["ordering", (c) => c.from("quotes").select("id").order("created_at", { ascending: false })],
     ["two orderings", (c) => c.from("quotes").select("id").order("a").order("b", { ascending: false })],
     ["a page", (c) => c.from("quotes").select("id").limit(5)],

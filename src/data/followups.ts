@@ -1,4 +1,4 @@
-import { getSupabase, isSupabaseConfigured } from "./supabase";
+import { getDb, hasBackend } from "./backend";
 import type { FollowUp, FollowUpChannel, FollowUpTone } from "../domain/followups/followups";
 
 /**
@@ -77,11 +77,11 @@ const toFollowUp = (r: FollowUpRow): FollowUp => ({
 });
 
 /** Whether a sequence can be armed at all. */
-export const followUpsAvailable = (): boolean => isSupabaseConfigured();
+export const followUpsAvailable = (): boolean => hasBackend();
 
 /** Everything queued or already sent against one document, in order. */
 export async function listFollowUps(docId: string): Promise<FollowUp[]> {
-  const { data, error } = await getSupabase()
+  const { data, error } = await getDb()
     .from("follow_ups")
     .select("*")
     .eq("doc_id", docId)
@@ -131,7 +131,7 @@ export async function armFollowUps(opts: {
   replyTo?: string;
   steps: readonly ArmedStep[];
 }): Promise<FollowUp[]> {
-  const client = getSupabase();
+  const client = getDb();
 
   await cancelFollowUps(opts.docId);
 
@@ -174,7 +174,7 @@ export async function armFollowUps(opts: {
  * email the customer has already read.
  */
 export async function cancelFollowUps(docId: string): Promise<void> {
-  const { error } = await getSupabase()
+  const { error } = await getDb()
     .from("follow_ups")
     .update({ state: "cancelled", updated_at: new Date().toISOString() })
     .eq("doc_id", docId)

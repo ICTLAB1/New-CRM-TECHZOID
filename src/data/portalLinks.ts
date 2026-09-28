@@ -1,4 +1,4 @@
-import { getSupabase, isSupabaseConfigured } from "./supabase";
+import { getDb, hasBackend } from "./backend";
 import {
   DEFAULT_PORTAL_DAYS, hashPortalToken, newPortalToken, portalLink,
   type PortalTokenRow,
@@ -31,17 +31,17 @@ const fromRow = (r: Record<string, unknown>): PortalTokenRow => ({
   viewCount: Number(r.view_count ?? 0),
 });
 
-export const portalLinksAvailable = (): boolean => isSupabaseConfigured();
+export const portalLinksAvailable = (): boolean => hasBackend();
 
 export async function listPortalLinks(customerId: string): Promise<PortalTokenRow[]> {
-  if (!isSupabaseConfigured() || !customerId) return [];
-  const { data, error } = await getSupabase()
+  if (!hasBackend() || !customerId) return [];
+  const { data, error } = await getDb()
     .from("portal_tokens")
     .select("id, customer_id, label, expires_at, revoked_at, created_at, last_seen_at, view_count")
     .eq("customer_id", customerId)
     .order("created_at", { ascending: false });
   if (error) throw new Error(error.message);
-  return (data ?? []).map(fromRow);
+  return ((data ?? []) as Record<string, unknown>[]).map(fromRow);
 }
 
 export interface IssuedLink {
@@ -57,12 +57,12 @@ export async function issuePortalLink(args: {
   days?: number;
   origin?: string;
 }): Promise<IssuedLink> {
-  if (!isSupabaseConfigured()) throw new Error("Portal links need the database.");
+  if (!hasBackend()) throw new Error("Portal links need the database.");
 
   const token = newPortalToken();
   const expiresAt = new Date(Date.now() + (args.days ?? DEFAULT_PORTAL_DAYS) * 86400000).toISOString();
 
-  const { data, error } = await getSupabase()
+  const { data, error } = await getDb()
     .from("portal_tokens")
     .insert({
       customer_id: args.customerId,
@@ -91,8 +91,8 @@ export async function issuePortalLink(args: {
  * link is the only way forward, which is the right one.
  */
 export async function revokePortalLink(id: string): Promise<void> {
-  if (!isSupabaseConfigured()) return;
-  const { error } = await getSupabase()
+  if (!hasBackend()) return;
+  const { error } = await getDb()
     .from("portal_tokens")
     .update({ revoked_at: new Date().toISOString() })
     .eq("id", id);

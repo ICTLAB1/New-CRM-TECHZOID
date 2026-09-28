@@ -22,19 +22,20 @@ import { getSupabase } from "./supabase";
 
 /* ── the accessors ───────────────────────────────────────────────────── */
 
-/** The live client, as a query interface. */
-export function getDb(): Db {
+/** The live Supabase client, as a query interface. */
+export function supabaseDb(): Db {
   return getSupabase() as unknown as Db;
 }
 
 /**
- * The live client, as a change feed.
+ * The live Supabase client, as a change feed.
  *
  * The first thing to go when this leaves Supabase: Azure has no equivalent
  * of Postgres change subscriptions, so this becomes Web PubSub or nothing.
  * `store.ts` takes it as a separate argument for that reason, and works
- * without it — see the note on `subscribeAll`.
+ * without it — see the note on `subscribeAll`. `backend.ts` decides which
+ * of these, if any, the application actually uses.
  */
-export function getRealtime(): DbRealtime {
+export function supabaseRealtime(): DbRealtime {
   return getSupabase() as unknown as DbRealtime;
 }

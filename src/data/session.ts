@@ -1,4 +1,5 @@
 import { getSupabase, isSupabaseConfigured } from "./supabase";
+import { getDb } from "./backend";
 import type { Session } from "@supabase/supabase-js";
 
 /**
@@ -43,24 +44,25 @@ export function onSessionChange(handler: (session: Session | null) => void): () 
  * returns null rather than inventing a role, and the caller says so.
  */
 export async function loadProfile(session: Session): Promise<SignedInUser | null> {
-  const { data, error } = await getSupabase()
+  const { data, error } = await getDb()
     .from("profiles")
     .select("id, name, email, role, designation, phone")
     .eq("id", session.user.id)
     .maybeSingle();
   if (error || !data) return null;
+  const row = data as Record<string, unknown>;
   return {
-    id: data.id as string,
-    name: (data.name as string) || (session.user.email ?? "").split("@")[0] || "You",
-    email: (data.email as string) || session.user.email || "",
-    role: (data.role as string) || "Sales",
+    id: row.id as string,
+    name: (row.name as string) || (session.user.email ?? "").split("@")[0] || "You",
+    email: (row.email as string) || session.user.email || "",
+    role: (row.role as string) || "Sales",
     /* Their job title. Selected above but previously dropped here, which
        left every outgoing email with no title under the sender's name however
        carefully it had been set on their profile. */
-    designation: (data.designation as string) || "",
+    designation: (row.designation as string) || "",
     /* Their own mobile, so a customer replying to a quotation reaches the
        person who sent it rather than the switchboard. */
-    phone: (data.phone as string) || "",
+    phone: (row.phone as string) || "",
   };
 }
 

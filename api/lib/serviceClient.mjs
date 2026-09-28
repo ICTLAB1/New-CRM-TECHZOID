@@ -1,6 +1,7 @@
 import { asAnon, asService, asUser } from "./db.mjs";
 import { runQuery } from "./query.mjs";
 import { CALLABLE, SERVER_CALLABLE, compileRpc, runRpc } from "./rpc.mjs";
+import { parseOrFilter } from "./orFilter.mjs";
 
 /**
  * The server's own database client.
@@ -66,6 +67,11 @@ class Builder {
 
   /** PostgREST's `.not(column, operator, value)`. */
   not(c, op, v) { return this.filter(c, op, v, true); }
+
+  /** PostgREST's `.or("col.op.value,col.op.value")`. */
+  or(filter) {
+    return this.with({ filters: [...(this.spec.filters ?? []), { op: "or", terms: parseOrFilter(filter) }] });
+  }
 
   select(columns = "*", options) {
     return this.with({

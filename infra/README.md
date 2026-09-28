@@ -138,9 +138,81 @@ duplicate invoice number in front of a customer.
 Supabase is untouched by all of this and keeps serving. If the counts do not
 match, nothing has been lost; look at `counts.diff` and run it again.
 
+## 6. Point the CRM at Azure
+
+Everything so far builds the new home. This is the move.
+
+```bash
+VITE_API_BASE=/api npm run build
+npx @azure/static-web-apps-cli deploy dist --deployment-token "$(
+  az staticwebapp secrets list -n <staticSiteName> -g techzoid-crm \
+    --query properties.apiKey -o tsv)"
+```
+
+**One environment variable, not a code change.** Set `VITE_API_BASE` and
+every query and stored-function call in the CRM goes to the Azure API tier;
+leave it unset and nothing moves. A cutover that needs a code change needs a
+build, a deploy and a rollback plan. A cutover that needs a setting can be
+undone by somebody who is not the person who wrote it. The day this is used
+will not be a calm day.
+
+`/api` works because the Static Web App has the Function App as a linked
+backend: same origin, so no CORS and no cross-site cookie question.
+
+### To roll back
+
+Rebuild without the variable and redeploy. Supabase has not been touched by
+any of this and is still holding the same data it was — the migration copies
+rows, it does not move them. Nothing needs undoing on the Azure side either;
+it simply stops being asked.
+
+### What moved, and what did not
+
+| | after step 6 |
+|---|---|
+| Customers, quotations, invoices, the whole pipeline | **Azure** |
+| The 26 scheduled jobs and webhook handlers | **Azure** |
+| Sign-in | **Supabase Auth**, still |
+| Attachments | **Supabase Storage**, still |
+
+That is a deliberate stopping point, not an unfinished one.
+
+**Sign-in stays** because moving it to Entra ID is the one step that makes
+every user re-link their account, and it does not have to happen on the same
+day as anything else. Supabase Auth issues the token and the Azure API
+verifies it with the project's JWT secret — which is why `identity.mjs`
+implements HS256 as well as RS256. When you are ready, it is a configuration
+change: `JWT_ALG=RS256` plus `JWT_JWKS_URI`, `JWT_ISSUER` and
+`JWT_AUDIENCE`, and no code moves.
+
+**Attachments stay** because Blob Storage is provisioned and the swap is its
+own change with its own risk. A quotation with a missing PDF is not a
+failure worth folding into a larger one.
+
+Both can move later, separately, and either can be reverted without
+disturbing the other.
+
+### Live updates
+
+Azure has no equivalent of Postgres change subscriptions, so after step 6
+there is no live feed. This is not a stale screen: `useWorkspace` polls on a
+timer and refetches whenever the tab regains focus, and both were always
+there underneath. Expect a slower refresh, not a wrong one. Web PubSub is
+the eventual replacement and is not required for anything to work.
+
 ## What is still to do after this
 
-Provisioning is not the whole migration. See `docs/AZURE.md` for where the
-code stands. In particular sign-in is still Supabase Auth: moving it to
-Entra ID is the one step that requires every user to link their account
-once, and it is best done after the rest is running and settled.
+
+- **Entra ID sign-in.** A configuration change plus a tenant app
+  registration; see above. Every user links their account once.
+- **Attachments to Blob Storage.** The container and the managed-identity
+  role assignment already exist; `src/data/attachments.ts` still talks to
+  Supabase Storage.
+- **`admin-users`.** The one handler that did not come across, because it
+  manages accounts and accounts are what Entra ID takes over. It answers
+  501 with a reason rather than 404.
+- **Web PubSub**, if the polling refresh ever proves too slow.
+
+See `docs/AZURE.md` for how each piece was built and tested, and
+`docs/SCHEMA-DRIFT.md` for why the schema comes from production rather than
+from this repository.

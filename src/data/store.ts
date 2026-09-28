@@ -1,5 +1,5 @@
 import type { Db, DbRealtime } from "./db";
-import { getDb, getRealtime } from "./supabaseAsDb";
+import { getDb, getRealtime } from "./backend";
 import { ENTITY_EXTRA_COLS, ENTITY_TABLES, rowToItem, type EntityBase, type EntityRow, type EntityTable } from "./entities";
 import { normalizeCustomer, normalizeDocument } from "./normalize";
 import { OBJ_TYPE, type ObjType } from "../domain/documents/objType";

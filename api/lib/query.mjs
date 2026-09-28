@@ -307,8 +307,26 @@ function buildWhere(catalog, table, filters, params) {
   return ` where ${clauses.join(" and ")}`;
 }
 
-function buildClause(catalog, table, f, params) {
+function buildClause(catalog, table, f, params, depth = 0) {
   if (!f || typeof f !== "object") throw new QueryError("Malformed filter.");
+
+  if (f.op === "or") {
+    /* `.or("email.ilike.%x%,company.ilike.%x%")` in PostgREST. The BROWSER
+       parses that string into terms; this only ever sees the structured
+       form, so no caller text is parsed here and every column and operator
+       inside still goes through the catalog check like any other. */
+    if (!Array.isArray(f.terms) || f.terms.length === 0) {
+      throw new QueryError("`or` needs at least one term.");
+    }
+    /* Bounded, so a request cannot nest its way into a stack overflow. One
+       level is what PostgREST's own comma syntax expresses and all this
+       codebase asks for. */
+    if (depth > 0) throw new QueryError("`or` cannot be nested.");
+    if (f.terms.length > 32) throw new QueryError("Too many `or` terms.");
+    const parts = f.terms.map((t) => buildClause(catalog, table, t, params, depth + 1));
+    return `(${parts.join(" or ")})`;
+  }
+
   const col = checkColumn(catalog, table, f.col);
   const target = `${quote(table)}.${quote(col)}`;
 

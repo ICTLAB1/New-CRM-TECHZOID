@@ -116,6 +116,8 @@ export class IntegrationError extends Error {
   }
 }
 
+import { getDb } from "../data/backend";
+
 const FN = "/.netlify/functions/";
 
 async function authHeader(): Promise<Record<string, string>> {
@@ -227,13 +229,12 @@ export function netlifyApi(): IntegrationsApi {
     },
 
     async regenerateWebhookSecret(kind = "outbound") {
-      const { getSupabase } = await import("../data/supabase");
       /* 'main' is the outbound secret's stored id, kept from the original
          migration so an existing row is not orphaned by the rename. */
       /* 'whatsapp' is the key in the Interakt callback URL; the URL itself
          is the credential there, because Interakt does not sign. */
       const p_kind = kind === "inbound" ? "inbound" : kind === "whatsapp" ? "whatsapp" : "main";
-      const { data, error } = await getSupabase()
+      const { data, error } = await getDb()
         .rpc("regenerate_webhook_secret", { p_kind });
       if (error) throw new IntegrationError(error.message || "Couldn't generate a new secret.", 400);
       return String(data ?? "");

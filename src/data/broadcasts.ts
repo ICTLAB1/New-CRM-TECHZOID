@@ -1,4 +1,5 @@
 import { getSupabase, isSupabaseConfigured } from "./supabase";
+import { getDb } from "./backend";
 import type { Broadcast, BroadcastTone } from "../domain/broadcasts/broadcasts";
 
 /**
@@ -68,7 +69,7 @@ const toBroadcast = (r: Row, names: Map<string, string>): Broadcast => ({
 export async function fetchBroadcasts(names: Map<string, string> = new Map()): Promise<Broadcast[]> {
   if (!isSupabaseConfigured()) return [];
   try {
-    const { data, error } = await getSupabase()
+    const { data, error } = await getDb()
       .from(TABLE)
       .select("id, from_id, to_id, title, body, tone, expires_at, created_at")
       .order("created_at", { ascending: false })

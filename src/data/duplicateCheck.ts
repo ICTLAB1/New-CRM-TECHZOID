@@ -1,4 +1,4 @@
-import { getSupabase, isSupabaseConfigured } from "./supabase";
+import { getDb, hasBackend } from "./backend";
 import type { DuplicateReason } from "../domain/customers/duplicates";
 
 /**
@@ -31,9 +31,9 @@ export async function checkDuplicate(fields: {
   phone?: string;
   gstin?: string;
 }): Promise<DuplicateHit | null> {
-  if (!isSupabaseConfigured()) return null;
+  if (!hasBackend()) return null;
 
-  const { data, error } = await getSupabase().rpc("find_duplicate_customer", {
+  const { data, error } = await getDb().rpc("find_duplicate_customer", {
     p_company: fields.company ?? "",
     p_phone: fields.phone ?? "",
     p_gstin: fields.gstin ?? "",
@@ -51,4 +51,4 @@ export async function checkDuplicate(fields: {
 
 /** Whether the check can run at all, so the UI can stay quiet rather than
  *  claiming a customer is new when nothing was asked. */
-export const duplicateCheckAvailable = (): boolean => isSupabaseConfigured();
+export const duplicateCheckAvailable = (): boolean => hasBackend();

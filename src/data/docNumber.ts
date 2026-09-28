@@ -1,4 +1,4 @@
-import { getSupabase, isSupabaseConfigured } from "./supabase";
+import { getDb, hasBackend } from "./backend";
 import { getActiveCompanyId } from "./store";
 import { DEFAULT_PREFIX } from "../domain/numbering/docNumber";
 import { OBJ_TYPE, OBJ_TYPE_OF_DOC_TYPE } from "../domain/documents/objType";
@@ -59,9 +59,9 @@ export const seqKindOf = (docType: string): DocSeqKind =>
  */
 export async function nextDocSeq(kind: DocSeqKind, fallback: number): Promise<number> {
   const local = Math.max(1, Math.floor(Number(fallback) || 1));
-  if (!isSupabaseConfigured()) return local;
+  if (!hasBackend()) return local;
   try {
-    const { data, error } = await getSupabase().rpc("next_doc_seq", { p_kind: kind });
+    const { data, error } = await getDb().rpc("next_doc_seq", { p_kind: kind });
     if (error || data === null || data === undefined) {
       /* Worth knowing about: with a database present and this failing, the
          numbering is back to the browser's own counter and back to being
@@ -107,7 +107,7 @@ export async function nextDocNumber(
   fallback: number,
 ): Promise<number> {
   const local = Math.max(1, Math.floor(Number(fallback) || 1));
-  if (!isSupabaseConfigured()) return local;
+  if (!hasBackend()) return local;
   try {
     /* THE COMPANY ON SCREEN, not whichever one this person belongs to
        first. The two-argument form of next_doc_number falls back to
@@ -116,7 +116,7 @@ export async function nextDocNumber(
        series and came out as TZ/QT/2026-27/0027. It happened in the live
        workspace before this was fixed. */
     const company = getActiveCompanyId();
-    const { data, error } = await getSupabase().rpc(
+    const { data, error } = await getDb().rpc(
       "next_doc_number",
       company
         ? { p_company: company, p_obj_type: objType, p_fy: fy }

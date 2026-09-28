@@ -71,6 +71,8 @@ export interface DbQuery<T = unknown> extends PromiseLike<DbResult<T[]>> {
   ilike(column: string, pattern: string): DbQuery<T>;
   is(column: string, value: null | boolean): DbQuery<T>;
   in(column: string, values: readonly unknown[]): DbQuery<T>;
+  /** PostgREST's `.or("col.op.value,col.op.value")` — any of these match. */
+  or(filter: string): DbQuery<T>;
   order(column: string, options?: OrderOptions): DbQuery<T>;
   limit(count: number): DbQuery<T>;
   range(from: number, to: number): DbQuery<T>;

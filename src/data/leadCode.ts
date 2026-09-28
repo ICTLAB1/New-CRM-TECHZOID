@@ -1,4 +1,4 @@
-import { getSupabase, isSupabaseConfigured } from "./supabase";
+import { getDb, hasBackend } from "./backend";
 
 /**
  * This user's short registration code.
@@ -13,9 +13,9 @@ import { getSupabase, isSupabaseConfigured } from "./supabase";
  * beats a short one that 404s.
  */
 export async function myLeadCode(): Promise<string> {
-  if (!isSupabaseConfigured()) return "";
+  if (!hasBackend()) return "";
   try {
-    const { data, error } = await getSupabase().rpc("my_lead_code");
+    const { data, error } = await getDb().rpc("my_lead_code");
     if (error || !data) {
       /* Logged rather than swallowed: the usual cause is that migration 013
          has not been run, and an admin looking for why the link is still

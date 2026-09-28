@@ -1,4 +1,4 @@
-import { getSupabase, isSupabaseConfigured } from "./supabase";
+import { getDb, hasBackend } from "./backend";
 import type { MappedProspect } from "../domain/outreach/importMap";
 import type { Schedule } from "../domain/outreach/sending";
 import { DEFAULT_SCHEDULE } from "../domain/outreach/sending";
@@ -82,7 +82,7 @@ const toProspect = (r: Record<string, unknown>): ProspectRow => ({
   createdAt: String(r.created_at ?? ""),
 });
 
-export const outreachAvailable = (): boolean => isSupabaseConfigured();
+export const outreachAvailable = (): boolean => hasBackend();
 
 /**
  * The prospect list.
@@ -98,9 +98,9 @@ export async function listProspects(opts: {
   status?: string;
   includeQuarantined?: boolean;
 } = {}): Promise<{ rows: ProspectRow[]; total: number }> {
-  if (!isSupabaseConfigured()) return { rows: [], total: 0 };
+  if (!hasBackend()) return { rows: [], total: 0 };
 
-  let q = getSupabase()
+  let q = getDb()
     .from("outreach_prospects")
     .select(PROSPECT_COLUMNS, { count: "exact" })
     .order("created_at", { ascending: false })
@@ -121,8 +121,8 @@ export async function listProspects(opts: {
 /** Every prospect a campaign could target. Used at launch, where the whole
  *  set genuinely is needed and the count is already known to be sane. */
 export async function allSendableProspects(limit = 5000): Promise<ProspectRow[]> {
-  if (!isSupabaseConfigured()) return [];
-  const { data, error } = await getSupabase()
+  if (!hasBackend()) return [];
+  const { data, error } = await getDb()
     .from("outreach_prospects")
     .select(PROSPECT_COLUMNS)
     .eq("quarantined", false)
@@ -155,8 +155,8 @@ export async function importProspects(args: {
   skipped: number;
   summary?: Record<string, unknown>;
 }): Promise<ImportResult> {
-  if (!isSupabaseConfigured()) throw new Error("Importing prospects needs the database.");
-  const db = getSupabase();
+  if (!hasBackend()) throw new Error("Importing prospects needs the database.");
+  const db = getDb();
 
   const { data: imp, error: impErr } = await db
     .from("outreach_imports")
@@ -225,8 +225,8 @@ export async function importProspects(args: {
 
 /** Clear a quarantine flag after a person has looked at the row. */
 export async function releaseProspect(id: string): Promise<void> {
-  if (!isSupabaseConfigured()) return;
-  const { error } = await getSupabase()
+  if (!hasBackend()) return;
+  const { error } = await getDb()
     .from("outreach_prospects")
     .update({ quarantined: false, quarantine_reason: "", updated_at: new Date().toISOString() })
     .eq("id", id);
@@ -244,14 +244,18 @@ export interface SuppressionRow {
 }
 
 export async function listSuppressions(limit = 1000): Promise<SuppressionRow[]> {
-  if (!isSupabaseConfigured()) return [];
-  const { data, error } = await getSupabase()
+  if (!hasBackend()) return [];
+  const { data, error } = await getDb()
     .from("outreach_suppressions")
     .select("id, email, reason, note, created_at")
     .order("created_at", { ascending: false })
     .limit(limit);
   if (error) throw new Error(error.message);
-  return (data ?? []).map((r) => ({
+  /* Typed at the boundary rather than trusted. Supabase's client returned
+     `any`, so these coercions looked like belt and braces; they were in fact
+     the only thing standing between a renamed column and a screen full of
+     "undefined". The narrower interface makes that explicit. */
+  return ((data ?? []) as Record<string, unknown>[]).map((r) => ({
     id: String(r.id),
     email: String(r.email ?? ""),
     reason: String(r.reason ?? ""),
@@ -279,8 +283,8 @@ export async function suppress(args: {
   note?: string;
   addedBy?: string;
 }): Promise<void> {
-  if (!isSupabaseConfigured()) throw new Error("The suppression list needs the database.");
-  const { error } = await getSupabase()
+  if (!hasBackend()) throw new Error("The suppression list needs the database.");
+  const { error } = await getDb()
     .from("outreach_suppressions")
     .upsert(
       {
@@ -346,8 +350,8 @@ const toCampaign = (r: Record<string, unknown>): CampaignRow => ({
 });
 
 export async function listCampaigns(limit = 100): Promise<CampaignRow[]> {
-  if (!isSupabaseConfigured()) return [];
-  const { data, error } = await getSupabase()
+  if (!hasBackend()) return [];
+  const { data, error } = await getDb()
     .from("outreach_campaigns")
     .select(CAMPAIGN_COLUMNS)
     .order("created_at", { ascending: false })
@@ -368,7 +372,7 @@ export async function saveCampaign(args: {
   replyTo: string;
   schedule: Schedule;
 }): Promise<CampaignRow> {
-  if (!isSupabaseConfigured()) throw new Error("Campaigns need the database.");
+  if (!hasBackend()) throw new Error("Campaigns need the database.");
 
   const row = {
     owner_id: args.ownerId,
@@ -388,7 +392,7 @@ export async function saveCampaign(args: {
     updated_at: new Date().toISOString(),
   };
 
-  const db = getSupabase();
+  const db = getDb();
   const { data, error } = args.id
     ? await db.from("outreach_campaigns").update(row).eq("id", args.id).select(CAMPAIGN_COLUMNS).single()
     : await db.from("outreach_campaigns").insert(row).select(CAMPAIGN_COLUMNS).single();
@@ -399,8 +403,8 @@ export async function saveCampaign(args: {
 
 /** Pause or resume. Cancelling is separate and one-way — see cancelCampaign. */
 export async function setCampaignStatus(id: string, status: "sending" | "paused"): Promise<void> {
-  if (!isSupabaseConfigured()) return;
-  const { error } = await getSupabase()
+  if (!hasBackend()) return;
+  const { error } = await getDb()
     .from("outreach_campaigns")
     .update({ status, updated_at: new Date().toISOString() })
     .eq("id", id);
@@ -415,8 +419,8 @@ export async function setCampaignStatus(id: string, status: "sending" | "paused"
  * leave the queue.
  */
 export async function cancelCampaign(id: string): Promise<void> {
-  if (!isSupabaseConfigured()) return;
-  const { error } = await getSupabase()
+  if (!hasBackend()) return;
+  const { error } = await getDb()
     .from("outreach_campaigns")
     .update({ status: "cancelled", finished_at: new Date().toISOString() })
     .eq("id", id);
@@ -445,9 +449,9 @@ export interface CampaignProgress {
 
 export async function campaignProgress(campaignId: string): Promise<CampaignProgress> {
   const empty = { queued: 0, sent: 0, failed: 0, skipped: 0, total: 0 };
-  if (!isSupabaseConfigured()) return empty;
+  if (!hasBackend()) return empty;
 
-  const { data, error } = await getSupabase()
+  const { data, error } = await getDb()
     .from("outreach_sends")
     .select("state")
     .eq("campaign_id", campaignId);
@@ -469,15 +473,15 @@ export async function campaignProgress(campaignId: string): Promise<CampaignProg
 
 /** The rows themselves, for "what happened to Ravi at Acme?". */
 export async function listSends(campaignId: string, limit = 500): Promise<SendRow[]> {
-  if (!isSupabaseConfigured()) return [];
-  const { data, error } = await getSupabase()
+  if (!hasBackend()) return [];
+  const { data, error } = await getDb()
     .from("outreach_sends")
     .select("id, prospect_id, send_to, subject, state, note, sent_at")
     .eq("campaign_id", campaignId)
     .order("created_at", { ascending: true })
     .limit(limit);
   if (error) throw new Error(error.message);
-  return (data ?? []).map((r) => ({
+  return ((data ?? []) as Record<string, unknown>[]).map((r) => ({
     id: String(r.id),
     prospectId: String(r.prospect_id ?? ""),
     sendTo: String(r.send_to ?? ""),
@@ -551,10 +555,12 @@ export interface SendingAccount {
  * token-free view exists precisely so a screen never has to touch them.
  */
 export async function mySendingAccounts(): Promise<SendingAccount[]> {
-  if (!isSupabaseConfigured()) return [];
-  const { data, error } = await getSupabase().rpc("my_sending_accounts");
+  if (!hasBackend()) return [];
+  /* A set-returning function, so `data` is an array — but `rpc` cannot know
+     which, since a scalar one returns a bare value. Said here instead. */
+  const { data, error } = await getDb().rpc<Record<string, unknown>[]>("my_sending_accounts");
   if (error) throw new Error(error.message);
-  return (data ?? []).map((r: Record<string, unknown>) => ({
+  return (data ?? []).map((r) => ({
     id: String(r.id),
     email: String(r.email ?? ""),
     displayName: String(r.display_name ?? ""),

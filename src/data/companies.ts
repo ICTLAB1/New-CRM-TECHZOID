@@ -1,4 +1,4 @@
-import { getSupabase, isSupabaseConfigured } from "./supabase";
+import { getDb, hasBackend } from "./backend";
 import { currentSession } from "./session";
 
 /**
@@ -44,11 +44,11 @@ const ACTIVE_KEY = "crm.activeCompany";
  * what somebody may do from another person's permissions.
  */
 export async function myCompanies(): Promise<Company[]> {
-  if (!isSupabaseConfigured()) return [];
+  if (!hasBackend()) return [];
   const session = await currentSession();
   if (!session) return [];
 
-  const { data, error } = await getSupabase()
+  const { data, error } = await getDb()
     .from("company_members")
     .select("role, companies!inner(id, name)")
     .eq("user_id", session.user.id)
@@ -90,7 +90,7 @@ export function dedupeById(rows: Company[]): Company[] {
 export async function createCompany(name: string): Promise<string> {
   const clean = name.trim();
   if (!clean) throw new Error("A company needs a name.");
-  const { data, error } = await getSupabase().rpc("create_company", { p_name: clean });
+  const { data, error } = await getDb().rpc("create_company", { p_name: clean });
   if (error) throw new Error(readableCompanyError(error.message));
   return String(data);
 }
@@ -157,7 +157,7 @@ export interface Member {
 
 /** Everybody in one company, with the role they hold there. */
 export async function listMembers(companyId: string): Promise<Member[]> {
-  const { data, error } = await getSupabase()
+  const { data, error } = await getDb()
     .from("company_members")
     .select("user_id, role, profiles!inner(name, email)")
     .eq("company_id", companyId);
@@ -178,14 +178,14 @@ export async function listMembers(companyId: string): Promise<Member[]> {
 }
 
 export async function addMember(companyId: string, userId: string, role: string): Promise<void> {
-  const { error } = await getSupabase()
+  const { error } = await getDb()
     .from("company_members")
     .insert({ company_id: companyId, user_id: userId, role });
   if (error) throw new Error(readableMemberError(error.message));
 }
 
 export async function setMemberRole(companyId: string, userId: string, role: string): Promise<void> {
-  const { error } = await getSupabase()
+  const { error } = await getDb()
     .from("company_members")
     .update({ role })
     .eq("company_id", companyId)
@@ -194,7 +194,7 @@ export async function setMemberRole(companyId: string, userId: string, role: str
 }
 
 export async function removeMember(companyId: string, userId: string): Promise<void> {
-  const { error } = await getSupabase()
+  const { error } = await getDb()
     .from("company_members")
     .delete()
     .eq("company_id", companyId)
@@ -205,7 +205,7 @@ export async function removeMember(companyId: string, userId: string): Promise<v
 export async function renameCompany(companyId: string, name: string): Promise<void> {
   const clean = name.trim();
   if (!clean) throw new Error("A company needs a name.");
-  const { error } = await getSupabase().from("companies").update({ name: clean }).eq("id", companyId);
+  const { error } = await getDb().from("companies").update({ name: clean }).eq("id", companyId);
   if (error) throw new Error("Couldn't rename that company. Try again in a moment.");
 }
 
