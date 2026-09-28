@@ -51,24 +51,28 @@ d("the identity gate", () => {
     expect(uid).toBe(RAVI);
   });
 
+  /* SCOPED TO THE SEEDED ROW, not `count(*)` over the table. Counting
+     everything made this suite depend on being the only one using the
+     database — the translator's tests seed their own rows, and the two
+     suites started failing each other for reasons neither was about. What
+     is being asked is whether RLS shows Ravi's row to the right people, so
+     that is what is asked. */
+  const seesSeededRow = (who) => asUser(who, async (c) =>
+    (await c.query("select count(*)::int as n from public.customers where id='c-ravi'")).rows[0].n);
+
   it("shows a salesperson their own records", async () => {
-    const n = await asUser(RAVI, async (c) =>
-      (await c.query("select count(*)::int as n from public.customers")).rows[0].n);
-    expect(n).toBe(1);
+    expect(await seesSeededRow(RAVI)).toBe(1);
   });
 
   it("hides them from another salesperson", async () => {
-    const n = await asUser(MEENA, async (c) =>
-      (await c.query("select count(*)::int as n from public.customers")).rows[0].n);
-    expect(n).toBe(0);
+    expect(await seesSeededRow(MEENA)).toBe(0);
   });
 
   it("lets an Admin see everything", async () => {
-    const [n, priv] = await asUser(BOSS, async (c) => [
-      (await c.query("select count(*)::int as n from public.customers")).rows[0].n,
-      (await c.query("select public.is_privileged() as p")).rows[0].p,
-    ]);
-    expect(n).toBe(1);
+    /* Boss owns nothing. Seeing a row that belongs to Ravi is the point. */
+    const priv = await asUser(BOSS, async (c) =>
+      (await c.query("select public.is_privileged() as p")).rows[0].p);
+    expect(await seesSeededRow(BOSS)).toBe(1);
     expect(priv).toBe(true);
   });
 

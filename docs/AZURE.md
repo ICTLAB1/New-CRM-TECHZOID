@@ -149,13 +149,81 @@ would have broken production silently:
    errors instead of quietly seeing no rows, which would have taken the
    customer portal and the public registration form down.
 
+## Step 3 — the replacement for PostgREST (built)
+
+What Supabase was actually providing, beyond the database, was PostgREST: a
+process that turned a URL into SQL, ran it as the signed-in user, and let the
+policies decide what came back. Azure sells no equivalent, so leaving
+Supabase means writing that. It is written, and it is three files.
+
+`api/lib/query.mjs` turns a query description into parameterised SQL. Cut
+down to what the CRM actually uses rather than the whole of PostgREST, which
+turned out to be a much smaller surface than expected: five operations,
+twelve builder methods, two embedded selects, seven stored functions.
+
+Nothing from the caller is ever interpolated. Values become bind parameters;
+identifiers — table, column, operator, direction — are not escaped but
+**checked against the live catalog**, and the catalog's own spelling is what
+gets emitted. A column name that does not exist never reaches the database in
+any form. Authorisation is not decided there at all: it runs inside
+`asUser`/`asAnon` and the policies already in the database do the judging.
+
+`src/data/db.ts` is the surface written out as an interface — which is how
+the size of the job got answered at all, because nineteen files typed against
+`SupabaseClient` tell you nothing about how much of Supabase they use.
+
+`src/data/pgClient.ts` offers that same builder to the browser and composes
+the JSON instead of a URL, **so no call site in `src/data/` changes**. That
+was the point. Hand-translating fifty-five call sites into bespoke fetches is
+a few thousand lines each of which could drop a filter, and a dropped
+`.eq("company_id", …)` does not throw — it shows one company another
+company's customers.
+
+### What was proven, and how
+
+| Proof | Where |
+|---|---|
+| A hostile query description cannot become SQL — nine attack shapes refused, and a hostile *value* bound rather than rejected | `api/lib/query.test.mjs` |
+| The 89 policies still decide who sees what, with PostgREST gone | same |
+| Each of the twelve builder methods behaves as PostgREST did | same |
+| The builder composes what the call site asked for, and a branched query does not leak its sibling's filters | `src/data/pgClient.test.ts` |
+| The live Supabase client really has every method it is cast to | `src/data/supabaseAsDb.test.ts` |
+| **The real `createStore` runs on plain PostgreSQL with no Supabase in the path**, and still hides one salesperson's customers from another | `src/data/azureEndToEnd.test.ts` |
+
+That last one is the one that matters. Every other test checks a link; it
+checks the chain. All of them skip when no database is configured, so CI
+without one stays green rather than red for the wrong reason.
+
+### What it cost
+
+Four bugs, all caught by tests rather than by reading:
+
+- `array_agg` over a `name` column comes back from node-pg as a string, not
+  an array, so the catalog's key columns were unusable.
+- `jsonb_build_object` is variadic-any; a bind parameter in the key position
+  needs an explicit cast or Postgres refuses to plan the query.
+- A first attempt at a compile-time proof that Supabase satisfies `Db` emitted
+  runtime code referencing a compile-time-only binding, and took down three
+  test files at import. A proof that runs is not a proof.
+- An end-to-end assertion compared two `Date` objects with `toBe` and so
+  passed whatever the database did. Replaced with the exact expected stamp.
+
+And one thing that could not be had: a compile-time proof that
+`SupabaseClient` satisfies `Db`. It is true, and the compiler will confirm it
+in a file of its own — but not once anything else in the build has spent the
+instantiation budget on Supabase's generics, at which point the same proof
+stops compiling for reasons unrelated to it. A check that depends on what
+else is in the build is not a check, so it is a runtime conformance test
+instead, with the gap it leaves stated in the file rather than papered over.
+
 ## What still has to be built
 
 | Piece | Today | On Azure | Size |
 |---|---|---|---|
-| Browser → database | 16 direct calls via PostgREST | REST calls to the API tier | **Large** — `src/data/` rewrite, 13 files |
+| Browser → database | ~~16 direct calls via PostgREST~~ | **Done** — see Step 3 | — |
+| The HTTP endpoints in front of the translator | — | Two Azure Functions, `/api/q` and `/api/rpc` | Small — the hard part is written and tested |
 | Sign-in | Supabase Auth, email + password | Entra ID / MSAL | Moderate; every user re-links once |
-| Realtime | `supabase_realtime`, 12 tables | Web PubSub, or polling | Moderate — the app already polls every 45s and refetches on focus, so this degrades gracefully |
+| Realtime | `supabase_realtime`, 12 tables | Web PubSub, or polling | Moderate — and now **optional**: the change feed is a separate argument to `createStore`, and a store without one falls back to the poll and the refetch-on-focus that were always underneath it |
 | Attachments | Supabase Storage bucket | Blob Storage + SAS URLs | Moderate — one file, `src/data/attachments.ts` |
 | Scheduled sender | `netlify.toml` cron | Functions timer trigger | Small |
 | Netlify Functions | 17 `.mjs` handlers | Azure Functions | Small — same Node, different envelope |

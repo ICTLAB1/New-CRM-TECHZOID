@@ -1,5 +1,5 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
-import { getSupabase } from "./supabase";
+import type { Db, DbRealtime } from "./db";
+import { getDb, getRealtime } from "./supabaseAsDb";
 import { ENTITY_EXTRA_COLS, ENTITY_TABLES, rowToItem, type EntityBase, type EntityRow, type EntityTable } from "./entities";
 import { normalizeCustomer, normalizeDocument } from "./normalize";
 import { OBJ_TYPE, type ObjType } from "../domain/documents/objType";
@@ -76,7 +76,12 @@ export interface LoadedWorkspace {
  * be seen; this decides what is being looked at. Both are needed, and the
  * one that must never be relied on alone is this one.
  */
-export function createStore(client: SupabaseClient, companyId: () => string | null = () => null) {
+export function createStore(
+  client: Db,
+  companyId: () => string | null = () => null,
+  /* Absent until Web PubSub is wired up. See `subscribeAll`. */
+  live?: DbRealtime,
+) {
 
   async function fetchEntity<T extends EntityBase>(table: EntityTable): Promise<T[]> {
     /* Narrowed to the company on screen when there is one. A workspace that
@@ -229,10 +234,20 @@ export function createStore(client: SupabaseClient, companyId: () => string | nu
     if (error) throw error;
   }
 
-  /** Live sync: any row change in any of these tables fires `onChange(table)`
-   *  so every signed-in screen refetches. Respects RLS automatically. */
-  function subscribeAll(onChange: (table: string) => void) {
-    const channel = client.channel("crm-live-sync");
+  /**
+   * Live sync: any row change in any of these tables fires `onChange(table)`
+   * so every signed-in screen refetches. Respects RLS automatically.
+   *
+   * A client with no realtime — which is every client once this leaves
+   * Supabase, until Web PubSub is wired up — gets a subscription that does
+   * nothing. That is a slower refresh, not a stale screen: `useWorkspace`
+   * polls on a timer underneath this and refetches whenever the tab comes
+   * back into focus. Both of those are the floor, and the floor is what
+   * carries the CRM if this returns nothing.
+   */
+  function subscribeAll(onChange: (table: string) => void): { unsubscribe: () => void } {
+    if (!live) return { unsubscribe: () => {} };
+    const channel = live.channel("crm-live-sync");
     [...ENTITY_TABLES, "settings"].forEach((table) => {
       channel.on(
         "postgres_changes",
@@ -241,13 +256,42 @@ export function createStore(client: SupabaseClient, companyId: () => string | nu
       );
     });
     channel.subscribe();
-    return channel;
+    return { unsubscribe: () => { void channel.unsubscribe(); } };
   }
 
-  return { fetchEntity, fetchSettings, fetchProfiles, load, syncEntity, syncSettings, subscribeAll };
+  const api: Store = { fetchEntity, fetchSettings, fetchProfiles, load, syncEntity, syncSettings, subscribeAll };
+  return api;
 }
 
-export type Store = ReturnType<typeof createStore>;
+/**
+ * Written out rather than inferred with `ReturnType<typeof createStore>`.
+ *
+ * Inferring it made the two refer to each other: the store's own `store()`
+ * below is declared to return `Store`, `Store` came from whatever
+ * `createStore` returned, and `createStore` could not be resolved until its
+ * argument had been checked against a client type that the inference was
+ * still in the middle of. The compiler's word for that is "type
+ * instantiation is excessively deep". Stating the type ends it, and means
+ * the shape of the store is something a reader can find in one place.
+ */
+export interface Store {
+  fetchEntity<T extends EntityBase>(table: EntityTable): Promise<T[]>;
+  fetchSettings(): Promise<Record<string, unknown>>;
+  fetchProfiles(): Promise<Profile[]>;
+  load(): Promise<LoadedWorkspace>;
+  syncEntity<T extends EntityBase>(
+    table: EntityTable,
+    prev: readonly T[],
+    next: readonly T[],
+    now?: () => string,
+  ): Promise<void>;
+  syncSettings(
+    prev: Record<string, unknown>,
+    next: Record<string, unknown>,
+    now?: () => string,
+  ): Promise<void>;
+  subscribeAll(onChange: (table: string) => void): { unsubscribe: () => void };
+}
 
 /** The app's store, bound to the live client on first use. */
 /**
@@ -271,8 +315,13 @@ export function getActiveCompanyId(): string | null {
   return activeCompanyId;
 }
 
-let live: Store | null = null;
+let liveStore: Store | null = null;
 export function store(): Store {
-  if (!live) live = createStore(getSupabase(), () => activeCompanyId);
-  return live;
+  if (!liveStore) {
+    /* Both come through `supabaseAsDb`, which is where the live client is
+       narrowed to these two interfaces and where the proof that it may be
+       narrowed to them is written down. */
+    liveStore = createStore(getDb(), () => activeCompanyId, getRealtime());
+  }
+  return liveStore;
 }

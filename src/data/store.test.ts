@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Db } from "./db";
 import { createStore } from "./store";
 
 /**
@@ -77,13 +77,12 @@ function fakeClient(options: FakeOptions = {}) {
     return builder;
   };
 
-  const client = {
-    from,
-    channel: () => {
-      const channel = { on: () => channel, subscribe: () => channel };
-      return channel;
-    },
-  } as unknown as SupabaseClient;
+  /* Cast to `Db`, the narrow interface the store now takes, rather than to
+     the whole Supabase client. The fake only ever implemented this much of
+     it; saying so is both shorter and true. The change feed is a separate
+     argument to `createStore` and no test here uses one, so the fake no
+     longer carries a pretend `channel`. */
+  const client = { from } as unknown as Db;
 
   return { client, ops };
 }
