@@ -1,9 +1,35 @@
 # Provisioning the CRM on Azure
 
-Four commands. Run them in order; each one prints what the next one needs.
-
 Nothing here touches Supabase or Netlify. The current production CRM keeps
 serving throughout, and cutover is a separate, reversible step at the end.
+
+## The short version
+
+```bash
+az login
+export SOURCE_URL='<the Supabase connection string>'
+export JWT_SECRET='<the Supabase project JWT secret>'
+export SUPABASE_URL='https://<project>.supabase.co' SUPABASE_SERVICE_KEY='...'
+
+infra/apply-all.sh --plan     # what it would do, touching nothing
+infra/apply-all.sh            # steps 1-6
+infra/apply-all.sh --cutover  # ...and step 8, the move
+```
+
+`infra/apply-all.sh` is the eight steps below with the joins done: it carries
+the generated password from step 1 into step 2 without it ever being printed,
+opens the database firewall for the machine it is running on and closes it
+again however the run ends, refuses to move data onto a schema it cannot
+prove matches, and keeps the row dump outside the checkout. Every step is
+idempotent, `--from N` resumes, and it will not cut over unless asked in as
+many words.
+
+Read the rest anyway before running it on the day. The script automates the
+typing, not the judgement.
+
+## The long version
+
+Run these in order; each one prints what the next one needs.
 
 ## 1. Create the resources
 

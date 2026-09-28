@@ -9,3 +9,10 @@ tmp/
 
 # tsc incremental state — machine-specific, not source
 tsconfig.tsbuildinfo
+
+# infra/migrate-data.sh works here when MIGRATION_DIR is not set. It holds
+# data.sql — every row of every customer, order and invoice — so it must
+# never be committable, however absent-mindedly.
+migration-*/
+crm-migration-*/
+supabase/azure/*.raw
