@@ -20,10 +20,19 @@
  * caller and somebody else's document numbers. It is checked in
  * `identity.mjs` and it is checked before this file runs.
  *
- * DELIBERATELY ABSENT: `consume_rate_limit` and `may_manage_email_account`.
- * Both exist and both are called — by the scheduled jobs, which run as
- * `service_role` and do not come through here. A browser has no business
- * asking the database whether it has exhausted its own rate limit.
+ * DELIBERATELY ABSENT FROM `CALLABLE`: `consume_rate_limit` and
+ * `may_manage_email_account`. Both exist and both are called — by the server
+ * jobs, which run as `service_role` and do not come through the HTTP
+ * endpoint. A browser has no business asking the database whether it has
+ * exhausted its own rate limit, or telling it the answer.
+ *
+ * They are in `SERVER_CALLABLE` instead, which `serviceClient.mjs` adds and
+ * `/api/rpc` does not. Getting this split wrong the first time had a cost
+ * worth recording: with the rate limiter's function missing from the only
+ * whitelist there was, `consume()` failed, logged, and FAILED OPEN — so the
+ * public registration form, the one endpoint that is unauthenticated by
+ * design and therefore most needs a limit, had none at all. It answered 200
+ * and saved the row. Nothing was broken enough to notice.
  */
 
 export class RpcError extends Error {
@@ -80,6 +89,24 @@ export const CALLABLE = {
   regenerate_webhook_secret: [{ args: ["p_kind"], returns: "scalar" }],
 };
 
+/**
+ * Functions the SERVER may call and a browser may not.
+ *
+ * Not reachable through `/api/rpc` at any privilege: `handleRpc` compiles
+ * against `CALLABLE` alone. These are for `serviceClient.mjs`, which runs
+ * in the function host where there is no caller to distrust.
+ */
+export const SERVER_CALLABLE = {
+  /* The rate limiter. A browser that could call this could also spend its
+     own allowance to zero, or — worse — call it with somebody else's key. */
+  consume_rate_limit: [{ args: ["p_key", "p_limit", "p_window_seconds"], returns: "rows" }],
+
+  /* Whether a given person may manage a given sending account. The answer
+     is a permission decision, and a client that asks for one is a client
+     that intends to act on it itself. */
+  may_manage_email_account: [{ args: ["p_account_id"], returns: "scalar" }],
+};
+
 const IDENTIFIER = /^[a-z_][a-z0-9_]*$/;
 
 /**
@@ -90,8 +117,8 @@ const IDENTIFIER = /^[a-z_][a-z0-9_]*$/;
  * thought was being applied and that silently was not is how a query comes
  * back with the wrong rows and nobody knows why.
  */
-function signatureFor(fn, argNames) {
-  const signatures = Object.prototype.hasOwnProperty.call(CALLABLE, fn) ? CALLABLE[fn] : null;
+function signatureFor(fn, argNames, allow) {
+  const signatures = Object.prototype.hasOwnProperty.call(allow, fn) ? allow[fn] : null;
   if (!signatures) throw new RpcError("Unknown function.");
 
   const wanted = [...argNames].sort();
@@ -108,15 +135,20 @@ function signatureFor(fn, argNames) {
  * Named notation (`p_kind => $1`) rather than positional, so a function with
  * defaults or overloads resolves the way the caller meant rather than the
  * way the argument order happened to fall.
+ *
+ * @param allow Which whitelist to check against. Defaults to `CALLABLE`, the
+ *   browser's — so a caller that forgets to pass one gets the SMALLER set,
+ *   never the larger. A default that widened access would be a mistake
+ *   nobody would see.
  */
-export function compileRpc(fn, args = {}) {
+export function compileRpc(fn, args = {}, allow = CALLABLE) {
   if (typeof fn !== "string" || !IDENTIFIER.test(fn)) throw new RpcError("Unknown function.");
   if (args === null || typeof args !== "object" || Array.isArray(args)) {
     throw new RpcError("Arguments must be an object.");
   }
 
   const names = Object.keys(args);
-  const signature = signatureFor(fn, names);
+  const signature = signatureFor(fn, names, allow);
 
   const params = [];
   /* The names come from `signature.args` — this file's own copy — not from

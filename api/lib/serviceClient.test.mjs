@@ -167,4 +167,36 @@ d("what each client is allowed to see", () => {
     expect(data).toBeNull();
     expect(error?.message).toBe("Unknown function.");
   });
+
+  /* -- THE ONE THAT WAS ALREADY WRONG ONCE ---------------------------
+     The rate limiter's function is deliberately off the browser's
+     whitelist. When that was the ONLY whitelist, `consume()` could not
+     call it, threw, was caught, logged, and FAILED OPEN — so the public
+     registration form, which is unauthenticated by design and therefore
+     the endpoint that most needs a limit, had none. It answered 200 and
+     saved the row. Nothing looked broken. */
+  it("can call the rate limiter, which the browser cannot", async () => {
+    const { data, error } = await service().rpc("consume_rate_limit", {
+      p_key: `test:${Date.now()}`, p_limit: 3, p_window_seconds: 60,
+    });
+    expect(error).toBeNull();
+    expect(data[0].allowed).toBe(true);
+    expect(data[0].remaining).toBe(2);
+  });
+
+  it("actually refuses once the allowance is spent", async () => {
+    /* Proving it counts, not merely that it answers. */
+    const key = `test:spend:${Date.now()}`;
+    const ask = () => service().rpc("consume_rate_limit",
+      { p_key: key, p_limit: 2, p_window_seconds: 60 });
+    expect((await ask()).data[0].allowed).toBe(true);
+    expect((await ask()).data[0].allowed).toBe(true);
+    expect((await ask()).data[0].allowed).toBe(false);
+  });
+
+  it("can ask whether somebody may manage a sending account", async () => {
+    const { error } = await service().rpc("may_manage_email_account",
+      { p_account_id: "00000000-0000-0000-0000-000000000000" });
+    expect(error).toBeNull();
+  });
 });

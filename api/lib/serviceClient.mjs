@@ -1,6 +1,6 @@
 import { asAnon, asService, asUser } from "./db.mjs";
 import { runQuery } from "./query.mjs";
-import { compileRpc, runRpc } from "./rpc.mjs";
+import { CALLABLE, SERVER_CALLABLE, compileRpc, runRpc } from "./rpc.mjs";
 
 /**
  * The server's own database client.
@@ -167,8 +167,13 @@ export function createClient(runAs) {
     async rpc(fn, args = {}) {
       try {
         /* Compiled first, outside the transaction: the whitelist check is
-           pure, so a bad name costs no connection. */
-        const call = compileRpc(fn, args);
+           pure, so a bad name costs no connection.
+           
+           The wider whitelist, because this runs in the function host where
+           there is no caller to distrust — the rate limiter and the
+           permission helper live there. `/api/rpc` still compiles against
+           `CALLABLE` alone, so none of this is reachable from a browser. */
+        const call = compileRpc(fn, args, { ...CALLABLE, ...SERVER_CALLABLE });
         const data = await runAs((client) => runRpc(client, call));
         return { data, error: null };
       } catch (err) {

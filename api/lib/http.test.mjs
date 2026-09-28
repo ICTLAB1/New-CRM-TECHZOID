@@ -314,10 +314,27 @@ describe("the whitelist itself", () => {
     ]);
   });
 
-  it("does not expose the functions the scheduled jobs use", () => {
+  it("does not expose the functions the server jobs use", () => {
     /* Those run as service_role, which bypasses RLS entirely. A browser
        must not be able to reach them however valid its token. */
     expect(CALLABLE.consume_rate_limit).toBeUndefined();
     expect(CALLABLE.may_manage_email_account).toBeUndefined();
+  });
+
+  it("keeps the two whitelists disjoint", async () => {
+    /* A function on both lists would be reachable from a browser by
+       accident the next time somebody edited either one. */
+    const { SERVER_CALLABLE } = await import("./rpc.mjs");
+    const overlap = Object.keys(SERVER_CALLABLE).filter((fn) => fn in CALLABLE);
+    expect(overlap).toEqual([]);
+  });
+
+  it("defaults to the SMALLER whitelist when none is named", async () => {
+    /* compileRpc takes which list to check against. If that defaulted to
+       the server's, every forgotten argument would widen access silently.
+       It defaults to the browser's, so forgetting narrows instead. */
+    const { compileRpc, RpcError } = await import("./rpc.mjs");
+    expect(() => compileRpc("consume_rate_limit",
+      { p_key: "k", p_limit: 1, p_window_seconds: 60 })).toThrow(RpcError);
   });
 });
