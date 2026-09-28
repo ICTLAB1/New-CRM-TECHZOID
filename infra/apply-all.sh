@@ -133,18 +133,53 @@ note "subscription: $(az account show --query name -o tsv)"
 # Whose steps need what. Checked NOW, all of them, rather than three minutes
 # into a provisioning run — the point of a preflight is that a missing
 # variable costs a retype and not a half-built resource group.
-missing=()
-runs 2 && [ -z "${SOURCE_URL:-}" ] && missing+=("SOURCE_URL (step 2: the schema to copy)")
-runs 5 && [ -z "${SOURCE_URL:-}" ] && missing+=("SOURCE_URL (step 5: the rows to copy)")
-runs 3 && [ -z "${JWT_SECRET:-}" ] && missing+=("JWT_SECRET (step 3: what verifies every token)")
+# Anything still sitting in the terminal's input buffer -- the rest of a
+# pasted block, say -- would otherwise be read as the ANSWER to the first
+# prompt. Paste a runbook in one go and your database password becomes the
+# next command line, silently, and the failure surfaces three steps later
+# as an authentication error that makes no sense. Drained before every
+# prompt, and the prompt reads from /dev/tty rather than from stdin.
+drain_input() {
+  local junk
+  while IFS= read -r -t 0 2>/dev/null; do
+    IFS= read -r -t 0.1 junk 2>/dev/null || break
+  done
+}
+
+# Ask for a value rather than refusing to start without it. Exporting
+# secrets by hand puts them in ~/.bash_history, which on Cloud Shell lives
+# on the persistent share and outlives the session.
+ask_for() {
+  local var="$1" why="$2" value=""
+  [ -n "${!var:-}" ] && return 0
+  if [ ! -t 0 ] || [ ! -r /dev/tty ]; then
+    die "${var} is not set, and there is no terminal to ask on. Export it and run again."
+  fi
+  while [ -z "$value" ]; do
+    drain_input
+    printf '\n  %s\n  %s: ' "$why" "$var" > /dev/tty
+    IFS= read -rs value < /dev/tty
+    printf '\n' > /dev/tty
+    [ -n "$value" ] || printf '  (that one is needed)\n' > /dev/tty
+  done
+  printf -v "$var" '%s' "$value"
+  export "${var?}"
+}
+
+if [ "$PLAN" != 1 ] || runs 2 || runs 5; then
+  { runs 2 || runs 5; } && ask_for SOURCE_URL "The Supabase connection string, port 5432 -- NOT the 6543 pooler."
+fi
+runs 3 && ask_for JWT_SECRET "Supabase -> Settings -> API -> JWT Secret. It is what verifies every token."
 if runs 6; then
-  [ -z "${SUPABASE_URL:-}" ]         && missing+=("SUPABASE_URL (step 6)")
-  [ -z "${SUPABASE_SERVICE_KEY:-}" ] && missing+=("SUPABASE_SERVICE_KEY (step 6)")
+  ask_for SUPABASE_URL         "Supabase -> Settings -> API -> Project URL (https://<ref>.supabase.co)."
+  ask_for SUPABASE_SERVICE_KEY "Supabase -> Settings -> API -> service_role key."
 fi
-if [ ${#missing[@]} -gt 0 ]; then
-  printf '\nNot set:\n'; printf '  %s\n' "${missing[@]}"
-  die "Export those and run again. (--from N skips the steps that need them.)"
-fi
+
+# A placeholder left in from the runbook is worse than a missing value: it
+# reaches step 6 and fails there, after the rows have already moved.
+case "${SUPABASE_URL:-}" in
+  *"<"*|*">"*) die "SUPABASE_URL still has a placeholder in it: ${SUPABASE_URL}" ;;
+esac
 
 # pg_dump must be at least as new as the server it reads.
 #

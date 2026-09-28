@@ -7,14 +7,21 @@ serving throughout, and cutover is a separate, reversible step at the end.
 
 ```bash
 az login
-export SOURCE_URL='<the Supabase connection string>'
-export JWT_SECRET='<the Supabase project JWT secret>'
-export SUPABASE_URL='https://<project>.supabase.co' SUPABASE_SERVICE_KEY='...'
-
 infra/apply-all.sh --plan     # what it would do, touching nothing
 infra/apply-all.sh            # steps 1-6
 infra/apply-all.sh --cutover  # ...and step 8, the move
 ```
+
+It asks for the four values it needs — the Supabase connection string, the
+JWT secret, the project URL and the service-role key — one prompt at a
+time, unless they are already exported. **Paste one line at a time**: a
+pasted block and an interactive prompt share one input buffer, so the line
+after the command becomes the answer to the first question. The script
+drains the buffer before each prompt to stop that, but the habit is worth
+having anyway.
+
+`infra/CLOUDSHELL.md` is the same thing written out for Azure Cloud Shell,
+which is where this is most easily run.
 
 `infra/apply-all.sh` is the eight steps below with the joins done: it carries
 the generated password from step 1 into step 2 without it ever being printed,

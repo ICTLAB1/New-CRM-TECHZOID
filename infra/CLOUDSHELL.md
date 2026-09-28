@@ -14,25 +14,29 @@ cd new-crm-techzoid
 git checkout claude/crm-redesign-preview
 ```
 
-## 2. The four values it needs
+## 2. Look before you leap
 
-| Variable | Where it comes from |
+```bash
+infra/apply-all.sh --plan
+```
+
+That is the whole command. **Paste one line at a time** — see the warning
+below for why.
+
+It asks for the four values it needs, one prompt at a time, and nothing you
+type is echoed or kept:
+
+| It asks for | Where it comes from |
 |---|---|
 | `SOURCE_URL` | Supabase → Project Settings → **Database** → Connection string → **URI** |
 | `JWT_SECRET` | Supabase → Project Settings → **API** → JWT Settings → JWT Secret |
 | `SUPABASE_URL` | Supabase → Project Settings → API → Project URL |
 | `SUPABASE_SERVICE_KEY` | Supabase → Project Settings → API → `service_role` key |
 
-```bash
-read -rsp 'SOURCE_URL: '           SOURCE_URL           && echo && export SOURCE_URL
-read -rsp 'JWT_SECRET: '           JWT_SECRET           && echo && export JWT_SECRET
-read -rsp 'SUPABASE_SERVICE_KEY: ' SUPABASE_SERVICE_KEY && echo && export SUPABASE_SERVICE_KEY
-export SUPABASE_URL='https://<your-project-ref>.supabase.co'
-```
-
-`read -rs` rather than `export X=...` on purpose: typed that way they do not
-go into `~/.bash_history`, which on Cloud Shell is on the persistent share
-and outlives the session.
+It prompts rather than asking you to `export` them because an `export` line
+goes into `~/.bash_history`, which on Cloud Shell is on the persistent share
+and outlives the session. If you would rather export them anyway — for an
+unattended run — the script uses what is already set and does not ask.
 
 **Use the direct connection string, not the transaction pooler.** Supabase
 offers three. `pg_dump` needs a real session, so port **5432** (direct, or
@@ -40,18 +44,24 @@ the *session* pooler) works and port **6543** (transaction pooler) does not
 — it fails partway through with errors about prepared statements. If direct
 connections are refused on your plan, the session pooler string is fine.
 
-## 3. Look before you leap
+`--plan` touches nothing, prints every command it would run, and prints no
+secret. Read it. It also checks, before anything exists, that this Cloud
+Shell's `pg_dump` is new enough for your Supabase server — if it is not, it
+stops and tells you exactly what to install.
 
-```bash
-infra/apply-all.sh --plan
-```
+### One line at a time
 
-Touches nothing, prints every command it would run, and prints no secret.
-Read it. It also checks, before anything exists, that this Cloud Shell's
-`pg_dump` is new enough for your Supabase server — if it is not, it stops
-and tells you exactly what to install.
+Do not paste a multi-line block that ends in a command which then prompts
+you. Everything you paste lands in one input buffer, and a prompt reads
+from that same buffer — so the line *after* the command gets taken as the
+answer to the first question, and your database password becomes
+`export SUPABASE_URL=...`. It fails later, as an authentication error that
+points nowhere near the cause.
 
-## 4. Run it
+The script drains anything buffered before each prompt, so it is protected
+against this. The habit is still worth having: Cloud Shell, one line, Enter.
+
+## 3. Run it
 
 ```bash
 infra/apply-all.sh
@@ -64,7 +74,7 @@ eight minutes.
 **It does not cut over.** The live CRM on Netlify and Supabase keeps serving
 throughout, and everything above is a copy.
 
-## 5. Look at it
+## 4. Look at it
 
 ```bash
 az deployment group show -g techzoid-crm -n crm-infra \
@@ -80,7 +90,7 @@ Then check it against Azure rather than against the old database:
 infra/compare-schema.sh          # every object, both sides
 ```
 
-## 6. The move, when you are ready
+## 5. The move, when you are ready
 
 ```bash
 infra/apply-all.sh --only 8 --cutover
