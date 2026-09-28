@@ -193,6 +193,158 @@ d("the query endpoint", () => {
     expect((await handleQuery(claimsToBeHuge, options)).status).toBe(413);
     expect(read).toBe(false);
   });
+
+  /* -- THE SIZE OF THE REQUEST, WHICH IS NOT THE SIZE OF THE ANSWER ----
+     Every one of these existed because a single limit for everybody broke
+     saving the company's settings. The CRM keeps the whole configuration
+     — catalogue, bank details, certificates, letterhead, stamp, logos, all
+     base64 — in one jsonb document and sends the WHOLE of it back on every
+     save. Production's is 2.88 MB. Reading it worked and saving it did
+     not, so the address on the invoices could not be corrected. */
+
+  it("lets a caller who has proved who they are send a settings-sized body", async () => {
+    const big = JSON.stringify({
+      table: "customers", op: "select", select: "id",
+      filters: [{ col: "id", op: "eq", value: "http-priya" }],
+      pad: "x".repeat(3_000_000),
+    });
+    /* Not asserting 200: `pad` is not a builder method and the translator
+       is right to refuse it. What matters is that it got FAR ENOUGH to be
+       refused on its contents rather than turned away at the door. */
+    const res = await handleQuery(request(big, { token: tokenFor(PRIYA) }), options);
+    expect(res.status).not.toBe(413);
+  });
+
+  it("still holds a signed-in caller to a ceiling", async () => {
+    /* Raised, not removed. 9 MB is past the 8 MB allowance. */
+    const absurd = JSON.stringify({ table: "customers", op: "select", select: "id", pad: "x".repeat(9_000_000) });
+    expect((await handleQuery(request(absurd, { token: tokenFor(PRIYA) }), options)).status).toBe(413);
+  });
+
+  it("does not let a FORGED token buy the larger allowance", async () => {
+    /* The whole design rests on this. The bigger body is unlocked by the
+       SIGNATURE, so a token that does not verify must buy nothing.
+       Asserting the status alone would prove nothing here — a forged token
+       ends in 401 either way, because `asCaller` verifies it again further
+       down. What distinguishes the two is whether the 3 MB was READ: if a
+       mere Authorization header raised the limit, the parser would have
+       chewed through the whole body before anyone checked the signature,
+       which is exactly the denial of service the cap exists to prevent. */
+    let read = false;
+    const forged = `${tokenFor(PRIYA).slice(0, -4)}AAAA`;
+    const claimsToBeBig = {
+      method: "POST",
+      headers: {
+        get: (n) => ({
+          "content-type": "application/json",
+          "content-length": "3000000",
+          authorization: `Bearer ${forged}`,
+        })[n] ?? null,
+      },
+      text: async () => { read = true; return "{}"; },
+    };
+    const res = await handleQuery(claimsToBeBig, options);
+    expect(res.status).toBe(401);
+    expect(read).toBe(false);
+  });
+
+  it("admits a settings-sized body on its declared length, for a real token", async () => {
+    /* The mirror of the test above, on the same pre-read path: a token
+       that DOES verify gets past `content-length` and the body is read.
+       Without this, the one above would also pass if the allowance were
+       never raised for anybody. */
+    let read = false;
+    const claimsToBeBig = {
+      method: "POST",
+      headers: {
+        get: (n) => ({
+          "content-type": "application/json",
+          "content-length": "3000000",
+          authorization: `Bearer ${tokenFor(PRIYA)}`,
+        })[n] ?? null,
+      },
+      text: async () => {
+        read = true;
+        return JSON.stringify({ table: "customers", op: "select", select: "id",
+          filters: [{ col: "id", op: "eq", value: "http-priya" }] });
+      },
+    };
+    const res = await handleQuery(claimsToBeBig, options);
+    expect(read).toBe(true);
+    expect(res.status).toBe(200);
+  });
+
+  it("does not read the body of an oversize request from a stranger", async () => {
+    /* An unauthenticated flood must still be turned away without the
+       parser ever seeing it. */
+    let read = false;
+    const claimsToBeHuge = {
+      method: "POST",
+      headers: {
+        get: (n) => ({ "content-type": "application/json", "content-length": "4000000" })[n] ?? null,
+      },
+      text: async () => { read = true; return "{}"; },
+    };
+    expect((await handleQuery(claimsToBeHuge, options)).status).toBe(413);
+    expect(read).toBe(false);
+  });
+});
+
+d("saving the company settings, at the size they really are", () => {
+  /* An end-to-end version of the above, over the actual row the actual
+     screen writes to. The unit tests measure bytes; this one proves the
+     save LANDS — through the token, the policies, `is_privileged_in`, and
+     a jsonb document the size of production's. */
+  const ADMIN = "33333333-3333-3333-3333-333333333333";
+  let before = null;
+
+  beforeAll(async () => {
+    forgetCatalog();
+    await asService(async (c) => {
+      const row = (await c.query(`select company_id, data from public.settings where id = 'main'`)).rows[0];
+      before = row?.data ?? null;
+      if (!row) throw new Error("no settings row to test against");
+      await c.query(`insert into public.company_members (company_id, user_id, role)
+        values ($1,$2,'Admin')
+        on conflict (company_id, user_id) do update set role = 'Admin'`, [row.company_id, ADMIN]);
+    });
+  });
+
+  afterAll(async () => {
+    await asService(async (c) => {
+      if (before !== null) {
+        await c.query(`update public.settings set data = $1 where id = 'main'`, [before]);
+      }
+    });
+    await closePool();
+  });
+
+  it("saves a 3 MB settings document and reads the change back", async () => {
+    /* Shaped like the real one: a couple of megabytes of base64 for the
+       letterhead and the stamp, and one short string somebody just
+       edited. */
+    const settings = {
+      ...(before ?? {}),
+      companyName: "Northwind Trading Ltd",
+      brandingLogos: "d".repeat(1_500_000),
+      stampImg: "d".repeat(1_400_000),
+    };
+    expect(JSON.stringify(settings).length).toBeGreaterThan(2_800_000);
+
+    const res = await handleQuery(request({
+      table: "settings", op: "update",
+      values: { data: settings },
+      filters: [{ col: "id", op: "eq", value: "main" }],
+    }, { token: tokenFor(ADMIN) }), options);
+
+    expect(res.status).toBe(200);
+
+    const saved = await asService(async (c) =>
+      (await c.query(`select data->>'companyName' as n, length(data::text) as len
+                        from public.settings where id = 'main'`)).rows[0]);
+    expect(saved.n).toBe("Northwind Trading Ltd");
+    expect(Number(saved.len)).toBeGreaterThan(2_800_000);
+  });
 });
 
 d("the rpc endpoint", () => {

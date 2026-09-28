@@ -227,7 +227,9 @@ Every request goes through the same five checks, in this order:
    set `application/json`, so it is turned away before anything reads a body.
 2. **Size** — the declared `content-length` first, so an oversize body is
    refused without being read, then the actual bytes, because the header is
-   whatever the caller wrote there.
+   whatever the caller wrote there. Two limits, not one: **1 MB for a caller
+   who has not proved anything**, **8 MB once the token's signature checks
+   out**. See below.
 3. **The token** — verified, never merely decoded. See below.
 4. **`asUser(verified id)` or `asAnon()`** — opens a transaction and stamps
    the identity with `SET LOCAL` so the policies can judge it.
@@ -235,6 +237,44 @@ Every request goes through the same five checks, in this order:
 
 There is no step where a user id is taken from the request body, and no step
 where a query runs on a connection with nobody's identity on it.
+
+### Why the body limit has two values
+
+The first version had one limit, 1 MB, chosen so that nobody could use the
+JSON parser as a denial of service. It was tested and it worked, and it would
+have broken the CRM on the first day.
+
+The company's entire configuration lives in one `jsonb` document in
+`public.settings` — product catalogue, bank details, ISO certificates,
+letterhead, stamp and logos, all base64 — and `syncSettings` posts the
+**whole document back on every save**, including a one-word edit to the
+company address. Production's two rows are **2.88 MB and 2.72 MB** today.
+So reading settings worked perfectly and saving them returned 413: the
+address on the invoices could not be corrected, and the screen said "That
+request is too large." Nothing in the logs would have said "settings".
+
+Raising the limit for everybody would have thrown away the reason it was
+there. The reason applies to **strangers** — `/api/q` is reachable by the
+whole internet, because the registration form and the customer portal run as
+`anon`, and every legitimate unauthenticated request is a few hundred bytes.
+It does not apply to somebody holding a valid token.
+
+So the larger allowance is unlocked by the token's **signature**, which
+costs one hash of a header and touches no database — no `resolveCaller`, no
+connection, no query, because the question at that point is "is this a real
+token", not "whose". The size is still decided before the body is read. An
+unauthenticated flood still meets 1 MB; a forged token buys nothing and gets
+a 401.
+
+8 MB rather than 3: the catalogue grows, and a limit that must be raised
+again the next time somebody uploads a certificate is a limit that gets met
+by an outage first. It is ~2.7x the largest document that exists and far
+below the Functions host's own ceiling, so it constrains rather than merely
+restating it.
+
+Proven at the real size, not the convenient one: a settings row grown to
+production's size migrates byte-identically, reads back whole, and **saves**
+— and every one of those tests fails against the single 1 MB cap.
 
 ### Who is calling — `api/lib/identity.mjs`
 

@@ -329,10 +329,16 @@ async function defaultLinkIdentity(oid, email) {
  * not verify is very much an error — quietly downgrading it to anonymous
  * would turn a forged token into a working request for the public paths.
  */
-export async function callerOf(authorizationHeader, options = {}) {
+export function bearerToken(authorizationHeader) {
   const raw = String(authorizationHeader ?? "").trim();
   if (!raw) return null;
   const match = /^Bearer\s+(.+)$/i.exec(raw);
   if (!match) throw new AuthError("Authorization header is not a bearer token.");
-  return resolveCaller(await verifyToken(match[1].trim(), options), options);
+  return match[1].trim();
+}
+
+export async function callerOf(authorizationHeader, options = {}) {
+  const token = bearerToken(authorizationHeader);
+  if (!token) return null;
+  return resolveCaller(await verifyToken(token, options), options);
 }
