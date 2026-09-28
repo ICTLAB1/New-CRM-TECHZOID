@@ -62,25 +62,29 @@ select 'public.' || c.relname,
 SQL
 }
 
-say "Checking the target has the schema already"
-target_tables="$(psql "${TARGET_URL}" -At -v ON_ERROR_STOP=1 -c \
-  "select count(*) from information_schema.tables where table_schema='public'")"
-if [[ "${target_tables}" -lt 40 ]]; then
+say "Checking the target's schema matches the source's, object by object"
+# NOT a table count. Counting tables was the first version of this check and
+# it would have passed: the repository's migrations build 42 tables and
+# production has 48, so "at least 40" looked like success while thirteen
+# tables were missing and seven unrelated ones made up the number. See
+# docs/SCHEMA-DRIFT.md. This compares every table, column, default,
+# constraint, index, function, trigger, policy and view.
+if ! SCHEMA_COMPARE_DIR="${WORKDIR}" "$(dirname "${BASH_SOURCE[0]}")/compare-schema.sh"; then
   cat >&2 <<EOF
-The target has ${target_tables} tables in public, which is not the CRM schema.
-Apply the migrations first:
 
+Not copying anything onto a target that does not match the source.
+
+Build the target from what production actually is, rather than from the
+migrations in supabase/ — they do not describe it:
+
+  infra/capture-production-schema.sh
   psql "\$TARGET_URL" -v ON_ERROR_STOP=1 -f supabase/azure/000_bootstrap.sql
-  psql "\$TARGET_URL" -v ON_ERROR_STOP=1 -f supabase/schema.sql
-  for f in supabase/0*.sql; do psql "\$TARGET_URL" -v ON_ERROR_STOP=1 -f "\$f"; done
+  psql "\$TARGET_URL" -v ON_ERROR_STOP=1 -f supabase/azure/production-schema.sql
 
-Note the -v ON_ERROR_STOP=1 on every one of those: without it psql exits 0
-having skipped every statement that failed, and the schema comes out quietly
-incomplete.
+then run this again.
 EOF
   exit 1
 fi
-echo "  ${target_tables} tables present."
 
 say "Checking the target is empty"
 target_rows="$(psql "${TARGET_URL}" -At -v ON_ERROR_STOP=1 -c \

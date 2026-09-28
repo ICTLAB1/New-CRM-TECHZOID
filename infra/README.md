@@ -39,36 +39,47 @@ configure.
 
 It creates **no application secrets**. That is step 3.
 
-## 2. Load the schema
+## 2. Load the schema — from production, not from this repository
 
 ```bash
+export SOURCE_URL='<the Supabase connection string>'
 export TARGET_URL='postgresql://crmadmin:<password>@<postgresHost>:5432/crm?sslmode=require'
 
+infra/capture-production-schema.sh
+
 psql "$TARGET_URL" -v ON_ERROR_STOP=1 -f supabase/azure/000_bootstrap.sql
-psql "$TARGET_URL" -v ON_ERROR_STOP=1 -f supabase/schema.sql
-for f in supabase/0*.sql; do
-  echo "$f"
-  psql "$TARGET_URL" -v ON_ERROR_STOP=1 -f "$f"
-done
+psql "$TARGET_URL" -v ON_ERROR_STOP=1 -f supabase/azure/production-schema.sql
 ```
 
-**`-v ON_ERROR_STOP=1` on every one of those is not optional.** Without it
-`psql` prints each error, skips that statement, and exits 0 — you get a
-schema that is quietly incomplete and a script that reported success. This
-is a real mistake that was made once during this migration and caught only
-because the table count was checked afterwards.
+**Not by replaying `supabase/*.sql`.** Those migrations do not describe the
+live database: 13 tables, 19 functions, 6 views, 2 sequences and a dozen
+triggers exist in production and in no file here, applied through the
+Supabase dashboard and never committed. Replaying them builds a database
+that cannot hold production's data, and the restore fails partway with the
+already-loaded tables looking fine. `docs/SCHEMA-DRIFT.md` has the full list
+and how it was found.
 
-You should end with 43 tables, 100 policies and 64 functions:
+**`-v ON_ERROR_STOP=1` on every `psql` line is not optional.** Without it
+`psql` prints each error, skips that statement, and exits 0 — a schema that
+is quietly incomplete and a script that reported success. That mistake was
+made once already during this work and caught only because something counted
+afterwards.
+
+`000_bootstrap.sql` is what stands in for Supabase itself: the `auth` schema,
+`auth.uid()`, `auth.role()`, and the `anon`, `authenticated` and
+`service_role` roles that every policy is written against. It is why not one
+policy had to be rewritten.
+
+Then **prove it landed**, rather than assuming:
 
 ```bash
-psql "$TARGET_URL" -At -c "select count(*) from information_schema.tables where table_schema='public'"
-psql "$TARGET_URL" -At -c "select count(*) from pg_policies where schemaname='public'"
+infra/compare-schema.sh
 ```
 
-`000_bootstrap.sql` is what stands in for Supabase itself: it creates the
-`auth` schema, `auth.uid()`, `auth.role()`, and the `anon`, `authenticated`
-and `service_role` roles that all 89 policies are written against. That is
-why not one migration had to be edited.
+It fingerprints every table, column, default, constraint, index, function,
+trigger, policy and view in both databases and diffs them. An empty diff is
+the only evidence worth having. `infra/migrate-data.sh` runs this itself and
+refuses to copy anything onto a target that does not match.
 
 ## 3. Load the secrets
 
@@ -115,11 +126,10 @@ export TARGET_URL='<the Azure one>'
 infra/migrate-data.sh
 ```
 
-Rows only; the schema is already there from step 2 and is the proven one.
-Copying Supabase's schema instead would bring its roles, extensions and
-publication objects, which are exactly what does not exist on Azure.
+Rows only; the schema is already there from step 2.
 
-The script refuses to load onto a non-empty target, restores inside a single
+The script compares both schemas first and stops if they differ, refuses to
+load onto a non-empty target, restores inside a single
 transaction so a failure commits nothing, **compares row counts table by
 table** and fails loudly if any differ, and resets the sequences afterwards —
 that last step is the one that is easy to forget and that shows up as a
