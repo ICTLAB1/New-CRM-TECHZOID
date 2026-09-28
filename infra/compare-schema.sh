@@ -63,6 +63,28 @@ echo "THE SCHEMAS DO NOT MATCH. Do not migrate data onto this target yet."
 echo
 summarise "-" "only in the SOURCE, so the target cannot hold its data"
 summarise "+" "only in the TARGET, which is usually harmless"
+
+# Functions reported as different are usually not. A comment in a body, or a
+# CRLF from something pasted into a web editor, changes the stored text and
+# nothing else. This second pass says which of them differ in CODE — and
+# that is the only list worth anybody's afternoon.
+if grep -q '^[-+]function|' "${OUT}/schema.diff"; then
+  CODE="${HERE}/schema-digest-code.sql"
+  psql "${SOURCE_URL}" -At -v ON_ERROR_STOP=1 -f "${CODE}" | sort > "${OUT}/source-code.txt"
+  psql "${TARGET_URL}" -At -v ON_ERROR_STOP=1 -f "${CODE}" | sort > "${OUT}/target-code.txt"
+
+  if diff -q "${OUT}/source-code.txt" "${OUT}/target-code.txt" >/dev/null; then
+    echo
+    echo "  (every function that differs above differs only in comments or"
+    echo "   whitespace — the code is identical on both sides)"
+  else
+    echo
+    echo "  functions whose CODE really differs:"
+    diff "${OUT}/source-code.txt" "${OUT}/target-code.txt" \
+      | grep '^[<>]' | cut -d'|' -f1 | sed 's/^[<>] /    /' | sort -u
+  fi
+fi
+
 echo
 echo "Full detail: ${OUT}/schema.diff"
 echo

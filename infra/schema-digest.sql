@@ -37,6 +37,16 @@ with everything as (
   select 'table' as kind, c.relname as name,
          md5(string_agg(
            a.attname||' '||format_type(a.atttypid, a.atttypmod)
+           -- `attgenerated` and `attidentity` are read as well as the
+           -- expression, and not as a formality: a GENERATED column and a
+           -- column with the same expression as its DEFAULT both store the
+           -- expression in pg_attrdef, so on the expression alone they
+           -- fingerprint identically. They behave completely differently —
+           -- a default is evaluated once and can then be updated to
+           -- anything. This check was added after exactly that pair slipped
+           -- past an earlier version of this file.
+           ||case a.attgenerated when '' then '' else ' generated' end
+           ||case a.attidentity when '' then '' else ' identity' end
            ||coalesce(' default '||pg_get_expr(ad.adbin, ad.adrelid), '')
            ||case when a.attnotnull then ' not null' else '' end,
            E'\n' order by a.attnum)) as fingerprint
