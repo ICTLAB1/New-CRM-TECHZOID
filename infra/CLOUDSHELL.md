@@ -38,7 +38,15 @@ goes into `~/.bash_history`, which on Cloud Shell is on the persistent share
 and outlives the session. If you would rather export them anyway — for an
 unattended run — the script uses what is already set and does not ask.
 
-**Use the direct connection string, not the transaction pooler.** Supabase
+**Use the SESSION POOLER string.** Supabase → Connect offers three:
+
+| | Use it? |
+|---|---|
+| **Session pooler**, port 5432 | **Yes.** User is `postgres.<projectref>`. IPv4, so Cloud Shell can reach it. |
+| Direct connection, port 5432 | No. Newer projects serve it over **IPv6 only** and Cloud Shell has no IPv6 — it just times out. |
+| Transaction pooler, port 6543 | No. `pg_dump` dies partway through on prepared statements. |
+
+**Not the direct connection, and not the transaction pooler.** Supabase
 offers three. `pg_dump` needs a real session, so port **5432** (direct, or
 the *session* pooler) works and port **6543** (transaction pooler) does not
 — it fails partway through with errors about prepared statements. If direct

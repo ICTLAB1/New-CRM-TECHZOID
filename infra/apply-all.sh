@@ -190,7 +190,7 @@ esac
 # outright with "server version mismatch", but only after step 1 has built a
 # resource group, and the message does not say what to do about it. Asked
 # here instead, before anything exists.
-if { runs 2 || runs 5; } && [ "$PLAN" != 1 ]; then
+if runs 2 || runs 5; then   # read-only, so a --plan checks it too
   dump_major="$(pg_dump --version | grep -oE '[0-9]+' | head -1)"
 
   # Keep the error. Throwing it away and printing "could not reach the
@@ -240,11 +240,15 @@ if { runs 2 || runs 5; } && [ "$PLAN" != 1 ]; then
   if [ "$dump_major" -lt "$src_major" ]; then
     die "pg_dump is ${dump_major} and the source server is ${src_major}. It will refuse to read it.
 
-  On Cloud Shell or Ubuntu:
-    sudo sh -c 'echo \"deb http://apt.postgresql.org/pub/repos/apt \$(lsb_release -cs)-pgdg main\" > /etc/apt/sources.list.d/pgdg.list'
-    curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add -
-    sudo apt-get update && sudo apt-get install -y postgresql-client-${src_major}
-    export PATH=/usr/lib/postgresql/${src_major}/bin:\$PATH"
+  On Cloud Shell or Ubuntu, paste these four lines one at a time:
+
+    curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /usr/share/keyrings/pgdg.gpg
+    echo \"deb [signed-by=/usr/share/keyrings/pgdg.gpg] https://apt.postgresql.org/pub/repos/apt \$(lsb_release -cs)-pgdg main\" | sudo tee /etc/apt/sources.list.d/pgdg.list
+    sudo apt-get update -qq && sudo apt-get install -y postgresql-client-${src_major}
+    export PATH=/usr/lib/postgresql/${src_major}/bin:\$PATH
+
+  Then run this script again. (apt-key, which the old advice used, has been
+  removed from current Ubuntu -- hence the keyring file.)"
   fi
 fi
 
@@ -456,6 +460,31 @@ open_firewall() {
 if runs 2; then
   say "2. Loading the schema — captured from production, not replayed from this repository"
   open_firewall
+
+  # The target must not be OLDER than the source. pg_dump writes for the
+  # version it read, and a 17 dump does not load into a 16 server -- it
+  # fails partway, leaving a half-built schema that looks plausible. The
+  # template now asks for 17 because that is what Supabase runs, but this
+  # catches a -p postgresVersion override, an older server left over from an
+  # earlier attempt, and the day Supabase moves to 18.
+  if [ "$PLAN" != 1 ]; then
+    tgt_num="$(psql "$TARGET_URL" -At -c 'show server_version_num' 2>/dev/null || true)"
+    if [ -n "$tgt_num" ] && [ -n "${src_major:-}" ]; then
+      tgt_major=$(( tgt_num / 10000 ))
+      note "postgres: source is ${src_major}, Azure is ${tgt_major}"
+      if [ "$tgt_major" -lt "${src_major}" ]; then
+        die "Azure is running Postgres ${tgt_major} and Supabase is running ${src_major}.
+
+  A dump taken from ${src_major} will not load into ${tgt_major}. Delete the
+  server and redeploy with a matching version:
+
+    az postgres flexible-server delete -g ${RESOURCE_GROUP} -n ${PG_HOST%%.*} --yes
+    infra/apply-all.sh --only 1
+
+  (Nothing has been copied yet, so there is nothing to lose by deleting it.)"
+      fi
+    fi
+  fi
 
   # Already loaded? Then say so and move on. `production-schema.sql` is
   # pg_dump output: its CREATE TABLEs have no IF NOT EXISTS, so re-running

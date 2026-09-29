@@ -42,8 +42,8 @@ param postgresAdminPassword string
 @description('Database size. B1ms is the burstable entry tier — right for this workload, and changeable later without a rebuild.')
 param postgresSkuName string = 'Standard_B1ms'
 
-@description('Postgres major version. 16, because that is what the schema and all 37 migrations were proven against.')
-param postgresVersion string = '16'
+@description('Postgres major version. 17, because that is what the live Supabase server runs.')
+param postgresVersion string = '17'
 
 var suffix = uniqueString(resourceGroup().id)
 var storageName = toLower('${namePrefix}st${suffix}')
