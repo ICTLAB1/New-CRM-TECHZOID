@@ -54,6 +54,7 @@ while [ $# -gt 0 ]; do
     --only)    FROM="${2:?--only needs a step number}"; TO="$2"; shift 2 ;;
     --plan)    PLAN=1; shift ;;
     --cutover) CUTOVER=1; shift ;;
+    --check)   FROM=9; TO=9; shift ;;
     --yes|-y)  ASSUME_YES=1; shift ;;
     -h|--help) sed -n '2,36p' "${BASH_SOURCE[0]}" | sed 's/^#\s\?//'; exit 0 ;;
     *) echo "Unknown argument: $1" >&2; exit 2 ;;
@@ -318,6 +319,81 @@ deploy_site() {
     npx --yes @azure/static-web-apps-cli deploy "${ROOT}/dist" --env default
 }
 
+# -- is it actually working ---------------------------------------------
+#
+# "Deployed" and "live" are not the same claim, and the gap between them is
+# where this will go wrong. A zip can upload cleanly to a function app that
+# then answers 500 on every request because the Key Vault reference did not
+# resolve -- the managed identity's role assignment takes a minute or two to
+# propagate, and until it does the app starts, serves, and cannot reach the
+# database. Nothing in the deployment output says so.
+#
+# So: a real request, over the real URL, through the linked backend.
+#
+# An anonymous select on `settings` is the one worth making. It touches
+# every part of the path -- routing, the function host, the connection
+# string from the vault, the catalog, the translator and the policies -- and
+# the CORRECT answer is `{"data":[]}`, because `settings_select_member`
+# compares against auth.uid() and an anonymous caller is nobody. Empty is
+# proof the policy ran. Rows coming back would be the alarming outcome.
+smoke_test() {
+  [ "$PLAN" = 1 ] && { note "would check the site and the API actually answer"; return 0; }
+  local base="https://${STATIC_HOST}" raw code body attempt=0
+  local max="${SMOKE_TRIES:-10}" gap="${SMOKE_GAP:-15}"
+
+  printf '  checking %s ... ' "$base"
+  code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "$base/" || echo 000)"
+  if [ "$code" != "200" ]; then
+    printf '%s\n' "$code"
+    die "The site is not serving. Deploy it (step 4) before checking."
+  fi
+  printf 'serving\n'
+
+  # Retried, because a Flex Consumption app cold-starts and the role
+  # assignment it needs may still be propagating. A failure on the first
+  # try means nothing; a failure on the tenth is real.
+  while [ "$attempt" -lt "$max" ]; do
+    attempt=$(( attempt + 1 ))
+    printf '  checking %s/api/q (try %s/%s) ... ' "$base" "$attempt" "$max"
+
+    # ONE request. The body and the status must describe the same call --
+    # asking twice can answer differently, and then the body printed in a
+    # failure is not the body of the request that failed.
+    raw="$(curl -s -w '\n%{http_code}' --max-time 45 -X POST "${base}/api/q" \
+      -H 'content-type: application/json' \
+      -d '{"table":"settings","op":"select","select":"id","filters":[{"col":"id","op":"eq","value":"main"}]}' \
+      2>/dev/null || printf '\n000')"
+    code="${raw##*$'\n'}"
+    body="${raw%$'\n'*}"
+
+    case "$code" in
+      200)
+        printf 'answered\n'
+        case "$(printf '%s' "$body" | tr -d ' ')" in
+          '{"data":[]}')
+            note "live: it reached the database, and the policies refused an anonymous caller -- which is the correct answer"
+            return 0 ;;
+          *'"data"'*)
+            note "the API answered 200 but returned ROWS to an anonymous caller."
+            die "Row-level security is not being applied. Do NOT cut over. Check that 000_bootstrap.sql loaded, and that the API connects as a role without BYPASSRLS." ;;
+          *)
+            note "unexpected body: ${body:0:200}"
+            die "The API answered 200 with something unrecognisable." ;;
+        esac ;;
+      404) printf '404\n'
+           die "The API is not routed. The Static Web App's linked backend is not wired to ${FUNCTION_APP}, or the zip deployed without registering any function." ;;
+      000) printf 'no answer\n' ;;
+      *)   printf '%s\n' "$code" ;;
+    esac
+    [ "$attempt" -lt "$max" ] && sleep "$gap"
+  done
+
+  note "last response: ${code} ${body:0:200}"
+  die "The API never answered correctly. Most often this is the Key Vault reference: run
+  az functionapp config appsettings list -g ${RESOURCE_GROUP} -n ${FUNCTION_APP}
+  and look for PGCONNECTION_STRING still showing an unresolved @Microsoft.KeyVault(...) value."
+}
+
 open_firewall() {
   [ "$RULE_ADDED" = 1 ] && return 0
   [ "$PLAN" = 1 ] && { note "would open the firewall for this machine"; return 0; }
@@ -409,6 +485,7 @@ if runs 4; then
     note "would deploy dist/ to $STATIC_SITE"
   else
     deploy_site
+    smoke_test
   fi
 fi
 
@@ -503,8 +580,14 @@ if runs 8; then
       note "would deploy the cutover build to $STATIC_SITE"
     else
       deploy_site
+      smoke_test
     fi
   fi
+fi
+
+if runs 9; then
+  say "Checking that it is actually live"
+  smoke_test
 fi
 
 say "Done."

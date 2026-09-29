@@ -96,6 +96,9 @@ infra/compare-schema.sh          # every object, both sides
 infra/apply-all.sh --only 8 --cutover
 ```
 
+It rebuilds the site with `VITE_API_BASE=/api` and `VITE_BLOB_STORAGE=on`,
+deploys it, and then **checks that it is actually live** — see below.
+
 Rolling back is the same command without `--cutover`, which rebuilds the
 site pointed at Supabase again. Nothing on the Azure side needs undoing — it
 simply stops being asked. Supabase still holds every row it did, because
@@ -103,6 +106,37 @@ none of this moved anything.
 
 Sign-in with Entra ID is step 7 and is separate; it needs an app
 registration made in the portal first. `infra/README.md` has it.
+
+## Deployed is not live
+
+```bash
+infra/apply-all.sh --check
+```
+
+Runs automatically after every deploy, and on its own whenever you want it.
+
+It makes one real anonymous request to `/api/q` over the live URL. That one
+request exercises routing, the function host, the connection string coming
+out of Key Vault, the catalog, the translator and the policies — and the
+**correct answer is `{"data":[]}`**, because `settings_select_member`
+compares against `auth.uid()` and an anonymous caller is nobody. Empty is
+the proof that row-level security ran. Rows coming back is the alarming
+outcome, and the check refuses to let you cut over on it.
+
+It retries for a couple of minutes, because a Flex Consumption app
+cold-starts and the managed identity's role assignment takes a little while
+to propagate — until it does, the app starts, serves, and cannot reach the
+database. A zip that uploaded perfectly can sit there answering 500, and
+nothing in the deployment output would tell you.
+
+What each failure means:
+
+| What you see | What it is |
+|---|---|
+| `{"data":[]}` | Live. This is the one you want. |
+| rows returned | RLS is not applying. **Do not cut over.** `000_bootstrap.sql` did not load, or the API is connecting as a role that bypasses it. |
+| 404 | The Static Web App's linked backend is not wired to the Function App, or the zip deployed without registering a function. |
+| 500 for two minutes | Almost always the Key Vault reference: `az functionapp config appsettings list -g techzoid-crm -n <app>` and look for `PGCONNECTION_STRING` still showing `@Microsoft.KeyVault(...)` unresolved. |
 
 ## If something stops
 
