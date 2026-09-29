@@ -192,9 +192,48 @@ esac
 # here instead, before anything exists.
 if { runs 2 || runs 5; } && [ "$PLAN" != 1 ]; then
   dump_major="$(pg_dump --version | grep -oE '[0-9]+' | head -1)"
-  src_num="$(psql "$SOURCE_URL" -At -c 'show server_version_num' 2>/dev/null || true)"
+
+  # Keep the error. Throwing it away and printing "could not reach the
+  # source database" turns five different problems -- a wrong password, a
+  # paused project, an IPv6-only host this machine cannot route to, a
+  # placeholder left in the string -- into one unhelpful sentence, and the
+  # person reading it has no way to tell which. Postgres already says
+  # exactly what went wrong; the job here is to pass it on and translate it.
+  pg_err="$(mktemp)"; CLEANUP_FILES+=("$pg_err")
+  src_num="$(psql "$SOURCE_URL" -At -c 'show server_version_num' 2>"$pg_err" || true)"
   if [ -z "$src_num" ]; then
-    die "Could not reach the source database with SOURCE_URL. Check the string, and that this machine is allowed to connect."
+    printf '\n  Postgres said:\n' >&2
+    sed 's/^/    /' "$pg_err" >&2
+
+    # The four that actually happen, each with the thing to do about it.
+    if grep -qi 'password authentication failed' "$pg_err"; then
+      die "The password in SOURCE_URL is wrong.
+
+  If you left [YOUR-PASSWORD] in the string, replace it -- brackets and all.
+  If you do not know it: Supabase -> Settings -> Database -> Reset database
+  password. That does NOT break your live CRM, which connects with API keys.
+  If the password contains @ / # or ?, percent-encode it (@ is %40)."
+    elif grep -qi 'Tenant or user not found' "$pg_err"; then
+      die "The username is wrong for the pooler.
+
+  Through the Session pooler the user is postgres.<projectref>, not plain
+  'postgres'. Copy the Session pooler string from Supabase -> Connect rather
+  than editing the direct one by hand."
+    elif grep -qiE 'could not translate host name|Name or service not known' "$pg_err"; then
+      die "That hostname does not resolve. Check it for a typo, and that the
+  project reference in it matches the project you are looking at."
+    elif grep -qiE 'timeout expired|could not connect to server|Connection refused|No route to host|Network is unreachable' "$pg_err"; then
+      die "Reached the network and got nothing back. Two usual causes:
+
+  1. A PAUSED project. Supabase pauses free projects after a week idle.
+     Open the project in the dashboard; if it offers 'Restore', do that and
+     wait for it to come up.
+  2. The DIRECT connection string, which newer projects serve over IPv6
+     only. Cloud Shell has no IPv6, so it hangs. Use the SESSION POOLER
+     string from Supabase -> Connect (port 5432, user postgres.<ref>)."
+    else
+      die "Could not reach the source database. The message above is from Postgres itself."
+    fi
   fi
   src_major=$(( src_num / 10000 ))
   note "postgres: source is ${src_major}, pg_dump here is ${dump_major}"
