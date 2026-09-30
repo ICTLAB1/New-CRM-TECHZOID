@@ -42,6 +42,22 @@ param postgresAdminPassword string
 @description('Database size. B1ms is the burstable entry tier — right for this workload, and changeable later without a rebuild.')
 param postgresSkuName string = 'Standard_B1ms'
 
+/* Static Web Apps is not offered in every region, and centralindia is one of
+   the ones it is missing from -- the deployment fails outright with
+   LocationNotAvailableForResourceType. At the time of writing it is offered
+   in centralus, eastus2, westus2, westeurope and eastasia, so this is a
+   SEPARATE knob from `location`: the database, the storage and the function
+   app stay next to the people using them, and only the static host moves.
+   eastasia is the closest of the five to India.
+
+   It costs nothing in latency that matters. A Static Web App is a CDN in
+   front of a handful of files, served from the edge wherever the visitor
+   is; the requests that actually touch data go to /api, which is the linked
+   backend, which is still in `location`. */
+@description('Region for the Static Web App. It is not available in every region -- see the note in this file.')
+@allowed([ 'centralus', 'eastus2', 'westus2', 'westeurope', 'eastasia' ])
+param staticSiteLocation string = 'eastasia'
+
 @description('Postgres major version. 17, because that is what the live Supabase server runs.')
 param postgresVersion string = '17'
 
@@ -318,7 +334,7 @@ resource metricsAccess 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
 
 resource staticSite 'Microsoft.Web/staticSites@2023-12-01' = {
   name: staticSiteName
-  location: location
+  location: staticSiteLocation
   /* Standard, not Free: a linked backend needs it, and a linked backend is
      what puts the SPA and /api on ONE ORIGIN. Same origin means no CORS to
      configure and no cross-site cookie question to get wrong. */
