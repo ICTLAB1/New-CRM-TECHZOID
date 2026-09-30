@@ -213,12 +213,17 @@ if runs 2 || runs 5; then   # read-only, so a --plan checks it too
   If you do not know it: Supabase -> Settings -> Database -> Reset database
   password. That does NOT break your live CRM, which connects with API keys.
   If the password contains @ / # or ?, percent-encode it (@ is %40)."
-    elif grep -qi 'Tenant or user not found' "$pg_err"; then
-      die "The username is wrong for the pooler.
+    elif grep -qiE 'tenant[ /]?(or user)? ?(not found)|ENOTFOUND' "$pg_err"; then
+      die "The pooler does not host this project.
 
-  Through the Session pooler the user is postgres.<projectref>, not plain
-  'postgres'. Copy the Session pooler string from Supabase -> Connect rather
-  than editing the direct one by hand."
+  Supabase runs several poolers per region and they are NOT interchangeable:
+  a project on aws-1-<region> is unknown to aws-0-<region>, and the error is
+  this one -- it reads like a bad username, but the username is usually fine
+  and the HOST is wrong.
+
+  Copy the string verbatim from Supabase -> Connect -> Session pooler rather
+  than typing it or adapting an example. Check both halves: the user is
+  postgres.<projectref>, and the host is whichever aws-N the dashboard says."
     elif grep -qiE 'could not translate host name|Name or service not known' "$pg_err"; then
       die "That hostname does not resolve. Check it for a typo, and that the
   project reference in it matches the project you are looking at."
