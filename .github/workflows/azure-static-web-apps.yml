@@ -41,7 +41,12 @@ jobs:
           VITE_API_BASE: /api
           VITE_BLOB_STORAGE: on
           VITE_SUPABASE_URL: https://sdhprpbfazpyghjepzpt.supabase.co
-          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          # The `anon` key, inline on purpose. It is public by design: it is
+          # compiled into the bundle and served to every visitor either way,
+          # it carries no privileges of its own, and every row-level policy
+          # still applies to it. The service_role key is the opposite of all
+          # three and must never appear here.
+          VITE_SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNkaHBycGJmYXpweWdoamVwenB0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ5OTY5MDMsImV4cCI6MjEwMDU3MjkwM30.HURLe79g1EX8vuMCRTbaBRhxd7JLsOINBptHjw_0LPI
         run: npm run build
 
       - name: deploy
