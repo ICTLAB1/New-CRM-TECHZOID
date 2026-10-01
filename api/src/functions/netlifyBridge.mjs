@@ -71,7 +71,28 @@ export const SCHEDULED = {
 
 /** Every function file present, by name. */
 export function functionNames(dir = FUNCTIONS_DIR) {
-  return readdirSync(dir)
+  /* A MISSING DIRECTORY IS EMPTY, NOT FATAL.
+     `readdirSync` throws when the path is not there, and this runs at
+     registration — inside the module the Functions host imports first. One
+     throw here and the host registers NOTHING: not the bridged handlers it
+     was looking for, and not `/api/q` either, which has nothing to do with
+     any of this. The symptom is a function app that deploys cleanly,
+     reports Running, and answers 404 to every route, with the reason
+     visible only in a log this deployment could not reach.
+
+     Which is exactly what happened: the deployment package was built
+     excluding `netlify/`, and the whole API disappeared. The care taken a
+     few lines down -- importing each handler on first CALL so that one bad
+     module cannot take out the other twenty-five -- was undone by reading
+     the directory eagerly. */
+  let entries;
+  try {
+    entries = readdirSync(dir);
+  } catch (err) {
+    console.warn(`No bridged functions at ${dir} (${err?.code ?? err}); registering none.`);
+    return [];
+  }
+  return entries
     .filter((f) => f.endsWith(".mjs") && !f.endsWith(".test.mjs"))
     .map((f) => f.replace(/\.mjs$/, ""))
     .sort();

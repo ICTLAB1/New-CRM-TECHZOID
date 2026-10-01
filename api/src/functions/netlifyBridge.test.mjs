@@ -225,3 +225,20 @@ d("a real handler, unchanged, on the Azure stack", () => {
     });
   });
 });
+
+describe("when the bridged handlers are not in the package", () => {
+  /* The deployment that found this built its zip without `netlify/`, and
+     the eager readdirSync took the WHOLE api down with it -- `/api/q`
+     included, which does not go through this file at all. */
+  it("registers none rather than throwing", () => {
+    expect(() => functionNames("/no/such/directory")).not.toThrow();
+    expect(functionNames("/no/such/directory")).toEqual([]);
+  });
+
+  it("still registers the real endpoints when the bridge finds nothing", () => {
+    const http = new Map();
+    const app = { http: (n, o) => http.set(n, o), timer: () => {} };
+    expect(() => registerNetlifyFunctions(app, "/no/such/directory")).not.toThrow();
+    expect(http.size).toBe(0);
+  });
+});
