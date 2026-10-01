@@ -54,8 +54,8 @@ const MAX_TOKEN_BYTES = 8 * 1024;
  */
 export function identityConfig(env = process.env) {
   const alg = (env.JWT_ALG || "HS256").toUpperCase();
-  if (alg !== "HS256" && alg !== "RS256") {
-    throw new AuthError("Unsupported JWT_ALG: expected HS256 or RS256.", 500);
+  if (alg !== "HS256" && alg !== "RS256" && alg !== "ES256") {
+    throw new AuthError("Unsupported JWT_ALG: expected HS256, RS256 or ES256.", 500);
   }
 
   const config = {
@@ -71,6 +71,10 @@ export function identityConfig(env = process.env) {
      subject IS this application's user id or merely points at one.
      Defaults from the algorithm because that is how the two providers
      actually differ here, and can be stated outright when it is not. */
+  /* ES256 is Supabase's asymmetric signing, not Entra's -- so it defaults to
+     the supabase directory, where the token's subject IS this application's
+     user id. Getting this wrong would send every caller through the Entra
+     translation and resolve nobody. */
   config.directory = (env.JWT_DIRECTORY || (alg === "RS256" ? "entra" : "supabase")).toLowerCase();
   if (config.directory !== "entra" && config.directory !== "supabase") {
     throw new AuthError("Unsupported JWT_DIRECTORY: expected entra or supabase.", 500);
@@ -145,6 +149,23 @@ function checkHs256(signingInput, signatureB64, secret) {
   return timingSafeEqual(actual, expected);
 }
 
+/* ES256 signatures in a JWT are the raw r||s pair, 64 bytes, NOT the DER
+   SEQUENCE that Node's verifier expects by default. Without
+   `dsaEncoding: "ieee-p1363"` every signature fails to verify and it looks
+   exactly like a wrong key. */
+function checkEs256(signingInput, signatureB64, publicKey) {
+  try {
+    return verifySignature(
+      "SHA256",
+      Buffer.from(signingInput),
+      { key: publicKey, dsaEncoding: "ieee-p1363" },
+      Buffer.from(signatureB64, "base64url"),
+    );
+  } catch {
+    return false;
+  }
+}
+
 function checkRs256(signingInput, signatureB64, publicKey) {
   try {
     return verifySignature(
@@ -178,7 +199,11 @@ async function loadJwks(uri, doFetch) {
   const body = await res.json();
   const keys = new Map();
   for (const jwk of body?.keys ?? []) {
-    if (!jwk || jwk.kty !== "RSA") continue;
+    /* RSA for Entra, EC for Supabase, which signs ES256 on a P-256 curve.
+       Filtering to RSA alone silently discarded every Supabase key and the
+       set came back empty -- which reads as "the provider is down", not as
+       "this verifier does not understand the key type it was handed". */
+    if (!jwk || (jwk.kty !== "RSA" && jwk.kty !== "EC")) continue;
     if (jwk.use && jwk.use !== "sig") continue;
     try {
       keys.set(String(jwk.kid), createPublicKey({ key: jwk, format: "jwk" }));
@@ -235,9 +260,15 @@ export async function verifyToken(token, options = {}) {
   }
 
   const signingInput = `${headerB64}.${payloadB64}`;
-  const ok = config.alg === "HS256"
-    ? checkHs256(signingInput, signatureB64, config.secret)
-    : checkRs256(signingInput, signatureB64, await publicKeyFor(header.kid, config, doFetch));
+  let ok;
+  if (config.alg === "HS256") {
+    ok = checkHs256(signingInput, signatureB64, config.secret);
+  } else {
+    const key = await publicKeyFor(header.kid, config, doFetch);
+    ok = config.alg === "ES256"
+      ? checkEs256(signingInput, signatureB64, key)
+      : checkRs256(signingInput, signatureB64, key);
+  }
   if (!ok) throw new AuthError("Token signature does not verify.");
 
   /* Only now is the payload worth reading. */
