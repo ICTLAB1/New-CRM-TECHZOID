@@ -1,0 +1,54 @@
+# Builds the CRM and publishes it to Azure Static Web Apps.
+#
+# WHY A WORKFLOW RATHER THAN `swa deploy`. The CLI fetches its uploader from
+# aka.ms at run time, and the environment this was set up from cannot reach
+# it. GitHub's runners can, and this has the better property anyway: every
+# push to the branch redeploys, so the site and the repository cannot drift.
+#
+# THE THREE SWITCHES ARE SET HERE, and they are the whole cutover:
+#   VITE_API_BASE=/api       sends queries to the Function App, not Supabase
+#   VITE_BLOB_STORAGE=on     sends attachments to Azure Blob Storage
+#   (VITE_AUTH is deliberately absent — sign-in stays on Supabase until the
+#    Entra step, which is separate and reversible on its own.)
+#
+# VITE_SUPABASE_ANON_KEY is the `anon` key, which is public by design: it
+# carries no privileges of its own and every row-level policy still applies
+# to it. The service_role key must NEVER appear here — a VITE_ variable is
+# compiled into the bundle and served to every visitor.
+name: deploy the CRM to Azure
+
+on:
+  push:
+    branches: [ claude/crm-redesign-preview ]
+  workflow_dispatch:
+
+jobs:
+  build_and_deploy:
+    runs-on: ubuntu-latest
+    name: build and deploy
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: install
+        run: npm ci || npm install
+
+      - name: build, pointed at Azure
+        env:
+          VITE_API_BASE: /api
+          VITE_BLOB_STORAGE: on
+          VITE_SUPABASE_URL: https://sdhprpbfazpyghjepzpt.supabase.co
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+        run: npm run build
+
+      - name: deploy
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
+          action: upload
+          app_location: dist
+          skip_app_build: true
+          skip_api_build: true
