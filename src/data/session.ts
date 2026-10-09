@@ -73,7 +73,37 @@ export async function currentSession(): Promise<Session | null> {
   return data.session ?? null;
 }
 
+/** No CRM user has this id: it exists only so the app can say "not linked". */
+const NOBODY = "00000000-0000-0000-0000-000000000000";
+
 export function onSessionChange(handler: (session: Session | null) => void): () => void {
+  /* UNDER ENTRA, SUPABASE KNOWS NOTHING. Its auth listener only ever reports
+     "signed out", which sent everybody straight back to the sign-in screen
+     after a perfectly good Microsoft sign-in. Sign-in and sign-out both
+     reload the page under Entra (they are full-page redirects), so one
+     answer at start-up is the whole story. */
+  if (signInWithEntra()) {
+    let live = true;
+    void (async () => {
+      let session: Session | null = null;
+      try {
+        session = await entraSessionFor();
+        if (!session) {
+          /* Signed in with Microsoft but not a CRM user (or not linked).
+             Say so, rather than showing the sign-in button again — which
+             reads as "it didn't work" and invites the same loop. */
+          const account = await entraAccount();
+          if (account) {
+            session = { user: { id: NOBODY, email: account.email } } as unknown as Session;
+          }
+        }
+      } catch (err) {
+        console.error("could not restore the Microsoft session:", err);
+      }
+      if (live) handler(session);
+    })();
+    return () => { live = false; };
+  }
   const { data } = getSupabase().auth.onAuthStateChange((_event, session) => handler(session));
   return () => data.subscription.unsubscribe();
 }
