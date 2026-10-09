@@ -39,7 +39,7 @@ export async function handler(event) {
 
   if (!clientId || !redirectUri) {
     return fail(event, 400,
-      "Microsoft 365 isn't set up yet. An admin needs to add MS_CLIENT_ID, MS_CLIENT_SECRET and MS_REDIRECT_URI in the Netlify environment variables — Settings → Integrations has the steps.");
+      "Microsoft 365 isn't set up yet. An admin needs to add MS_CLIENT_ID, MS_CLIENT_SECRET and MS_REDIRECT_URI in the Azure Function App settings — Settings → Integrations has the steps.");
   }
 
   /* Only a signed-in CRM user may start a connection, and the mailbox that

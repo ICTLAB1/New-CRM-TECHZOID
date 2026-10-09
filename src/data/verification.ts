@@ -1,4 +1,4 @@
-import { isSupabaseConfigured } from "./supabase";
+import { hasBackend } from "./backend";
 import { parseGstinResponse, type GstinVerification } from "../domain/verification/gstin";
 import { parsePanResponse, type PanVerification } from "../domain/verification/pan";
 import { fnPath, fnToken } from "./functions";
@@ -23,14 +23,14 @@ export type VerifyOutcome<T> =
   | { state: "unavailable"; message: string };
 
 /** Whether the feature can be offered at all. The preview has no server. */
-export const verificationAvailable = (): boolean => isSupabaseConfigured();
+export const verificationAvailable = (): boolean => hasBackend();
 
 /** The failure arm never carries a result, so it is spelled without one —
  *  which lets every caller read `outcome.message` without a cast. */
 type AskFailure = Exclude<VerifyOutcome<never>, { state: "ok" }>;
 
 async function ask(body: Record<string, unknown>): Promise<{ ok: true; payload: Record<string, unknown> } | { ok: false; outcome: AskFailure }> {
-  if (!isSupabaseConfigured()) {
+  if (!hasBackend()) {
     return { ok: false, outcome: { state: "unavailable", message: "Verification needs a signed-in workspace." } };
   }
 
@@ -111,7 +111,7 @@ export interface IntegrationStatus {
  *  A panel showing nothing is better than one claiming "not connected"
  *  because it could not reach the server to find out. */
 export async function integrationStatus(): Promise<IntegrationStatus | null> {
-  if (!isSupabaseConfigured()) return null;
+  if (!hasBackend()) return null;
   try {
     const token = await fnToken();
     if (!token) return null;
@@ -149,7 +149,7 @@ export interface FollowUpDiagnosis {
 }
 
 async function followUpAdmin<T>(body: Record<string, unknown>): Promise<{ ok: true; data: T } | { ok: false; message: string }> {
-  if (!isSupabaseConfigured()) return { ok: false, message: "This preview has no server to ask." };
+  if (!hasBackend()) return { ok: false, message: "This preview has no server to ask." };
   try {
     const token = await fnToken();
     if (!token) return { ok: false, message: "Your session has ended. Sign in again." };

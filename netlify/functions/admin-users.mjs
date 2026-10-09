@@ -2,6 +2,7 @@ import { fail, guard, json, readJson } from "../lib/http.mjs";
 import { adminClient, isAdmin, signedInProfile } from "../lib/auth.mjs";
 import { isEmail, str } from "../lib/validate.mjs";
 import { consume, tooManyMessage } from "../lib/ratelimit.mjs";
+import { asService } from "../../api/lib/db.mjs";
 
 /**
  * Team accounts.
@@ -21,8 +22,6 @@ const ASSIGNABLE_ROLES = ["Admin", "Manager", "Sales", "Accounts"];
 /** What profiles.role is allowed to hold. Narrower than the list above by
  *  its own check constraint — see the note where it is applied. */
 const PROFILE_ROLES = ["Admin", "Manager", "Sales"];
-
-const MIN_PASSWORD = 8;
 
 export async function handler(event) {
   const stop = guard(event);
@@ -46,154 +45,89 @@ export async function handler(event) {
   if (!body) return fail(event, 400, "That request wasn't valid JSON.");
 
   switch (body.action) {
-    case "create_user": return createUser(event, admin, body);
+    case "create_user": return createUser(event, admin, body, caller);
     case "update_user": return updateUser(event, admin, body);
-    case "reset_password": return resetPassword(event, admin, body);
+    case "reset_password": return resetPassword(event);
     case "delete_user": return deleteUser(event, admin, body, caller.user.id);
     default: return fail(event, 400, "Unknown action.");
   }
 }
 
-async function createUser(event, admin, body) {
+/* ── ON AZURE ──────────────────────────────────────────────────────────
+   Sign-in belongs to Microsoft Entra ID, so there is no password to set,
+   reset or email out. A team member here is three rows: a local identity
+   (auth.users), the profile the CRM shows, and a membership in a company.
+   The first time they sign in with Microsoft, link_entra_identity joins
+   their Entra account to the profile by email (supabase/042_entra_identity.sql).
+
+   They still need a Microsoft account the CRM's directory accepts — staff
+   on @techzoidtechnologies.com are invited as guests in Azure → Users. The
+   response says so, because an account that exists here but cannot sign in
+   reads as broken. */
+
+const ENTRA_NOTE =
+  "They sign in with their Microsoft 365 account. If they are new to the company, " +
+  "also add them in Azure portal → Microsoft Entra ID → Users → Invite external user.";
+
+async function createUser(event, admin, body, caller) {
   const email = str(body.email, 320).toLowerCase();
-  const password = String(body.password ?? "");
   const name = str(body.name, 120) || email.split("@")[0];
   const role = str(body.role, 20) || "Sales";
   const designation = str(body.designation, 120);
   const phone = str(body.phone, 40);
   /* Which company this person is being hired into. Sent by the browser,
-     which knows what is on screen; verified below, because the service key
-     this function holds bypasses row-level security and would otherwise put
+     which knows what is on screen; verified below, because the service
+     connection bypasses row-level security and would otherwise put
      somebody into a company the caller has nothing to do with. */
   const companyId = str(body.companyId, 64);
 
-  if (!email || !password) return fail(event, 400, "An email address and a password are both required.");
+  if (!email) return fail(event, 400, "An email address is required.");
   if (!isEmail(email)) return fail(event, 400, `"${email}" doesn't look like an email address.`);
-  if (password.length < MIN_PASSWORD) {
-    return fail(event, 400, `The password needs at least ${MIN_PASSWORD} characters.`);
-  }
   if (!ASSIGNABLE_ROLES.includes(role)) {
     return fail(event, 400, `"${role}" isn't a role. Choose one of: ${ASSIGNABLE_ROLES.join(", ")}.`);
   }
 
-  /* The company must be one the caller may actually staff. RLS is not doing
-     this for us here — the admin client is above it — so the check is
-     explicit and the failure is a refusal, not a silent success. */
   const company = await companyToJoin(admin, caller, companyId);
   if (company.error) return fail(event, 403, company.error);
 
-  const { data, error } = await admin.auth.admin.createUser({
-    email,
-    password,
-    email_confirm: true,
-    user_metadata: { name },
-  });
-  if (error) {
-    /* Supabase's own wording here is aimed at a person ("A user with this
-       email address has already been registered") and is worth showing. */
-    return fail(event, 400, str(error.message, 300) || "That account could not be created.");
-  }
-
-  const userId = data.user.id;
-
-  /* A trigger creates the profile row as Sales. Set the name and the chosen
-     role now. If this fails the sign-in exists but is mis-labelled, which is
-     confusing rather than harmless — so say so instead of reporting success. */
-  /* TWO ROLES, ON PURPOSE, and they are not always the same string.
-     profiles.role governs things that are not about one company — reaching
-     this endpoint at all — and its constraint allows only Admin, Manager and
-     Sales. company_members.role governs what somebody may do INSIDE a
-     company and also allows Accounts. Writing "Accounts" to the profile
-     silently failed its check constraint and left the person a Sales user
-     with a puzzling warning; it is now clamped deliberately, and the role
-     they were actually given is the one that lands on the membership. */
+  /* profiles.role allows Admin, Manager and Sales only; Accounts lives on
+     the company membership. See the note in the original Supabase version. */
   const profileRole = PROFILE_ROLES.includes(role) ? role : "Sales";
-  const { error: profileErr } = await admin.from("profiles")
-    .update({ name, role: profileRole, designation, phone }).eq("id", userId);
-  if (profileErr) {
-    console.error("profile update after createUser failed:", profileErr.message);
-    return json(event, 200, {
-      success: true,
-      userId,
-      emailSent: false,
-      warning: `The sign-in was created, but the name and role couldn't be saved. Set them from the team list — ${name} is currently a Sales user.`,
-    });
-  }
-
-  /* Into the company, in the same breath. Somebody with a sign-in and no
-     membership can log in and see an empty CRM — every record is scoped to a
-     company they are not in — which looks exactly like a broken account. */
-  let joined = "";
-  if (company.id) {
-    const { error: memberErr } = await admin
-      .from("company_members")
-      .insert({ company_id: company.id, user_id: userId, role });
-    if (memberErr) {
-      console.error("could not add the new user to a company:", memberErr.message);
-    } else {
-      joined = company.name || "";
-    }
-  }
-
-  const mail = await sendWelcome({ email, password, name });
-
-  /* The account exists whether or not the email went out. Reporting failure
-     here would tell an Admin to try again and hit "already registered", so
-     the result is a success that states plainly what did and didn't happen. */
-  return json(event, 200, {
-    success: true, userId, joinedCompany: joined,
-    emailSent: mail.sent, emailError: mail.error,
-  });
-}
-
-/**
- * Send the new member their sign-in details.
- *
- * Never throws: the caller has already created the account, and a mail
- * problem must not turn that into an error. Returns what actually happened.
- */
-async function sendWelcome({ email, password, name }) {
-  const apiKey = process.env.RESEND_API_KEY;
-  const fromAddress = process.env.EMAIL_FROM || "sales@techzoidtechnologies.com";
-  const appUrl = process.env.APP_URL || "https://crm.ttpldelhi.com";
-
-  if (!apiKey) {
-    return { sent: false, error: "The account is ready, but no welcome email was sent — RESEND_API_KEY isn't configured in Netlify. Share the password directly." };
-  }
-
-  const text = [
-    `Hi ${name},`,
-    "",
-    "An account has been created for you on the TechZoid Sales CRM.",
-    "",
-    `Sign in at: ${appUrl}`,
-    `Email:    ${email}`,
-    `Password: ${password}`,
-    "",
-    "Please sign in and change your password from Settings as soon as you can.",
-    "",
-    "TechZoid Technologies Private Limited",
-  ].join("\n");
 
   try {
-    const resp = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: "Bearer " + apiKey },
-      body: JSON.stringify({
-        from: "TechZoid Technologies <" + fromAddress + ">",
-        to: [email],
-        subject: "Your TechZoid CRM account",
-        text,
-      }),
+    const userId = await asService(async (db) => {
+      const dup = await db.query(
+        "select 1 from public.profiles where lower(email) = $1 limit 1", [email]);
+      if (dup.rowCount) {
+        const e = new Error("dup"); e.code = "DUP"; throw e;
+      }
+      const u = await db.query(
+        "insert into auth.users (email, raw_user_meta_data) values ($1, jsonb_build_object('name', $2::text)) returning id",
+        [email, name]);
+      const id = u.rows[0].id;
+      /* ON CONFLICT: a database that still has the Supabase trigger will
+         already have made this row; either way it ends up as given here. */
+      await db.query(
+        `insert into public.profiles (id, name, email, role, designation, phone)
+         values ($1, $2, $3, $4, $5, $6)
+         on conflict (id) do update set name = excluded.name, email = excluded.email,
+           role = excluded.role, designation = excluded.designation, phone = excluded.phone`,
+        [id, name, email, profileRole, designation, phone]);
+      if (company.id) {
+        await db.query(
+          `insert into public.company_members (company_id, user_id, role) values ($1, $2, $3)
+           on conflict (company_id, user_id) do nothing`,
+          [company.id, id, role]);
+      }
+      return id;
     });
-    if (resp.ok) return { sent: true, error: null };
-    const result = await resp.json().catch(() => ({}));
-    /* Log the provider's reason; show the Admin only what to do about it. */
-    console.error("welcome email refused:", resp.status, result?.name ?? result?.message);
-    return { sent: false, error: "The account is ready, but the welcome email was refused by the email provider. Share the password directly." };
+    return json(event, 200, {
+      success: true, userId, joinedCompany: company.name || "",
+      emailSent: false, emailError: null, note: ENTRA_NOTE,
+    });
   } catch (err) {
-    console.error("welcome email failed:", err?.message ?? err);
-    return { sent: false, error: "The account is ready, but the welcome email couldn't be sent. Share the password directly." };
+    if (err?.code === "DUP") return fail(event, 400, `${email} is already on the team.`);
+    return fail(event, 500, "That team member couldn't be added.", err?.message);
   }
 }
 
@@ -212,18 +146,6 @@ async function updateUser(event, admin, body) {
   if (!name && !email && !hasDesignation && !hasPhone) return fail(event, 400, "Nothing to change.");
   if (email && !isEmail(email)) return fail(event, 400, `"${email}" doesn't look like an email address.`);
 
-  /* The sign-in address lives on the auth record; the name lives in both the
-     auth metadata and `profiles`. Update whichever was given, in that order,
-     so the address someone signs in with and the name shown across the CRM
-     never drift apart. */
-  const authPatch = {};
-  if (email) { authPatch.email = email; authPatch.email_confirm = true; }
-  if (name) authPatch.user_metadata = { name };
-  if (Object.keys(authPatch).length) {
-    const { error } = await admin.auth.admin.updateUserById(userId, authPatch);
-    if (error) return fail(event, 400, str(error.message, 300) || "That account could not be updated.");
-  }
-
   const profilePatch = {};
   if (name) profilePatch.name = name;
   if (email) profilePatch.email = email;
@@ -231,34 +153,48 @@ async function updateUser(event, admin, body) {
   if (hasPhone) profilePatch.phone = phone;
   const { error: profileErr } = await admin.from("profiles").update(profilePatch).eq("id", userId);
   if (profileErr) {
-    return fail(event, 400, "The sign-in was updated, but the team record wasn't. Reload and check the details.", profileErr.message);
+    return fail(event, 400, "That team record couldn't be updated. Reload and check the details.", profileErr.message);
   }
 
+  /* A changed address is a different Microsoft account: unlink the old one
+     so the new address links on its next sign-in, and keep the local
+     identity row in step. */
+  if (email) {
+    try {
+      await asService(async (db) => {
+        await db.query("update public.profiles set entra_oid = null where id = $1", [userId]);
+        await db.query("update auth.users set email = $2 where id = $1", [userId, email]);
+      });
+    } catch (err) {
+      console.error("could not re-point the sign-in after an email change:", err?.message ?? err);
+    }
+  }
   return json(event, 200, { success: true });
 }
 
-async function resetPassword(event, admin, body) {
-  const userId = str(body.userId, 64);
-  const newPassword = String(body.newPassword ?? "");
-
-  if (!userId || !newPassword) return fail(event, 400, "An account and a new password are both required.");
-  if (newPassword.length < MIN_PASSWORD) {
-    return fail(event, 400, `The password needs at least ${MIN_PASSWORD} characters.`);
-  }
-
-  const { error } = await admin.auth.admin.updateUserById(userId, { password: newPassword });
-  if (error) return fail(event, 400, str(error.message, 300) || "That password could not be changed.");
-  return json(event, 200, { success: true });
+async function resetPassword(event) {
+  return fail(event, 400,
+    "Passwords are managed by Microsoft now. Reset it in the Microsoft 365 admin centre, or the person can use 'Forgot password' on the Microsoft sign-in page.");
 }
 
+/**
+ * Take someone off the team WITHOUT deleting their work.
+ *
+ * Deleting the profile cascades: subscriptions, purchase orders, invoices
+ * and attachments are all `on delete cascade` from their owner. The
+ * Supabase version deleted the account and took all of that with it. Here
+ * the person loses access and their records stay, still showing their name.
+ *
+ * Access is cut three ways: no company memberships (nothing to see), no
+ * linked Microsoft account, and the profile's email cleared so the next
+ * Microsoft sign-in cannot link back to it. The address is kept on the
+ * local identity row for the record.
+ */
 async function deleteUser(event, admin, body, callerId) {
   const userId = str(body.userId, 64);
   if (!userId) return fail(event, 400, "Which account? No user was given.");
-  if (userId === callerId) return fail(event, 400, "You can't delete your own account.");
+  if (userId === callerId) return fail(event, 400, "You can't remove your own account.");
 
-  /* Removing the last Admin locks everyone out of team management, settings
-     and the admin-only functions — recoverable only from the Supabase
-     dashboard. Refuse rather than let it happen. */
   const { data: target } = await admin.from("profiles").select("role").eq("id", userId).maybeSingle();
   if (target?.role === "Admin") {
     const { count, error } = await admin.from("profiles").select("id", { count: "exact", head: true }).eq("role", "Admin");
@@ -270,9 +206,19 @@ async function deleteUser(event, admin, body, callerId) {
     }
   }
 
-  const { error } = await admin.auth.admin.deleteUser(userId);
-  if (error) return fail(event, 400, str(error.message, 300) || "That account could not be removed.");
-  return json(event, 200, { success: true });
+  try {
+    await asService(async (db) => {
+      await db.query("delete from public.company_members where user_id = $1", [userId]);
+      await db.query(
+        "update public.profiles set entra_oid = null, email = '', role = 'Sales' where id = $1", [userId]);
+    });
+  } catch (err) {
+    return fail(event, 500, "That account couldn't be removed.", err?.message);
+  }
+  return json(event, 200, {
+    success: true,
+    note: "Their quotations and records are kept. To stop them signing in to Microsoft entirely, remove them in Azure portal → Microsoft Entra ID → Users.",
+  });
 }
 
 

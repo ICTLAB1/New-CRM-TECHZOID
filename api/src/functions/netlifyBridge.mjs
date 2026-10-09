@@ -45,8 +45,8 @@ export const FUNCTIONS_DIR = join(here, "..", "..", "netlify", "functions");
  * is reading the log.
  */
 export const UNPORTED = {
-  "admin-users":
-    "User administration moves to Entra ID and is not available on this deployment yet.",
+  /* admin-users was here until it was rewritten for Entra ID: it now writes
+     the Azure database directly and never asks for a password. */
 };
 
 /**

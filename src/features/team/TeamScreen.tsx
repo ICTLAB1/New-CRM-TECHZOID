@@ -5,6 +5,7 @@ import { Confirm, Modal } from "../../components/Modal";
 import { useToast } from "../../components/Toast";
 import { BroadcastComposer } from "../broadcasts/BroadcastComposer";
 import { IntegrationError, type IntegrationsApi } from "../../integrations/api";
+import { usesMicrosoftSignIn } from "../../data/session";
 
 /**
  * Team accounts.
@@ -146,7 +147,9 @@ export function TeamScreen({ api, members, currentUser, companyId, companyName, 
                       {isAdmin ? (
                         <span className="row-tight">
                           <Button size="sm" tone="quiet" onClick={() => setEditing(m)}>Edit</Button>
-                          <Button size="sm" tone="quiet" onClick={() => setResetting(m)}>Reset password</Button>
+                          {usesMicrosoftSignIn() ? null : (
+                            <Button size="sm" tone="quiet" onClick={() => setResetting(m)}>Reset password</Button>
+                          )}
                           {m.id !== currentUser.id ? (
                             <Button size="sm" tone="danger" onClick={() => setConfirmDelete(m)}>Remove</Button>
                           ) : null}
@@ -207,7 +210,7 @@ export function TeamScreen({ api, members, currentUser, companyId, companyName, 
         open={!!confirmDelete}
         title="Remove this account?"
         body={<>
-          <strong>{confirmDelete?.name}</strong> will no longer be able to sign in. Their customers,
+          <strong>{confirmDelete?.name}</strong> will no longer be able to get into the CRM. Their customers,
           quotations and orders stay where they are — reassign them first if someone else should pick them up.
         </>}
         confirmLabel="Remove the account"
@@ -237,6 +240,7 @@ function AddMember({
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState("Sales");
+  const microsoft = usesMicrosoftSignIn();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   /* Shown when the account was created but the welcome email wasn't sent.
@@ -261,7 +265,10 @@ function AddMember({
         phone: phone.trim(),
         role,
       });
-      if (result.emailSent) {
+      if (microsoft) {
+        const where = result.joinedCompany ? ` to ${result.joinedCompany}` : "";
+        toast(`${name || email} added${where}. ${result.note ?? ""}`.trim(), "good");
+      } else if (result.emailSent) {
         const where = result.joinedCompany ? ` at ${result.joinedCompany}` : "";
         toast(`${name || email} can now sign in${where} — their details have been emailed`, "good");
       } else {
@@ -313,14 +320,16 @@ function AddMember({
     <Modal
       open
       title="Add someone to the team"
-      description="Creates a sign-in and emails them their details."
+      description={microsoft
+        ? "They sign in with their own Microsoft 365 account — no password to set."
+        : "Creates a sign-in and emails them their details."}
       onClose={onClose}
       footer={
         <>
           <Button tone="quiet" onClick={onClose}>Cancel</Button>
           <Button loading={busy} loadingLabel="Creating…"
             tone="primary"
-            disabled={busy || !email.trim() || password.length < 8}
+            disabled={busy || !email.trim() || (!microsoft && password.length < 8)}
             onClick={() => void create()}
           >
             Create the account
@@ -343,13 +352,15 @@ function AddMember({
             <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+91 98100 12345" />
           </Field>
         </div>
-        <Field
-          label="Starting password"
-          hint="They should change it once they're in."
-          error={tooShort ? "At least eight characters." : undefined}
-        >
-          <Input value={password} onChange={(e) => setPassword(e.target.value)} invalid={tooShort} />
-        </Field>
+        {microsoft ? null : (
+          <Field
+            label="Starting password"
+            hint="They should change it once they're in."
+            error={tooShort ? "At least eight characters." : undefined}
+          >
+            <Input value={password} onChange={(e) => setPassword(e.target.value)} invalid={tooShort} />
+          </Field>
+        )}
         <Field
           label={companyName ? `Role at ${companyName}` : "Role"}
           hint={

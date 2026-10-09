@@ -236,7 +236,7 @@ export async function handler(event) {
   let sentNow = 0;
   try {
     const drained = await drainQueue(admin, {
-      siteUrl: process.env.URL || process.env.DEPLOY_PRIME_URL || "",
+      siteUrl: process.env.APP_URL || process.env.URL || process.env.DEPLOY_PRIME_URL || "",
       batchLimit: 2,
       campaignId,
     });

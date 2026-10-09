@@ -233,8 +233,8 @@ function AzureSetup({ api }: { api: IntegrationsApi }) {
   return (
     <div style={{ marginTop: 14 }}>
       <p className="muted" style={{ marginTop: 0 }}>
-        Done once for the whole company, by someone with access to both the Microsoft 365 tenant and the
-        Netlify site. After this, everyone else just presses Connect.
+        Done once for the whole company, by someone with admin access to Azure. After this, everyone else
+        just presses Connect.
       </p>
 
       <ol className="steps" style={{ marginTop: 16 }}>
@@ -299,8 +299,8 @@ function AzureSetup({ api }: { api: IntegrationsApi }) {
 
         <li className="step">
           <div className="step-body">
-            <div className="step-title">Add the variables in Netlify</div>
-            <div>Site configuration → Environment variables:</div>
+            <div className="step-title">Add the settings in Azure</div>
+            <div>Azure portal → Function App techzoid-fn-web7gna6q5rns → Settings → Environment variables:</div>
             <div className="stack" style={{ gap: 6 }}>
               {[
                 ["MS_CLIENT_ID", "the Application (client) ID from the app's Overview page"],
@@ -320,19 +320,9 @@ function AzureSetup({ api }: { api: IntegrationsApi }) {
 
         <li className="step">
           <div className="step-body">
-            <div className="step-title">Create the database table</div>
+            <div className="step-title">Apply</div>
             <div>
-              In Supabase → SQL Editor, run <code className="mono">supabase/003_ms_mail_accounts.sql</code>.
-              It stores each person's connection, locked so nobody can read anyone else's.
-            </div>
-          </div>
-        </li>
-
-        <li className="step">
-          <div className="step-body">
-            <div className="step-title">Redeploy</div>
-            <div>
-              Netlify reads environment variables at build time, so trigger a fresh deploy — then re-check below.
+              Press Apply on that page. The Function App restarts with the new settings in about a minute — then re-check below.
             </div>
           </div>
         </li>
@@ -421,10 +411,10 @@ function WhatsAppPanel({ status }: { status: IntegrationStatus | null }) {
           </li>
           <li className="step">
             <div className="step-body">
-              <div className="step-title">Add the token in Netlify</div>
+              <div className="step-title">Add the token in Azure</div>
               <div>
-                Site configuration → Environment variables → <code className="mono">WHATSAPP_API_TOKEN</code>,
-                then redeploy.
+                Function App techzoid-fn-web7gna6q5rns → Environment variables → <code className="mono">WHATSAPP_API_TOKEN</code>,
+                then press Apply.
               </div>
             </div>
           </li>
@@ -466,10 +456,10 @@ function WhatsAppPanel({ status }: { status: IntegrationStatus | null }) {
           </li>
           <li className="step">
             <div className="step-body">
-              <div className="step-title">Add the key in Netlify</div>
+              <div className="step-title">Add the key in Azure</div>
               <div>
-                Site configuration → Environment variables → <code className="mono">INTERAKT_API_KEY</code> — the
-                Secret Key from Interakt — then redeploy.
+                Function App techzoid-fn-web7gna6q5rns → Environment variables → <code className="mono">INTERAKT_API_KEY</code> — the
+                Secret Key from Interakt — then press Apply.
               </div>
             </div>
           </li>
@@ -547,10 +537,10 @@ function VerificationPanel({ status }: { status: IntegrationStatus | null }) {
           </li>
           <li className="step">
             <div className="step-body">
-              <div className="step-title">Add both in Netlify</div>
+              <div className="step-title">Add both in Azure</div>
               <div>
-                Site configuration → Environment variables → <code className="mono">SANDBOX_API_KEY</code> and{" "}
-                <code className="mono">SANDBOX_API_SECRET</code>, then redeploy.
+                Function App techzoid-fn-web7gna6q5rns → Environment variables → <code className="mono">SANDBOX_API_KEY</code> and{" "}
+                <code className="mono">SANDBOX_API_SECRET</code>, then press Apply.
                 {" "}<strong>Not</strong> prefixed <code className="mono">VITE_</code> — anything with that prefix is
                 compiled into the JavaScript every visitor downloads, and a paid verification key published on the
                 internet is somebody else&rsquo;s free key.
@@ -590,8 +580,7 @@ function AssistantPanel() {
       </p>
       <div className="notice notice-flat" style={{ marginTop: 12 }}>
         <span>
-          Add <code className="mono">ANTHROPIC_API_KEY</code> in Netlify → Site configuration → Environment
-          variables, then redeploy. Each question is billed to that key, so the CRM only answers signed-in
+          Add <code className="mono">ANTHROPIC_API_KEY</code> in Azure portal → Function App techzoid-fn-web7gna6q5rns → Settings → Environment variables, then press Apply. Each question is billed to that key, so the CRM only answers signed-in
           users and caps how many questions each person can ask per hour.
         </span>
       </div>
@@ -859,10 +848,7 @@ function WebhooksPanel({
 
       <div className="notice" style={{ marginTop: 16 }}>
         <span>
-          Event kinds, both directions: <code className="mono">{EVENT_KINDS}</code>. Run{" "}
-          <code className="mono">supabase/005_webhooks.sql</code> and then{" "}
-          <code className="mono">supabase/006_webhooks_inbound.sql</code> once each in Supabase → SQL Editor
-          before turning this on.
+          Event kinds, both directions: <code className="mono">{EVENT_KINDS}</code>. The tables this needs are already in the Azure database.
         </span>
       </div>
     </Card>

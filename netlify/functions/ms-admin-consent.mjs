@@ -53,7 +53,7 @@ export async function handler(event) {
   const redirectUri = process.env.MS_REDIRECT_URI;
   if (!clientId || !redirectUri) {
     return fail(event, 400,
-      "Microsoft 365 is not configured on the server yet — MS_CLIENT_ID and MS_REDIRECT_URI have to be set in Netlify first.",
+      "Microsoft 365 is not configured on the server yet — MS_CLIENT_ID and MS_REDIRECT_URI have to be set in the Azure Function App first.",
       null, "GET, OPTIONS");
   }
 

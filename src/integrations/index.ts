@@ -1,5 +1,5 @@
 import { demoApi, netlifyApi, type IntegrationsApi } from "./api";
-import { isSupabaseConfigured } from "../data/supabase";
+import { hasBackend } from "../data/backend";
 
 /**
  * Which implementation the app runs on.
@@ -9,6 +9,6 @@ import { isSupabaseConfigured } from "../data/supabase";
  * refuses every outward-facing action and says why. There is no third mode
  * where a button looks like it worked and did nothing.
  */
-export const integrations: IntegrationsApi = isSupabaseConfigured() ? netlifyApi() : demoApi();
+export const integrations: IntegrationsApi = hasBackend() ? netlifyApi() : demoApi();
 
 export type { IntegrationsApi } from "./api";

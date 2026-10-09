@@ -68,6 +68,8 @@ export interface CreatedMember {
    *  Not an error — the account is real either way. */
   emailError?: string | null;
   warning?: string | null;
+  /** Under Microsoft sign-in: what the admin still has to do, if anything. */
+  note?: string | null;
 }
 
 export interface IntegrationsApi {

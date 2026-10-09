@@ -89,7 +89,7 @@ export async function handler(event) {
   const redirectUri = process.env.MS_REDIRECT_URI;
   if (!clientId || !clientSecret || !redirectUri) {
     return page(500, "Not configured",
-      "The Microsoft 365 environment variables are missing on the server. An admin can add them in Netlify.", false);
+      "The Microsoft 365 environment variables are missing on the server. An admin can add them in the Azure Function App.", false);
   }
 
   /* Verify the state signed in ms-oauth-start. Without this, anyone could

@@ -9,7 +9,7 @@
 
 /** Origins allowed to call the authenticated functions. */
 function allowedOrigins() {
-  const configured = (process.env.ALLOWED_ORIGINS || process.env.URL || "")
+  const configured = (process.env.ALLOWED_ORIGINS || process.env.APP_URL || process.env.URL || "")
     .split(",").map((o) => o.trim()).filter(Boolean);
   /* Netlify sets URL and DEPLOY_PRIME_URL; both are legitimate. */
   if (process.env.DEPLOY_PRIME_URL) configured.push(process.env.DEPLOY_PRIME_URL);

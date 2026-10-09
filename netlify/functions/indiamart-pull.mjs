@@ -51,7 +51,7 @@ export const handler = async (event) => {
   const key = process.env.INDIAMART_CRM_KEY || "";
   if (!key) {
     return reply(400, {
-      error: "IndiaMART is not connected yet — INDIAMART_CRM_KEY has to be set in Netlify first.",
+      error: "IndiaMART is not connected yet — INDIAMART_CRM_KEY has to be set in the Azure Function App first.",
     });
   }
 
@@ -151,7 +151,7 @@ export const handler = async (event) => {
 function readableError(verdict) {
   if (verdict.reason === "bad-key") {
     return "IndiaMART refused the key. Generate a new one in the seller panel under Lead Manager, "
-      + "then update INDIAMART_CRM_KEY in Netlify. A key expires if it goes seven days unused.";
+      + "then update INDIAMART_CRM_KEY in the Azure Function App. A key expires if it goes seven days unused.";
   }
   if (verdict.reason === "rate-limited") return "IndiaMART is rate limiting us. The next run will pick up where this left off.";
   if (verdict.reason === "their-fault") return "IndiaMART had a server error. The next run will try the same window again.";

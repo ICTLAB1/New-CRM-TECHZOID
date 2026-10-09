@@ -186,7 +186,7 @@ async function sendViaResend({ to, cc, subject, message, html, replyTo, attachme
   if (!apiKey) {
     return {
       ok: false,
-      error: "Email isn't connected yet. Either connect your own Microsoft 365 mailbox in Settings → Integrations, or ask an admin to add RESEND_API_KEY in Netlify.",
+      error: "Email isn't connected yet. Either connect your own Microsoft 365 mailbox in Settings → Integrations, or ask an admin to add RESEND_API_KEY in Azure.",
     };
   }
 

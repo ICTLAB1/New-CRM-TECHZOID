@@ -48,7 +48,7 @@ export async function handler(event) {
 
   if (!credentialsPresent()) {
     return fail(event, 400,
-      "Verification isn't connected yet. Ask an admin to add SANDBOX_API_KEY and SANDBOX_API_SECRET in Netlify.");
+      "Verification isn't connected yet. Ask an admin to add SANDBOX_API_KEY and SANDBOX_API_SECRET in the Azure Function App.");
   }
 
   /* Each verification is billed, so the limit is per person and tighter

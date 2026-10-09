@@ -1,5 +1,5 @@
-import { getSupabase, isSupabaseConfigured } from "./supabase";
-import { getDb } from "./backend";
+import { getSupabase } from "./supabase";
+import { getDb, hasBackend, isOnAzure } from "./backend";
 import type { Broadcast, BroadcastTone } from "../domain/broadcasts/broadcasts";
 
 /**
@@ -67,7 +67,7 @@ const toBroadcast = (r: Row, names: Map<string, string>): Broadcast => ({
 /** Everything this person is allowed to see and has not expired. Empty
  *  rather than throwing: a broken message board must not break the CRM. */
 export async function fetchBroadcasts(names: Map<string, string> = new Map()): Promise<Broadcast[]> {
-  if (!isSupabaseConfigured()) return [];
+  if (!hasBackend()) return [];
   try {
     const { data, error } = await getDb()
       .from(TABLE)
@@ -90,9 +90,9 @@ export async function sendBroadcast(input: {
   tone: BroadcastTone | string;
   expiresInHours: number;
 }): Promise<{ ok: true } | { ok: false; message: string }> {
-  if (!isSupabaseConfigured()) return { ok: false, message: "This preview has no server to send through." };
+  if (!hasBackend()) return { ok: false, message: "This preview has no server to send through." };
   try {
-    const { error } = await getSupabase().from(TABLE).insert({
+    const { error } = await getDb().from(TABLE).insert({
       from_id: input.fromId,
       to_id: input.toId || null,
       title: input.title.trim(),
@@ -110,9 +110,9 @@ export async function sendBroadcast(input: {
 
 /** Withdraw one you sent, for the message that went out with the wrong date. */
 export async function withdrawBroadcast(id: string): Promise<boolean> {
-  if (!isSupabaseConfigured()) return false;
+  if (!hasBackend()) return false;
   try {
-    const { error } = await getSupabase().from(TABLE).delete().eq("id", id);
+    const { error } = await getDb().from(TABLE).delete().eq("id", id);
     return !error;
   } catch {
     return false;
@@ -122,7 +122,14 @@ export async function withdrawBroadcast(id: string): Promise<boolean> {
 /** Fires when a message arrives, so it lands in a second rather than at the
  *  next poll. Returns a function that stops listening. */
 export function onBroadcast(fn: () => void): () => void {
-  if (!isSupabaseConfigured()) return () => {};
+  if (!hasBackend()) return () => {};
+  /* Azure has no push channel for table changes, so ask once a minute. A
+     team notice arriving within a minute is soon enough; one that never
+     arrived because the channel belonged to a paused Supabase project was not. */
+  if (isOnAzure()) {
+    const timer = window.setInterval(fn, 60_000);
+    return () => window.clearInterval(timer);
+  }
   try {
     const channel = getSupabase()
       .channel("crm-broadcasts")

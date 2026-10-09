@@ -147,12 +147,8 @@ describe("registration", () => {
     expect(http.get("submit-lead").authLevel).toBe("anonymous");
   });
 
-  it("answers the unported one with 501 and a reason, not 404", async () => {
-    /* "Not built yet" and "no such endpoint" are different problems for
-       whoever is reading the log. */
-    const res = await bridge("admin-users")(request());
-    expect(res.status).toBe(501);
-    expect(res.jsonBody.error).toBe(UNPORTED["admin-users"]);
+  it("has nothing left unported — admin-users now runs on Azure", () => {
+    expect(Object.keys(UNPORTED)).toEqual([]);
   });
 
   it("does not let one broken handler stop the others registering", () => {

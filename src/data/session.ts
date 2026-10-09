@@ -1,5 +1,5 @@
-import { getSupabase, isSupabaseConfigured } from "./supabase";
-import { getDb, signInWithEntra } from "./backend";
+import { getSupabase } from "./supabase";
+import { getDb, hasBackend, signInWithEntra } from "./backend";
 import { entraAccount, entraSignIn, entraSignOut } from "./entraAuth";
 import type { Session } from "@supabase/supabase-js";
 
@@ -25,7 +25,7 @@ export interface SignedInUser {
 
 /** One definition of "is there a server behind this", used by the app to
  *  decide between the live workspace and the preview fixtures. */
-export const isConfigured = isSupabaseConfigured;
+export const isConfigured = hasBackend;
 
 /** True when the sign-in screen should offer Microsoft rather than a password. */
 export const usesMicrosoftSignIn = signInWithEntra;

@@ -23,7 +23,7 @@ export async function handler(event) {
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
-    return fail(event, 400, "The assistant isn't connected yet. An admin can add ANTHROPIC_API_KEY in the Netlify environment variables.");
+    return fail(event, 400, "The assistant isn't connected yet. An admin can add ANTHROPIC_API_KEY in the Azure Function App settings.");
   }
 
   const body = readJson(event);

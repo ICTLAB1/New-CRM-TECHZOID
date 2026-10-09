@@ -32,7 +32,7 @@ function checks(d: FollowUpDiagnosis): Check[] {
     {
       ok: d.configured.interaktKey,
       label: "The WhatsApp key is set",
-      detail: d.configured.interaktKey ? undefined : "Add INTERAKT_API_KEY in Netlify and redeploy.",
+      detail: d.configured.interaktKey ? undefined : "Add INTERAKT_API_KEY in Azure: Function App techzoid-fn-web7gna6q5rns → Environment variables, then Apply.",
     },
     {
       ok: d.configured.templatesNamed,
@@ -52,7 +52,7 @@ function checks(d: FollowUpDiagnosis): Check[] {
       ok: !d.queue.neverSentAnything,
       label: "The scheduler has run",
       detail: d.queue.neverSentAnything
-        ? "Nothing has ever been sent, on any channel. Either nothing has come due yet, or the scheduled function is not running — Netlify → Functions → followups-run should show a schedule of 0 4 * * *. Use “Send due follow-ups now” to settle it."
+        ? "Nothing has ever been sent, on any channel. Either nothing has come due yet, or the scheduled function is not running — Azure → Function App techzoid-fn-web7gna6q5rns → Functions → followups-run should be listed as a timer. Use “Send due follow-ups now” to settle it."
         : d.queue.lastSentAt ? `Last sent ${new Date(d.queue.lastSentAt).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}.` : undefined,
     },
   ];

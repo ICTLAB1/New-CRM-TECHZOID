@@ -67,8 +67,9 @@ describe("the handler still does what these cases describe", () => {
     /* Order matters: creating the account first and then discovering the
        caller may not staff that company leaves an orphaned sign-in. */
     const check = source.indexOf("companyToJoin(admin, caller, companyId)");
-    const create = source.indexOf("auth.admin.createUser");
+    const create = source.indexOf("insert into auth.users");
     expect(check).toBeGreaterThan(-1);
+    expect(create).toBeGreaterThan(-1);
     expect(check).toBeLessThan(create);
   });
 
@@ -77,11 +78,18 @@ describe("the handler still does what these cases describe", () => {
        also allows Accounts. Writing "Accounts" to the profile silently
        failed its check constraint. */
     expect(source).toMatch(/PROFILE_ROLES\s*=\s*\["Admin", "Manager", "Sales"\]/);
-    expect(source).toMatch(/role:\s*profileRole/);
-    expect(source).toMatch(/company_members[\s\S]{0,200}user_id: userId, role \}/);
+    expect(source).toMatch(/\[id, name, email, profileRole, designation, phone\]/);
+    expect(source).toMatch(/\[company\.id, id, role\]/);
   });
 
   it("adds the membership rather than leaving the account unattached", () => {
-    expect(source).toMatch(/from\("company_members"\)\s*\.insert/);
+    expect(source).toMatch(/insert into public\.company_members/);
+  });
+
+  it("never deletes a profile — removing someone must keep their records", () => {
+    /* Every owner_id is ON DELETE CASCADE: deleting the profile would take
+       their quotations, orders and invoices with it. */
+    expect(source).not.toMatch(/delete from public\.profiles/);
+    expect(source).not.toMatch(/auth\.admin\.deleteUser/);
   });
 });
