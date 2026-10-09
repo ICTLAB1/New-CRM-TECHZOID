@@ -81,6 +81,17 @@ async function client(settings: EntraSettings): Promise<IPublicClientApplication
      remember who signed in so every later call finds them. */
   ready = app.initialize().then(() => app!.handleRedirectPromise().then((result) => {
     if (result?.account) app!.setActiveAccount(result.account);
+  }).catch((err) => {
+    /* A FAILED RETURN MUST NOT POISON EVERY LATER CALL. This promise is
+       shared, so a rejection here (an expired or replayed code — AADSTS70008
+       — after a reload, a back button, a slow return) used to make every
+       later sign-in attempt fail with the same old error, leaving no way out
+       but clearing the address bar by hand. Drop the stale code from the URL
+       and carry on signed out: the next click starts a fresh sign-in. */
+    console.warn("Microsoft sign-in return could not be completed:", err);
+    if (window.location.hash) {
+      window.history.replaceState(null, "", window.location.pathname + window.location.search);
+    }
   }));
   await ready;
   return app;
