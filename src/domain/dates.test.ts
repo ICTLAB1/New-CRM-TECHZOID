@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addDays, fmtDate, fmtDateShort, isOverdue } from "./dates";
+import { addDays, fmtDate, fmtDateShort, greeting, isOverdue } from "./dates";
 
 describe("date formatting", () => {
   it("gives tables the year", () => {
@@ -60,5 +60,36 @@ describe("addDays", () => {
 
   it("returns unparseable input unchanged", () => {
     expect(addDays("nonsense", 5)).toBe("nonsense");
+  });
+});
+
+describe("greeting by the clock", () => {
+  it("says good morning from five until noon", () => {
+    expect(greeting(5)).toBe("Good morning");
+    expect(greeting(9)).toBe("Good morning");
+    expect(greeting(11)).toBe("Good morning");
+  });
+
+  it("switches to afternoon at noon, not at one", () => {
+    /* 12:30 is the afternoon in English, whatever the 12-hour clock says. */
+    expect(greeting(12)).toBe("Good afternoon");
+    expect(greeting(16)).toBe("Good afternoon");
+  });
+
+  it("says good evening from five in the evening", () => {
+    expect(greeting(17)).toBe("Good evening");
+    expect(greeting(21)).toBe("Good evening");
+  });
+
+  it("says good evening through the night, not good morning at 2am", () => {
+    /* Somebody finishing a quotation at two in the morning is having an
+       evening, not a morning. */
+    expect(greeting(0)).toBe("Good evening");
+    expect(greeting(2)).toBe("Good evening");
+    expect(greeting(4)).toBe("Good evening");
+  });
+
+  it("does not throw on a nonsense hour", () => {
+    expect(greeting(Number.NaN)).toBe("Good afternoon");
   });
 });

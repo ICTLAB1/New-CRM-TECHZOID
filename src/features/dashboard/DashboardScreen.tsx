@@ -1,3 +1,4 @@
+import { greeting } from "../../domain/dates";
 import { useMemo } from "react";
 import { PageHead } from "../../app/AppShell";
 import { Button, Card, Empty, Meter, StatTile, SummaryBar } from "../../components/primitives";
@@ -59,7 +60,7 @@ export function DashboardScreen({
   return (
     <main className="page">
       <PageHead
-        title={`Good morning, ${currentUser.name.split(" ")[0]}`}
+        title={`${greeting()}, ${currentUser.name.split(" ")[0]}`}
         sub={wide ? "Everything across the team." : "Your accounts and documents."}
       />
 
