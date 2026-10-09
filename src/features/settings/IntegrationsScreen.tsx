@@ -6,6 +6,7 @@ import { useToast } from "../../components/Toast";
 import { diagnosticLines, isReady, nextAction, type Diagnostics } from "../../domain/integrations/diagnostics";
 import { IntegrationError, type IntegrationsApi, type MailboxConnection } from "../../integrations/api";
 import { integrationStatus, testVerificationConnection, type IntegrationStatus } from "../../data/verification";
+import { fnPath, fnToken, fnUrl } from "../../data/functions";
 
 /**
  * Settings → Integrations.
@@ -212,9 +213,7 @@ function AzureSetup({ api }: { api: IntegrationsApi }) {
   /* The value Azure must be given, derived from where this page is actually
      running. The path is fixed: the deployed app registration points at it,
      and changing it breaks every existing connection. */
-  const redirectUri =
-    (typeof window === "undefined" ? "https://crm.ttpldelhi.com" : window.location.origin) +
-    "/.netlify/functions/ms-oauth-callback";
+  const redirectUri = fnUrl("ms-oauth-callback");
 
   const check = useCallback(async () => {
     setError(""); setChecking(true);
@@ -746,9 +745,7 @@ function WebhooksPanel({
   /* Where the website should POST to, derived from where this page is
      actually running rather than hardcoded — a preview deploy and the live
      site need different values and both are legitimate. */
-  const receiveUrl =
-    (typeof window === "undefined" ? "https://crm.ttpldelhi.com" : window.location.origin) +
-    "/.netlify/functions/webhook-receive";
+  const receiveUrl = fnUrl("webhook-receive");
 
   return (
     <Card
@@ -895,7 +892,7 @@ function AdminConsent() {
   async function open() {
     setBusy(true);
     try {
-      const res = await fetch("/.netlify/functions/ms-admin-consent", { credentials: "include" });
+      const res = await fetch(fnPath("ms-admin-consent"), { credentials: "include", headers: { Authorization: "Bearer " + ((await fnToken()) ?? "") } });
       const payload = await res.json().catch(() => ({}));
       if (!res.ok || !payload?.url) {
         throw new Error(String(payload?.error ?? "Could not build the approval link."));

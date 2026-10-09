@@ -1,6 +1,7 @@
-import { getSupabase, isSupabaseConfigured } from "./supabase";
+import { isSupabaseConfigured } from "./supabase";
 import { parseGstinResponse, type GstinVerification } from "../domain/verification/gstin";
 import { parsePanResponse, type PanVerification } from "../domain/verification/pan";
+import { fnPath, fnToken } from "./functions";
 
 /**
  * Checking a GSTIN or a PAN against the government register.
@@ -35,8 +36,7 @@ async function ask(body: Record<string, unknown>): Promise<{ ok: true; payload: 
 
   let token: string | undefined;
   try {
-    const { data } = await getSupabase().auth.getSession();
-    token = data.session?.access_token;
+    token = (await fnToken()) ?? undefined;
   } catch { /* handled below, same as no session */ }
   if (!token) {
     return { ok: false, outcome: { state: "unavailable", message: "Your session has ended. Sign in again." } };
@@ -44,7 +44,7 @@ async function ask(body: Record<string, unknown>): Promise<{ ok: true; payload: 
 
   let resp: Response;
   try {
-    resp = await fetch("/.netlify/functions/verify-tax-id", {
+    resp = await fetch(fnPath("verify-tax-id"), {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
       body: JSON.stringify(body),
@@ -113,10 +113,9 @@ export interface IntegrationStatus {
 export async function integrationStatus(): Promise<IntegrationStatus | null> {
   if (!isSupabaseConfigured()) return null;
   try {
-    const { data } = await getSupabase().auth.getSession();
-    const token = data.session?.access_token;
+    const token = await fnToken();
     if (!token) return null;
-    const resp = await fetch("/.netlify/functions/integration-status", {
+    const resp = await fetch(fnPath("integration-status"), {
       headers: { Authorization: "Bearer " + token },
     });
     if (!resp.ok) return null;
@@ -152,10 +151,9 @@ export interface FollowUpDiagnosis {
 async function followUpAdmin<T>(body: Record<string, unknown>): Promise<{ ok: true; data: T } | { ok: false; message: string }> {
   if (!isSupabaseConfigured()) return { ok: false, message: "This preview has no server to ask." };
   try {
-    const { data } = await getSupabase().auth.getSession();
-    const token = data.session?.access_token;
+    const token = await fnToken();
     if (!token) return { ok: false, message: "Your session has ended. Sign in again." };
-    const resp = await fetch("/.netlify/functions/followups-admin", {
+    const resp = await fetch(fnPath("followups-admin"), {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
       body: JSON.stringify(body),

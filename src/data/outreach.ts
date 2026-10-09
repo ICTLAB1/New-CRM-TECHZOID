@@ -2,6 +2,7 @@ import { getDb, hasBackend } from "./backend";
 import type { MappedProspect } from "../domain/outreach/importMap";
 import type { Schedule } from "../domain/outreach/sending";
 import { DEFAULT_SCHEDULE } from "../domain/outreach/sending";
+import { fnPath } from "./functions";
 
 /**
  * Reading and writing the outreach tables.
@@ -512,7 +513,7 @@ export async function launchCampaign(args: {
   greetUnnamed?: boolean;
   accessToken: string;
 }): Promise<{ queued: number; excluded: number; sentNow: number }> {
-  const res = await fetch("/.netlify/functions/outreach-launch", {
+  const res = await fetch(fnPath("outreach-launch"), {
     method: "POST",
     headers: { "content-type": "application/json", authorization: `Bearer ${args.accessToken}` },
     body: JSON.stringify({

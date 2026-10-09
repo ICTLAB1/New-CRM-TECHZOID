@@ -17,10 +17,10 @@ import {
   mySendingAccounts, outreachAvailable, saveCampaign, sendTestEmail, setCampaignStatus, suppressedAddresses,
   type CampaignRow, type CampaignProgress, type ProspectRow, type SendingAccount,
 } from "../../data/outreach";
-import { currentSession } from "../../data/session";
 import { RecipientsPicker } from "./RecipientsPicker";
 import { SenderPanel } from "./SenderPanel";
 import type { Block } from "../../domain/outreach/emailHtml";
+import { fnToken } from "../../data/functions";
 
 /**
  * Writing a campaign, and watching it go out.
@@ -233,8 +233,7 @@ export function CampaignScreen({ currentUser, settings, preselected, onDoneWithP
   async function sendTest() {
     setTesting(true);
     try {
-      const session = await currentSession();
-      const token = session?.access_token;
+      const token = await fnToken();
       if (!token) throw new Error("Your session has expired. Sign in again.");
 
       const out = await sendTestEmail({
@@ -256,8 +255,7 @@ export function CampaignScreen({ currentUser, settings, preselected, onDoneWithP
   async function launch() {
     setLaunching(true);
     try {
-      const session = await currentSession();
-      const token = session?.access_token;
+      const token = await fnToken();
       if (!token) throw new Error("Your session has expired. Sign in again.");
 
       const saved = await saveCampaign({

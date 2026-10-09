@@ -117,13 +117,11 @@ export class IntegrationError extends Error {
 }
 
 import { getDb } from "../data/backend";
+import { fnPath, fnToken } from "../data/functions";
 
-const FN = "/.netlify/functions/";
 
 async function authHeader(): Promise<Record<string, string>> {
-  const { getSupabase } = await import("../data/supabase");
-  const { data } = await getSupabase().auth.getSession();
-  const token = data.session?.access_token;
+  const token = await fnToken();
   if (!token) throw new IntegrationError("Your session has ended. Sign in again.", 401);
   return { "Content-Type": "application/json", Authorization: "Bearer " + token };
 }
@@ -131,7 +129,7 @@ async function authHeader(): Promise<Record<string, string>> {
 async function call<T>(name: string, init: RequestInit): Promise<T> {
   let resp: Response;
   try {
-    resp = await fetch(FN + name, init);
+    resp = await fetch(fnPath(name), init);
   } catch {
     /* A network failure, not a refusal. Say which, because "try again" is
        right for one and wrong for the other. */

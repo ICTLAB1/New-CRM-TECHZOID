@@ -4,6 +4,7 @@ import { computeDocument } from "../../domain/tax/compute";
 import { money } from "../../domain/currency/format";
 import { readPortalToken } from "../../domain/portal/token";
 import type { LineItem } from "../../domain/tax/types";
+import { fnPath } from "../../data/functions";
 
 /**
  * What the customer sees.
@@ -115,7 +116,7 @@ export function CustomerPortal({ token = readPortalToken(window.location) }: { t
        gets the same honest answer a revoked one does. */
     if (!token) { setState("invalid"); return; }
     try {
-      const res = await fetch("/.netlify/functions/portal?t=" + encodeURIComponent(token));
+      const res = await fetch(fnPath("portal") + "?t=" + encodeURIComponent(token));
       const body = (await res.json()) as PortalData;
       if (!body.valid) { setState("invalid"); return; }
       setData(body);
@@ -401,7 +402,7 @@ function RespondCard({ doc, token, onAnswered }: { doc: PortalDocument; token: s
     setSending(true);
     setError("");
     try {
-      const res = await fetch("/.netlify/functions/portal-respond", {
+      const res = await fetch(fnPath("portal-respond"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ token, documentId: doc.id, answer, signedBy: name.trim(), note: note.trim() }),

@@ -6,6 +6,7 @@ import { COUNTRIES } from "../../domain/geo/countries";
 import { gstinMessage, validateGSTIN } from "../../domain/gstin/validate";
 import { currencyForCountry } from "../../domain/geo/currencyForCountry";
 import { CURRENCIES } from "../../domain/currency/currencies";
+import { fnPath } from "../../data/functions";
 
 /**
  * The public registration form.
@@ -65,7 +66,7 @@ export function PublicLeadForm({ refId }: { refId: string }) {
 
   useEffect(() => {
     let live = true;
-    fetch("/.netlify/functions/public-lead-info?ref=" + encodeURIComponent(refId))
+    fetch(fnPath("public-lead-info") + "?ref=" + encodeURIComponent(refId))
       .then((r) => r.json())
       .then((data: Branding) => {
         if (!live) return;
@@ -89,7 +90,7 @@ export function PublicLeadForm({ refId }: { refId: string }) {
     setError("");
     setStatus("sending");
     try {
-      const resp = await fetch("/.netlify/functions/submit-lead", {
+      const resp = await fetch(fnPath("submit-lead"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

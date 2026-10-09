@@ -8,6 +8,7 @@ import {
   type FollowUpStep, type FollowUpTone,
 } from "../../domain/followups/followups";
 import { DEFAULT_TEMPLATE_NAMES, TEMPLATE_SETTING } from "../../domain/integrations/interakt";
+import { fnUrl } from "../../data/functions";
 
 /**
  * When a sent quotation gets chased, and how the chaser reads.
@@ -30,7 +31,6 @@ export function FollowUpPanel({
   const [keyBusy, setKeyBusy] = useState(false);
   const [keyError, setKeyError] = useState("");
 
-  const origin = typeof window === "undefined" ? "https://crm.ttpldelhi.com" : window.location.origin;
 
   const makeKey = async () => {
     if (!api) return;
@@ -132,7 +132,7 @@ export function FollowUpPanel({
                 <strong>Copy this now — it is shown once.</strong> Paste it into Interakt as the webhook URL:
                 <br />
                 <code className="mono" style={{ wordBreak: "break-all" }}>
-                  {`${origin}/.netlify/functions/whatsapp-status?k=${callbackKey}`}
+                  {`${fnUrl("whatsapp-status")}?k=${callbackKey}`}
                 </code>
                 <br />
                 The key in that address is what proves a caller is Interakt — Interakt does not sign its
