@@ -157,24 +157,28 @@ export function netlifyApi(): IntegrationsApi {
 
   return {
     async mailbox() {
-      const { getSupabase } = await import("../data/supabase");
-      const supabase = getSupabase();
-      const { data: session } = await supabase.auth.getUser();
-      const id = session.user?.id;
+      /* WHOEVER IS SIGNED IN, BY WHICHEVER SIGN-IN IS LIVE. This asked
+         Supabase directly, which on Azure knows nobody — so every mailbox
+         read as "Not connected" even straight after connecting it. */
+      const { currentSession } = await import("../data/session");
+      const { getDb } = await import("../data/backend");
+      const session = await currentSession();
+      const id = session?.user?.id;
       if (!id) return null;
       /* Read directly: the row is the user's own, and the policy on
          ms_mail_accounts is what makes that safe. The refresh token column
          is never selected — the browser has no use for it. */
-      const { data } = await supabase
+      const { data } = await getDb()
         .from("ms_mail_accounts")
         .select("ms_email, ms_display_name, updated_at")
         .eq("user_id", id)
         .maybeSingle();
-      if (!data) return null;
+      const row = data as { ms_email?: string | null; ms_display_name?: string | null; updated_at?: string | null } | null;
+      if (!row) return null;
       return {
-        email: data.ms_email ?? "",
-        displayName: data.ms_display_name ?? "",
-        connectedAt: data.updated_at ?? undefined,
+        email: row.ms_email ?? "",
+        displayName: row.ms_display_name ?? "",
+        connectedAt: row.updated_at ?? undefined,
       };
     },
 
@@ -184,12 +188,12 @@ export function netlifyApi(): IntegrationsApi {
     },
 
     async disconnectMailbox() {
-      const { getSupabase } = await import("../data/supabase");
-      const supabase = getSupabase();
-      const { data: session } = await supabase.auth.getUser();
-      const id = session.user?.id;
+      const { currentSession } = await import("../data/session");
+      const { getDb } = await import("../data/backend");
+      const session = await currentSession();
+      const id = session?.user?.id;
       if (!id) throw new IntegrationError("Your session has ended. Sign in again.", 401);
-      const { error } = await supabase.from("ms_mail_accounts").delete().eq("user_id", id);
+      const { error } = await getDb().from("ms_mail_accounts").delete().eq("user_id", id);
       if (error) throw new IntegrationError("Couldn't disconnect the mailbox. Try again in a moment.", 500);
     },
 

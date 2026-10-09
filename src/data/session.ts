@@ -210,6 +210,6 @@ export async function setMyDetails(patch: { designation?: string; phone?: string
   if (patch.phone !== undefined) update.phone = patch.phone.trim();
   if (!Object.keys(update).length) return;
 
-  const { error } = await getSupabase().from("profiles").update(update).eq("id", session.user.id);
+  const { error } = await getDb().from("profiles").update(update).eq("id", session.user.id);
   if (error) throw new Error("Couldn't save your details. Try again in a moment.");
 }
