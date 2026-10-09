@@ -77,7 +77,11 @@ async function client(settings: EntraSettings): Promise<IPublicClientApplication
          and it existed for browsers this application does not support. */
     },
   });
-  ready = app.initialize().then(() => app!.handleRedirectPromise().then(() => undefined));
+  /* Coming back from Microsoft's sign-in page, the result arrives here:
+     remember who signed in so every later call finds them. */
+  ready = app.initialize().then(() => app!.handleRedirectPromise().then((result) => {
+    if (result?.account) app!.setActiveAccount(result.account);
+  }));
   await ready;
   return app;
 }
@@ -118,18 +122,24 @@ export async function entraToken(): Promise<string | null> {
   }
 }
 
-/** Start an interactive sign-in. */
+/**
+ * Start an interactive sign-in.
+ *
+ * A FULL-PAGE REDIRECT, NOT A POPUP. Popups are blocked by phones, by many
+ * office PCs and by embedded browsers, and the sign-in then fails with
+ * `popup_window_error` before the user ever sees Microsoft's page. The page
+ * leaves for Microsoft and comes back; `client()` picks the result up.
+ */
 export async function entraSignIn(): Promise<void> {
   const settings = entraSettings();
   if (!settings) throw new Error("Microsoft sign-in is not configured.");
   const msal = await client(settings);
-  const result = await msal.loginPopup({
+  await msal.loginRedirect({
     scopes: [settings.apiScope],
     /* Ask every time which account to use. Without this, somebody on a
        shared machine is silently signed in as whoever used it last. */
     prompt: "select_account",
   });
-  if (result.account) msal.setActiveAccount(result.account);
 }
 
 export async function entraSignOut(): Promise<void> {
@@ -137,7 +147,7 @@ export async function entraSignOut(): Promise<void> {
   if (!settings) return;
   const msal = await client(settings);
   const account = activeAccount(msal);
-  await msal.logoutPopup({ account: account ?? undefined });
+  await msal.logoutRedirect({ account: account ?? undefined });
 }
 
 /** Who is signed in, or null. */
