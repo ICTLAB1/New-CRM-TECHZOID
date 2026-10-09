@@ -3,14 +3,21 @@
 begin;
 set local request.jwt.claim.role = 'service_role';
 
--- 1. A local identity row each. The on_auth_user_created trigger creates
---    the matching profile (as Sales). Their Entra id is filled in by
---    link_entra_identity on first sign-in, matching on email.
+-- 1. A local identity row each, then the profile. The Azure database has
+--    no on_auth_user_created trigger, so the profile is inserted here.
+--    The Entra id is filled in by link_entra_identity on first sign-in.
 insert into auth.users (email, raw_user_meta_data)
 select v.email, jsonb_build_object('name', v.name)
 from (values ('amit.k@techzoidtechnologies.com', 'Amit K'),
              ('umesh.g@techzoidtechnologies.com', 'Umesh Kumar Gupta')) v(email, name)
-where not exists (select 1 from public.profiles p where lower(p.email) = v.email);
+where not exists (select 1 from auth.users u where lower(u.email) = v.email);
+
+insert into public.profiles (id, name, email, role)
+select distinct on (lower(u.email)) u.id, u.raw_user_meta_data->>'name', lower(u.email), 'Sales'
+from auth.users u
+where lower(u.email) in ('amit.k@techzoidtechnologies.com', 'umesh.g@techzoidtechnologies.com')
+  and not exists (select 1 from public.profiles p where lower(p.email) = lower(u.email))
+order by lower(u.email), u.created_at;
 
 -- 2. Roles: Umesh is Senior Sales Manager -> Manager; Amit -> Sales.
 update public.profiles set role = 'Manager', designation = coalesce(nullif(designation, ''), 'Senior Sales Manager')
