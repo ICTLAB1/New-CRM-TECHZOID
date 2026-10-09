@@ -16,6 +16,7 @@ import type { Session } from "@supabase/supabase-js";
 import { useCompanies } from "../data/useCompanies";
 import { CompanySwitcher } from "../features/companies/CompanySwitcher";
 import { useAutoUpdate } from "./useAutoUpdate";
+import { TopProgress, WorkspaceSkeleton } from "../components/Loading";
 
 /**
  * Which mode the app is in.
@@ -131,7 +132,7 @@ function LiveWorkbench({ user }: { user: SignedInUser }) {
     void ws.reload();
   };
 
-  if (!companies.ready || ws.state === "loading") return <Splash message="Loading your workspace…" />;
+  if (!companies.ready || ws.state === "loading") return <WorkspaceSkeleton />;
   if (ws.state === "failed") {
     return (
       <Splash
@@ -146,6 +147,8 @@ function LiveWorkbench({ user }: { user: SignedInUser }) {
   }));
 
   return (
+    <>
+    <TopProgress active={ws.saving} />
     <Workbench
       data={ws.data}
       settings={ws.settings}
@@ -177,6 +180,7 @@ function LiveWorkbench({ user }: { user: SignedInUser }) {
         </div>
       ) : null}
     />
+    </>
   );
 }
 

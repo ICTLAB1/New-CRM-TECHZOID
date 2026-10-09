@@ -27,16 +27,21 @@ describe("no decoration", () => {
     // decorating a surface. Every occurrence must be inside a *-wrap::after.
     const uses = [...allCode.matchAll(/([^{}]*)\{[^}]*(linear|radial|conic)-gradient[^}]*\}/g)]
       .map((m) => (m[1] ?? "").trim().split("\n").pop()?.trim() ?? "");
+    // The one other use: the shimmer on a skeleton loader (.skel), asked for
+    // in the motion brief. It stands in for content that is loading — it
+    // carries information too, and it is gone the moment the content lands.
     for (const selector of uses) {
-      expect(selector, `gradient in ${selector}`).toMatch(/-wrap::after$/);
+      expect(selector, `gradient in ${selector}`).toMatch(/-wrap::after$|^\.skel$/);
     }
   });
 
   it("defines exactly one shadow token and uses no ad-hoc box-shadows", () => {
-    // Depth is for things genuinely floating: modals, sheets, toasts.
+    // Depth is for things genuinely floating: modals, sheets, toasts — and,
+    // since the motion brief, the subtle lift under the pointer. All of it
+    // comes from the --lift / --elev-N tokens; never an ad-hoc shadow.
     const shadows = allCode.match(/box-shadow:\s*([^;]+);/g) ?? [];
     for (const decl of shadows) {
-      expect(decl, decl).toMatch(/var\(--lift\)|var\(--accent-weak\)|none/);
+      expect(decl, decl).toMatch(/var\(--lift\)|var\(--elev-\d\)|var\(--accent-weak\)|none/);
     }
   });
 

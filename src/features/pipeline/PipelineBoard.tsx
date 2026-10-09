@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { AnimatePresence, LayoutGroup, motion } from "motion/react";
 import { STAGES, applyStage, stageNeedsReason, type LostDetail, type StageId } from "../../domain/pipeline/stages";
 import type { Customer } from "../../domain/customers/customer";
 import { customerLabel } from "../../domain/customers/customer";
@@ -56,6 +57,9 @@ export function PipelineBoard({
   return (
     <>
       <div className="board-wrap">
+      {/* One layout group, so a card dropped into another column travels
+          there instead of vanishing from one and appearing in the other. */}
+      <LayoutGroup>
       <div className="board scroll">
         {STAGES.map((stage) => {
           const inStage = customers.filter((c) => (c.stage ?? "lead") === stage.id);
@@ -79,6 +83,7 @@ export function PipelineBoard({
                 {formatTotals(totalsByCurrency(inStage, (c) => Number(c.value) || 0, (c) => c.currency), moneyShort) || "—"}
               </div>
               <div className="board-body">
+                <AnimatePresence initial={false}>
                 {inStage.map((c) => {
                   const overdue = isOverdue(c.nextFollowUp);
                   /* Counted as revenue with no order or invoice behind it.
@@ -89,8 +94,16 @@ export function PipelineBoard({
                     ? backingNote(backingFor(c.id, documents))
                     : "";
                   return (
-                    <button
+                    <motion.div
                       key={c.id}
+                      layout="position"
+                      layoutId={"deal-" + c.id}
+                      initial={{ opacity: 0, scale: 0.97 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.97 }}
+                      transition={{ type: "spring", stiffness: 420, damping: 38, mass: 0.9 }}
+                    >
+                    <button
                       type="button"
                       draggable
                       onDragStart={() => setDragId(c.id)}
@@ -110,14 +123,17 @@ export function PipelineBoard({
                       {Number(c.value) > 0 ? <div className="deal-value">{moneyShort(c.value, c.currency)}</div> : null}
                       {unbacked ? <div className="deal-flag" title={unbacked}>No order yet</div> : null}
                     </button>
+                    </motion.div>
                   );
                 })}
+                </AnimatePresence>
                 {inStage.length === 0 ? <div className="field-hint" style={{ padding: "6px 4px" }}>Nothing here.</div> : null}
               </div>
             </div>
           );
         })}
       </div>
+      </LayoutGroup>
       </div>
 
       {pendingLost ? (

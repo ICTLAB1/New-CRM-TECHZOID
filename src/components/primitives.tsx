@@ -1,4 +1,5 @@
 import { Children, cloneElement, isValidElement, useId } from "react";
+import { motion } from "motion/react";
 import type { ButtonHTMLAttributes, CSSProperties, InputHTMLAttributes, ReactElement, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from "react";
 
 /* The shared component library. Presentational only — nothing here reaches
@@ -212,6 +213,9 @@ export interface TabsProps<T extends string> {
   onChange: (id: T) => void;
 }
 export function Tabs<T extends string>({ tabs, active, onChange }: TabsProps<T>) {
+  /* Unique per tab strip, so two strips on one screen do not trade
+     underlines with each other. */
+  const strip = useId();
   return (
     <div className="tabs" role="tablist">
       {tabs.map((t) => (
@@ -225,6 +229,13 @@ export function Tabs<T extends string>({ tabs, active, onChange }: TabsProps<T>)
         >
           {t.label}
           {t.count !== undefined ? <span className="tab-count">{t.count}</span> : null}
+          {t.id === active ? (
+            <motion.span
+              layoutId={"tab-ink-" + strip}
+              className="tab-indicator"
+              transition={{ type: "spring", stiffness: 520, damping: 42, mass: 0.8 }}
+            />
+          ) : null}
         </button>
       ))}
     </div>

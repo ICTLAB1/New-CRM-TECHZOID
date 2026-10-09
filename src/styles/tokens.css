@@ -152,8 +152,7 @@
   --t-exit:    .14s;   /* and leaving — shorter, nobody waits to watch it */
 }
 
-/* Reduced motion is honoured everywhere; nothing here is load-bearing.
-   Everything still ARRIVES — it just arrives already in place. */
-@media (prefers-reduced-motion: reduce) {
-  * { animation: none !important; transition: none !important; }
-}
+/* Nothing here is load-bearing: motion only says where something came from. */
+/* Reduced motion is handled in motion.css: calmer, not switched off,
+   because movement was asked for and a long-forgotten Windows setting
+   ("Animation effects: off") was silently removing all of it. */
