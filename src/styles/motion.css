@@ -200,8 +200,10 @@ input[type="checkbox"]:focus-visible, input[type="radio"]:focus-visible { box-sh
 .top-progress.is-on { opacity: 1; }
 .top-progress::after {
   content: ""; position: absolute; inset: 0; background: var(--accent);
-  animation: mo-progress 1.1s var(--ease-inout) infinite;
+  transform: translateX(-100%);
 }
+/* Only travels while a save is actually happening. */
+.top-progress.is-on::after { animation: mo-progress 1.1s var(--ease-inout) infinite; }
 
 /* Skeletons: shapes standing in for what is about to load. */
 .skel {
