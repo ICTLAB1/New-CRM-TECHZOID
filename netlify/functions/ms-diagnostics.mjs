@@ -69,8 +69,10 @@ export async function handler(event) {
   if (!secrets.MS_CLIENT_ID) checks.push("MS_CLIENT_ID is missing.");
   if (!secrets.MS_CLIENT_SECRET) checks.push("MS_CLIENT_SECRET is missing.");
   if (!secrets.MS_REDIRECT_URI) checks.push("MS_REDIRECT_URI is missing.");
-  if (secrets.MS_REDIRECT_URI && !/\/\.netlify\/functions\/ms-oauth-callback$/.test(secrets.MS_REDIRECT_URI)) {
-    checks.push("MS_REDIRECT_URI must end with /.netlify/functions/ms-oauth-callback — that exact path is what Azure redirects to.");
+  /* On Azure the callback answers at /api/ms-oauth-callback; the Netlify
+     path is accepted too so an older deployment still reads correctly. */
+  if (secrets.MS_REDIRECT_URI && !/\/(api|\.netlify\/functions)\/ms-oauth-callback$/.test(secrets.MS_REDIRECT_URI)) {
+    checks.push("MS_REDIRECT_URI must end with /api/ms-oauth-callback — that exact path is what Microsoft redirects to.");
   }
   if (!env.MS_STATE_SECRET) {
     checks.push("MS_STATE_SECRET isn't set, so the service role key is being used to sign OAuth state. It works, but a dedicated secret is better.");
