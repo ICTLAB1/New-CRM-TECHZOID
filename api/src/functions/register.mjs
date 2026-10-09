@@ -1,6 +1,7 @@
 import { handleQuery, handleRpc } from "../../lib/http.mjs";
 import { handleBlob } from "../../lib/blob.mjs";
 import { getBlobs } from "../../lib/azureBlob.mjs";
+import { handleAuthProxy } from "../../lib/authProxy.mjs";
 
 /**
  * Wire the two endpoints onto a Functions app.
@@ -38,6 +39,18 @@ export function register(app) {
      registration, so a deployment with no storage account configured still
      starts and still serves everything else — the endpoint answers "not
      configured" instead of the whole app failing to come up. */
+  /* Sign-in, reached through this origin rather than from the browser.
+     The office network answers NXDOMAIN for <ref>.supabase.co, so the
+     browser cannot ask the identity provider anything; this app can. See
+     `authProxy.mjs` for what it refuses to forward and why. */
+  app.http("idp", {
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    authLevel: "anonymous",
+    route: "idp/{*path}",
+    handler: (request, context) =>
+      handleAuthProxy(request, { path: request.params?.path, log: context?.error }),
+  });
+
   app.http("blob", {
     methods: ["POST"],
     authLevel: "anonymous",

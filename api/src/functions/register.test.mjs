@@ -30,16 +30,24 @@ const probe = () => ({
 });
 
 describe("the routes", () => {
-  it("registers exactly q, rpc and blob", () => {
+  it("registers exactly idp, q, rpc and blob", () => {
     /* Pinned deliberately. A route appearing here that nobody meant to add
        is a new public entry point, and it should take an edit to this line
        and somebody noticing it in review. */
     const { app, routes } = fakeApp();
     register(app);
-    expect([...routes.keys()].sort()).toEqual(["blob", "q", "rpc"]);
+    /* `idp` was added on purpose: the office network answers NXDOMAIN for
+       the identity provider, so the browser reaches it through this origin
+       instead. It is a public entry point and it is meant to be -- signing
+       in is what an unauthenticated caller does. What keeps it safe is in
+       authProxy.mjs: one configured host, auth paths only, no credential of
+       its own. */
+    expect([...routes.keys()].sort()).toEqual(["blob", "idp", "q", "rpc"]);
   });
 
   it("accepts only POST, on the paths the browser calls", () => {
+    /* `idp` is deliberately not in this list: a sign-in flow needs GET for
+       the provider\'s own endpoints, so it is checked separately. */
     const { app, routes } = fakeApp();
     register(app);
     for (const name of ["q", "rpc", "blob"]) {
