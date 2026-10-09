@@ -15,6 +15,7 @@ import type { TeamMember } from "../features/team/TeamScreen";
 import type { Session } from "@supabase/supabase-js";
 import { useCompanies } from "../data/useCompanies";
 import { CompanySwitcher } from "../features/companies/CompanySwitcher";
+import { useAutoUpdate } from "./useAutoUpdate";
 
 /**
  * Which mode the app is in.
@@ -113,6 +114,7 @@ function LiveApp() {
 }
 
 function LiveWorkbench({ user }: { user: SignedInUser }) {
+  useAutoUpdate();
   /* Which company, THEN the workspace. Every query the store makes is
      narrowed to the active company, so loading the other way round fetches
      one company's records only to discard them — and for somebody who
