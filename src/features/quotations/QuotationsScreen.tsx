@@ -77,12 +77,15 @@ export interface QuotationsScreenProps {
    *  Without this the whole Deliver section — sales orders and the dispatch
    *  challans raised from them — had no way in at all. */
   onCreateOrder?: (order: SalesOrder) => void;
+  /** What already exists downstream, so the same document is never turned
+   *  into a second proforma, order or tax invoice by a double click. */
+  related?: { proformas: SalesDocument[]; invoices: SalesDocument[]; orders: SalesOrder[] };
 }
 
 export function QuotationsScreen({
   docType, documents, customers, catalog, settings, brandLogos, docImages, api, currentUser,
   onChange, onCustomerStage, onSettingsNote, onCreateBankAccount, onCreateProforma, onCreateInvoice, onCreateOrder,
-  onCreateCustomer, team = [], customFields = [],
+  onCreateCustomer, team = [], customFields = [], related,
 }: QuotationsScreenProps) {
   const toast = useToast();
   const [editing, setEditing] = useState<SalesDocument | null>(null);
@@ -260,7 +263,22 @@ export function QuotationsScreen({
    * itself is not a cosmetic problem: it is the number a customer pays
    * against and the number a GST return is filed under.
    */
+  /** The document already made from this one, if any. */
+  const existing = (doc: SalesDocument, kind: "proforma" | "invoice" | "order"): string | null => {
+    if (!related) return null;
+    if (kind === "proforma") return related.proformas.find((p) => p.quoteId === doc.id)?.number ?? null;
+    if (kind === "invoice") return related.invoices.find((i) => i.quoteId === doc.id && i.status !== "Cancelled")?.number ?? null;
+    return related.orders.find((o) => o.proformaId === doc.id || o.quoteId === doc.id)?.number ?? null;
+  };
+  const refuseDuplicate = (doc: SalesDocument, kind: "proforma" | "invoice" | "order", what: string): boolean => {
+    const no = existing(doc, kind);
+    if (!no) return false;
+    toast(`${doc.number} already has ${what} ${no}. Open that one instead of raising a second.`, "info");
+    return true;
+  };
+
   const raiseInvoice = async (doc: SalesDocument) => {
+    if (refuseDuplicate(doc, "invoice", "tax invoice")) return;
     const { doc: inv, seq } = await allocateNumber(
       invoiceFrom(doc, settings as DocSettings, currentUser),
       "invoice",
@@ -271,6 +289,7 @@ export function QuotationsScreen({
   };
 
   const confirmOrder = async (doc: SalesDocument) => {
+    if (refuseDuplicate(doc, "order", "sales order")) return;
     /* The order number comes from the same database counter every other
        document uses, so two people confirming at once cannot collide. */
     const now = new Date();
@@ -287,6 +306,7 @@ export function QuotationsScreen({
   /** Same as raiseInvoice, and it had the same hole: the proforma was filed
    *  carrying the preview number rather than one out of its own series. */
   const raiseProforma = async (doc: SalesDocument) => {
+    if (refuseDuplicate(doc, "proforma", "proforma")) return;
     const { doc: pf, seq } = await allocateNumber(
       proformaFromQuotation(doc, settings as DocSettings, currentUser),
       "proforma",

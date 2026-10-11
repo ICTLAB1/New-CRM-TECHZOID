@@ -38,6 +38,18 @@ if ! az ad app federated-credential list --id "$APP" --query "[?name=='github-br
   }" -o none
 fi
 
+# GitHub may present the subject with numeric owner/repo ids appended
+# (organisation setting "use immutable ids"). Accept that form too.
+OWNER_ID="143274384"
+if ! az ad app federated-credential list --id "$APP" --query "[?name=='github-branch-ids']" -o tsv | grep -q .; then
+  az ad app federated-credential create --id "$APP" --parameters "{
+    \"name\": \"github-branch-ids\",
+    \"issuer\": \"https://token.actions.githubusercontent.com\",
+    \"subject\": \"repo:ICTLAB1@${OWNER_ID}/New-CRM-TECHZOID@1344007576:ref:refs/heads/${BRANCH}\",
+    \"audiences\": [\"api://AzureADTokenExchange\"]
+  }" -o none
+fi
+
 for i in 1 2 3 4 5 6; do
   az role assignment create --assignee-object-id "$SP" --assignee-principal-type ServicePrincipal \
     --role "Contributor" --scope "$RG_ID" -o none 2>/dev/null && break

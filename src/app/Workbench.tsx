@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { useAutomations } from "./useAutomations";
+import { useToast } from "../components/Toast";
 import { applyStage, type StageId } from "../domain/pipeline/stages";
 import { AppShell, PageHead } from "./AppShell";
 import { BroadcastPopup } from "../features/broadcasts/BroadcastPopup";
@@ -198,6 +200,15 @@ export function Workbench({
     onChange("customers", next);
   };
 
+  /* The CRM running its own process: stages, the document chain and
+     follow-up tasks. See src/domain/automation/flow.ts. */
+  const toast = useToast();
+  useAutomations({
+    data, settings, user, onChange, onSettingsNote,
+    onCustomersChange: handleCustomersChange,
+    notify: (text) => toast(text, "info"),
+  });
+
   return (
     <AppShell
       view={view}
@@ -262,6 +273,7 @@ export function Workbench({
         </main>
       ) : view === "quotations" ? (
         <QuotationsScreen
+          related={{ proformas, invoices, orders }}
           docType="quotation"
           documents={quotations}
           customers={customers}
@@ -283,6 +295,7 @@ export function Workbench({
         />
       ) : view === "proformas" ? (
         <QuotationsScreen
+          related={{ proformas, invoices, orders }}
           docType="proforma"
           documents={proformas}
           customers={customers}
@@ -304,6 +317,7 @@ export function Workbench({
         />
       ) : view === "invoices" ? (
         <QuotationsScreen
+          related={{ proformas, invoices, orders }}
           docType="invoice"
           documents={invoices}
           customers={customers}
@@ -330,6 +344,7 @@ export function Workbench({
         />
       ) : view === "purchase-orders" ? (
         <QuotationsScreen
+          related={{ proformas, invoices, orders }}
           docType="purchase_order"
           documents={purchaseOrders}
           customers={customers}
