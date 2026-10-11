@@ -39,6 +39,7 @@ import { ActivityScreen } from "../features/activity/ActivityScreen";
 import { AssistantScreen } from "../features/assistant/AssistantScreen";
 import { ProspectsScreen } from "../features/outreach/ProspectsScreen";
 import { CampaignScreen } from "../features/outreach/CampaignScreen";
+import { PaymentTrackerScreen } from "../features/paymentTracker/PaymentTrackerScreen";
 import { addAccount, readAccounts, type BankAccount } from "../domain/banking/accounts";
 import { integrations } from "../integrations";
 import { BRAND_LOGOS, DOC_IMAGES } from "./demoData";
@@ -434,6 +435,8 @@ export function Workbench({
         />
       ) : view === "integrations" ? (
         <IntegrationsScreen api={integrations} user={user} users={team} settings={settings} onSettingsChange={onSettingsChange} />
+      ) : view === "payment-tracker" ? (
+        <PaymentTrackerScreen currentUser={user} users={team} customers={customers} companyId={activeCompanyId} />
       ) : view === "prospects" ? (
         <ProspectsScreen
           currentUser={user}

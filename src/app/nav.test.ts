@@ -36,7 +36,9 @@ describe("navigation", () => {
     // then despatch. "Find" — cold outreach — comes after selling rather
     // than before it: a salesperson opens the CRM to work the pipeline, not
     // to import a list.
+    // "Collect" is the Payment Tracker: a separate section for bills on
+    // credit and their automatic reminders, right after getting paid.
     expect(NAV.map((s) => s.label))
-      .toEqual(["Sell", "Find", "Buy", "Deliver", "Get paid", "Understand", "Administer"]);
+      .toEqual(["Sell", "Find", "Buy", "Deliver", "Get paid", "Collect", "Understand", "Administer"]);
   });
 });

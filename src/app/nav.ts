@@ -57,6 +57,15 @@ export const NAV: NavSection[] = [
     ],
   },
   {
+    /* Its own section on purpose: bills on credit entered by hand, with
+       automatic reminders. Separate from the CRM's invoices and
+       Receivables, and shares no data with them. */
+    label: "Collect",
+    items: [
+      { id: "payment-tracker", label: "Payment Tracker" },
+    ],
+  },
+  {
     label: "Understand",
     items: [
       { id: "reports", label: "Reports" },
