@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Intent } from "../../app/intent";
+import { isOffline } from "../../data/offline";
 import { Presence } from "../../components/Presence";
 import { PageHead } from "../../app/AppShell";
 import { Button, Card, Chip, Empty, Input, Select, Tabs } from "../../components/primitives";
@@ -126,6 +127,16 @@ export function QuotationsScreen({
     of: DocType = docType,
   ): Promise<{ doc: SalesDocument; seq: number | null }> => {
     if (!doc.autoNumber) return { doc, seq: null };
+    /* OFFLINE: no number yet. The series lives in the database, and a number
+       guessed on this phone could be the one a colleague takes at the same
+       moment. The document is saved with a placeholder and gets its real
+       number the moment the connection is back (useAutomations). */
+    if (isOffline()) {
+      return {
+        doc: { ...doc, number: "OFFLINE-" + doc.id.slice(-5).toUpperCase(), offlineNumber: of } as SalesDocument,
+        seq: null,
+      };
+    }
     const { objType, kind, seqKey: key, prefix } = seriesFor(of);
     /* One instant for both the series and the label, so a save at the stroke
        of midnight on 31 March cannot draw from one financial year and print
@@ -301,6 +312,7 @@ export function QuotationsScreen({
 
   const confirmOrder = async (doc: SalesDocument) => {
     if (refuseDuplicate(doc, "order", "sales order")) return;
+    if (isOffline()) { toast("A sales order needs its number from the server — confirm it once you're back online.", "info"); return; }
     /* The order number comes from the same database counter every other
        document uses, so two people confirming at once cannot collide. */
     const now = new Date();

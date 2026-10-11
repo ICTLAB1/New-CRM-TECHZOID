@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { getSync, subscribeSync } from "../data/offline";
 import { useOnline } from "./useOnline";
 import { usePresence } from "./usePresence";
 
@@ -18,6 +19,13 @@ import { usePresence } from "./usePresence";
  */
 export function ConnectionBanner() {
   const online = useOnline();
+  const sync = useSyncExternalStore(subscribeSync, getSync, getSync);
+  const since = sync.syncedAt
+    ? new Date(sync.syncedAt).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })
+    : null;
+  const waiting = sync.pending > 0
+    ? ` ${sync.pending} change${sync.pending === 1 ? "" : "s"} saved on this device will upload when you're back online.`
+    : " Anything you add or change is saved on this device and uploads by itself when you're back online.";
   const [restored, setRestored] = useState(false);
   /* Nothing on first paint: somebody who was online all along should never
      see "connection restored" for a connection that never dropped. */
@@ -32,7 +40,7 @@ export function ConnectionBanner() {
     return () => clearTimeout(t);
   }, [online]);
 
-  const show = !online || restored;
+  const show = !online || restored || (online && sync.pending > 0);
   const { mounted, className } = usePresence(show);
   if (!mounted) return null;
 
@@ -45,12 +53,14 @@ export function ConnectionBanner() {
       aria-live="polite"
     >
       <span>
-        {online ? (
-          <><strong>Connection restored.</strong> Anything you save now goes straight through.</>
+        {online && sync.pending > 0 ? (
+          <><strong>Uploading changes made offline…</strong> {sync.pending} waiting.</>
+        ) : online ? (
+          <><strong>Back online.</strong> Everything done offline has been uploaded.</>
         ) : (
           <>
-            <strong>You're offline.</strong> You can keep reading, but saving and sending will not work
-            until the connection is back.
+            <strong>You're offline.</strong> Showing data{since ? ` from ${since}` : ""}.{waiting}
+            {" "}Sending email or WhatsApp waits for the connection.
           </>
         )}
       </span>

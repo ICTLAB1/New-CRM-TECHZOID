@@ -3,6 +3,7 @@ import {
   myCompanies, readActiveCompany, resolveActiveCompany, roleIn, writeActiveCompany, type Company,
 } from "./companies";
 import { setActiveCompanyId } from "./store";
+import { isNetworkError, recall, remember } from "./offline";
 
 /**
  * The companies this person belongs to, and which one is on screen.
@@ -41,7 +42,16 @@ export function useCompanies(enabled: boolean): CompaniesState {
   const load = useCallback(async () => {
     if (!enabled) { setReady(true); return; }
     try {
-      const list = await myCompanies();
+      let list: Company[];
+      try {
+        list = await myCompanies();
+        remember("companies", list);
+      } catch (err) {
+        /* Offline: the companies this device last saw. */
+        const cached = recall<Company[]>("companies");
+        if (!cached || !isNetworkError(err)) throw err;
+        list = cached;
+      }
       const active = resolveActiveCompany(list, readActiveCompany());
       /* The store is told before anything is rendered with it, so the first
          query already carries the filter. */

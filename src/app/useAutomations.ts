@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { WorkspaceData } from "../data/useWorkspace";
 import type { Customer } from "../domain/customers/customer";
 import type { SalesDocument } from "../domain/documents/create";
@@ -10,6 +10,8 @@ import { DEFAULT_PREFIX, buildDocNumber, fyLabel } from "../domain/numbering/doc
 import { OBJ_TYPE } from "../domain/documents/objType";
 import { docSeries, nextDocNumber } from "../data/docNumber";
 import { TODAY } from "../domain/dates";
+import { isOffline } from "../data/offline";
+import type { DocType } from "../domain/documents/model";
 import { planAutomations, nextFollowUpDate, type AutoStamp, type FlowStep } from "../domain/automation/flow";
 
 /**
@@ -55,14 +57,21 @@ export function useAutomations(deps: AutomationDeps): void {
   const busy = useRef(false);
 
   const d = deps.data;
-  const signature = [d.customers, d.quotations, d.proformas, d.invoices, d.orders, d.subscriptions]
+  /* Back online is a reason to look again even when nothing changed. */
+  const [online, setOnline] = useState(0);
+  useEffect(() => {
+    const on = () => setOnline((n) => n + 1);
+    window.addEventListener("online", on);
+    return () => window.removeEventListener("online", on);
+  }, []);
+  const signature = online + "#" + [d.customers, d.quotations, d.proformas, d.purchaseOrders, d.invoices, d.orders, d.subscriptions]
     .map((l) => l.length + ":" + l.reduce((a, r) => Math.max(a, Number((r as { updatedAt?: number }).updatedAt) || 0), 0))
     .join("|");
 
   useEffect(() => {
-    if (deps.enabled === false || latest.current.settings["automations"] === "off") return;
+    if (deps.enabled === false) return;
     const t = setTimeout(() => {
-      if (busy.current) return;
+      if (busy.current || isOffline()) return;
       busy.current = true;
       void withLock(() => run(latest.current))
         .catch((err) => console.error("automations:", err))
@@ -72,7 +81,42 @@ export function useAutomations(deps: AutomationDeps): void {
   }, [signature, deps.enabled]);
 }
 
+/**
+ * Documents saved offline carry a placeholder number. Once online, each
+ * takes the next number from its series, exactly as if it had been saved
+ * now — so two phones offline at once can never print the same number.
+ */
+async function assignOfflineNumbers(deps: AutomationDeps): Promise<boolean> {
+  const lists: [keyof WorkspaceData, DocType][] = [
+    ["quotations", "quotation"], ["proformas", "proforma"], ["invoices", "invoice"], ["purchaseOrders", "purchase_order"],
+  ];
+  let settings = { ...deps.settings };
+  let any = false;
+  for (const [key, type] of lists) {
+    const docs = deps.data[key] as (SalesDocument & { offlineNumber?: string })[];
+    if (!docs.some((d) => d.offlineNumber && d.ownerId === deps.user.id)) continue;
+    const next = [];
+    for (const d of docs) {
+      if (!d.offlineNumber || d.ownerId !== deps.user.id) { next.push(d); continue; }
+      const series = docSeries(type, settings);
+      const at = new Date();
+      const seq = await nextDocNumber(series.objType, fyLabel(at), series.kind, Number(settings[series.seqKey]) || 1);
+      settings = { ...settings, [series.seqKey]: seq + 1 };
+      const { offlineNumber: _drop, ...rest } = d;
+      next.push({ ...rest, number: buildDocNumber(series.prefix, seq, at), autoNumber: false, updatedAt: Date.now() });
+      deps.notify?.(`${d.number} is now ${buildDocNumber(series.prefix, seq, at)}`);
+    }
+    deps.onChange(key, next as never);
+    any = true;
+  }
+  if (any) deps.onSettingsNote?.(settings);
+  return any;
+}
+
 async function run(deps: AutomationDeps): Promise<void> {
+  /* Placeholder numbers first; the rest runs on the next change. */
+  if (await assignOfflineNumbers(deps)) return;
+  if (deps.settings["automations"] === "off") return;
   const { data, settings, user } = deps;
   const sellerState = ((settings["company"] as { state?: string })?.state) ?? "Delhi";
   const grandOf = (doc: SalesDocument) => computeDocument(doc, sellerState).grand;

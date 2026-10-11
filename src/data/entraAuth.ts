@@ -4,6 +4,7 @@ import {
   type AccountInfo,
   type IPublicClientApplication,
 } from "@azure/msal-browser";
+import { isInstalledApp } from "./offline";
 
 /**
  * Signing in with the company's Microsoft account.
@@ -72,7 +73,10 @@ async function client(settings: EntraSettings): Promise<IPublicClientApplication
          the browser being closed and is shared across every tab on the
          origin; this is a CRM with customer records in it and the shorter
          life is worth the extra sign-in. */
-      cacheLocation: "sessionStorage",
+      /* Installed on a phone's home screen, the sign-in has to survive the
+         app being closed — that is what lets it open with no network. In
+         an ordinary browser tab it stays per-tab, as before. */
+      cacheLocation: isInstalledApp() ? "localStorage" : "sessionStorage",
       /* `storeAuthStateInCookie` is deliberately absent: MSAL v5 removed it,
          and it existed for browsers this application does not support. */
     },

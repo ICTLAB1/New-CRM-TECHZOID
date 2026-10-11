@@ -2,6 +2,7 @@ import { getSupabase } from "./supabase";
 import { getDb, hasBackend, signInWithEntra } from "./backend";
 import { entraAccount, entraSignIn, entraSignOut } from "./entraAuth";
 import type { Session } from "@supabase/supabase-js";
+import { isNetworkError, recall, remember } from "./offline";
 
 /**
  * Who is signed in.
@@ -61,7 +62,22 @@ async function entraSessionFor(): Promise<Session | null> {
      guest they are not, so the lookup found nothing and a perfectly good
      Microsoft sign-in ended on "your account isn't set up yet".
      `my_profile()` reads auth.uid(), which the API has already resolved. */
-  const { data, error } = await getDb().rpc("my_profile");
+  let data: unknown = null;
+  let error: unknown = null;
+  try {
+    ({ data, error } = await getDb().rpc("my_profile"));
+  } catch (err) {
+    error = err;
+  }
+  /* No connection: the person who signed in on this device last time,
+     if it is the same Microsoft account. */
+  if (error && isNetworkError(error)) {
+    const last = recall<{ id: string; email: string; account: string }>("session");
+    if (last && last.account === account.email) {
+      entraSessionCache = { user: { id: last.id, email: last.email } } as unknown as Session;
+      return entraSessionCache;
+    }
+  }
   let row = (Array.isArray(data) ? data[0] : data) as { id?: string; email?: string } | null;
 
   /* BELT AND BRACES. If the server does not offer my_profile (an API not yet
@@ -82,6 +98,7 @@ async function entraSessionFor(): Promise<Session | null> {
   entraSessionCache = {
     user: { id: row.id, email: row.email || account.email },
   } as unknown as Session;
+  remember("session", { id: row.id, email: row.email || account.email, account: account.email });
   return entraSessionCache;
 }
 
@@ -134,14 +151,24 @@ export function onSessionChange(handler: (session: Session | null) => void): () 
  * returns null rather than inventing a role, and the caller says so.
  */
 export async function loadProfile(session: Session): Promise<SignedInUser | null> {
-  const { data, error } = await getDb()
-    .from("profiles")
-    .select("id, name, email, role, designation, phone")
-    .eq("id", session.user.id)
-    .maybeSingle();
+  let data: unknown = null;
+  let error: unknown = null;
+  try {
+    ({ data, error } = await getDb()
+      .from("profiles")
+      .select("id, name, email, role, designation, phone")
+      .eq("id", session.user.id)
+      .maybeSingle());
+  } catch (err) {
+    error = err;
+  }
+  if (error && isNetworkError(error)) {
+    /* Offline: the profile as it was last loaded on this device. */
+    return recall<SignedInUser>("profile:" + session.user.id);
+  }
   if (error || !data) return null;
   const row = data as Record<string, unknown>;
-  return {
+  const user: SignedInUser = {
     id: row.id as string,
     name: (row.name as string) || (session.user.email ?? "").split("@")[0] || "You",
     email: (row.email as string) || session.user.email || "",
@@ -154,6 +181,8 @@ export async function loadProfile(session: Session): Promise<SignedInUser | null
        person who sent it rather than the switchboard. */
     phone: (row.phone as string) || "",
   };
+  remember("profile:" + user.id, user);
+  return user;
 }
 
 /** Start a Microsoft sign-in. Only meaningful when `VITE_AUTH=entra`. */
