@@ -24,9 +24,10 @@ describe("navigation", () => {
   it("badges only things worth interrupting for", () => {
     // A badge is for work that is due or overdue, never a row count —
     // a permanent number next to every item teaches people to ignore all of them.
+    // The numbers are live now (Workbench passes them to the shell), so
+    // nothing in the static menu may carry a made-up one.
     const badged = NAV.flatMap((s) => s.items).filter((i) => i.badge !== undefined);
-    expect(badged.map((i) => i.id).sort()).toEqual(["proformas", "renewals"]);
-    for (const item of badged) expect(item.badge).toBeGreaterThan(0);
+    expect(badged).toEqual([]);
   });
 
   it("groups by what someone is doing, not by table", () => {
