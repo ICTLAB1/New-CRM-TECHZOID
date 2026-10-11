@@ -222,6 +222,10 @@ export function planAutomations(input: FlowInput): FlowStep[] {
   for (const sub of dueForRenewal(subscriptions, RENEWAL_NOTICE_DAYS, new Date(now))) {
     const s = sub as Subscription & Stamped;
     if (!s.customerId || !s.expiryDate || !isMine(s, me, now)) continue;
+    /* Coming up, not already lapsed: a subscription that ran out months
+       ago is history, and raising a task for every one of them on the day
+       this was switched on would bury the list. */
+    if (s.expiryDate < today) continue;
     if (s.auto?.renewalFor === s.expiryDate) continue;
     steps.push({
       kind: "task", customerId: s.customerId, due: today,

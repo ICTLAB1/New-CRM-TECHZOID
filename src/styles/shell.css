@@ -2,121 +2,127 @@
    The application shell: sidebar, topbar, page frame, mobile nav.
    ───────────────────────────────────────────────────────────────────── */
 
-.shell { display: grid; grid-template-columns: var(--sidebar-w) minmax(0, 1fr); min-height: 100vh; }
+.shell { display: flex; flex-direction: column; min-height: 100vh; background: var(--bg); }
 
-/* ── sidebar ───────────────────────────────────────────────────────────
-   WHITE, with the canvas a shade grey-green behind the cards, so the rail
-   reads as part of the page rather than a panel stuck to it. It keeps its
-   own token group even now that it is light: the day the chrome is asked
-   to change again, it changes without dragging every card with it.
-
-   The active item stays a filled green block rather than the hairline it
-   once was. "Which screen am I on" is the one question this column has to
-   answer at a glance, and a 3px rule does not answer it across a nav of
-   twenty items. */
-.sidebar {
-  position: sticky; top: 0; align-self: start;
-  height: 100vh;
-  display: flex; flex-direction: column;
-  background: var(--shell);
-  border-right: 1px solid var(--shell-rule);
-  overflow-y: auto;
-}
-.sidebar-brand { display: flex; align-items: center; gap: 9px; height: var(--topbar-h); padding: 0 var(--gap-wide); border-bottom: 1px solid var(--shell-rule); flex: none; }
-.brand-mark { width: 22px; height: 22px; border-radius: var(--radius); background: var(--accent); color: var(--on-accent); display: grid; place-items: center; font-size: 10px; font-weight: 700; letter-spacing: -.02em; flex: none; }
-.brand-name { font-size: var(--t-mid); font-weight: 600; color: var(--shell-ink); letter-spacing: -0.01em; }
-/* Bounded by the sidebar header's own height, so an uploaded logo of any
-   proportion cannot push it taller than every other row in the shell. */
-.brand-logo { max-width: 150px; max-height: 26px; object-fit: contain; object-position: left center; display: block; }
-
-.nav { padding: var(--gap) var(--gap-tight) var(--gap-block); }
-/* Section labels are orientation, not headlines: small, grey, sentence
-   case. Tracked-out mono capitals here compete with the items under them. */
-.nav-section { padding: var(--gap-wide) 10px 4px; font-size: var(--t-micro); font-weight: 600; color: var(--shell-ink-2); letter-spacing: .08em; text-transform: uppercase; font-family: var(--sans); opacity: .75; }
-.nav-section:first-child { padding-top: 4px; }
-
-.nav-item {
-  display: flex; align-items: center; gap: 9px;
-  width: 100%;
-  padding: 7px 10px;
-  border: 0;
-  background: transparent;
-  border-radius: var(--radius);
-  font: inherit; font-size: var(--t-body); font-weight: 500;
-  color: var(--shell-ink-2); text-align: left; cursor: pointer;
-}
-.nav-item {
-  transition:
-    background-color var(--t-quick) var(--ease),
-    color var(--t-quick) var(--ease);
-}
-.nav-item:hover { background: var(--shell-2); color: var(--shell-ink); }
-.nav-item[aria-current="page"] { background: var(--accent); color: var(--on-accent); font-weight: 600; }
-.nav-item[aria-current="page"]:hover { background: var(--accent); }
-.nav-icon { width: 15px; height: 15px; flex: none; color: currentColor; }
-/* On a dark rail the tinted badge the light one used disappears, so the
-   count is drawn as a solid pill instead. */
-.nav-badge {
-  margin-left: auto;
-  min-width: 19px; height: 18px; padding: 0 6px;
-  display: inline-grid; place-items: center;
-  border-radius: 999px;
-  background: var(--warn); color: var(--on-accent);
-  font-family: var(--mono); font-size: var(--t-micro); font-weight: 600;
-}
-.nav-item[aria-current="page"] .nav-badge { background: var(--shell-ink); color: var(--accent); }
-
-.sidebar-foot { margin-top: auto; padding: var(--gap) var(--gap-wide) var(--gap-wide); border-top: 1px solid var(--shell-rule); }
-.who { display: flex; align-items: center; gap: 9px; }
-.who-mark { width: 28px; height: 28px; border-radius: 50%; background: var(--shell-2); color: var(--shell-ink); display: grid; place-items: center; font-size: var(--t-small); font-weight: 600; flex: none; }
-.who-name { font-size: var(--t-body); font-weight: 500; color: var(--shell-ink); }
-.who-role { font-size: var(--t-small); color: var(--shell-ink-2); }
-
-/* ── main column ───────────────────────────────────────────────────── */
-.main { min-width: 0; display: flex; flex-direction: column; }
-
-.topbar {
-  position: sticky; top: 0; z-index: 30;
+/* ── global header ─────────────────────────────────────────────────────
+   Launcher, brand, a centred search, then the person's own controls. */
+.global-header {
+  position: sticky; top: 0; z-index: 40;
   display: flex; align-items: center; gap: var(--gap);
-  height: var(--topbar-h); padding: 0 var(--gap-page);
+  height: var(--topbar-h); padding: 0 var(--gap-wide);
   background: var(--shell);
   border-bottom: 1px solid var(--shell-rule);
 }
-/* The topbar orients; it does not repeat the page title in the same weight
-   directly above it. Section in grey, current screen in ink, both small. */
-.crumb { display: flex; align-items: center; gap: 6px; font-size: var(--t-small); min-width: 0; }
-.crumb-section { color: var(--shell-ink-2); }
-.crumb-sep { color: var(--shell-rule); }
-.crumb-current { color: var(--shell-ink); font-weight: 500; }
-.topbar-crumb { font-size: var(--t-small); color: var(--shell-ink-2); font-family: var(--mono); }
-
-/* The company picker. Sized to the name rather than stretched to the bar:
-   it sits between a search box and a bell, and a select that grows to fill
-   the space would dominate a row of controls it is not more important than.
-   Capped, because a registered Indian company name runs long. */
-.topbar-company {
-  max-width: 220px;
-  height: 30px;
-  color: var(--shell-ink);
-  background: var(--shell-2);
-  border-color: var(--shell-rule);
-  padding-block: 0;
-  font-size: var(--t-small);
+.launcher-btn {
+  width: 34px; height: 34px; display: grid; place-items: center;
+  border: 0; background: transparent; border-radius: var(--radius); cursor: pointer;
 }
-@media (max-width: 720px) { .topbar-company { max-width: 130px; } }
-
+.launcher-btn:hover { background: var(--shell-2); }
+.waffle { display: grid; grid-template-columns: repeat(3, 4px); gap: 3px; }
+.waffle i { width: 4px; height: 4px; border-radius: 50%; background: var(--ink-3); display: block; }
+.launcher-btn:hover .waffle i { background: var(--accent); }
+.gh-brand { display: flex; align-items: center; gap: 8px; flex: none; }
+.brand-mark { width: 26px; height: 26px; border-radius: var(--radius); background: var(--accent); color: var(--on-accent); display: grid; place-items: center; font-size: 11px; font-weight: 700; flex: none; }
+.brand-name { font-size: var(--t-mid); font-weight: 700; color: var(--shell-ink); }
+.brand-logo { max-width: 150px; max-height: 30px; object-fit: contain; object-position: left center; display: block; }
+.gh-search-wrap { display: flex; justify-content: center; min-width: 0; }
 .topsearch {
-  width: 280px; height: 30px;
-  padding: 0 11px;
-  font: inherit; font-size: var(--t-small);
-  color: var(--shell-ink);
-  background: var(--shell-2);
-  border: 1px solid var(--shell-rule);
-  border-radius: 999px;
+  width: min(560px, 100%); height: 32px; padding: 0 12px 0 32px;
+  font: inherit; font-size: var(--t-body); color: var(--shell-ink);
+  background: var(--surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23747474' stroke-width='2.4' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-3.5-3.5'/%3E%3C/svg%3E") no-repeat 11px center;
+  border: 1px solid var(--rule-strong); border-radius: var(--radius);
 }
-.topsearch::placeholder { color: var(--shell-ink-2); }
+.topsearch::placeholder { color: var(--ink-4); }
 .topsearch:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-weak); }
-@media (max-width: 760px) { .topsearch { display: none; } }
+.topbar-crumb { font-size: var(--t-small); color: var(--shell-ink-2); white-space: nowrap; }
+.topbar-company { max-width: 220px; height: 32px; padding-block: 0; font-size: var(--t-small); }
+.gh-user { position: relative; flex: none; }
+.who-mark {
+  width: 32px; height: 32px; border-radius: 50%; border: 0; cursor: pointer;
+  background: var(--accent); color: var(--on-accent);
+  display: grid; place-items: center; font: inherit; font-size: var(--t-small); font-weight: 700;
+}
+.gh-user-menu {
+  position: absolute; right: 0; top: calc(100% + 6px); z-index: 60;
+  min-width: 220px; padding: 14px; display: grid; gap: 4px;
+  background: var(--surface); border: 1px solid var(--rule-strong); border-radius: var(--radius-card);
+  box-shadow: var(--lift);
+}
+.who-name { font-size: var(--t-mid); font-weight: 700; color: var(--ink); }
+.who-role { font-size: var(--t-small); color: var(--ink-3); margin-bottom: 8px; }
+
+/* ── the app's tab bar ──────────────────────────────────────────────── */
+.app-nav {
+  position: sticky; top: var(--topbar-h); z-index: 35;
+  display: flex; align-items: stretch; gap: var(--gap-wide);
+  height: var(--tabbar-h); padding: 0 var(--gap-wide);
+  background: var(--shell);
+  border-bottom: 3px solid var(--accent);
+}
+.app-name { display: flex; align-items: center; font-size: var(--t-lg); font-weight: 400; color: var(--ink); padding-right: var(--gap-wide); border-right: 1px solid var(--rule); white-space: nowrap; }
+.app-tabs { display: flex; align-items: stretch; min-width: 0; overflow-x: auto; overflow-y: visible; scrollbar-width: none; }
+.app-tabs::-webkit-scrollbar { display: none; }
+.app-tab {
+  position: relative; display: inline-flex; align-items: center; gap: 6px;
+  padding: 0 12px; border: 0; background: transparent; cursor: pointer;
+  font: inherit; font-size: var(--t-body); color: var(--ink-2); white-space: nowrap;
+}
+.app-tab:hover { background: var(--accent-weak); color: var(--ink); }
+.app-tab[aria-current="page"] { color: var(--ink); font-weight: 700; background: var(--accent-weak); }
+.app-tab[aria-current="page"]::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: var(--accent); }
+.nav-badge {
+  min-width: 18px; height: 18px; padding: 0 5px; display: inline-grid; place-items: center;
+  border-radius: 999px; background: var(--bad); color: var(--on-accent);
+  font-size: var(--t-micro); font-weight: 700;
+}
+.app-more { position: static; display: inline-flex; }
+.app-more-menu {
+  position: fixed; top: calc(var(--topbar-h) + var(--tabbar-h)); right: var(--gap-wide); z-index: 60;
+  width: 260px; max-height: 70vh; overflow-y: auto; padding: 6px 0;
+  background: var(--surface); border: 1px solid var(--rule-strong); border-radius: var(--radius-card);
+  box-shadow: var(--lift);
+}
+.app-more-item {
+  display: flex; justify-content: space-between; gap: 10px; width: 100%;
+  padding: 8px 14px; border: 0; background: transparent; cursor: pointer;
+  font: inherit; font-size: var(--t-body); color: var(--ink); text-align: left;
+}
+.app-more-item:hover { background: var(--accent-weak); }
+.app-more-item .muted { font-size: var(--t-small); }
+
+/* ── app launcher ───────────────────────────────────────────────────── */
+.launcher-scrim { position: fixed; inset: 0; z-index: 80; background: rgba(24,24,24,.45); display: grid; place-items: start center; padding: 60px var(--gap-wide); animation: scrim-in var(--t-enter) var(--ease) both; }
+.launcher { width: min(960px, 100%); max-height: calc(100vh - 120px); overflow-y: auto; background: var(--surface); border-radius: var(--radius-card); box-shadow: var(--lift); padding: var(--gap-block); }
+.launcher-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--gap-wide); }
+.launcher-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: var(--gap-block) var(--gap-wide); }
+.launcher-group { display: grid; gap: 2px; align-content: start; }
+.launcher-group .eyebrow { margin-bottom: 6px; }
+.launcher-item {
+  display: flex; align-items: center; gap: 10px; padding: 6px 8px;
+  border: 0; background: transparent; border-radius: var(--radius); cursor: pointer;
+  font: inherit; font-size: var(--t-body); color: var(--accent); text-align: left;
+}
+.launcher-item:hover { background: var(--accent-weak); text-decoration: underline; }
+.launcher-item[aria-current="page"] { font-weight: 700; }
+
+/* ── object tiles ───────────────────────────────────────────────────── */
+.obj-tile {
+  width: 24px; height: 24px; flex: none; border-radius: var(--radius);
+  display: grid; place-items: center;
+  font-size: var(--t-small); font-weight: 700; color: var(--on-accent);
+  background: var(--obj-8);
+}
+.obj-tile-lg { width: 36px; height: 36px; font-size: var(--t-lg); }
+[data-obj="1"] .obj-tile-lg, .obj-tile[data-obj="1"] { background: var(--obj-1); }
+[data-obj="2"] .obj-tile-lg, .obj-tile[data-obj="2"] { background: var(--obj-2); }
+[data-obj="3"] .obj-tile-lg, .obj-tile[data-obj="3"] { background: var(--obj-3); }
+[data-obj="4"] .obj-tile-lg, .obj-tile[data-obj="4"] { background: var(--obj-4); }
+[data-obj="5"] .obj-tile-lg, .obj-tile[data-obj="5"] { background: var(--obj-5); }
+[data-obj="6"] .obj-tile-lg, .obj-tile[data-obj="6"] { background: var(--obj-6); }
+[data-obj="7"] .obj-tile-lg, .obj-tile[data-obj="7"] { background: var(--obj-7); }
+
+/* ── main column ───────────────────────────────────────────────────── */
+.main { min-width: 0; display: flex; flex-direction: column; flex: 1; }
 
 /* Each screen arrives rather than replacing the last one between frames.
    Keyed on the view in AppShell so it re-runs on every navigation.
@@ -144,48 +150,47 @@
 }
 /* The title may shrink; the actions may not. A long subtitle was squeezing
    the action row until its buttons stacked vertically. */
-.page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--gap-wide); margin-bottom: var(--gap-wide); flex-wrap: wrap; }
+.page-head {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--gap-wide);
+  margin-bottom: var(--gap-wide); flex-wrap: wrap;
+  padding: 14px var(--gap-wide);
+  background: var(--surface); border: 1px solid var(--rule-strong); border-radius: var(--radius-card);
+}
+.page-head-id { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.page-head-text { display: flex; flex-direction: column; min-width: 0; }
+.page-eyebrow { font-size: var(--t-small); color: var(--ink-3); }
 .page-head > :first-child { min-width: 0; flex: 1 1 auto; }
 /* :not(:first-child) matters. A page head with no actions has one child,
    which matches BOTH selectors — and the later rule won, freezing the title
    block at its natural width. On a phone that pushed a long subtitle past
    the viewport and gave the whole page a horizontal scrollbar. */
 .page-head > :last-child:not(:first-child) { flex: 0 0 auto; }
-.page-title { font-size: var(--t-page); font-weight: 600; color: var(--ink); letter-spacing: -0.02em; }
-.page-sub { margin-top: 3px; font-size: var(--t-body); color: var(--ink-4); }
+.page-title { font-size: var(--t-page); font-weight: 700; color: var(--ink); }
+.page-sub { margin-top: 2px; font-size: var(--t-small); color: var(--ink-3); }
 
 /* ── split editor: document on the right, form on the left ─────────────
    On a phone the preview is hidden outright. A scaled A4 page is
    unreadable at that width, and keeping it costs the form half the screen. */
 .split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--gap-wide); align-items: start; }
-.split-preview { position: sticky; top: calc(var(--topbar-h) + var(--gap-block)); }
+.split-preview { position: sticky; top: calc(var(--topbar-h) + var(--tabbar-h) + var(--gap-block)); }
 
 /* ── mobile ────────────────────────────────────────────────────────── */
 .mobile-only { display: none; }
 
 @media (max-width: 960px) {
-  .shell { grid-template-columns: minmax(0, 1fr); }
-  .sidebar {
-    position: fixed; inset: 0 auto 0 0; z-index: 70;
-    width: 264px;
-    transform: translateX(-100%);
-    transition: transform .18s ease;
-    box-shadow: var(--lift);
-  }
-  .sidebar.is-open { transform: none; }
-  /* Fades in with the drawer. Appearing instantly under a sliding panel
-     is the detail that makes a drawer feel bolted on. */
-  .sidebar-scrim {
-    position: fixed; inset: 0; z-index: 65; background: rgba(16,21,31,.38);
-    animation: scrim-in var(--t-enter) var(--ease) both;
-  }
-  .mobile-only { display: inline-flex; }
-  .page { padding: var(--gap-wide) var(--gap-wide) 72px; }
+  .page { padding: var(--gap) var(--gap) 72px; }
   .tile { padding: 11px 13px 13px; }
   .tile-value { font-size: var(--t-lg); }
-  .topbar { padding: 0 var(--gap-wide); }
   .split { grid-template-columns: minmax(0, 1fr); }
   .split-preview { display: none; }
+  .app-name { display: none; }
+  .topbar-crumb { display: none; }
+}
+@media (max-width: 640px) {
+  .gh-search-wrap .topsearch { display: none; }
+  .brand-name { display: none; }
+  .global-header { gap: 6px; padding: 0 var(--gap); }
+  .app-nav { padding: 0 4px; }
 }
 
 /* ── sign in ───────────────────────────────────────────────────────────

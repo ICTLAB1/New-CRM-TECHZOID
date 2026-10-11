@@ -1,4 +1,7 @@
-import { useState, type ReactNode } from "react";
+import { createContext, useContext, useState, type ReactNode } from "react";
+
+/** The screen on show, so a page title can carry that screen's tile. */
+const ViewLabel = createContext<string>("");
 import { useHotkeys } from "../components/hotkeys";
 import { ShortcutsHelp } from "../components/ShortcutsHelp";
 import { NAV } from "./nav";
@@ -34,6 +37,8 @@ const initials = (name: string): string =>
 export function AppShell({ view, onNavigate, user, brand, onSignOut, banner, bell, companyPicker, children }: AppShellProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [userOpen, setUserOpen] = useState(false);
   const section = NAV.find((s) => s.items.some((i) => i.id === view));
 
   /* The two shortcuts that belong to the whole app rather than to one panel.
@@ -63,13 +68,23 @@ export function AppShell({ view, onNavigate, user, brand, onSignOut, banner, bel
     setMenuOpen(false);
   };
 
+  const all = NAV.flatMap((sec) => sec.items.map((i) => ({ ...i, section: sec.label })));
+  const tabs = PRIMARY_TABS.map((id) => all.find((i) => i.id === id)).filter(Boolean) as typeof all;
+  /* A screen reached from the launcher or "More" gets a tab of its own for
+     as long as it is open, the way a record opened from search does. */
+  const extra = !PRIMARY_TABS.includes(view) && current ? [{ ...current, section: section?.label ?? "" }] : [];
+  const moreItems = all.filter((i) => !PRIMARY_TABS.includes(i.id) && i.id !== "components");
+
   return (
     <div className="shell">
       <ShortcutsHelp open={helpOpen} onClose={() => setHelpOpen(false)} />
-      {menuOpen ? <div className="sidebar-scrim" onClick={() => setMenuOpen(false)} /> : null}
 
-      <aside className={"sidebar scroll" + (menuOpen ? " is-open" : "")}>
-        <div className="sidebar-brand">
+      <header className="global-header">
+        <button type="button" className="launcher-btn" aria-label="App launcher" title="App launcher"
+          onClick={() => setMenuOpen(true)}>
+          <span aria-hidden className="waffle">{Array.from({ length: 9 }, (_, i) => <i key={i} />)}</span>
+        </button>
+        <span className="gh-brand">
           {brand?.logo ? (
             <img className="brand-logo" src={brand.logo} alt={brand.name || "Home"} />
           ) : (
@@ -78,83 +93,119 @@ export function AppShell({ view, onNavigate, user, brand, onSignOut, banner, bel
               <span className="brand-name">{brand?.name || "TechZoid"}</span>
             </>
           )}
-        </div>
+        </span>
+        <span className="grow gh-search-wrap">
+          <input className="topsearch" type="search" placeholder="Search customers, quotations, orders…" aria-label="Search" />
+        </span>
+        {companyPicker}
+        {bell}
+        <span className="topbar-crumb" title={`Financial year ${fyLabel()}`}>FY {fyLabel()}</span>
+        <span className="gh-user">
+          <button type="button" className="who-mark" aria-label={`${user.name} — account`} title={`${user.name} · ${user.role}`}
+            onClick={() => setUserOpen((o) => !o)}>{initials(user.name)}</button>
+          {userOpen ? (
+            <div className="gh-user-menu" role="menu" onMouseLeave={() => setUserOpen(false)}>
+              <div className="who-name">{user.name}</div>
+              <div className="who-role">{user.role}</div>
+              {onSignOut ? <Button tone="default" size="sm" onClick={onSignOut}>Sign out</Button> : null}
+            </div>
+          ) : null}
+        </span>
+      </header>
 
-        <nav className="nav">
-          {NAV.map((section) => (
-            <div key={section.label}>
-              <div className="nav-section eyebrow">{section.label}</div>
-              {section.items.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  className="nav-item"
-                  aria-current={item.id === view ? "page" : undefined}
-                  onClick={() => go(item.id)}
-                >
-                  {item.label}
-                  {item.badge ? <span className="nav-badge">{item.badge}</span> : null}
-                </button>
+      <nav className="app-nav" aria-label="Main">
+        <span className="app-name">Sales</span>
+        <div className="app-tabs scroll">
+          {[...tabs, ...extra].map((item) => (
+            <button key={item.id} type="button" className="app-tab"
+              aria-current={item.id === view ? "page" : undefined} onClick={() => go(item.id)}>
+              {item.label}
+              {item.badge ? <span className="nav-badge">{item.badge}</span> : null}
+            </button>
+          ))}
+          <span className="app-more">
+            <button type="button" className="app-tab" aria-haspopup="menu" aria-expanded={moreOpen}
+              onClick={() => setMoreOpen((o) => !o)}>More ▾</button>
+            {moreOpen ? (
+              <div className="app-more-menu" role="menu" onMouseLeave={() => setMoreOpen(false)}>
+                {moreItems.map((i) => (
+                  <button key={i.id} type="button" role="menuitem" className="app-more-item"
+                    onClick={() => { go(i.id); setMoreOpen(false); }}>
+                    {i.label}<span className="muted">{i.section}</span>
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </span>
+        </div>
+      </nav>
+
+      {menuOpen ? (
+        <div className="launcher-scrim" onClick={() => setMenuOpen(false)}>
+          <div className="launcher" role="dialog" aria-label="App launcher" onClick={(e) => e.stopPropagation()}>
+            <div className="launcher-head">
+              <h2 className="page-title">App Launcher</h2>
+              <Button tone="quiet" size="sm" onClick={() => setMenuOpen(false)}>Close</Button>
+            </div>
+            <div className="launcher-grid">
+              {NAV.filter((sec) => sec.items.some((i) => i.id !== "components")).map((sec) => (
+                <div key={sec.label} className="launcher-group">
+                  <div className="eyebrow">{sec.label}</div>
+                  {sec.items.filter((i) => i.id !== "components").map((i) => (
+                    <button key={i.id} type="button" className="launcher-item"
+                      aria-current={i.id === view ? "page" : undefined} onClick={() => go(i.id)}>
+                      <span className="obj-tile" data-obj={objOf(i.id)} aria-hidden>{i.label.slice(0, 1)}</span>
+                      {i.label}
+                    </button>
+                  ))}
+                </div>
               ))}
             </div>
-          ))}
-        </nav>
-
-        <div className="sidebar-foot">
-          <div className="who">
-            <span className="who-mark" aria-hidden>{initials(user.name)}</span>
-            <span className="grow">
-              <span className="who-name" style={{ display: "block" }}>{user.name}</span>
-              <span className="who-role">{user.role}</span>
-            </span>
-            {onSignOut ? (
-              <Button tone="quiet" size="sm" onClick={onSignOut}>Sign out</Button>
-            ) : null}
           </div>
         </div>
-      </aside>
+      ) : null}
 
       <div className="main">
-        <header className="topbar">
-          <Button className="mobile-only" tone="quiet" size="sm" iconOnly aria-label="Menu" onClick={() => setMenuOpen(true)}>☰</Button>
-          <nav className="crumb truncate" aria-label="Breadcrumb">
-            <span className="crumb-section">{section?.label ?? "TechZoid"}</span>
-            <span className="crumb-sep" aria-hidden>/</span>
-            <span className="crumb-current">{current?.label ?? "CRM"}</span>
-          </nav>
-          <span className="grow" />
-          <input className="topsearch" type="search" placeholder="Search customers, quotations, orders…" aria-label="Search" />
-          {companyPicker}
-          {bell}
-          {/* Computed, not written down. This said "FY 2026-27" as a literal
-              string, which was right on the day it was typed and would have
-              gone on saying it through April 2027 and every year after —
-              while the numbers on the documents underneath moved on without
-              it. A date on the screen that never changes is worse than no
-              date, because people read it and believe it. */}
-          <span className="topbar-crumb" title={`Financial year ${fyLabel()}`}>FY {fyLabel()}</span>
-        </header>
-        {/* Connectivity first: when the network is gone it explains every
-            other failure on the screen, so it belongs above them. */}
         <ConnectionBanner />
         {banner}
-        {/* Keyed on the view so React replaces the subtree on navigation and
-            the page's entrance animation re-runs. Without the key, moving
-            between two screens that happen to share a root element would
-            swap the content with no transition at all. */}
-        <div key={view} className="view">{children}</div>
+        <ViewLabel.Provider value={current?.label ?? ""}>
+          <div key={view} className="view" data-obj={objOf(view)}>{children}</div>
+        </ViewLabel.Provider>
       </div>
     </div>
   );
 }
 
+/** The tabs always on the bar — the rest are under "More" and the launcher. */
+export const PRIMARY_TABS = [
+  "dashboard", "pipeline", "customers", "quotations", "proformas",
+  "orders", "invoices", "receivables", "renewals", "reports",
+];
+
+/** Which object colour a screen's title tile carries. */
+export function objOf(view: string): number {
+  if (["customers", "team", "companies", "prospects"].includes(view)) return 1;
+  if (["pipeline", "campaigns", "leads"].includes(view)) return 2;
+  if (["quotations", "proformas", "catalog"].includes(view)) return 3;
+  if (["orders", "dispatch", "purchase-orders"].includes(view)) return 4;
+  if (["invoices", "receivables", "incentives"].includes(view)) return 5;
+  if (["dashboard", "reports", "activity", "assistant"].includes(view)) return 6;
+  if (["subscriptions", "renewals"].includes(view)) return 7;
+  return 8;
+}
+
 /** Page title, optional subtitle, and the actions for this screen. */
 export function PageHead({ title, sub, actions }: { title: string; sub?: ReactNode; actions?: ReactNode }) {
+  const screen = useContext(ViewLabel);
   return (
     <div className="page-head">
-      <div>
+      <div className="page-head-id">
+        <span className="obj-tile obj-tile-lg" aria-hidden>{(screen || title).slice(0, 1)}</span>
+        <span className="page-head-text">
+        <span className="page-eyebrow">{screen && screen !== title ? screen : "TechZoid CRM"}</span>
         <h1 className="page-title">{title}</h1>
         {sub ? <div className="page-sub">{sub}</div> : null}
+        </span>
       </div>
       {actions ? <div className="row-tight wrap">{actions}</div> : null}
     </div>

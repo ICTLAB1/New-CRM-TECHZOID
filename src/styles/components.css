@@ -1012,3 +1012,34 @@ button.path-hit { cursor: pointer; }
   .path-hit, .path-step:first-child .path-hit { padding: 0 10px; height: 30px; }
 }
 .record-path { margin-top: var(--gap-wide); }
+
+/* ── Lightning-style finish ───────────────────────────────────────────
+   The enterprise look asked for in October 2026. Kept together at the end
+   so it reads as one decision and overrides the earlier, quieter rules. */
+.card, .summary { border-color: var(--rule-strong); box-shadow: var(--elev-1); }
+.card-head { background: var(--surface); border-bottom-color: var(--rule); }
+.card-title { font-size: var(--t-mid); font-weight: 700; }
+.btn { font-weight: 400; }
+/* The neutral button is white with blue text, as the whole family is. */
+.btn-default { color: var(--accent); border-color: var(--rule-strong); }
+.btn-default:hover:not(:disabled) { background: var(--surface-2); color: var(--accent-hover); }
+.btn-primary { border-color: var(--accent); }
+.btn-quiet { color: var(--accent); }
+.btn-quiet:hover:not(:disabled) { background: var(--accent-weak); color: var(--accent-hover); }
+.table th {
+  background: var(--surface-2); color: var(--ink-3);
+  font-weight: 700; font-size: var(--t-small);
+  border-bottom: 1px solid var(--rule-strong);
+  padding: 8px 12px;
+}
+.table td { padding: 8px 12px; }
+.table tbody tr:hover td { background: var(--accent-weak); }
+.table .strong { font-weight: 400; color: var(--accent); }
+.tile-value { font-weight: 400; }
+.summary .tile-label, .tile-label { font-weight: 400; }
+/* Path: done steps green, the current one deep blue. */
+.path-step.is-done { background: var(--good); color: var(--on-accent); }
+.path-step.is-current.is-accent { background: var(--accent-hover); }
+.path-step.is-todo { background: var(--surface-3); color: var(--ink-3); }
+.input:focus, .select:focus, .textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-weak); }
+.table .num.strong { color: var(--ink); }

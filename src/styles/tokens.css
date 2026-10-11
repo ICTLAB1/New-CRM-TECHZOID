@@ -34,111 +34,112 @@
    ───────────────────────────────────────────────────────────────────── */
 
 :root {
-  /* ── ink ───────────────────────────────────────────────────────────
-     Values are near-black and large; labels are grey and small. That
-     contrast is what makes a dense screen readable without boxes. */
-  --ink:          #0B1220;  /* values, headings */
-  --ink-2:        #3C4657;  /* body copy */
-  --ink-3:        #6E7891;  /* labels */
-  --ink-4:        #9AA3B5;  /* meta, placeholders */
+  /* ── THE LOOK: an enterprise CRM in the Lightning manner ─────────────
+     Asked for in October 2026: "make it look like Salesforce". The style,
+     not the brand — no logo, name or icon set of theirs. What carries the
+     resemblance is the structure (a global header, a row of app tabs, a
+     record page with a highlights strip and a stage path) and this palette:
+     a cool grey canvas, white cards on a warm-grey hairline, and one
+     saturated blue for every action. */
 
-  /* ── surfaces ─────────────────────────────────────────────────────── */
-  --bg:           #F2F5F3;  /* app background */
+  /* ── ink ─────────────────────────────────────────────────────────── */
+  --ink:          #181818;  /* values, headings */
+  --ink-2:        #2E2E2E;  /* body copy */
+  --ink-3:        #5C5C5C;  /* labels */
+  --ink-4:        #747474;  /* meta, placeholders */
+
+  /* ── surfaces ────────────────────────────────────────────────────── */
+  --bg:           #EEF1F6;  /* the canvas behind the cards */
   --surface:      #FFFFFF;  /* cards, tables, sheets */
-  --surface-2:    #F9FAFC;  /* table headers, inset panels */
-  --surface-3:    #EDF1EE;  /* hover, track */
+  --surface-2:    #F3F3F3;  /* table headers, inset panels */
+  --surface-3:    #E5E5E5;  /* hover, track */
 
-  /* ── rules ────────────────────────────────────────────────────────── */
-  --rule:         #E4E9E5;  /* hairline between things */
-  --rule-strong:  #C8D1CA;  /* deliberate division */
+  /* ── rules ───────────────────────────────────────────────────────── */
+  --rule:         #E5E5E5;  /* hairline between things */
+  --rule-strong:  #C9C9C9;  /* card and control borders */
 
-  /* ── the one accent ───────────────────────────────────────────────── */
-  --accent:       #0B7A43;  /* deep, low-chroma — a bright blue reads consumer */
-  --accent-hover: #095F34;
-  --accent-weak:  #E7F4EC;  /* selected row, active nav */
-  --accent-rule:  #B4DCC4;
-  --on-accent:    #FFFFFF;  /* text on an accent fill */
+  /* ── the one accent: action blue ─────────────────────────────────── */
+  --accent:       #0176D3;
+  --accent-hover: #014486;
+  --accent-weak:  #EEF4FF;  /* selected row, active tab wash, focus halo */
+  --accent-rule:  #AACBFF;
+  --on-accent:    #FFFFFF;
 
-  /* ── semantic: each means exactly one thing ───────────────────────── */
-  --good:         #0B5A50;  /* won, paid, delivered */
-  --good-weak:    #E4F1EF;
-  --warn:         #8A5A0C;  /* needs attention, due soon */
-  --warn-weak:    #FBF1DF;
-  --bad:          #96291A;  /* overdue, lost, failed */
-  --bad-weak:     #FBEAE6;
-  --neutral:      #5C6672;  /* draft, inactive, no state */
-  --neutral-weak: #EDF1EE;
+  /* ── semantic: each means exactly one thing ──────────────────────── */
+  --good:         #2E844A;  /* won, paid, delivered */
+  --good-weak:    #EBF7E6;
+  --warn:         #A96404;  /* needs attention, due soon */
+  --warn-weak:    #FEF1DD;
+  --bad:          #BA0517;  /* overdue, lost, failed */
+  --bad-weak:     #FDEDEA;
+  --neutral:      #5C5C5C;  /* draft, inactive */
+  --neutral-weak: #F3F3F3;
 
-  /* ── the shell ─────────────────────────────────────────────────────
-     Its own group, and that is what makes a dark chrome safe to add: the
-     sidebar and topbar stop borrowing --surface and --ink from the
-     content, so the two can be lit differently without every card,
-     table and form following the rail into the dark. */
-  --shell:        #FFFFFF;  /* sidebar and topbar */
-  --shell-2:      #EFF4F0;  /* hover and the active item */
-  --shell-ink:    #0B1220;  /* the current item, the brand */
-  --shell-ink-2:  #5C6672;  /* everything not current */
-  --shell-rule:   #E2E8E4;  /* division inside the dark */
+  /* ── the shell: white header, white tab bar ──────────────────────── */
+  --shell:        #FFFFFF;
+  --shell-2:      #F3F3F3;
+  --shell-ink:    #181818;
+  --shell-ink-2:  #5C5C5C;
+  --shell-rule:   #E5E5E5;
 
-  /* ── chart series ──────────────────────────────────────────────────
-     A FIXED ORDER, never cycled and never reassigned by rank: colour
-     follows the entity, so a filter that drops a series must not repaint
-     the survivors. Five, because a sixth could not be told apart from one
-     of these by a colour-blind reader — a ninth series folds into "Other"
-     rather than inventing a hue.
+  /* ── object colours ────────────────────────────────────────────────
+     The coloured tile beside each page title, one per kind of record, so
+     "this is a quotation" is recognisable before it is read. Identity, not
+     state: they never appear inside a status chip. */
+  --obj-1: #7F8CED;  /* customers, team */
+  --obj-2: #FF5D2D;  /* pipeline, deals */
+  --obj-3: #3BA755;  /* quotations, proformas */
+  --obj-4: #0D9DDA;  /* orders, dispatch, purchasing */
+  --obj-5: #E3066A;  /* invoices, receivables */
+  --obj-6: #9050E9;  /* reports, dashboard */
+  --obj-7: #06A59A;  /* renewals, subscriptions */
+  --obj-8: #747474;  /* settings and the rest */
 
-     Re-validated after the palette turned green, and REORDERED because of
-     it: blue beside violet failed at ΔE 3.5 under deuteranopia, so orange
-     sits between them. Worst adjacent pair is now ΔE 20.4 (protan) and
-     21.2 with normal vision, all five ≥3:1 against a white card.
-
-     Named by POSITION, not by hue, and kept apart from --good/--warn/--bad:
-     a status colour means a state and must never turn up as "series 4". */
-  --series-1: #0B7A43;
-  --series-2: #0B6BE8;
-  --series-3: #B2560F;
+  /* ── chart series: fixed order, never reassigned ─────────────────── */
+  --series-1: #0176D3;
+  --series-2: #B2560F;
+  --series-3: #2E844A;
   --series-4: #7B3FD4;
   --series-5: #A61E5A;
 
-  /* Magnitude, not identity: one hue, light to dark. */
-  --ramp-1: #D8EDE1;
-  --ramp-2: #A9D9BE;
-  --ramp-3: #6BBE8E;
-  --ramp-4: #2A9560;
-  --ramp-5: #0A5E35;
+  --ramp-1: #D8E6FE;
+  --ramp-2: #AACBFF;
+  --ramp-3: #57A3FD;
+  --ramp-4: #0176D3;
+  --ramp-5: #014486;
 
-  /* ── type ─────────────────────────────────────────────────────────── */
-  --sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  /* ── type: the system face, as Lightning falls back to ───────────── */
+  --sans: -apple-system, "Segoe UI", system-ui, Roboto, "Helvetica Neue", Arial, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 
-  --t-micro:  10.5px;    /* eyebrow / column head */
-  --t-small:  12px;  /* labels, meta */
-  --t-body:   13.5px;  /* the default */
-  --t-mid:    14.5px;
-  --t-lg:     17px;  /* card values */
-  --t-xl:     24px;    /* summary figures */
-  --t-page:   20px;    /* page title */
+  --t-micro:  11px;
+  --t-small:  12px;
+  --t-body:   13px;
+  --t-mid:    14px;
+  --t-lg:     16px;
+  --t-xl:     24px;
+  --t-page:   18px;
 
-  /* ── space: a 4px grid, named by use not size ─────────────────────── */
+  /* ── space ───────────────────────────────────────────────────────── */
   --gap-hair:  2px;
   --gap-tight: 6px;
   --gap:       10px;
-  --gap-wide:  18px;
-  --gap-block: 26px;
-  --gap-page:  34px;
+  --gap-wide:  16px;
+  --gap-block: 24px;
+  --gap-page:  20px;
 
-  /* ── geometry ─────────────────────────────────────────────────────── */
-  --radius:      7px;   /* controls */
-  --radius-card: 12px;   /* panels */
-  --control-h:   34px;
-  --control-h-lg:40px;
-  --edge:        3px;   /* the action edge on a card that needs one */
+  /* ── geometry: square-ish, as enterprise software is ─────────────── */
+  --radius:      4px;
+  --radius-card: 6px;
+  --control-h:   32px;
+  --control-h-lg:38px;
+  --edge:        3px;
 
-  /* The only shadow in the system, for things genuinely above the page. */
-  --lift: 0 10px 30px rgba(11, 18, 32, .10), 0 2px 6px rgba(11, 18, 32, .05);
+  --lift: 0 8px 24px rgba(24, 24, 24, .16), 0 2px 4px rgba(24, 24, 24, .08);
 
-  --sidebar-w: 216px;
-  --topbar-h:  52px;
+  --sidebar-w: 0px;
+  --topbar-h:  50px;
+  --tabbar-h:  40px;
 }
 
 /* ── motion ──────────────────────────────────────────────────────────

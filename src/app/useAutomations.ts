@@ -194,5 +194,8 @@ async function run(deps: AutomationDeps): Promise<void> {
     if (touched.has(key)) deps.onChange(key, lists[key] as never);
   }
   if (liveSettings !== settings) deps.onSettingsNote?.(liveSettings);
-  if (said.length) deps.notify?.(said.length === 1 ? `Automatic: ${said[0]}` : `Automatic: ${said.length} updates — ${said.slice(0, 3).join("; ")}${said.length > 3 ? "…" : ""}`);
+  if (said.length) {
+    const first = said[0]!.length > 90 ? said[0]!.slice(0, 88) + "…" : said[0];
+    deps.notify?.(said.length === 1 ? `Done automatically: ${first}` : `Done automatically: ${first} (+${said.length - 1} more)`);
+  }
 }
