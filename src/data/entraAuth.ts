@@ -97,8 +97,34 @@ async function client(settings: EntraSettings): Promise<IPublicClientApplication
   return app;
 }
 
+/**
+ * THE ACCOUNT IN THIS CRM'S TENANT, when MSAL holds more than one.
+ *
+ * Staff are B2B guests: one sign-in leaves MSAL with two accounts for the
+ * same person — their home tenant's and the guest one in the tenant this app
+ * lives in. They carry different object ids, and only the guest one is what
+ * the API sees. Taking "the first account" picked the home one some of the
+ * time, which is why "your account isn't set up yet" came and went.
+ */
 function activeAccount(msal: IPublicClientApplication): AccountInfo | null {
-  return msal.getActiveAccount() ?? msal.getAllAccounts()[0] ?? null;
+  const tenant = entraSettings()?.tenantId?.toLowerCase();
+  const all = msal.getAllAccounts();
+  const inTenant = tenant ? all.find((a) => a.tenantId?.toLowerCase() === tenant) : undefined;
+  const active = msal.getActiveAccount();
+  if (active && (!tenant || active.tenantId?.toLowerCase() === tenant)) return active;
+  return inTenant ?? active ?? all[0] ?? null;
+}
+
+/** The `oid` claim of an access token — the id the API links profiles by. */
+export function tokenObjectId(token: string | null): string {
+  if (!token) return "";
+  try {
+    const part = token.split(".")[1] ?? "";
+    const json = atob(part.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(part.length / 4) * 4, "="));
+    return String((JSON.parse(json) as { oid?: string }).oid ?? "");
+  } catch {
+    return "";
+  }
 }
 
 /**
@@ -168,10 +194,13 @@ export async function entraAccount(): Promise<{ id: string; email: string; name:
   const msal = await client(settings);
   const account = activeAccount(msal);
   if (!account) return null;
+  /* The object id the API will see is the one in the access token; for a
+     guest that differs from the home account's. Prefer it. */
+  const oid = tokenObjectId(await entraToken());
   return {
     /* Entra's object id. NOT this CRM's user id — the API translates it.
        Nothing in the browser should use this to decide what anybody owns. */
-    id: String(account.localAccountId ?? account.homeAccountId ?? ""),
+    id: oid || String(account.localAccountId ?? account.homeAccountId ?? ""),
     email: String(account.username ?? ""),
     name: String(account.name ?? account.username ?? ""),
   };

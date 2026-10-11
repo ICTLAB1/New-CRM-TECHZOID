@@ -61,9 +61,22 @@ async function entraSessionFor(): Promise<Session | null> {
      guest they are not, so the lookup found nothing and a perfectly good
      Microsoft sign-in ended on "your account isn't set up yet".
      `my_profile()` reads auth.uid(), which the API has already resolved. */
-  const { data } = await getDb().rpc("my_profile");
+  const { data, error } = await getDb().rpc("my_profile");
+  let row = (Array.isArray(data) ? data[0] : data) as { id?: string; email?: string } | null;
 
-  const row = (Array.isArray(data) ? data[0] : data) as { id?: string; email?: string } | null;
+  /* BELT AND BRACES. If the server does not offer my_profile (an API not yet
+     redeployed answers "Unknown function"), look the profile up by the
+     object id from the access token — the same id the API linked it with —
+     so sign-in never depends on both halves being deployed in step. */
+  if (error || !row?.id) {
+    const { data: byOid } = await getDb()
+      .from("profiles")
+      .select("id, email")
+      .eq("entra_oid", account.id)
+      .maybeSingle();
+    if (byOid) row = byOid as { id?: string; email?: string };
+  }
+
   if (!row?.id) return null;
 
   entraSessionCache = {
