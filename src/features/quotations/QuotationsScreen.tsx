@@ -160,10 +160,16 @@ export function QuotationsScreen({
     [shown, sellerState, settings],
   );
 
-  const owners = useMemo(
-    () => [...new Set(documents.map((d) => d.ownerId))].filter(Boolean),
-    [documents],
-  );
+  /* Owners by NAME. The documents only carry the owner's id; the team list
+     turns it into a person. Anyone no longer on the team keeps a readable
+     label rather than a raw id. */
+  const owners = useMemo(() => {
+    const names = new Map(team.map((t) => [t.id, t.name]));
+    return [...new Set(documents.map((d) => d.ownerId))]
+      .filter(Boolean)
+      .map((id) => ({ id, name: names.get(id) || "Former team member" }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [documents, team]);
 
   const create = () => {
     const opts = { settings: settings as DocSettings, user: currentUser };
@@ -351,7 +357,7 @@ export function QuotationsScreen({
           <Input style={{ maxWidth: 280 }} placeholder="Search number, customer, reference…" value={query} onChange={(e) => setQuery(e.target.value)} />
           <Select style={{ maxWidth: 170 }} value={owner} onChange={(e) => setOwner(e.target.value)}>
             <option value="all">Any owner</option>
-            {owners.map((o) => <option key={o} value={o}>{o}</option>)}
+            {owners.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
           </Select>
           <span className="grow" />
           <span className="field-hint">
