@@ -359,3 +359,143 @@ export function blankBill(ownerId: string, companyId: string | null): PaymentBil
 }
 
 export const newPaymentId = newId;
+
+/* ── scanning an invoice ───────────────────────────────────────────── */
+
+export interface ScannedInvoice {
+  invoiceNo: string;
+  invoiceDate: string;
+  customerName: string;
+  customerGstin: string;
+  contactName: string;
+  email: string;
+  phone: string;
+  amount: number;
+  currency: string;
+  creditDays: number | null;
+  dueDate: string;
+  poNumber: string;
+  notes: string;
+}
+
+export interface ScanResult {
+  fileName: string;
+  fields?: ScannedInvoice;
+  error?: string;
+}
+
+const MAX_FILE_BYTES = 10 * 1024 * 1024;
+
+function readAsDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result));
+    r.onerror = () => reject(new Error("Could not read that file."));
+    r.readAsDataURL(blob);
+  });
+}
+
+/** Phone photos are 4–12 MB; 2000px JPEG reads just as well at a fraction. */
+async function shrinkImage(file: File): Promise<{ data: string; mediaType: string }> {
+  try {
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, 2000 / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(bitmap.width * scale);
+    canvas.height = Math.round(bitmap.height * scale);
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("no canvas");
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    return { data: canvas.toDataURL("image/jpeg", 0.85), mediaType: "image/jpeg" };
+  } catch {
+    return { data: await readAsDataUrl(file), mediaType: file.type || "image/jpeg" };
+  }
+}
+
+const SAMPLE_SCAN: ScannedInvoice = {
+  invoiceNo: "TZ/26-27/0151", invoiceDate: localISO(new Date()), customerName: "Arcadia Design Studio",
+  customerGstin: "07AABCA1234F1Z5", contactName: "Priya Nair", email: "priya@arcadia.example", phone: "+91 98111 22334",
+  amount: 141600, currency: "INR", creditDays: 45, dueDate: "", poNumber: "PO-8812",
+  notes: "Demo workspace — this is a sample reading, not your file.",
+};
+
+/** Read one invoice file with AI. Never throws — errors come back per file. */
+export async function scanInvoice(file: File, sellerNames: string[]): Promise<ScanResult> {
+  const fileName = file.name || "invoice";
+  const isPdf = file.type === "application/pdf" || /\.pdf$/i.test(fileName);
+  const isImage = file.type.startsWith("image/");
+  if (!isPdf && !isImage) return { fileName, error: "Only PDFs and photos can be read." };
+  if (isPdf && file.size > MAX_FILE_BYTES) return { fileName, error: "That PDF is over 10 MB." };
+
+  if (!hasBackend()) {
+    await new Promise((r) => setTimeout(r, 900));
+    return { fileName, fields: { ...SAMPLE_SCAN } };
+  }
+
+  try {
+    const payload = isPdf
+      ? { data: await readAsDataUrl(file), mediaType: "application/pdf" }
+      : await shrinkImage(file);
+    const token = await fnToken();
+    const resp = await fetch(fnPath("payment-invoice-read"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      body: JSON.stringify({ ...payload, fileName, sellerNames }),
+    });
+    const json = (await resp.json().catch(() => ({}))) as { fields?: ScannedInvoice; error?: string };
+    if (!resp.ok || !json.fields) return { fileName, error: json.error || `Could not read it (${resp.status}).` };
+    return { fileName, fields: json.fields };
+  } catch (err) {
+    return { fileName, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+interface CustomerLike { id: string; company?: string; contact?: string; email?: string; phone?: string; gstin?: string }
+
+const squash = (s: string) => s.toLowerCase().replace(/\b(pvt|private|ltd|limited|llp|the|m\/s)\b/g, "").replace(/[^a-z0-9]/g, "");
+
+/** A new bill filled from a scanned invoice, matched to a CRM customer where possible. */
+export function billFromScan(
+  fields: ScannedInvoice,
+  customers: CustomerLike[],
+  ownerId: string,
+  companyId: string | null,
+): { bill: PaymentBill; matched: string | null } {
+  const base = blankBill(ownerId, companyId);
+  const byGstin = fields.customerGstin
+    ? customers.find((c) => (c.gstin ?? "").toUpperCase() === fields.customerGstin)
+    : undefined;
+  const key = squash(fields.customerName);
+  const byName = !byGstin && key.length >= 3 ? customers.find((c) => squash(c.company ?? "") === key) : undefined;
+  const match = byGstin ?? byName;
+
+  const invoiceDate = fields.invoiceDate || base.invoiceDate;
+  const creditDays = fields.creditDays ?? (fields.dueDate && fields.dueDate >= invoiceDate
+    ? Math.round((Date.parse(fields.dueDate) - Date.parse(invoiceDate)) / 86_400_000)
+    : base.creditDays);
+  const dueDate = fields.dueDate || dueDateFor(invoiceDate, creditDays);
+  const notes = [fields.poNumber && `PO: ${fields.poNumber}`, fields.customerGstin && `GSTIN: ${fields.customerGstin}`]
+    .filter(Boolean).join("\n");
+
+  return {
+    matched: match ? (match.company ?? null) : null,
+    bill: {
+      ...base,
+      customerId: match?.id ?? null,
+      customerName: match?.company || fields.customerName,
+      invoiceNo: fields.invoiceNo,
+      invoiceDate,
+      creditDays,
+      dueDate,
+      amount: fields.amount,
+      currency: fields.currency || "INR",
+      contactName: fields.contactName || match?.contact || "",
+      email: fields.email || match?.email || "",
+      /* Raw: the form shows it and splits it for WhatsApp on save. */
+      phone: fields.phone || match?.phone || "",
+      notes,
+    },
+  };
+}

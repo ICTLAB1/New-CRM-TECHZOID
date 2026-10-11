@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { BellOff, BellRing, Mail, MessageCircle, Plus, Settings2 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { BellOff, BellRing, Camera, FileUp, Mail, MessageCircle, Plus, Settings2 } from "lucide-react";
 import { PageHead } from "../../app/AppShell";
 import { Button, Card, Chip, Empty, Input, Select } from "../../components/primitives";
 import { Presence } from "../../components/Presence";
@@ -12,6 +12,7 @@ import {
 import {
   listBills, listReminders, loadSettings, saveBill, trackerLive,
   type PaymentBill, type ReminderLog, type TrackerSettings, DEFAULT_SETTINGS, blankBill,
+  scanInvoice, billFromScan,
 } from "../../data/paymentTracker";
 import { BillForm } from "./BillForm";
 import { BillPanel } from "./BillPanel";
@@ -30,7 +31,7 @@ import "./paymentTracker.css";
 export interface PaymentTrackerProps {
   currentUser: { id: string; name: string; role: string; email?: string };
   users: { id: string; name: string; email?: string }[];
-  customers: { id: string; company?: string; contact?: string; email?: string; phone?: string }[];
+  customers: { id: string; company?: string; contact?: string; email?: string; phone?: string; gstin?: string }[];
   companyId: string | null;
 }
 
@@ -67,6 +68,62 @@ export function PaymentTrackerScreen({ currentUser, users, customers, companyId 
   const [editing, setEditing] = useState<PaymentBill | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
+
+  /* ── scanning invoices ── */
+  type QueueItem = {
+    bill: PaymentBill;
+    scan: { fileName: string; previewUrl: string; isPdf: boolean; matched: string | null; notes: string; remaining: number };
+  };
+  const [queue, setQueue] = useState<QueueItem[]>([]);
+  const [scanning, setScanning] = useState<{ done: number; total: number } | null>(null);
+  const [dragOver, setDragOver] = useState(false);
+  const cameraInput = useRef<HTMLInputElement>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
+
+  const scanFiles = async (list: FileList | File[] | null) => {
+    const files = Array.from(list ?? []).slice(0, 20);
+    if (files.length === 0 || scanning) return;
+    setScanning({ done: 0, total: files.length });
+    const sellers = [settings.companyName, "TechZoid Technologies"];
+    const drafts: QueueItem[] = [];
+    const failed: string[] = [];
+    let done = 0;
+    /* Three at a time: quick for a batch, gentle on the AI's rate limit. */
+    const work = files.map((file) => async () => {
+      const result = await scanInvoice(file, sellers);
+      done += 1;
+      setScanning({ done, total: files.length });
+      if (!result.fields) { failed.push(`${result.fileName}: ${result.error}`); return; }
+      const { bill, matched } = billFromScan(result.fields, customers, currentUser.id, companyId);
+      drafts.push({
+        bill,
+        scan: {
+          fileName: result.fileName,
+          previewUrl: URL.createObjectURL(file),
+          isPdf: file.type === "application/pdf" || /\.pdf$/i.test(file.name),
+          matched,
+          notes: result.fields.notes,
+          remaining: 0,
+        },
+      });
+    });
+    const runners = Array.from({ length: Math.min(3, work.length) }, async () => {
+      while (work.length) await work.shift()?.();
+    });
+    await Promise.all(runners);
+    setScanning(null);
+    if (failed.length) toast(`${failed.length} file(s) could not be read — ${failed[0]}`, "bad");
+    if (drafts.length) {
+      setQueue((cur) => [...cur, ...drafts]);
+      toast(`${drafts.length} invoice(s) read — check each one and save`, "good");
+    }
+  };
+
+  const nextInQueue = () => setQueue((cur) => {
+    const [first, ...rest] = cur;
+    if (first) URL.revokeObjectURL(first.scan.previewUrl);
+    return rest;
+  });
 
   const reload = useCallback(async () => {
     setLoadError(null);
@@ -187,6 +244,42 @@ export function PaymentTrackerScreen({ currentUser, users, customers, companyId 
         </Card>
       ) : (
         <>
+          <div
+            className={"pt-scan-drop" + (dragOver ? " is-over" : "")}
+            onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={(e) => { e.preventDefault(); setDragOver(false); void scanFiles(e.dataTransfer.files); }}
+          >
+            <div className="pt-scan-drop-text">
+              <strong>{scanning ? `Reading invoice ${Math.min(scanning.done + 1, scanning.total)} of ${scanning.total}…` : "Scan or upload invoices"}</strong>
+              {scanning
+                ? "The details are filled in for you to check."
+                : "Take a photo or drop PDFs here — the customer, amount, dates and credit days are filled in automatically."}
+            </div>
+            <Button loading={!!scanning} disabled={!!scanning} onClick={() => cameraInput.current?.click()}>
+              <Camera size={15} /> Scan with camera
+            </Button>
+            <Button loading={!!scanning} disabled={!!scanning} onClick={() => fileInput.current?.click()}>
+              <FileUp size={15} /> Upload invoices
+            </Button>
+            <input
+              ref={cameraInput}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              hidden
+              onChange={(e) => { void scanFiles(e.target.files); e.target.value = ""; }}
+            />
+            <input
+              ref={fileInput}
+              type="file"
+              accept="application/pdf,image/*"
+              multiple
+              hidden
+              onChange={(e) => { void scanFiles(e.target.files); e.target.value = ""; }}
+            />
+          </div>
+
           <section className="pt-health" aria-label="Collections">
             <div className="pt-health-head">
               <div>
@@ -360,6 +453,25 @@ export function PaymentTrackerScreen({ currentUser, users, customers, companyId 
             onSaved={(saved) => {
               upsertLocal(saved);
               setEditing(null);
+              toast(`${saved.invoiceNo} saved — due ${fmtDate(saved.dueDate)}`, "good");
+            }}
+          />
+        )}
+      </Presence>
+
+      <Presence value={editing ? null : queue[0] ?? null}>
+        {(item, isOpen) => (
+          <BillForm
+            key={item.bill.id}
+            open={isOpen}
+            bill={item.bill}
+            scan={{ ...item.scan, remaining: queue.length - 1 }}
+            customers={customers}
+            existing={bills}
+            onClose={nextInQueue}
+            onSaved={(saved) => {
+              upsertLocal(saved);
+              nextInQueue();
               toast(`${saved.invoiceNo} saved — due ${fmtDate(saved.dueDate)}`, "good");
             }}
           />

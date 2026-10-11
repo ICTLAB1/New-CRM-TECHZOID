@@ -11,11 +11,13 @@ const CURRENCIES = ["INR", "USD", "AED", "EUR", "GBP", "NOK"];
 
 /** Adding or editing one bill given on credit. */
 export function BillForm({
-  open, bill, customers, existing, onClose, onSaved,
+  open, bill, customers, existing, onClose, onSaved, scan,
 }: {
   open: boolean;
   bill: PaymentBill;
-  customers: { id: string; company?: string; contact?: string; email?: string; phone?: string }[];
+  customers: { id: string; company?: string; contact?: string; email?: string; phone?: string; gstin?: string }[];
+  /** Set when this bill was read from a scanned/uploaded invoice. */
+  scan?: { fileName: string; previewUrl: string; isPdf: boolean; matched: string | null; notes: string; remaining: number };
   existing: PaymentBill[];
   onClose: () => void;
   onSaved: (bill: PaymentBill) => void;
@@ -97,12 +99,25 @@ export function BillForm({
       canSubmit={!saving}
       footer={
         <>
-          <Button tone="quiet" onClick={onClose}>Cancel</Button>
+          <Button tone="quiet" onClick={onClose}>{scan && scan.remaining > 0 ? "Skip this one" : "Cancel"}</Button>
           <Button tone="primary" loading={saving} onClick={() => void save()}>{isNew ? "Add bill" : "Save changes"}</Button>
         </>
       }
     >
       <div className="stack">
+        {scan ? (
+          <div className="pt-scan-note">
+            <div className="row-tight" style={{ justifyContent: "space-between", gap: 8 }}>
+              <strong>Read from {scan.fileName}</strong>
+              <a href={scan.previewUrl} target="_blank" rel="noreferrer">View invoice</a>
+            </div>
+            <div>Check the amount, dates and customer before saving — nothing is saved until you press Add bill.</div>
+            {scan.matched ? <div>Matched to CRM customer <strong>{scan.matched}</strong>; missing contact details were filled from there.</div> : null}
+            {scan.notes ? <div>Note from the reader: {scan.notes}</div> : null}
+            {scan.remaining > 0 ? <div>{scan.remaining} more invoice(s) waiting after this one.</div> : null}
+            {!scan.isPdf ? <img src={scan.previewUrl} alt="Scanned invoice" className="pt-scan-thumb" /> : null}
+          </div>
+        ) : null}
         <Field label="Customer" hint="Start typing — picking a CRM customer fills in their contact details.">
           <Input
             list="pt-customers"
@@ -131,7 +146,7 @@ export function BillForm({
           </Field>
           <Field label="Currency">
             <Select value={b.currency} onChange={(e) => set({ currency: e.target.value })}>
-              {CURRENCIES.map((c) => <option key={c}>{c}</option>)}
+              {[...new Set([...CURRENCIES, b.currency])].map((c) => <option key={c}>{c}</option>)}
             </Select>
           </Field>
         </div>

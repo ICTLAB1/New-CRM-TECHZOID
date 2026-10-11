@@ -81,3 +81,20 @@
   .pt-lanes { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .pt-big { font-size: 22px; }
 }
+
+/* scanned invoice */
+.pt-scan-note {
+  display: grid; gap: 4px; font-size: var(--t-small); color: var(--ink);
+  background: var(--accent-weak); border: 1px solid var(--accent-rule); border-radius: var(--radius); padding: var(--gap) var(--gap-wide);
+}
+.pt-scan-note a { color: var(--accent); }
+.pt-scan-thumb { margin-top: var(--gap-tight); max-height: 220px; width: auto; max-width: 100%; border: 1px solid var(--rule); border-radius: var(--radius); background: var(--surface); justify-self: start; }
+.pt-scan-drop {
+  border: 1.5px dashed var(--accent-rule); border-radius: var(--radius); background: var(--surface);
+  padding: var(--gap) var(--gap-wide); margin-bottom: var(--gap-wide);
+  display: flex; align-items: center; gap: var(--gap-wide); flex-wrap: wrap;
+  transition: border-color var(--m-fast) var(--ease-out), background var(--m-fast) var(--ease-out);
+}
+.pt-scan-drop.is-over { border-color: var(--accent); background: var(--accent-weak); }
+.pt-scan-drop-text { flex: 1; min-width: 200px; font-size: var(--t-body); color: var(--neutral); }
+.pt-scan-drop-text strong { color: var(--ink); display: block; font-size: var(--t-mid); }
