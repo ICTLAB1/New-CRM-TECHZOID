@@ -65,9 +65,9 @@ jobs:
       id-token: write
       contents: read
     env:
-      AZURE_CLIENT_ID: ""
-      AZURE_TENANT_ID: ""
-      AZURE_SUBSCRIPTION_ID: ""
+      AZURE_CLIENT_ID: "e11daa33-1f77-49db-b9c7-8f468d55f705"
+      AZURE_TENANT_ID: "1d063589-6565-42de-8055-92aca1128f35"
+      AZURE_SUBSCRIPTION_ID: "488bfe98-ea81-424c-8bc8-d97369a44759"
       RG: techzoid-crm
       FA: techzoid-fn-web7gna6q5rns
     steps:
