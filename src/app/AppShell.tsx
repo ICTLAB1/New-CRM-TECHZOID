@@ -117,7 +117,9 @@ export function AppShell({ view, onNavigate, user, brand, onSignOut, banner, bel
         </span>
         {onNew ? (
           <button type="button" className="btn btn-primary btn-sm gh-new" aria-haspopup="menu"
-            onClick={(e) => openMenu("new", e.currentTarget)}>+ New ▾</button>
+            onClick={(e) => openMenu("new", e.currentTarget)} aria-label="New">
+            <span aria-hidden>+</span><span className="gh-new-label"> New ▾</span>
+          </button>
         ) : null}
         {companyPicker}
         {bell}
@@ -221,6 +223,24 @@ export function AppShell({ view, onNavigate, user, brand, onSignOut, banner, bel
         </div>
       ) : null}
 
+      {/* Phones: the five places people go most, under the thumb. Everything
+          else is one tap away in the menu (the launcher). */}
+      <nav className="bottom-nav" aria-label="Main">
+        {BOTTOM_TABS.map(([id, label, glyph]) => (
+          <button key={id} type="button" className="bottom-tab"
+            aria-current={id === view ? "page" : undefined} onClick={() => go(id)}>
+            <span className="bottom-glyph" aria-hidden>{glyph}</span>
+            <span>{label}</span>
+            {badges[id] ? <span className="nav-badge bottom-badge">{badges[id]}</span> : null}
+          </button>
+        ))}
+        <button type="button" className="bottom-tab" aria-current={!BOTTOM_TABS.some(([id]) => id === view) ? "page" : undefined}
+          onClick={() => setMenuOpen(true)}>
+          <span className="bottom-glyph" aria-hidden>☰</span>
+          <span>Menu</span>
+        </button>
+      </nav>
+
       <div className="main">
         <ConnectionBanner />
         {banner}
@@ -231,6 +251,14 @@ export function AppShell({ view, onNavigate, user, brand, onSignOut, banner, bel
     </div>
   );
 }
+
+/** The bottom bar on a phone: [screen id, label, glyph]. */
+const BOTTOM_TABS: [string, string, string][] = [
+  ["dashboard", "Home", "⌂"],
+  ["tasks", "Tasks", "✓"],
+  ["pipeline", "Pipeline", "▤"],
+  ["customers", "Customers", "◉"],
+];
 
 /** Screens with a tab of their own; everything else sits in its section's
  *  dropdown (Sell ▾, Deliver ▾, …) and in the launcher. */

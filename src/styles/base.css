@@ -86,6 +86,8 @@ a:hover { text-decoration: underline; }
    per screen makes the reader scroll past five screens to reach any actual
    content — the opposite of the dense, quiet reading this design is for.
    Auto-fit keeps at least two across at 390px and as many as fit above. */
+.grid-dash { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); }
+@media (max-width: 900px) { .grid-dash { grid-template-columns: minmax(0, 1fr); } }
 .grid-tiles { grid-template-columns: repeat(auto-fit, minmax(148px, 1fr)); gap: var(--gap); }
 
 @media (max-width: 1100px) {

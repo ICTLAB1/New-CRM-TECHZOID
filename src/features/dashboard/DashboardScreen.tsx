@@ -74,7 +74,7 @@ export function DashboardScreen({
         </SummaryBar>
       </div>
 
-      <div className="grid" style={{ gridTemplateColumns: "minmax(0, 1.1fr) minmax(0, 1fr)", marginBottom: "var(--gap-wide)" }}>
+      <div className="grid grid-dash" style={{ marginBottom: "var(--gap-wide)" }}>
         <Card
           title="Needs attention"
           edge={attention.some((a) => a.tone === "bad") ? "bad" : attention.length ? "warn" : undefined}
