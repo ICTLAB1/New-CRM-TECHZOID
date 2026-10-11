@@ -1,6 +1,7 @@
 import { totalsByCurrency, type CurrencyTotal } from "../currency/format";
 import { isConcluded } from "../pipeline/advance";
 import type { StageId } from "../pipeline/stages";
+import { localISO } from "../dates";
 
 /**
  * A deal: one thing being sold to one customer.
@@ -164,7 +165,7 @@ const uid = (): string => "deal_" + Math.random().toString(36).slice(2, 10);
 function addDays(days: number, today: Date = new Date()): string {
   const d = new Date(today);
   d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0, 10);
+  return localISO(d);
 }
 
 export function blankDeal(

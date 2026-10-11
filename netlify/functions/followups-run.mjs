@@ -1,3 +1,4 @@
+import { officeToday } from "../lib/today.mjs";
 import { adminClient } from "../lib/auth.mjs";
 import { sendMail } from "../lib/mailer.mjs";
 import { sendWhatsAppTemplate } from "../lib/whatsapp.mjs";
@@ -53,7 +54,7 @@ export async function handler() {
     return { statusCode: 500, body: "not configured" };
   }
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = officeToday();
 
   const { data, error } = await admin
     .from("follow_ups")

@@ -6,7 +6,7 @@ import { orderStageOf } from "../orders/stages";
 import { orderFulfilment } from "../orders/fulfilment";
 import { daysLeft, expiryLabel, isPerpetual } from "../subscriptions/expiry";
 import { trailingRevenue, type Workspace } from "../analytics/dashboard";
-import { fmtDate } from "../dates";
+import { fmtDate, localISO } from "../dates";
 
 /**
  * The report definitions.
@@ -43,7 +43,7 @@ export function buildReports(
   months = 6,
   now: Date = new Date(),
 ): Report[] {
-  const today = now.toISOString().slice(0, 10);
+  const today = localISO(now);
   const from = new Date(now.getFullYear(), now.getMonth() - (months - 1), 1).getTime();
   const nameOf = (id: string) => users.find((u) => u.id === id)?.name ?? "Unassigned";
   const grand = (d: Parameters<typeof computeDocument>[0]) => computeDocument(d, sellerState).grand;
@@ -259,7 +259,7 @@ export function buildReports(
   const activity = ws.customers.map((c) => ({
     customer: c.company, owner: nameOf(c.ownerId), stage: stageOf(c.stage).label,
     notes: (c.notes ?? []).length,
-    lastTouch: (c.notes ?? []).length ? fmtDate(new Date((c.notes ?? [])[0]?.ts ?? 0).toISOString().slice(0, 10)) : "Never",
+    lastTouch: (c.notes ?? []).length ? fmtDate(localISO(new Date((c.notes ?? [])[0]?.ts ?? 0))) : "Never",
     nextFollowUp: c.nextFollowUp ? fmtDate(c.nextFollowUp) : "None set",
   })).sort((a, b) => a.notes - b.notes);
   reports.push({

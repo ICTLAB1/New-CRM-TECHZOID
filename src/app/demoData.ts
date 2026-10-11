@@ -14,7 +14,7 @@ export const USERS = [
 const day = (offset: number): string => {
   const d = new Date("2026-08-23T00:00:00");
   d.setDate(d.getDate() + offset);
-  return d.toISOString().slice(0, 10);
+  return localISO(d);
 };
 
 export const CUSTOMERS: Customer[] = [
@@ -255,6 +255,7 @@ export const PURCHASE_ORDERS: SalesDocument[] = [
 
 import type { SalesOrder, DeliveryChallan } from "../domain/orders/create";
 import type { Subscription } from "../domain/subscriptions/expiry";
+import { localISO } from "../domain/dates";
 
 export const ORDERS: SalesOrder[] = [
   { id: "o1", number: "TZ/SO/2627/0011", ownerId: "u-priyanshi", customerId: "c1", proformaId: "pf1", proformaNumber: "TZ/PI/2627/0042", poNumber: "PO/ABC/2425/078",

@@ -33,6 +33,7 @@ import { TAX_TYPES } from "../../domain/tax/types";
 import { STATE_NAMES } from "../../domain/geo/states";
 import type { CatalogProduct } from "../../domain/catalog/types";
 import { moneyList } from "../../domain/currency/format";
+import { localISO } from "../../domain/dates";
 
 /** A4 is 210mm; at 96dpi that is this many CSS pixels. */
 const A4_PX = (210 / 25.4) * 96;
@@ -240,7 +241,7 @@ export function DocumentEditor({
            next month must not restate the margin on a quotation sent this
            month — see domain/margin. Taken from the cheapest vendor price
            still live today. */
-        cost: effectiveCost(product, new Date().toISOString().slice(0, 10)).cost || undefined,
+        cost: effectiveCost(product, localISO(new Date())).cost || undefined,
       }],
     }));
     setShowCatalog(false);

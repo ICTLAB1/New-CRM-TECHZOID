@@ -12,6 +12,7 @@ import {
   type VendorPrice,
 } from "../../domain/catalog/vendors";
 import { inrList } from "../../domain/currency/format";
+import { localISO } from "../../domain/dates";
 
 /**
  * The product catalog.
@@ -220,7 +221,7 @@ function ProductSheet({
 
   const margin = p.sellPrice && p.costPrice ? ((p.sellPrice - p.costPrice) / p.sellPrice) * 100 : null;
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localISO(new Date());
   const prices = readVendorPrices(p);
   const best = bestPrice(prices, today);
   const live = prices.length ? effectiveCost(p, today) : null;

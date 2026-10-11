@@ -1,5 +1,6 @@
 import { sortedNotes } from "./notes";
 import type { Customer } from "./customer";
+import { localISO } from "../dates";
 
 /**
  * Everything that has happened with one customer, in one list.
@@ -102,7 +103,7 @@ export interface EntryDay {
 export function groupEntriesByDay(entries: readonly RecordEntry[]): EntryDay[] {
   const days = new Map<string, RecordEntry[]>();
   for (const e of [...entries].sort((a, b) => b.ts - a.ts)) {
-    const date = new Date(e.ts).toISOString().slice(0, 10);
+    const date = localISO(new Date(e.ts));
     const bin = days.get(date) ?? [];
     bin.push(e);
     days.set(date, bin);

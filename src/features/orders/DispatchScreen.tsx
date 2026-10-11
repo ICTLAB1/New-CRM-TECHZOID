@@ -5,7 +5,7 @@ import { Modal } from "../../components/Modal";
 import { useToast } from "../../components/Toast";
 import { COURIERS, DISPATCH_STATUSES, DISPATCH_TONE, type DispatchStatus } from "../../domain/orders/stages";
 import type { DeliveryChallan } from "../../domain/orders/create";
-import { fmtDate } from "../../domain/dates";
+import { fmtDate, localISO } from "../../domain/dates";
 
 export function DispatchScreen({
   challans, onChange,
@@ -42,7 +42,7 @@ export function DispatchScreen({
               <tbody>
                 {challans.map((c) => {
                   const late = c.status !== "Delivered" && c.status !== "Returned" && !!c.expectedDeliveryDate
-                    && c.expectedDeliveryDate < new Date().toISOString().slice(0, 10);
+                    && c.expectedDeliveryDate < localISO(new Date());
                   return (
                     <tr key={c.id} className={late ? "needs-warn" : undefined}>
                       <td className="edge-cell" />
@@ -107,7 +107,7 @@ function ChallanModal({
                 setC((cur) => ({
                   ...cur,
                   status,
-                  deliveredDate: status === "Delivered" ? (cur.deliveredDate || new Date().toISOString().slice(0, 10)) : cur.deliveredDate,
+                  deliveredDate: status === "Delivered" ? (cur.deliveredDate || localISO(new Date())) : cur.deliveredDate,
                 }));
               }}
             >

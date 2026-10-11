@@ -6,7 +6,22 @@
  * current one. Both come from here so they can never drift into three formats
  * across four screens.
  */
-export const TODAY = (): string => new Date().toISOString().slice(0, 10);
+/**
+ * A Date as yyyy-mm-dd ON THE LOCAL CALENDAR.
+ *
+ * NOT toISOString(). That reports the UTC date, and India is five and a half
+ * hours ahead of UTC: local midnight is the previous day in UTC. It made
+ * every "add 15 days" land one day short (quotation validity, follow-up
+ * dates) and made "today" yesterday before 5:30 in the morning.
+ */
+export function localISO(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+export const TODAY = (): string => localISO(new Date());
 
 const parse = (iso: string): Date | null => {
   const d = new Date(iso + (iso.length === 10 ? "T00:00:00" : ""));
@@ -37,7 +52,7 @@ export function addDays(iso: string, days: number): string {
   const d = parse(iso);
   if (!d) return iso;
   d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0, 10);
+  return localISO(d);
 }
 
 /**

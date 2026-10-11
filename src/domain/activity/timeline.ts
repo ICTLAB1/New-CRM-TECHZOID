@@ -3,6 +3,7 @@ import { moneyShort } from "../currency/format";
 import { seesEverything } from "../analytics/scope";
 import type { Workspace } from "../analytics/dashboard";
 import type { Challan } from "../orders/fulfilment";
+import { localISO } from "../dates";
 
 /** What a challan carries in practice, beyond the two linking fields the
  *  workspace type guarantees. */
@@ -202,7 +203,7 @@ export function groupByDay(events: readonly ActivityEvent[]): TimelineDay[] {
     const date = new Date(ev.ts);
     /* A missing timestamp is 0, which is a perfectly valid date in 1970 and
        exactly the wrong thing to show. Undated is the honest label. */
-    const key = !ev.ts || isNaN(date.getTime()) ? "unknown" : date.toISOString().slice(0, 10);
+    const key = !ev.ts || isNaN(date.getTime()) ? "unknown" : localISO(date);
     const last = days[days.length - 1];
     if (last?.key === key) {
       last.events.push(ev);

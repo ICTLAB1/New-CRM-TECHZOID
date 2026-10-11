@@ -4,6 +4,7 @@ import { daysLeft, type Subscription } from "../subscriptions/expiry";
 import { isOpenStage } from "../pipeline/stages";
 import { formatTotals, inrShort, moneyShort } from "../currency/format";
 import type { Customer } from "../customers/customer";
+import { localISO } from "../dates";
 
 /**
  * What the assistant is told about the CRM.
@@ -43,7 +44,7 @@ export function buildCrmContext(
   now: Date = new Date(),
 ): string {
   const ws = scopeWorkspace(full, user);
-  const today = now.toISOString().slice(0, 10);
+  const today = localISO(now);
   const k = kpis(ws, sellerState, now);
 
   const open = ws.customers.filter((c) => isOpenStage(c.stage));

@@ -1,3 +1,4 @@
+import { officeToday } from "../lib/today.mjs";
 import { fail, guard, json, readJson } from "../lib/http.mjs";
 import { adminClient, signedInProfile } from "../lib/auth.mjs";
 import { handler as runDueFollowUps } from "./followups-run.mjs";
@@ -72,7 +73,7 @@ export async function handler(event) {
   }
 
   const all = rows ?? [];
-  const today = new Date().toISOString().slice(0, 10);
+  const today = officeToday();
   const count = (fn) => all.filter(fn).length;
 
   const scheduled = all.filter((r) => r.state === "scheduled");

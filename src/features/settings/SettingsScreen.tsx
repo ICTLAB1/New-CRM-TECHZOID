@@ -14,6 +14,7 @@ import { normalizeDocTemplate, SECTION_ORDER_META, type DocTemplate, type Sectio
 import { DOMESTIC_TERMS } from "../../domain/documents/terms";
 import { DEFAULT_REVENUE_BASIS, REVENUE_BASES, type IncentiveScheme, type IncentiveSlab } from "../../domain/incentives/incentives";
 import { DEFAULT_PREFIX, buildDocNumber } from "../../domain/numbering/docNumber";
+import { localISO } from "../../domain/dates";
 
 /**
  * Settings.
@@ -899,7 +900,7 @@ function BackupPanel({
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `techzoid-crm-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    link.download = `techzoid-crm-backup-${localISO(new Date())}.json`;
     link.click();
     setTimeout(() => URL.revokeObjectURL(url), 10_000);
     toast("Backup downloaded", "good");

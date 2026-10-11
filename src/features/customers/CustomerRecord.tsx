@@ -5,7 +5,7 @@ import { Path } from "../../components/Path";
 import { groupEntriesByDay, recordTimeline, type RecordDocument, type RecordEntry } from "../../domain/customers/record";
 import { blankNote, NOTE_OUTCOMES, NOTE_TYPES, noteIsEmpty, type NoteDraft } from "../../domain/customers/notes";
 import { likelihood, weightedValue, type Deal } from "../../domain/deals/deal";
-import { fmtDate } from "../../domain/dates";
+import { fmtDate, localISO } from "../../domain/dates";
 import { moneyList } from "../../domain/currency/format";
 import type { Customer } from "../../domain/customers/customer";
 
@@ -170,7 +170,7 @@ export function CustomerRecord({
             <Fact label="Country" value={customer.country} />
             <Fact label="Segment" value={customer.segment} />
             <Fact label="Source" value={customer.source} />
-            <Fact label="Customer since" value={customer.createdAt ? fmtDate(new Date(customer.createdAt).toISOString().slice(0, 10)) : ""} />
+            <Fact label="Customer since" value={customer.createdAt ? fmtDate(localISO(new Date(customer.createdAt))) : ""} />
           </Card>
         </aside>
 

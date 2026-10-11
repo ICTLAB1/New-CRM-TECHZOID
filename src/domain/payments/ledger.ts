@@ -1,4 +1,5 @@
 import { round2 } from "../money";
+import { localISO } from "../dates";
 
 export const PAYMENT_METHODS = [
   "Bank Transfer / NEFT / RTGS",
@@ -35,7 +36,7 @@ export interface PayableDocument {
   validUntil?: string | null;
 }
 
-const todayISO = (): string => new Date().toISOString().slice(0, 10);
+const todayISO = (): string => localISO(new Date());
 
 /**
  * Payment status is DERIVED from the ledger — never stored, never inferred

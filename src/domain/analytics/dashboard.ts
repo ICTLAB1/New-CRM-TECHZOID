@@ -10,7 +10,7 @@ import { totalsByCurrency, type CurrencyTotal } from "../currency/format";
 import { backingFor, backingNote } from "../pipeline/backing";
 import { countsAsWon, isOpenStage, wonAmount } from "../pipeline/stages";
 import { scopeTo, type Owned } from "./scope";
-import { TODAY } from "../dates";
+import { TODAY, localISO } from "../dates";
 
 export interface Workspace {
   customers: Customer[];
@@ -69,7 +69,7 @@ export interface Kpis {
 }
 
 export function kpis(ws: Workspace, sellerState: string, now: Date = new Date()): Kpis {
-  const today = now.toISOString().slice(0, 10);
+  const today = localISO(now);
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
 
   const open = ws.customers.filter((c) => isOpenStage(c.stage));
@@ -134,7 +134,7 @@ export interface AttentionRow {
  * a list people stop reading.
  */
 export function needsAttention(ws: Workspace, sellerState: string, now: Date = new Date()): AttentionRow[] {
-  const today = now.toISOString().slice(0, 10);
+  const today = localISO(now);
   const rows: AttentionRow[] = [];
 
   for (const pf of [...ws.proformas, ...(ws.invoices ?? [])]) {
