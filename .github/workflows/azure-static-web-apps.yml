@@ -50,3 +50,73 @@ jobs:
           app_location: dist
           skip_app_build: true
           
+  # THE SERVER AND THE DATABASE, on the same push as the website.
+  # Before this, a push updated only the website; the API and the database
+  # had to be updated by hand from Cloud Shell, and the day they were not,
+  # the website called a server function that did not exist yet and nobody
+  # could sign in. Now all three move together.
+  #
+  # Signs in to Azure with a federated credential (infra/github-deploy-access.sh):
+  # no password or key is stored anywhere. These ids are not secrets.
+  api_and_database:
+    runs-on: ubuntu-latest
+    name: deploy the API and database changes
+    permissions:
+      id-token: write
+      contents: read
+    env:
+      AZURE_CLIENT_ID: ""
+      AZURE_TENANT_ID: ""
+      AZURE_SUBSCRIPTION_ID: ""
+      RG: techzoid-crm
+      FA: techzoid-fn-web7gna6q5rns
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: is deploy access set up?
+        id: access
+        run: |
+          if [ -n "$AZURE_CLIENT_ID" ]; then echo "ready=yes" >> "$GITHUB_OUTPUT";
+          else echo "::warning::API not deployed: run infra/github-deploy-access.sh once and add its ids here."; fi
+
+      - uses: actions/setup-node@v4
+        if: steps.access.outputs.ready == 'yes'
+        with:
+          node-version: '22'
+
+      - name: test the API
+        if: steps.access.outputs.ready == 'yes'
+        run: cd api && npm ci && npx vitest run
+
+      - uses: azure/login@v2
+        if: steps.access.outputs.ready == 'yes'
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+      - name: apply database changes
+        if: steps.access.outputs.ready == 'yes'
+        run: |
+          sudo apt-get install -y -qq postgresql-client >/dev/null
+          KV="$(az keyvault list -g "$RG" --query "[0].name" -o tsv)"
+          DB="$(az keyvault secret show --vault-name "$KV" -n pg-connection-string --query value -o tsv)"
+          echo "::add-mask::$DB"
+          DB="$DB" bash infra/migrate.sh
+
+      - name: deploy the API
+        if: steps.access.outputs.ready == 'yes'
+        run: |
+          bash infra/package-api.sh "$RUNNER_TEMP/api.zip"
+          az functionapp deployment source config-zip -g "$RG" -n "$FA" --src "$RUNNER_TEMP/api.zip" -o none
+
+      - name: check the new API is the one answering
+        if: steps.access.outputs.ready == 'yes'
+        run: |
+          for i in 1 2 3 4 5 6; do
+            sleep 20
+            body=$(curl -s -w ' %{http_code}' -X POST https://crm.ttpldelhi.com/api/rpc -H 'content-type: application/json' -d '{"fn":"my_profile","args":{}}')
+            echo "rpc answered: $body"
+            case "$body" in *"Unknown function"*|*" 5"[0-9][0-9]) ;; *) exit 0 ;; esac
+          done
+          echo "::error::the API did not pick up the new version"; exit 1
