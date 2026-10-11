@@ -67,6 +67,11 @@ say "Deploying the API to $FA (takes a minute or two)"
 az functionapp deployment source config-zip -g "$RG" -n "$FA" --src "$PKG.zip" -o none
 rm -rf "$PKG" "$PKG.zip"
 
+# ── 1b. the database: any changes it has not had yet ─────────────────
+say "Bringing the database up to date"
+DB="$(az keyvault secret show --vault-name "$KV" -n pg-connection-string --query value -o tsv)"
+DB="$DB" bash "$ROOT/infra/migrate.sh"
+
 # ── 2. Microsoft 365 mailbox connector ─────────────────────────────────
 say "Setting up the Microsoft 365 mailbox connector"
 MAIL_APP="$(az ad app list --display-name "$MAIL_APP_NAME" --query "[0].appId" -o tsv)"
