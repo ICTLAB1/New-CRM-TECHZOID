@@ -1,5 +1,6 @@
 import { Children, cloneElement, isValidElement, useId } from "react";
 import { motion } from "motion/react";
+import { AnimatedNumber } from "./AnimatedNumber";
 import type { ButtonHTMLAttributes, CSSProperties, InputHTMLAttributes, ReactElement, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from "react";
 
 /* The shared component library. Presentational only — nothing here reaches
@@ -160,7 +161,7 @@ export function StatTile({ label, value, meta, tone, onClick }: StatTileProps) {
   const body = (
     <>
       <div className="tile-label">{label}</div>
-      <div className={cx("tile-value", tone && `is-${tone}`)}>{value}</div>
+      <div className={cx("tile-value", tone && `is-${tone}`)}><AnimatedNumber value={value} /></div>
       {meta ? <div className="tile-meta">{meta}</div> : null}
     </>
   );

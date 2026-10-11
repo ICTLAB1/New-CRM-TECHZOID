@@ -7,9 +7,13 @@ import "./documents/preview/preview.css";
 import "./styles/motion.css";
 import { MotionConfig } from "motion/react";
 import { App } from "./app/App";
+import { installUxMotion } from "./app/uxMotion";
 
 const root = document.getElementById("root");
 if (!root) throw new Error("Missing #root element in index.html");
+
+/* Ripples on press and cards revealing as they scroll in — see uxMotion.ts. */
+installUxMotion();
 
 createRoot(root).render(
   <StrictMode>

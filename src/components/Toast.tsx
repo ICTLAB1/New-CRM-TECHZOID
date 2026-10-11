@@ -121,6 +121,8 @@ function Toast({ toast, leaving, onDismiss }: { toast: ToastMessage; leaving: bo
   return (
     <div className={"toast" + (toast.tone ? " toast-" + toast.tone : "") + (leaving ? " is-leaving" : "")}>
       <span className="toast-text">{toast.text}</span>
+      {/* How long it has left, drawn as a line that drains. Decoration only. */}
+      <span className="toast-life" aria-hidden style={{ animationDuration: `${LIFE[toast.tone ?? "good"] ?? LIFE.good}ms` }} />
       {/* Reachable by keyboard and named for a screen reader, because a
           notification that can only be waited out is one a keyboard user
           cannot get out of the way. */}

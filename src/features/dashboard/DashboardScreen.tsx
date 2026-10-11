@@ -16,12 +16,14 @@ function RevenueBars({ points }: { points: { key: string; label: string; value: 
   const max = Math.max(1, ...points.map((p) => p.value));
   return (
     <div className="row" style={{ alignItems: "flex-end", gap: "var(--gap)", height: 130 }}>
-      {points.map((p) => (
+      {points.map((p, i) => (
         <div key={p.key} className="grow" style={{ textAlign: "center", minWidth: 0 }}>
           <div className="field-hint" style={{ marginBottom: 4 }}>{p.value ? inrShort(p.value) : ""}</div>
           <div
+            className="bar-grow"
             title={`${p.count} deal${p.count === 1 ? "" : "s"}`}
             style={{
+              animationDelay: `${120 + i * 70}ms`,
               height: Math.max(2, (p.value / max) * 86),
               background: p.value ? "var(--accent)" : "var(--surface-3)",
               borderRadius: "2px 2px 0 0",

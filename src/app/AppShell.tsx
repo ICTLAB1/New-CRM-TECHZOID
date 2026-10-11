@@ -1,3 +1,4 @@
+import { motion } from "motion/react";
 import { createContext, useContext, useState, type ReactNode } from "react";
 
 /** The screen on show, so a page title can carry that screen's tile. */
@@ -144,7 +145,8 @@ export function AppShell({ view, onNavigate, user, brand, onSignOut, banner, bel
             <button key={item!.id} type="button" className="app-tab"
               aria-current={item!.id === view ? "page" : undefined} onClick={() => go(item!.id)}>
               {item!.label}
-              {item!.badge ? <span className="nav-badge">{item!.badge}</span> : null}
+              {item!.badge ? <span key={item!.badge} className="nav-badge">{item!.badge}</span> : null}
+              {item!.id === view ? <motion.span layoutId="app-tab-ink" className="app-tab-ink" transition={{ type: "spring", stiffness: 480, damping: 38, mass: 0.7 }} /> : null}
             </button>
           ))}
           {nav.map((sec) => {
@@ -157,8 +159,9 @@ export function AppShell({ view, onNavigate, user, brand, onSignOut, banner, bel
                 aria-current={here ? "page" : undefined} aria-haspopup="menu" aria-expanded={menu?.id === sec.label}
                 onClick={(e) => openMenu(sec.label, e.currentTarget)}>
                 {sec.label}{here ? <span className="app-tab-sub">· {here.label}</span> : null}
-                {badge ? <span className="nav-badge">{badge}</span> : null}
+                {badge ? <span key={badge} className="nav-badge">{badge}</span> : null}
                 <span className="app-caret" aria-hidden>▾</span>
+                {here ? <motion.span layoutId="app-tab-ink" className="app-tab-ink" transition={{ type: "spring", stiffness: 480, damping: 38, mass: 0.7 }} /> : null}
               </button>
             );
           })}
@@ -229,13 +232,15 @@ export function AppShell({ view, onNavigate, user, brand, onSignOut, banner, bel
         {BOTTOM_TABS.map(([id, label, glyph]) => (
           <button key={id} type="button" className="bottom-tab"
             aria-current={id === view ? "page" : undefined} onClick={() => go(id)}>
+            {id === view ? <motion.span layoutId="bottom-tab-ink" className="bottom-tab-ink" transition={{ type: "spring", stiffness: 480, damping: 38, mass: 0.7 }} /> : null}
             <span className="bottom-glyph" aria-hidden>{glyph}</span>
             <span>{label}</span>
-            {badges[id] ? <span className="nav-badge bottom-badge">{badges[id]}</span> : null}
+            {badges[id] ? <span key={badges[id]} className="nav-badge bottom-badge">{badges[id]}</span> : null}
           </button>
         ))}
         <button type="button" className="bottom-tab" aria-current={!BOTTOM_TABS.some(([id]) => id === view) ? "page" : undefined}
           onClick={() => setMenuOpen(true)}>
+          {!BOTTOM_TABS.some(([id]) => id === view) ? <motion.span layoutId="bottom-tab-ink" className="bottom-tab-ink" transition={{ type: "spring", stiffness: 480, damping: 38, mass: 0.7 }} /> : null}
           <span className="bottom-glyph" aria-hidden>☰</span>
           <span>Menu</span>
         </button>

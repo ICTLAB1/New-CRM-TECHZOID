@@ -18,6 +18,7 @@ import { BillForm } from "./BillForm";
 import { BillPanel } from "./BillPanel";
 import { TrackerSettingsPanel } from "./TrackerSettingsPanel";
 import { StandingChip } from "./StandingChip";
+import { AnimatedNumber } from "../../components/AnimatedNumber";
 import "./paymentTracker.css";
 
 /**
@@ -245,7 +246,7 @@ export function PaymentTrackerScreen({ currentUser, users, customers, companyId 
       ) : (
         <>
           <div
-            className={"pt-scan-drop" + (dragOver ? " is-over" : "")}
+            className={"pt-scan-drop" + (dragOver ? " is-over" : "") + (scanning ? " is-scanning" : "")}
             onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
             onDragLeave={() => setDragOver(false)}
             onDrop={(e) => { e.preventDefault(); setDragOver(false); void scanFiles(e.dataTransfer.files); }}
@@ -284,12 +285,12 @@ export function PaymentTrackerScreen({ currentUser, users, customers, companyId 
             <div className="pt-health-head">
               <div>
                 <div className="pt-big-label">Outstanding</div>
-                <div className="pt-big">{totals(open)}</div>
+                <div className="pt-big"><AnimatedNumber value={totals(open)} duration={1100} /></div>
               </div>
               <div style={{ textAlign: "right" }}>
                 <div className="pt-big-label">Overdue</div>
                 <div className="pt-big" style={{ color: overdueRows.length ? "var(--bad)" : "var(--good)" }}>
-                  {totals(overdueRows)}
+                  <AnimatedNumber value={totals(overdueRows)} duration={1100} />
                 </div>
                 <div className="pt-sub">
                   {overdueRows.length} bill(s) · {dueToday} reminder(s) due today
@@ -315,7 +316,7 @@ export function PaymentTrackerScreen({ currentUser, users, customers, companyId 
                     onClick={() => { setLane((cur) => (cur === l.id ? "all" : l.id)); setView("open"); }}
                   >
                     <div className="pt-lane-top"><span className={"pt-swatch " + l.cls} />{l.label}</div>
-                    <div className="pt-lane-amt">{totals(list)}</div>
+                    <div className="pt-lane-amt"><AnimatedNumber value={totals(list)} /></div>
                     <div className="pt-lane-n">{list.length} bill(s)</div>
                   </button>
                 );
@@ -346,7 +347,9 @@ export function PaymentTrackerScreen({ currentUser, users, customers, companyId 
             </div>
 
             {loading ? (
-              <Empty title="Loading bills…" body="" />
+              <div className="stack" style={{ padding: "var(--gap-wide)" }} aria-label="Loading bills">
+                {[0, 1, 2, 3, 4].map((i) => <div key={i} className="skel" style={{ height: 44, animationDelay: `${i * 90}ms` }} />)}
+              </div>
             ) : shown.length === 0 ? (
               <Empty
                 title={bills.length === 0 ? "No bills yet" : "Nothing matches"}
