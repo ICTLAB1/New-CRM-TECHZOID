@@ -458,6 +458,11 @@ describe("the whitelist itself", () => {
       "create_company",
       "find_duplicate_customer",
       "my_lead_code",
+      /* Added for Entra: the browser cannot work out which CRM user a B2B
+         guest is, because the object id it can see is the one from the
+         guest's home tenant and not the one the token carries. This
+         answers from auth.uid() and takes no arguments. */
+      "my_profile",
       "my_sending_accounts",
       "next_customer_code",
       "next_doc_number",

@@ -63,6 +63,13 @@ export const CALLABLE = {
   /* The caller's own referral code. */
   my_lead_code: [{ args: [], returns: "scalar" }],
 
+  /* The caller's own profile, by auth.uid() rather than by an id the
+     browser worked out for itself. A B2B guest's object id differs between
+     their home tenant and the one they are a guest of, so matching on it
+     in the browser found nothing and told them their account was not set
+     up -- while the API had linked it correctly all along. */
+  my_profile: [{ args: [], returns: "rows" }],
+
   /* The sending accounts the caller may use. The `_safe` view exists so
      that credentials are not in what comes back. */
   my_sending_accounts: [{ args: [], returns: "rows" }],

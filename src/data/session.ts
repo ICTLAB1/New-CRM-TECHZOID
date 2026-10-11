@@ -52,13 +52,18 @@ async function entraSessionFor(): Promise<Session | null> {
   const account = await entraAccount();
   if (!account) return null;
 
-  const { data } = await getDb()
-    .from("profiles")
-    .select("id, email")
-    .eq("entra_oid", account.id)
-    .maybeSingle();
+  /* ASK THE DATABASE WHO WE ARE, rather than matching ids here.
+     This used to filter `profiles` on `entra_oid = account.id`, where
+     account.id is what MSAL reports. That is the object id in the person's
+     HOME tenant; the access token carries the one in the tenant they are a
+     guest of, and that is what the API linked the profile with. For a
+     member of the tenant they are the same value and it worked. For a B2B
+     guest they are not, so the lookup found nothing and a perfectly good
+     Microsoft sign-in ended on "your account isn't set up yet".
+     `my_profile()` reads auth.uid(), which the API has already resolved. */
+  const { data } = await getDb().rpc("my_profile");
 
-  const row = data as { id?: string; email?: string } | null;
+  const row = (Array.isArray(data) ? data[0] : data) as { id?: string; email?: string } | null;
   if (!row?.id) return null;
 
   entraSessionCache = {
