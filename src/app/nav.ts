@@ -15,11 +15,12 @@ export const NAV: NavSection[] = [
   {
     label: "Sell",
     items: [
-      { id: "dashboard", label: "Dashboard" },
+      { id: "dashboard", label: "Home" },
+      { id: "tasks", label: "Tasks" },
       { id: "pipeline", label: "Pipeline" },
       { id: "customers", label: "Customers" },
       { id: "quotations", label: "Quotations" },
-      { id: "proformas", label: "Proformas", badge: 3 },
+      { id: "proformas", label: "Proformas" },
     ],
   },
   {
@@ -45,7 +46,7 @@ export const NAV: NavSection[] = [
       { id: "orders", label: "Sales orders" },
       { id: "dispatch", label: "Dispatch" },
       { id: "subscriptions", label: "Subscriptions" },
-      { id: "renewals", label: "Renewals", badge: 7 },
+      { id: "renewals", label: "Renewals" },
     ],
   },
   {

@@ -28,16 +28,38 @@ export interface AppShellProps {
    *  in for the same reason as the bell: the shell lays the bar out, it does
    *  not decide what a company is. */
   companyPicker?: ReactNode;
+  /** The header search. Passed in because it searches the workspace, which
+   *  the shell knows nothing about. */
+  search?: ReactNode;
+  /** "+ New" in the header. Absent where nothing can be created. */
+  onNew?: (kind: NewKind) => void;
+  /** Live counts worth interrupting for, by screen id: tasks due, renewals
+   *  coming up, invoices overdue. */
+  badges?: Record<string, number>;
   children: ReactNode;
 }
+
+export type NewKind = "customer" | "quotation" | "proforma" | "invoice" | "purchase-order" | "task";
+const NEW_ITEMS: { kind: NewKind; label: string }[] = [
+  { kind: "customer", label: "Customer" },
+  { kind: "quotation", label: "Quotation" },
+  { kind: "proforma", label: "Proforma invoice" },
+  { kind: "invoice", label: "Tax invoice" },
+  { kind: "purchase-order", label: "Purchase order" },
+  { kind: "task", label: "Task" },
+];
 
 const initials = (name: string): string =>
   name.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? "").join("");
 
-export function AppShell({ view, onNavigate, user, brand, onSignOut, banner, bell, companyPicker, children }: AppShellProps) {
+export function AppShell({ view, onNavigate, user, brand, onSignOut, banner, bell, companyPicker, search, onNew, badges = {}, children }: AppShellProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
-  const [moreOpen, setMoreOpen] = useState(false);
+  const [menu, setMenu] = useState<{ id: string; left: number } | null>(null);
+  const openMenu = (id: string, el: HTMLElement) => {
+    const r = el.getBoundingClientRect();
+    setMenu((m) => (m?.id === id ? null : { id, left: Math.min(r.left, window.innerWidth - 270) }));
+  };
   const [userOpen, setUserOpen] = useState(false);
   const section = NAV.find((s) => s.items.some((i) => i.id === view));
 
@@ -68,12 +90,8 @@ export function AppShell({ view, onNavigate, user, brand, onSignOut, banner, bel
     setMenuOpen(false);
   };
 
-  const all = NAV.flatMap((sec) => sec.items.map((i) => ({ ...i, section: sec.label })));
-  const tabs = PRIMARY_TABS.map((id) => all.find((i) => i.id === id)).filter(Boolean) as typeof all;
-  /* A screen reached from the launcher or "More" gets a tab of its own for
-     as long as it is open, the way a record opened from search does. */
-  const extra = !PRIMARY_TABS.includes(view) && current ? [{ ...current, section: section?.label ?? "" }] : [];
-  const moreItems = all.filter((i) => !PRIMARY_TABS.includes(i.id) && i.id !== "components");
+  const nav = NAV.map((sec) => ({ ...sec, items: sec.items.map((i) => ({ ...i, badge: badges[i.id] || undefined })) }));
+  const all = nav.flatMap((sec) => sec.items.map((i) => ({ ...i, section: sec.label })));
 
   return (
     <div className="shell">
@@ -95,8 +113,12 @@ export function AppShell({ view, onNavigate, user, brand, onSignOut, banner, bel
           )}
         </span>
         <span className="grow gh-search-wrap">
-          <input className="topsearch" type="search" placeholder="Search customers, quotations, orders…" aria-label="Search" />
+          {search ?? <input className="topsearch" type="search" placeholder="Search…" aria-label="Search" />}
         </span>
+        {onNew ? (
+          <button type="button" className="btn btn-primary btn-sm gh-new" aria-haspopup="menu"
+            onClick={(e) => openMenu("new", e.currentTarget)}>+ New ▾</button>
+        ) : null}
         {companyPicker}
         {bell}
         <span className="topbar-crumb" title={`Financial year ${fyLabel()}`}>FY {fyLabel()}</span>
@@ -116,29 +138,63 @@ export function AppShell({ view, onNavigate, user, brand, onSignOut, banner, bel
       <nav className="app-nav" aria-label="Main">
         <span className="app-name">Sales</span>
         <div className="app-tabs scroll">
-          {[...tabs, ...extra].map((item) => (
-            <button key={item.id} type="button" className="app-tab"
-              aria-current={item.id === view ? "page" : undefined} onClick={() => go(item.id)}>
-              {item.label}
-              {item.badge ? <span className="nav-badge">{item.badge}</span> : null}
+          {DIRECT_TABS.map((id) => all.find((i) => i.id === id)).filter(Boolean).map((item) => (
+            <button key={item!.id} type="button" className="app-tab"
+              aria-current={item!.id === view ? "page" : undefined} onClick={() => go(item!.id)}>
+              {item!.label}
+              {item!.badge ? <span className="nav-badge">{item!.badge}</span> : null}
             </button>
           ))}
-          <span className="app-more">
-            <button type="button" className="app-tab" aria-haspopup="menu" aria-expanded={moreOpen}
-              onClick={() => setMoreOpen((o) => !o)}>More ▾</button>
-            {moreOpen ? (
-              <div className="app-more-menu" role="menu" onMouseLeave={() => setMoreOpen(false)}>
-                {moreItems.map((i) => (
-                  <button key={i.id} type="button" role="menuitem" className="app-more-item"
-                    onClick={() => { go(i.id); setMoreOpen(false); }}>
-                    {i.label}<span className="muted">{i.section}</span>
-                  </button>
-                ))}
-              </div>
-            ) : null}
-          </span>
+          {nav.map((sec) => {
+            const items = sec.items.filter((i) => !DIRECT_TABS.includes(i.id) && i.id !== "components");
+            if (!items.length) return null;
+            const here = items.find((i) => i.id === view);
+            const badge = items.reduce((n, i) => n + (i.badge ?? 0), 0);
+            return (
+              <button key={sec.label} type="button" className="app-tab"
+                aria-current={here ? "page" : undefined} aria-haspopup="menu" aria-expanded={menu?.id === sec.label}
+                onClick={(e) => openMenu(sec.label, e.currentTarget)}>
+                {sec.label}{here ? <span className="app-tab-sub">· {here.label}</span> : null}
+                {badge ? <span className="nav-badge">{badge}</span> : null}
+                <span className="app-caret" aria-hidden>▾</span>
+              </button>
+            );
+          })}
         </div>
       </nav>
+
+      {menu ? (
+        <>
+          <div className="menu-scrim" onClick={() => setMenu(null)} />
+          <div className="app-more-menu" role="menu" style={{ left: menu.left }}>
+            {menu.id === "new" ? (
+              <>
+                <div className="menu-head">Create</div>
+                {NEW_ITEMS.map((n) => (
+                  <button key={n.kind} type="button" role="menuitem" className="app-more-item"
+                    onClick={() => { onNew?.(n.kind); setMenu(null); setMenuOpen(false); }}>
+                    New {n.label.toLowerCase()}
+                  </button>
+                ))}
+              </>
+            ) : (
+              <>
+                <div className="menu-head">{menu.id}</div>
+                {(nav.find((s) => s.label === menu.id)?.items ?? [])
+                  .filter((i) => !DIRECT_TABS.includes(i.id) && i.id !== "components")
+                  .map((i) => (
+                    <button key={i.id} type="button" role="menuitem" className="app-more-item"
+                      aria-current={i.id === view ? "page" : undefined}
+                      onClick={() => { go(i.id); setMenu(null); }}>
+                      <span className="row-tight"><span className="obj-tile" data-obj={objOf(i.id)} aria-hidden>{i.label.slice(0, 1)}</span>{i.label}</span>
+                      {i.badge ? <span className="nav-badge">{i.badge}</span> : null}
+                    </button>
+                  ))}
+              </>
+            )}
+          </div>
+        </>
+      ) : null}
 
       {menuOpen ? (
         <div className="launcher-scrim" onClick={() => setMenuOpen(false)}>
@@ -176,11 +232,9 @@ export function AppShell({ view, onNavigate, user, brand, onSignOut, banner, bel
   );
 }
 
-/** The tabs always on the bar — the rest are under "More" and the launcher. */
-export const PRIMARY_TABS = [
-  "dashboard", "pipeline", "customers", "quotations", "proformas",
-  "orders", "invoices", "receivables", "renewals", "reports",
-];
+/** Screens with a tab of their own; everything else sits in its section's
+ *  dropdown (Sell ▾, Deliver ▾, …) and in the launcher. */
+export const DIRECT_TABS = ["dashboard", "tasks"];
 
 /** Which object colour a screen's title tile carries. */
 export function objOf(view: string): number {
@@ -189,7 +243,7 @@ export function objOf(view: string): number {
   if (["quotations", "proformas", "catalog"].includes(view)) return 3;
   if (["orders", "dispatch", "purchase-orders"].includes(view)) return 4;
   if (["invoices", "receivables", "incentives"].includes(view)) return 5;
-  if (["dashboard", "reports", "activity", "assistant"].includes(view)) return 6;
+  if (["dashboard", "reports", "activity", "assistant", "tasks"].includes(view)) return 6;
   if (["subscriptions", "renewals"].includes(view)) return 7;
   return 8;
 }

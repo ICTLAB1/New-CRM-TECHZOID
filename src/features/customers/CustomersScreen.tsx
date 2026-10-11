@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import type { Intent } from "../../app/intent";
 import { Presence } from "../../components/Presence";
 import { PageHead } from "../../app/AppShell";
 import { ShareLinkDialog } from "../leads/ShareLinkDialog";
@@ -29,11 +30,13 @@ export interface CustomersScreenProps {
   /** Read for `confirmBeforeSave` and passed to the sheet. */
   settings?: Record<string, unknown>;
   onChange: (customers: Customer[], workspace: Workspace) => void;
+  /** Open a customer, or start a new one, on arrival. */
+  intent?: Intent | null;
 }
 
 type Pending = { customer: Customer; duplicate: ReturnType<typeof findDuplicate<Customer>> };
 
-export function CustomersScreen({ customers, workspace, users, customFields, currentUser, settings = {}, api, onChange }: CustomersScreenProps) {
+export function CustomersScreen({ customers, workspace, users, customFields, currentUser, settings = {}, api, onChange, intent }: CustomersScreenProps) {
   const toast = useToast();
   const [query, setQuery] = useState("");
   const [stageFilter, setStageFilter] = useState<string>("all");
@@ -45,6 +48,13 @@ export function CustomersScreen({ customers, workspace, users, customFields, cur
   const [isNew, setIsNew] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [pending, setPending] = useState<Pending | null>(null);
+  useEffect(() => {
+    if (!intent) return;
+    if (intent.kind === "new") { setIsNew(true); setEditing(blankCustomer(currentUser.id, uid())); return; }
+    const c = customers.find((x) => x.id === intent.id);
+    if (c) { setIsNew(false); setEditing(c); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [intent?.n]);
 
   const canReassign = currentUser.role === "Admin" || currentUser.role === "Manager";
   const ownerName = (id: string): string => users.find((u) => u.id === id)?.name ?? "Unassigned";

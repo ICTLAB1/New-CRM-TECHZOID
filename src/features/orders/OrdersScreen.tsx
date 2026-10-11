@@ -16,6 +16,8 @@ import { moneyList } from "../../domain/currency/format";
 import { fmtDate } from "../../domain/dates";
 
 export interface OrdersScreenProps {
+  /** Show one order on arrival (from the header search). */
+  focusNumber?: string;
   orders: SalesOrder[];
   challans: DeliveryChallan[];
   settings: Record<string, unknown>;
@@ -27,10 +29,10 @@ export interface OrdersScreenProps {
   onSettingsNote?: (settings: Record<string, unknown>) => void;
 }
 
-export function OrdersScreen({ orders, challans, settings, currentUser, onChange, onSettingsNote }: OrdersScreenProps) {
+export function OrdersScreen({ orders, challans, settings, currentUser, onChange, onSettingsNote, focusNumber }: OrdersScreenProps) {
   const toast = useToast();
-  const [stage, setStage] = useState<string>("open");
-  const [query, setQuery] = useState("");
+  const [stage, setStage] = useState<string>(focusNumber ? "all" : "open");
+  const [query, setQuery] = useState(focusNumber ?? "");
   const [files, setFiles] = useState<SalesOrder | null>(null);
   const sellerState = ((settings["company"] as { state?: string })?.state) ?? "Delhi";
 

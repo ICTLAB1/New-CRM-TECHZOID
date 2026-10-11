@@ -1,4 +1,5 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { Intent } from "../../app/intent";
 import { Presence } from "../../components/Presence";
 import { PageHead } from "../../app/AppShell";
 import { Button, Card, Chip, Empty, Input, Select, Tabs } from "../../components/primitives";
@@ -80,12 +81,14 @@ export interface QuotationsScreenProps {
   /** What already exists downstream, so the same document is never turned
    *  into a second proforma, order or tax invoice by a double click. */
   related?: { proformas: SalesDocument[]; invoices: SalesDocument[]; orders: SalesOrder[] };
+  /** Open a document, or start a new one, on arrival. */
+  intent?: Intent | null;
 }
 
 export function QuotationsScreen({
   docType, documents, customers, catalog, settings, brandLogos, docImages, api, currentUser,
   onChange, onCustomerStage, onSettingsNote, onCreateBankAccount, onCreateProforma, onCreateInvoice, onCreateOrder,
-  onCreateCustomer, team = [], customFields = [], related,
+  onCreateCustomer, team = [], customFields = [], related, intent,
 }: QuotationsScreenProps) {
   const toast = useToast();
   const [editing, setEditing] = useState<SalesDocument | null>(null);
@@ -183,6 +186,14 @@ export function QuotationsScreen({
         : newQuotation(opts),
     );
   };
+  useEffect(() => {
+    if (!intent) return;
+    if (intent.kind === "new") { create(); return; }
+    const d = documents.find((x) => x.id === intent.id);
+    if (d) setEditing(d);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [intent?.n]);
+
 
   const save = async (draft: SalesDocument) => {
     /* Allocating a number is a round trip, and the editor stays on screen

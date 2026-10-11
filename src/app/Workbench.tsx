@@ -1,5 +1,16 @@
 import { useState } from "react";
 import { useAutomations } from "./useAutomations";
+import { GlobalSearch, type SearchHit } from "./GlobalSearch";
+import type { NewKind } from "./AppShell";
+import type { Intent } from "./intent";
+import { TasksScreen } from "../features/tasks/TasksScreen";
+import { TODAY } from "../domain/dates";
+import { dueForRenewal } from "../domain/subscriptions/expiry";
+import { computePaymentInfo } from "../domain/payments/ledger";
+import { computeDocument } from "../domain/tax/compute";
+
+const sellerStateOf = (settings: Record<string, unknown>): string =>
+  ((settings["company"] as { state?: string })?.state) ?? "Delhi";
 import { useToast } from "../components/Toast";
 import { applyStage, type StageId } from "../domain/pipeline/stages";
 import { AppShell, PageHead } from "./AppShell";
@@ -100,6 +111,19 @@ export function Workbench({
   /* Prospects handed from the Prospects screen to the composer. */
   const [composeFor, setComposeFor] = useState<string[] | undefined>(undefined);
   const [editing, setEditing] = useState<Customer | null>(null);
+  /* What the header search or "+ New" asked the next screen to open. */
+  const [intent, setIntent] = useState<(Intent & { view: string }) | null>(null);
+  const intentFor = (v: string): Intent | null => (intent && intent.view === v ? intent : null);
+  const request = (v: string, kind: Intent["kind"], id?: string) => {
+    setView(v);
+    setIntent({ view: v, kind, id, n: Date.now() });
+  };
+  const openHit = (h: SearchHit) => request(h.view, "open", h.id);
+  const startNew = (kind: NewKind) => {
+    const v = kind === "customer" ? "customers" : kind === "quotation" ? "quotations" : kind === "proforma" ? "proformas"
+      : kind === "invoice" ? "invoices" : kind === "purchase-order" ? "purchase-orders" : "tasks";
+    request(v, "new");
+  };
 
   const { customers, quotations, proformas, purchaseOrders, invoices, orders, challans, subscriptions } = data;
   const isAdmin = user.role === "Admin";
@@ -209,6 +233,17 @@ export function Workbench({
     notify: (text) => toast(text, "info"),
   });
 
+  /* Live counts for the nav: what is due for this person (or everyone, for
+     an admin), not totals. */
+  const todayIso = TODAY();
+  const mine = <T extends { ownerId?: string }>(r: T) => isAdmin || r.ownerId === user.id;
+  const badges: Record<string, number> = {
+    tasks: customers.filter((c) => mine(c) && c.nextFollowUp && c.nextFollowUp <= todayIso).length,
+    renewals: dueForRenewal(subscriptions.filter(mine), 30).filter((s) => (s.expiryDate ?? "") >= todayIso).length,
+    receivables: invoices.filter((i) => mine(i) && i.status === "Issued" && i.validUntil && i.validUntil < todayIso
+      && computePaymentInfo(i, computeDocument(i, sellerStateOf(settings)).grand, todayIso).overdue).length,
+  };
+
   return (
     <AppShell
       view={view}
@@ -219,6 +254,9 @@ export function Workbench({
       banner={banner}
       bell={<NotificationBell events={events} onOpen={() => onEventsSeen?.()} />}
       companyPicker={companyPicker}
+      search={<GlobalSearch data={data} onOpen={openHit} />}
+      onNew={startNew}
+      badges={badges}
     >
       {/* At the shell, not on a screen: a message from an admin has to reach
           somebody wherever they happen to be looking. */}
@@ -234,8 +272,18 @@ export function Workbench({
         />
       ) : view === "reports" ? (
         <ReportsScreen workspace={analytics} users={team} currentUser={user} settings={settings} />
+      ) : view === "tasks" ? (
+          <TasksScreen
+            customers={customers}
+            users={team}
+            currentUser={user}
+            onChange={handleCustomersChange}
+            onOpenCustomer={(c) => request("customers", "open", c.id)}
+            startNew={intentFor("tasks")?.kind === "new" ? intentFor("tasks")!.n : undefined}
+          />
       ) : view === "customers" ? (
         <CustomersScreen
+          intent={intentFor("customers")}
           customers={customers}
           workspace={ownershipOf(data)}
           users={team}
@@ -275,6 +323,7 @@ export function Workbench({
         <QuotationsScreen
           related={{ proformas, invoices, orders }}
           docType="quotation"
+          intent={intentFor("quotations")}
           documents={quotations}
           customers={customers}
           catalog={catalog}
@@ -297,6 +346,7 @@ export function Workbench({
         <QuotationsScreen
           related={{ proformas, invoices, orders }}
           docType="proforma"
+          intent={intentFor("proformas")}
           documents={proformas}
           customers={customers}
           catalog={catalog}
@@ -319,6 +369,7 @@ export function Workbench({
         <QuotationsScreen
           related={{ proformas, invoices, orders }}
           docType="invoice"
+          intent={intentFor("invoices")}
           documents={invoices}
           customers={customers}
           catalog={catalog}
@@ -346,6 +397,7 @@ export function Workbench({
         <QuotationsScreen
           related={{ proformas, invoices, orders }}
           docType="purchase_order"
+          intent={intentFor("purchase-orders")}
           documents={purchaseOrders}
           customers={customers}
           catalog={catalog}
@@ -363,6 +415,7 @@ export function Workbench({
         />
       ) : view === "orders" ? (
         <OrdersScreen
+          focusNumber={intentFor("orders") ? orders.find((o) => o.id === intentFor("orders")!.id)?.number : undefined}
           orders={orders}
           challans={challans}
           settings={settings}
@@ -374,6 +427,7 @@ export function Workbench({
         <DispatchScreen challans={challans} onChange={(next) => onChange("challans", next)} />
       ) : view === "subscriptions" || view === "renewals" ? (
         <RenewalsScreen
+          openId={intentFor(view)?.id}
           subscriptions={subscriptions}
           customers={customers}
           onChange={(next) => onChange("subscriptions", next)}

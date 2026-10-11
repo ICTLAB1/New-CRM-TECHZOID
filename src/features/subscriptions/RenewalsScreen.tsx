@@ -22,8 +22,10 @@ import { fmtDate } from "../../domain/dates";
  * same thing in a tenth of the space.
  */
 export function RenewalsScreen({
-  subscriptions, customers, onChange,
+  subscriptions, customers, onChange, openId,
 }: {
+  /** Open one subscription on arrival (from the header search). */
+  openId?: string;
   subscriptions: Subscription[];
   customers: { id: string; company?: string }[];
   onChange: (subs: Subscription[]) => void;
@@ -31,7 +33,7 @@ export function RenewalsScreen({
   const toast = useToast();
   const [window, setWindow] = useState("30");
   const [query, setQuery] = useState("");
-  const [editing, setEditing] = useState<Subscription | null>(null);
+  const [editing, setEditing] = useState<Subscription | null>(() => subscriptions.find((s) => s.id === openId) ?? null);
 
   const windows = [7, 30, 90] as const;
 
