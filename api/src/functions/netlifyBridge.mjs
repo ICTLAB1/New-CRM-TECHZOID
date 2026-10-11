@@ -61,6 +61,10 @@ export const SCHEDULED = {
   /* 04:00 UTC is 09:30 in India — a chaser should land at the start of a
      working day, not overnight. */
   "followups-run": "0 0 4 * * *",
+  /* Payment Tracker reminders and the team's morning summary — also 09:30
+     in India, five minutes after the follow-ups so the two never contend
+     for the same mailbox at once. */
+  "payment-reminders-run": "0 5 4 * * *",
   /* Every two minutes. The pacing lives in the rules, not in how often this
      runs, so running often makes a campaign responsive rather than faster. */
   "outreach-run": "0 */2 * * * *",

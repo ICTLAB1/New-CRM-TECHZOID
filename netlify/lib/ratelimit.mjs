@@ -23,6 +23,8 @@ export const LIMITS = {
   "email-send": { limit: 60, windowSeconds: 3600 },
   "whatsapp-send": { limit: 60, windowSeconds: 3600 },
   "ai-proxy": { limit: 40, windowSeconds: 3600 },
+  /* Payment Tracker invoice scanning: each call reads one invoice with AI. */
+  "payment-invoice-read": { limit: 120, windowSeconds: 3600 },
   "ms-oauth-start": { limit: 10, windowSeconds: 3600 },
   "admin-users": { limit: 30, windowSeconds: 3600 },
   "webhook-deliver": { limit: 120, windowSeconds: 3600 },
