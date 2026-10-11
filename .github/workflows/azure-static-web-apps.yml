@@ -86,7 +86,7 @@ jobs:
 
       - name: test the API
         if: steps.access.outputs.ready == 'yes'
-        run: cd api && npm ci && npx vitest run
+        run: npm ci && (cd api && npm ci) && npx vitest run api/ netlify/
 
       - uses: azure/login@v2
         if: steps.access.outputs.ready == 'yes'

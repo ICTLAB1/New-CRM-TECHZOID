@@ -25,6 +25,22 @@ import pg from "pg";
 
 const { Pool } = pg;
 
+/* VALUES IN THE SHAPE THE APP WAS WRITTEN FOR. The CRM was built against
+   PostgREST, which returns a `date` as "2026-10-12", a `numeric` as a JSON
+   number and a `bigint` as a number. node-postgres does none of that by
+   default: a date becomes midnight UTC ("2026-10-12T00:00:00.000Z", which
+   breaks every "is it due today" string comparison) and a numeric becomes a
+   STRING (so deal values added up as "1000" + "500" = "1000500"). */
+export function installTypeParsers(types = pg.types) {
+  types.setTypeParser(1082, (v) => v);                       // date  → "yyyy-mm-dd"
+  types.setTypeParser(1700, (v) => (v === null ? null : Number(v)));  // numeric → number
+  types.setTypeParser(20, (v) => {                           // bigint → number when exact
+    const n = Number(v);
+    return Number.isSafeInteger(n) ? n : v;
+  });
+}
+installTypeParsers();
+
 let pool = null;
 
 /** Lazily built so importing this file does not require a database. */
