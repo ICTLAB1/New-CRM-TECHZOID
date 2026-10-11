@@ -134,6 +134,23 @@ describe("a token that is not genuine", () => {
     await refused(hs256({ aud: ["api://a", "api://b"] }), config);
   });
 
+  it("accepts the client id and its api:// URI as the same app", async () => {
+    const id = "be646578-2d72-46cf-987d-a86d6393e1b3";
+    for (const configured of [id, "api://" + id]) {
+      const config = { ...hsConfig, audience: configured };
+      for (const aud of [id, "api://" + id]) {
+        const { subject } = await verifyToken(hs256({ aud }), { config });
+        expect(subject).toBe(USER);
+      }
+    }
+  });
+
+  it("still refuses a different app when the configured one is a client id", async () => {
+    const config = { ...hsConfig, audience: "be646578-2d72-46cf-987d-a86d6393e1b3" };
+    await refused(hs256({ aud: "11111111-2222-3333-4444-555555555555" }), config);
+    await refused(hs256({ aud: "api://11111111-2222-3333-4444-555555555555" }), config);
+  });
+
   it("accepts an audience given as a list containing ours", async () => {
     const config = { ...hsConfig, audience: "api://techzoid-crm" };
     const { subject } = await verifyToken(

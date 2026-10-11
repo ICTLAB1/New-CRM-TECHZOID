@@ -288,7 +288,22 @@ export async function verifyToken(token, options = {}) {
   }
   if (config.audience) {
     const audience = Array.isArray(claims.aud) ? claims.aud : [claims.aud];
-    if (!audience.includes(config.audience)) {
+    /* THE SAME APP HAS TWO NAMES. Entra v2.0 access tokens carry the bare
+       client id as `aud`; v1.0 tokens carry the Application ID URI
+       (api://<client id>). Setting JWT_AUDIENCE to one form while the tokens
+       carried the other locked every user out with "issued for somebody
+       else" — so both forms of the configured app are accepted, and a list
+       (comma-separated) is allowed for a deliberate second app. Anything
+       else is still refused. */
+    const accepted = new Set();
+    for (const raw of String(config.audience).split(",")) {
+      const one = raw.trim();
+      if (!one) continue;
+      accepted.add(one);
+      const bare = one.replace(/^api:\/\//, "").replace(/\/+$/, "");
+      if (UUID.test(bare)) { accepted.add(bare); accepted.add("api://" + bare); }
+    }
+    if (!audience.some((a) => accepted.has(String(a)))) {
       throw new AuthError("Token was issued for somebody else.");
     }
   }
