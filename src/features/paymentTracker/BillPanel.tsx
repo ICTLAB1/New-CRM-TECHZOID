@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Mail, MessageCircle, Pencil } from "lucide-react";
 import { Modal } from "../../components/Modal";
 import { Button, Chip, Field, Input, Select } from "../../components/primitives";
@@ -82,12 +82,24 @@ export function BillPanel({
     }
   };
 
+  const [previewing, setPreviewing] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const previewRef = useRef<HTMLDivElement>(null);
+
+  /* Shown directly under the button and scrolled into view, so it cannot
+     land somewhere off-screen. Pressing again hides it. */
   const showPreview = async () => {
+    if (preview) { setPreview(null); return; }
+    setPreviewing(true);
+    setPreviewError(null);
     try {
       const p = await previewEmail(bill.id);
       setPreview({ subject: p.subject, html: p.html });
+      requestAnimationFrame(() => previewRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
     } catch (err) {
-      toast(err instanceof Error ? err.message : String(err), "bad");
+      setPreviewError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setPreviewing(false);
     }
   };
 
@@ -216,11 +228,24 @@ export function BillPanel({
               <Button size="sm" disabled={!bill.phone || !trackerLive()} loading={sending === "whatsapp"} onClick={() => void send("whatsapp")}>
                 <MessageCircle size={14} /> WhatsApp now
               </Button>
-              <Button size="sm" tone="quiet" disabled={!trackerLive()} onClick={() => void showPreview()}>Preview email</Button>
+              <Button size="sm" tone="quiet" disabled={!trackerLive()} loading={previewing} onClick={() => void showPreview()}>
+                {preview ? "Hide preview" : "Preview email"}
+              </Button>
             </div>
             <div className="field-hint">
               Uses the {TONE_LABEL[dueNow?.tone ?? (days < 0 ? "upcoming" : toneFor(days, settings.schedule))]?.toLowerCase()} wording.
             </div>
+            {previewError ? <div className="field-msg">Could not load the preview — {previewError}</div> : null}
+            {preview ? (
+              <div ref={previewRef} className="pt-preview-wrap">
+                <div className="pt-preview-subject">
+                  <span className="pt-sub">Subject</span>
+                  <strong>{preview.subject}</strong>
+                  <span className="pt-sub">To {bill.email}</span>
+                </div>
+                <iframe title="Email preview" className="pt-preview" sandbox="" srcDoc={preview.html} />
+              </div>
+            ) : null}
 
             <div className="pt-section-title">Hold reminders</div>
             <div className="row-tight wrap" style={{ gap: 8, alignItems: "flex-end" }}>
@@ -300,12 +325,6 @@ export function BillPanel({
           </>
         ) : null}
 
-        {preview ? (
-          <>
-            <div className="pt-section-title">Email preview — {preview.subject}</div>
-            <iframe title="Email preview" className="pt-preview" sandbox="" srcDoc={preview.html} />
-          </>
-        ) : null}
       </div>
     </Modal>
   );
