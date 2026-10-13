@@ -102,6 +102,21 @@ jobs:
           tenant-id: ${{ env.AZURE_TENANT_ID }}
           subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
 
+      # Which Microsoft directory the server trusts for sign-in. Kept here
+      # so it can never drift from the website's own setting (.env.production).
+      # Set BEFORE the database step: once the server only trusts the new
+      # directory, a sign-in left over from the old one cannot re-link an
+      # account the migration has just freed.
+      - name: point the API at the sign-in directory
+        if: steps.access.outputs.ready == 'yes'
+        run: |
+          set -a; . ./.env.production; set +a
+          az functionapp config appsettings set -g "$RG" -n "$FA" -o none --settings \
+            JWT_ALG=RS256 JWT_DIRECTORY=entra \
+            "JWT_ISSUER=https://login.microsoftonline.com/${VITE_ENTRA_TENANT_ID}/v2.0" \
+            "JWT_JWKS_URI=https://login.microsoftonline.com/${VITE_ENTRA_TENANT_ID}/discovery/v2.0/keys" \
+            "JWT_AUDIENCE=${VITE_ENTRA_CLIENT_ID}"
+
       - name: apply database changes
         if: steps.access.outputs.ready == 'yes'
         run: |
