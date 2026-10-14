@@ -84,6 +84,7 @@ async function client(settings: EntraSettings): Promise<IPublicClientApplication
   /* Coming back from Microsoft's sign-in page, the result arrives here:
      remember who signed in so every later call finds them. */
   ready = app.initialize().then(() => app!.handleRedirectPromise().then((result) => {
+    clearStaleInteraction(settings.clientId);
     if (result?.account) app!.setActiveAccount(result.account);
   }).catch((err) => {
     /* A FAILED RETURN MUST NOT POISON EVERY LATER CALL. This promise is
@@ -171,16 +172,55 @@ export async function entraToken(): Promise<string | null> {
  * `popup_window_error` before the user ever sees Microsoft's page. The page
  * leaves for Microsoft and comes back; `client()` picks the result up.
  */
+/**
+ * Drop a "sign-in in progress" marker that no sign-in is behind.
+ *
+ * MSAL writes one before leaving for Microsoft and removes it on the way
+ * back — but only its OWN: a marker carrying another app's client id is
+ * never cleared. When sign-in moved to a new app registration (October
+ * 2026), browsers that had been mid-sign-in with the old one kept its
+ * marker for ever, and every click on "Sign in" failed with
+ * interaction_in_progress. A back button or a closed tab during sign-in
+ * leaves the same thing behind. By the time this runs the redirect has been
+ * handled (client() awaits it), so any marker still there is stale.
+ */
+function clearStaleInteraction(clientId: string, force = false): void {
+  for (const store of [globalThis.sessionStorage, globalThis.localStorage]) {
+    try {
+      if (!store) continue;
+      for (const key of Object.keys(store)) {
+        if (!key.endsWith("interaction.status")) continue;
+        let owner = "";
+        try { owner = (JSON.parse(store.getItem(key) ?? "{}") as { clientId?: string }).clientId ?? ""; } catch { /* unreadable: stale */ }
+        if (force || owner !== clientId) store.removeItem(key);
+      }
+    } catch { /* storage unavailable */ }
+  }
+}
+
 export async function entraSignIn(): Promise<void> {
   const settings = entraSettings();
   if (!settings) throw new Error("Microsoft sign-in is not configured.");
   const msal = await client(settings);
-  await msal.loginRedirect({
+  clearStaleInteraction(settings.clientId);
+  const request = {
     scopes: [settings.apiScope],
     /* Ask every time which account to use. Without this, somebody on a
        shared machine is silently signed in as whoever used it last. */
     prompt: "select_account",
-  });
+  };
+  try {
+    await msal.loginRedirect(request);
+  } catch (err) {
+    /* Still "in progress" with no sign-in behind it (a tab closed half way
+       through): clear it and go once more, rather than a dead button. */
+    if (String((err as { errorCode?: string })?.errorCode ?? err).includes("interaction_in_progress")) {
+      clearStaleInteraction(settings.clientId, true);
+      await msal.loginRedirect(request);
+      return;
+    }
+    throw err;
+  }
 }
 
 export async function entraSignOut(): Promise<void> {
