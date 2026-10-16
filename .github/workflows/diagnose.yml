@@ -30,3 +30,10 @@ jobs:
           echo "== admin =="; q "requests | where timestamp > ago(3h) and name has 'admin' | order by timestamp desc | project timestamp, name, resultCode, duration, operation_Id | take 10" | while IFS= read -r l; do echo "::warning title=admin::${l:0:900}"; done
           echo "== traces for admin ops =="; q "let ops = requests | where timestamp > ago(3h) and name has 'admin' | project operation_Id; traces | where operation_Id in (ops) | order by timestamp desc | project timestamp, severityLevel, message | take 25" | while IFS= read -r l; do echo "::warning title=trace::${l:0:900}"; done
           echo "== exceptions for admin ops =="; q "let ops = requests | where timestamp > ago(3h) and name has 'admin' | project operation_Id; exceptions | where operation_Id in (ops) | project timestamp, outerMessage, details | take 10" | while IFS= read -r l; do echo "::warning title=exc::${l:0:900}"; done
+      - name: which functions are registered, and does admin-users answer
+        run: |
+          az functionapp function list -g techzoid-crm -n techzoid-fn-web7gna6q5rns --query "[].name" -o tsv | sed 's#.*/##' | tr '\n' ' ' | sed 's/^/::warning title=functions::/'; echo
+          for u in https://crm.ttpldelhi.com/api/admin-users https://techzoid-fn-web7gna6q5rns.azurewebsites.net/api/admin-users https://crm.ttpldelhi.com/api/followups-admin; do
+            r=$(curl -s -m 30 -o /tmp/b -w '%{http_code}' -X POST -H 'content-type: application/json' -d '{"action":"delete_user"}' "$u"); echo "::warning title=probe::$u -> $r $(head -c 300 /tmp/b)"
+          done
+
