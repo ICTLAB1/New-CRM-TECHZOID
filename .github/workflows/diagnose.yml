@@ -1,0 +1,27 @@
+# Reads the server's recent errors from Application Insights and prints
+# them as annotations, so a failure can be diagnosed without anyone opening
+# the Azure portal. Run by hand (workflow_dispatch); changes nothing.
+name: diagnose the API
+
+on:
+  workflow_dispatch:
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: azure/login@v2
+        with:
+          client-id: e11daa33-1f77-49db-b9c7-8f468d55f705
+          tenant-id: 1d063589-6565-42de-8055-92aca1128f35
+          subscription-id: 488bfe98-ea81-424c-8bc8-d97369a44759
+      - name: recent server errors
+        run: |
+          az extension add -n application-insights -y >/dev/null 2>&1 || true
+          AI="$(az monitor app-insights component show -g techzoid-crm --query "[0].appId" -o tsv)"
+          q() { az monitor app-insights query --app "$AI" --analytics-query "$1" --query "tables[0].rows" -o tsv 2>&1 | head -40; }
+          echo "== exceptions =="; q "exceptions | where timestamp > ago(3h) | order by timestamp desc | project timestamp, operation_Name, outerMessage, innermostMessage | take 15" | while IFS= read -r l; do echo "::warning title=exception::${l:0:900}"; done
+          echo "== admin-users traces =="; q "union traces, requests | where timestamp > ago(3h) and (operation_Name has 'admin' or message has 'admin' or name has 'admin') | order by timestamp desc | project timestamp, itemType, name, resultCode, message | take 15" | while IFS= read -r l; do echo "::warning title=trace::${l:0:900}"; done
