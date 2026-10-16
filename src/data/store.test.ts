@@ -50,6 +50,10 @@ function fakeClient(options: FakeOptions = {}) {
             single: () => result(table, rowsFor[0] ?? null),
             maybeSingle: () => result(table, rowsFor[0] ?? null),
           }),
+          /* The team list leaves out removed accounts (blank email). */
+          neq: (col: string, value: unknown) => ({
+            order: () => result(table, rowsFor.filter((r) => (r as Record<string, unknown>)[col] !== value)),
+          }),
           order: () => result(table, rowsFor),
           then: (resolve: (v: unknown) => unknown) => result(table, rowsFor).then(resolve),
         };
@@ -256,6 +260,13 @@ describe("loading", () => {
     const loaded = await createStore(fakeClient(legacy).client).load();
     expect(loaded.settings).toEqual({ company: { name: "TechZoid" } });
     expect(loaded.profiles).toHaveLength(1);
+  });
+
+  it("leaves removed people off the team (their email is blanked on removal)", async () => {
+    const team = [...(legacy.rows.profiles ?? []), { id: "gone", name: "Left", email: "", role: "Sales" }];
+    const { client } = fakeClient({ rows: { ...legacy.rows, profiles: team } });
+    const loaded = await createStore(client).load();
+    expect(loaded.profiles.map((p) => p.id)).not.toContain("gone");
   });
 
   it("returns an empty settings object rather than undefined", async () => {

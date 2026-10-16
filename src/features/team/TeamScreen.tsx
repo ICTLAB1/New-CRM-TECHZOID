@@ -80,7 +80,11 @@ export function TeamScreen({ api, members, currentUser, companyId, companyName, 
       onChange(members.filter((m) => m.id !== member.id));
       toast(`${member.name}'s account was removed`, "good");
     } catch (err) {
-      setError(err instanceof IntegrationError ? err.message : "Couldn't remove that account.");
+      const msg = err instanceof IntegrationError ? err.message : "Couldn't remove that account.";
+      setError(msg);
+      /* Also as a toast: the banner is at the top of the page and the
+         Remove button is usually far below it, so a failure went unseen. */
+      toast(`${member.name} was not removed: ${msg}`, "bad");
     }
   };
 

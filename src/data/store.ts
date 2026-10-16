@@ -119,6 +119,12 @@ export function createStore(
     const { data, error } = await client
       .from("profiles")
       .select("id, name, role, email, designation, phone")
+      /* A removed account keeps its row — every quotation and customer it
+         owned still points at it — but has its email blanked so it can
+         never be signed in to again (admin-users delete_user). It is not on
+         the team any more, so it is not listed here. Without this filter a
+         removed person came straight back on the next refresh. */
+      .neq("email", "")
       .order("created_at", { ascending: true });
     if (error) throw error;
     return (data as Profile[] | null) || [];
