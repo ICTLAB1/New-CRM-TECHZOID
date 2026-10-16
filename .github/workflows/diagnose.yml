@@ -5,6 +5,9 @@ name: diagnose the API
 
 on:
   workflow_dispatch:
+  push:
+    branches: [ claude/crm-redesign-preview ]
+    paths: [ ".github/diagnose-request" ]
 
 jobs:
   diagnose:
