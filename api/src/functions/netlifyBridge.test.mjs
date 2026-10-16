@@ -149,6 +149,15 @@ describe("registration", () => {
     expect(http.get("submit-lead").authLevel).toBe("anonymous");
   });
 
+  it("never routes anything under a path the Functions host reserves", () => {
+    /* /api/admin-* is swallowed by the host's own admin API: team
+       management answered 404/401 and never ran until it was moved. */
+    const { app, http } = fakeApp();
+    registerNetlifyFunctions(app);
+    for (const [, cfg] of http) expect(cfg.route).not.toMatch(/^admin/i);
+    expect(http.get("admin-users").route).toBe("team-accounts");
+  });
+
   it("has nothing left unported — admin-users now runs on Azure", () => {
     expect(Object.keys(UNPORTED)).toEqual([]);
   });

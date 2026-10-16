@@ -33,7 +33,7 @@ jobs:
       - name: which functions are registered, and does admin-users answer
         run: |
           az functionapp function list -g techzoid-crm -n techzoid-fn-web7gna6q5rns --query "[].name" -o tsv | sed 's#.*/##' | tr '\n' ' ' | sed 's/^/::warning title=functions::/'; echo
-          for u in https://crm.ttpldelhi.com/api/admin-users https://techzoid-fn-web7gna6q5rns.azurewebsites.net/api/admin-users https://crm.ttpldelhi.com/api/followups-admin; do
+          for u in https://crm.ttpldelhi.com/api/team-accounts https://crm.ttpldelhi.com/api/admin-users https://crm.ttpldelhi.com/api/followups-admin; do
             r=$(curl -s -m 30 -o /tmp/b -w '%{http_code}' -X POST -H 'content-type: application/json' -d '{"action":"delete_user"}' "$u"); echo "::warning title=probe::$u -> $r $(head -c 300 /tmp/b)"
           done
 

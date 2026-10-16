@@ -153,7 +153,9 @@ async function post<T>(name: string, body: unknown): Promise<T> {
  *  Netlify functions for everything needing a secret. */
 export function netlifyApi(): IntegrationsApi {
   const adminCall = <T>(action: string, body: Record<string, unknown> = {}) =>
-    post<T>("admin-users", { action, ...body });
+    /* Not "admin-users": the Functions host reserves paths starting with
+       "admin" (see ROUTES in api/src/functions/netlifyBridge.mjs). */
+    post<T>("team-accounts", { action, ...body });
 
   return {
     async mailbox() {

@@ -57,6 +57,19 @@ export const UNPORTED = {
  * one that would silently turn "every five minutes" into "every five
  * seconds" if it were copied across unchanged.
  */
+/**
+ * Public routes that differ from the function's file name.
+ *
+ * THE FUNCTIONS HOST OWNS EVERY PATH THAT STARTS WITH "admin". Its own
+ * management API lives there, so /api/admin-users never reached our code:
+ * through the website it answered 404, called directly 401, and team
+ * management (add, edit, remove a person) silently failed on Azure from the
+ * day it moved. The handler keeps its name; only its address changes.
+ */
+export const ROUTES = {
+  "admin-users": "team-accounts",
+};
+
 export const SCHEDULED = {
   /* 04:00 UTC is 09:30 in India — a chaser should land at the start of a
      working day, not overnight. */
@@ -213,7 +226,7 @@ export function registerNetlifyFunctions(app, dir = FUNCTIONS_DIR) {
     app.http(name, {
       methods: ["GET", "POST", "OPTIONS"],
       authLevel: "anonymous",
-      route: name,
+      route: ROUTES[name] ?? name,
       handler: bridge(name, dir),
     });
   }
