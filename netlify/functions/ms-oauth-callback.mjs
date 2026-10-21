@@ -140,12 +140,68 @@ export async function handler(event) {
       console.warn("graph /me lookup failed:", err?.message ?? err);
     }
 
+    const now = new Date().toISOString();
+
+    /* A SHARED MAILBOX IS A DIFFERENT ROW IN A DIFFERENT TABLE. `ms_mail_accounts`
+       is keyed by CRM user and answers "which mailbox does this person send
+       from"; `email_accounts` is keyed by address and answers "which mailboxes
+       may the company send from". accounts@ belongs in the second: it outlives
+       whoever connected it, and more than one person needs to send from it.
+       `connected_by` still records who granted the consent, because Microsoft
+       is refreshing a token issued to that sign-in and they are who must
+       reconnect it. */
+    if (verified.purpose === "shared") {
+      if (!msEmail) {
+        return page(400, "Couldn't connect",
+          "Microsoft did not say which mailbox was authorised, so there is no address to record it under. Please try again.", false);
+      }
+      const admin = adminClient();
+      /* Keyed on lower(email) by a unique index, which is an expression and
+         so cannot be named as an upsert conflict target — looked up first
+         instead. Reconnecting an existing shared mailbox must UPDATE it, or
+         the insert trips that index and the reconnection looks broken. */
+      const { data: existing } = await admin
+        .from("email_accounts").select("id").ilike("email", msEmail).maybeSingle();
+
+      const { error } = existing?.id
+        ? await admin.from("email_accounts").update({
+            display_name: msName,
+            refresh_token: tok.refresh_token,
+            connected_by: verified.userId,
+            status: "ok",
+            status_detail: "",
+            last_ok_at: now,
+            disabled_at: null,
+            updated_at: now,
+          }).eq("id", existing.id)
+        : await admin.from("email_accounts").insert({
+            email: msEmail,
+            display_name: msName,
+            provider: "microsoft",
+            connected_by: verified.userId,
+            refresh_token: tok.refresh_token,
+            status: "ok",
+            last_ok_at: now,
+            updated_at: now,
+          });
+
+      if (error) {
+        console.error("saving shared mailbox failed:", error.message);
+        return page(500, "Couldn't save the connection",
+          "The mailbox authorised correctly but the CRM could not store it. Please try again, or ask an admin to check the server logs.", false);
+      }
+
+      console.log("shared mailbox connected:", msEmail, "by", verified.userId);
+      return page(200, "Shared mailbox connected",
+        "The company can now send from " + msEmail + ". Choose it under Reminder settings → Send from, or when launching a campaign.", true);
+    }
+
     const { error } = await adminClient().from("ms_mail_accounts").upsert({
       user_id: verified.userId,
       ms_email: msEmail,
       ms_display_name: msName,
       refresh_token: tok.refresh_token,
-      updated_at: new Date().toISOString(),
+      updated_at: now,
     });
     if (error) {
       console.error("saving mailbox failed:", error.message);

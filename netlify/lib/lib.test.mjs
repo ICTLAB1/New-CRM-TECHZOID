@@ -1,3 +1,4 @@
+import { createHmac } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { signState, verifyState, STATE_TTL_MS } from "./state.mjs";
 import { escapeHtml, resultPage } from "./html.mjs";
@@ -23,7 +24,35 @@ const USER = "3f2a6c1e-0000-4000-8000-abcdef123456";
 describe("OAuth state signing", () => {
   it("round-trips a user id", () => {
     const state = signState(USER, ENV);
-    expect(verifyState(state, ENV)).toEqual({ ok: true, userId: USER });
+    expect(verifyState(state, ENV)).toEqual({ ok: true, userId: USER, purpose: "own" });
+  });
+
+  it("round-trips which kind of mailbox is being connected", () => {
+    const state = signState(USER, ENV, Date.now(), "shared");
+    expect(verifyState(state, ENV)).toEqual({ ok: true, userId: USER, purpose: "shared" });
+  });
+
+  it("reads a state from before purposes existed as the personal one it was", () => {
+    /* Three-part payloads are still in flight for fifteen minutes after this
+       deploys. Rejecting them would tell everyone mid-connection that their
+       link is no longer valid. */
+    const payload = `${USER}.${Date.now()}.abcd1234`;
+    const sig = createHmac("sha256", ENV.MS_STATE_SECRET).update(payload).digest("hex");
+    const legacy = Buffer.from(`${payload}.${sig}`).toString("base64url");
+    expect(verifyState(legacy, ENV)).toEqual({ ok: true, userId: USER, purpose: "own" });
+  });
+
+  it("will not sign a purpose it does not know", () => {
+    expect(() => signState(USER, ENV, Date.now(), "anything-else")).toThrow();
+  });
+
+  it("rejects a purpose swapped after signing", () => {
+    /* The attack: take your own `own` consent link, change it to `shared`,
+       and your personal mailbox becomes the company's sending address. */
+    const state = signState(USER, ENV, Date.now(), "own");
+    const decoded = Buffer.from(state, "base64url").toString("utf8");
+    const tampered = Buffer.from(decoded.replace(".own.", ".shared.")).toString("base64url");
+    expect(verifyState(tampered, ENV).ok).toBe(false);
   });
 
   it("rejects a forged state naming someone else", () => {

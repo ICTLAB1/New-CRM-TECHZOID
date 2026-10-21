@@ -74,8 +74,13 @@ export interface CreatedMember {
 
 export interface IntegrationsApi {
   mailbox(): Promise<MailboxConnection | null>;
-  /** Returns the Microsoft consent URL to send the browser to. */
-  startMailboxConnection(): Promise<string>;
+  /**
+   * Returns the Microsoft consent URL to send the browser to.
+   *
+   * `shared` connects a company mailbox (accounts@, billing@) that anybody
+   * authorised may send from, rather than the signer's own.
+   */
+  startMailboxConnection(purpose?: "own" | "shared"): Promise<string>;
   disconnectMailbox(): Promise<void>;
   diagnostics(): Promise<Diagnostics>;
 
@@ -184,8 +189,8 @@ export function netlifyApi(): IntegrationsApi {
       };
     },
 
-    async startMailboxConnection() {
-      const { url } = await post<{ url: string }>("ms-oauth-start", {});
+    async startMailboxConnection(purpose: "own" | "shared" = "own") {
+      const { url } = await post<{ url: string }>("ms-oauth-start", { purpose });
       return url;
     },
 

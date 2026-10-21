@@ -45,6 +45,7 @@ export function IntegrationsScreen({ api, user, users, settings, onSettingsChang
       />
       <div className="stack" style={{ maxWidth: 760 }}>
         <MailboxPanel api={api} user={user} />
+        <SharedMailboxPanel api={api} canEdit={isAdmin(user.role) || user.role === "Manager"} />
         <WhatsAppPanel status={status} />
         <VerificationPanel status={status} />
         <AssistantPanel />
@@ -174,6 +175,90 @@ function MailboxPanel({ api, user }: { api: IntegrationsApi; user: { role: strin
         onConfirm={() => void disconnect()}
         onCancel={() => setConfirmDisconnect(false)}
       />
+    </Card>
+  );
+}
+
+/* ── shared mailboxes ──────────────────────────────────────────────── */
+
+/**
+ * Company mailboxes — accounts@, billing@ — as opposed to each person's own.
+ *
+ * The distinction is not cosmetic. A personal mailbox answers "who is this
+ * person", so there is exactly one and disconnecting it is their own business.
+ * A shared one answers "what does the company send from": payment reminders
+ * and campaigns pick it, more than one person relies on it, and it has to
+ * outlast whoever happened to connect it. They are different tables for that
+ * reason, and this panel exists because the screen previously offered no way
+ * to create the second kind at all.
+ */
+function SharedMailboxPanel({ api, canEdit }: { api: IntegrationsApi; canEdit: boolean }) {
+  const [boxes, setBoxes] = useState<{ id: string; email: string }[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const { mySendingAccounts } = await import("../../data/outreach");
+        const rows = await mySendingAccounts();
+        setBoxes(rows.map((r) => ({ id: r.id, email: r.email })));
+      } catch {
+        /* Same reasoning as the panel above: showing nothing beats claiming
+           there are none because the list could not be fetched. */
+        setBoxes(null);
+      }
+    })();
+  }, []);
+
+  const connect = async () => {
+    setError(""); setBusy(true);
+    try {
+      window.location.href = await api.startMailboxConnection("shared");
+    } catch (err) {
+      setError(err instanceof IntegrationError ? err.message : "Couldn't start the connection.");
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Card
+      title="Shared mailboxes"
+      actions={boxes && boxes.length > 0 ? <Chip tone="good">{boxes.length} connected</Chip> : <Chip tone="neutral">None</Chip>}
+    >
+      <p className="muted">
+        A mailbox the company sends from rather than a person — accounts@ for payment
+        reminders, or a campaign address. Anyone authorised can send from it, replies go
+        to whoever is covering it, and it keeps working when the person who set it up is
+        away.
+      </p>
+
+      {boxes && boxes.length > 0 ? (
+        <ul className="plain-list">
+          {boxes.map((b) => <li key={b.id}><strong>{b.email}</strong></li>)}
+        </ul>
+      ) : (
+        <p className="muted">No shared mailbox is connected yet.</p>
+      )}
+
+      {canEdit ? (
+        <>
+          <Button onClick={connect} disabled={busy}>
+            {busy ? "Opening Microsoft…" : "Connect a shared mailbox"}
+          </Button>
+          <p className="muted">
+            {/* The one thing people get wrong here, said before they click. */}
+            Microsoft will ask you to sign in. Sign in <strong>as the shared mailbox
+            itself</strong> (accounts@techzoidtechnologies.com and its password), not as
+            yourself — whichever account you sign in as is the address mail will come
+            from. You will be signed out of Microsoft in this tab afterwards.
+          </p>
+        </>
+      ) : (
+        <p className="muted">An Admin or Manager can connect one.</p>
+      )}
+
+      {error ? <p className="bad">{error}</p> : null}
     </Card>
   );
 }

@@ -1,6 +1,6 @@
-import { fail, guard, json, clientIp } from "../lib/http.mjs";
+import { fail, guard, json, clientIp, readJson } from "../lib/http.mjs";
 import { signedInUser, adminClient } from "../lib/auth.mjs";
-import { signState } from "../lib/state.mjs";
+import { PURPOSES, signState } from "../lib/state.mjs";
 import { consume, tooManyMessage } from "../lib/ratelimit.mjs";
 
 /* Scopes each user grants:
@@ -54,9 +54,15 @@ export async function handler(event) {
     console.error("rate limit unavailable:", err?.message ?? err);
   }
 
+  /* `own` unless a shared mailbox was asked for. Anything unrecognised is a
+     caller error rather than a silent fall back to `own`: connecting the
+     wrong kind of mailbox is not something to guess at. */
+  const asked = String(readJson(event)?.purpose ?? "own");
+  if (!PURPOSES.has(asked)) return fail(event, 400, "That request wasn't valid.");
+
   let state;
   try {
-    state = signState(user.id, process.env);
+    state = signState(user.id, process.env, Date.now(), asked);
   } catch (err) {
     return fail(event, 500,
       "Microsoft 365 isn't fully configured on the server. An admin should check MS_STATE_SECRET.",
@@ -70,8 +76,13 @@ export async function handler(event) {
     + "&response_mode=query"
     + "&scope=" + encodeURIComponent(SCOPES)
     + "&state=" + state
-    + "&prompt=select_account";
+    /* `login` for a shared mailbox, not `select_account`: they are signed in
+       to Microsoft as themselves, and select_account would happily hand back
+       their own account on one click — connecting abhinav's mailbox as the
+       company's accounts@ address. Forcing a fresh sign-in makes the choice
+       deliberate, which it has to be. */
+    + "&prompt=" + (asked === "shared" ? "login" : "select_account");
 
-  console.log("oauth start for", user.id, "from", clientIp(event));
+  console.log("oauth start for", user.id, `(${asked})`, "from", clientIp(event));
   return json(event, 200, { url });
 }
