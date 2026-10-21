@@ -73,7 +73,19 @@ export async function sendMail({
             .eq("id", accountId);
       }
     } catch (err) {
-      console.warn("campaign mailbox lookup failed:", err?.message ?? err);
+      console.warn("named mailbox lookup failed:", err?.message ?? err);
+    }
+
+    /* NAMING A MAILBOX IS A CONSTRAINT, NOT A PREFERENCE. This used to fall
+       through to the sender's own mailbox when the named one was missing,
+       disabled or never finished connecting — so a campaign booked to go out
+       from marketing@, or a payment reminder the company set to come from
+       accounts@, would quietly go out from whoever happened to trigger it.
+       That is a wrong From address on mail already in the customer's inbox:
+       unsendable, and invisible until somebody reads the headers. Refusing is
+       recoverable; sending as the wrong person is not. */
+    if (!mailbox) {
+      return { ok: false, error: "That mailbox is not connected any more. Reconnect it in Settings → Integrations, or choose another one.", retryable: false };
     }
   }
 

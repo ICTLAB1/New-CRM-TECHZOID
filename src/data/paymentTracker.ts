@@ -69,6 +69,16 @@ export interface TrackerSettings {
   whatsappOn: boolean;
   /** Whose connected mailbox the reminders go out from. */
   sendFromUserId: string;
+  /**
+   * A SHARED mailbox to send every reminder from, winning over
+   * `sendFromUserId` when set — an `email_accounts` row id.
+   *
+   * Chasing money is the company's job, not a salesperson's: the reply goes
+   * to whoever is on accounts duty that week, and the thread survives the
+   * owner being on leave or leaving. Empty keeps the old behaviour, where
+   * each bill is chased by the person who owns it.
+   */
+  sendFromAccountId: string;
   ccEmails: string;
   replyTo: string;
   digestOn: boolean;
@@ -87,6 +97,7 @@ export const DEFAULT_SETTINGS: TrackerSettings = {
   emailOn: true,
   whatsappOn: false,
   sendFromUserId: "",
+  sendFromAccountId: "",
   ccEmails: "",
   replyTo: "",
   digestOn: true,

@@ -5,6 +5,7 @@ import { useToast } from "../../components/Toast";
 import {
   runMorningNow, saveSettings, sendTest, serverStatus, trackerLive, type TrackerSettings,
 } from "../../data/paymentTracker";
+import { mySendingAccounts } from "../../data/outreach";
 
 const describeOffset = (o: number) => (o < 0 ? `${-o} before` : o === 0 ? "on the day" : `${o} after`);
 
@@ -26,16 +27,23 @@ export function TrackerSettingsPanel({
   const [s, setS] = useState<TrackerSettings>(() => ({
     ...settings,
     sendFromUserId: settings.sendFromUserId || currentUser.id,
+    sendFromAccountId: settings.sendFromAccountId || "",
     digestTo: settings.digestTo || currentUser.email || "",
   }));
   const [offsetsText, setOffsetsText] = useState(settings.schedule.offsets.join(", "));
   const [testTo, setTestTo] = useState(currentUser.email ?? "");
   const [status, setStatus] = useState<{ whatsappKey: boolean; resendKey: boolean } | null>(null);
+  /* Shared mailboxes (accounts@, billing@) — the usual answer for reminders,
+     since chasing a payment is the company writing, not a salesperson. */
+  const [mailboxes, setMailboxes] = useState<{ id: string; email: string }[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
 
   useEffect(() => {
     if (!trackerLive()) return;
     serverStatus().then(setStatus).catch(() => setStatus(null));
+    mySendingAccounts()
+      .then((rows) => setMailboxes(rows.map((r) => ({ id: r.id, email: r.email }))))
+      .catch(() => setMailboxes([]));
   }, []);
 
   const set = (patch: Partial<TrackerSettings>) => setS((cur) => ({ ...cur, ...patch }));
@@ -129,9 +137,34 @@ export function TrackerSettingsPanel({
           <input type="checkbox" checked={s.emailOn} onChange={(e) => set({ emailOn: e.target.checked })} />
           Send reminders by email
         </label>
-        <Field label="Send from" hint="Goes out from this person's connected Microsoft 365 mailbox, so a copy lands in their Sent Items.">
-          <Select value={s.sendFromUserId} onChange={(e) => set({ sendFromUserId: e.target.value })}>
-            {users.map((u) => <option key={u.id} value={u.id}>{u.name}{u.email ? ` — ${u.email}` : ""}</option>)}
+        <Field
+          label="Send from"
+          hint={s.sendFromAccountId
+            ? "Every reminder goes out from this shared mailbox, whoever owns the bill."
+            : "Each bill is chased from its owner's connected mailbox, so a copy lands in their Sent Items."}
+        >
+          {/* One question — which mailbox do reminders come from? — even though
+              the answer can be a shared mailbox or a person. The value is
+              prefixed so the two id spaces cannot be mistaken for each other. */}
+          <Select
+            value={s.sendFromAccountId ? `account:${s.sendFromAccountId}` : `user:${s.sendFromUserId}`}
+            onChange={(e) => {
+              const [kind, id] = e.target.value.split(/:(.*)/s);
+              set(kind === "account"
+                ? { sendFromAccountId: id }
+                : { sendFromAccountId: "", sendFromUserId: id });
+            }}
+          >
+            {mailboxes.length > 0 && (
+              <optgroup label="Shared mailbox — from the company">
+                {mailboxes.map((m) => <option key={m.id} value={`account:${m.id}`}>{m.email}</option>)}
+              </optgroup>
+            )}
+            <optgroup label="A person — from whoever owns the bill">
+              {users.map((u) => (
+                <option key={u.id} value={`user:${u.id}`}>{u.name}{u.email ? ` — ${u.email}` : ""}</option>
+              ))}
+            </optgroup>
           </Select>
         </Field>
         <div className="grid grid-2">

@@ -55,6 +55,14 @@ export async function sendReminder({ admin, row, step, tone, channel, today, set
     const cc = [...splitList(settings.ccEmails), ...splitList(row.cc)];
     result = await sendMail({
       admin,
+      /* A shared mailbox wins when one is configured, and then the owner is
+         not consulted at all: "all reminders come from accounts@" has to mean
+         all of them, including the bills owned by somebody who has since left.
+         Falling through to the owner on a disabled or deleted mailbox would
+         quietly resume sending from individuals, which is the thing this
+         setting exists to stop. sendMail refuses outright on a named mailbox
+         it cannot use, and the reminder is recorded failed with that reason. */
+      accountId: String(settings.sendFromAccountId ?? "").trim() || null,
       userId: settings.sendFromUserId || row.owner_id,
       to: sendTo,
       cc: [...new Set(cc.map((c) => c.toLowerCase()))],
