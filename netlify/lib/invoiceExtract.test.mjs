@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cleanExtraction, cleanDate, cleanAmount, systemPrompt, EXTRACT_TOOL } from "./invoiceExtract.mjs";
+import { cleanExtraction, cleanDate, cleanAmount, systemPrompt, EXTRACT_TOOL, readerFailure} from "./invoiceExtract.mjs";
 
 describe("cleaning what the invoice reader returns", () => {
   it("keeps good values", () => {
@@ -30,5 +30,33 @@ describe("cleaning what the invoice reader returns", () => {
   it("tells the reader who the seller is so it is never taken as the customer", () => {
     expect(systemPrompt(["TechZoid Technologies"])).toContain("Never record the seller as the customer");
     expect(EXTRACT_TOOL.input_schema.required).toEqual(["is_invoice"]);
+  });
+  it("does not tell anyone to retry a key the API rejected", () => {
+    /* The bug this is here for: a placeholder ANTHROPIC_API_KEY made Anthropic
+       answer 401, and the upload box said the reader was busy — so the only
+       advice on screen was to do the one thing that could never work. */
+    const rejected = readerFailure(401);
+    expect(rejected.message).toContain("ANTHROPIC_API_KEY");
+    expect(rejected.message).not.toMatch(/busy|try again in a moment/i);
+    expect(readerFailure(403).message).toBe(rejected.message);
+  });
+  it("names the model setting when the model is unknown", () => {
+    expect(readerFailure(404).message).toContain("ANTHROPIC_MODEL");
+    expect(readerFailure(404).message).not.toMatch(/busy/i);
+  });
+  it("still says busy for the faults that really do clear on their own", () => {
+    for (const status of [500, 502, 503, 529]) {
+      expect(readerFailure(status).message).toMatch(/busy/i);
+      expect(readerFailure(status).status).toBe(502);
+    }
+  });
+  it("keeps a rate limit a rate limit, and a bad scan a bad scan", () => {
+    expect(readerFailure(429).status).toBe(429);
+    expect(readerFailure(400).message).toContain("clearer photo");
+  });
+  it("answers a misconfiguration with 500, not a gateway error", () => {
+    /* 502 reads as "the thing upstream hiccuped"; these are our own settings. */
+    expect(readerFailure(401).status).toBe(500);
+    expect(readerFailure(404).status).toBe(500);
   });
 });

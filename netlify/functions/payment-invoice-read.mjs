@@ -2,7 +2,7 @@ import { fail, guard, json, readJson } from "../lib/http.mjs";
 import { adminClient, signedInUser } from "../lib/auth.mjs";
 import { consume, tooManyMessage } from "../lib/ratelimit.mjs";
 import {
-  ACCEPTED_TYPES, EXTRACT_TOOL, MAX_BASE64, cleanExtraction, systemPrompt,
+  ACCEPTED_TYPES, EXTRACT_TOOL, MAX_BASE64, cleanExtraction, readerFailure, systemPrompt,
 } from "../lib/invoiceExtract.mjs";
 
 /**
@@ -72,9 +72,8 @@ export async function handler(event) {
     const result = await resp.json().catch(() => ({}));
     if (!resp.ok) {
       console.error("invoice read refused:", resp.status, result?.error?.type, result?.error?.message);
-      return fail(event, 502, resp.status === 400
-        ? "That file could not be read. Try a clearer photo, or the original PDF."
-        : "The invoice reader is busy. Try again in a moment.");
+      const refusal = readerFailure(resp.status);
+      return fail(event, refusal.status, refusal.message);
     }
 
     const call = (result.content ?? []).find((c) => c?.type === "tool_use" && c?.name === EXTRACT_TOOL.name);

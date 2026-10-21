@@ -93,3 +93,38 @@ export function cleanExtraction(raw = {}) {
     notes: str(raw.notes, 400),
   };
 }
+
+/**
+ * Turn a refusal from the AI into what the person at the upload box should be
+ * told, and what HTTP status to answer with.
+ *
+ * The distinction this draws is between a fault that will clear on its own and
+ * one that will not. "Busy, try again in a moment" is advice, and it is honest
+ * only when trying again can work. A rejected key and an unknown model are
+ * settings that stay wrong until somebody changes them, so saying "busy" there
+ * sends the person round a loop with no exit — which is what happened on the
+ * Azure cutover: `ANTHROPIC_API_KEY` held a 31-character placeholder, Anthropic
+ * answered 401 `invalid x-api-key`, and the upload box reported a busy reader.
+ *
+ * The admin-facing cases name the setting, because the person who sees them is
+ * usually not the person who can fix them and has to pass the message on.
+ *
+ * @param status the HTTP status the Anthropic API answered with.
+ * @returns `{ status, message }` for the function to fail with.
+ */
+export function readerFailure(status) {
+  if (status === 400) {
+    return { status: 502, message: "That file could not be read. Try a clearer photo, or the original PDF." };
+  }
+  if (status === 401 || status === 403) {
+    return { status: 500, message: "Invoice scanning is misconfigured: the AI key was rejected. An admin needs to update ANTHROPIC_API_KEY — retrying will not help." };
+  }
+  if (status === 404) {
+    return { status: 500, message: "Invoice scanning is misconfigured: that AI model name is not recognised. An admin needs to check ANTHROPIC_MODEL — retrying will not help." };
+  }
+  if (status === 429) {
+    return { status: 429, message: "Too many invoices at once. Wait a minute and try again." };
+  }
+  /* Genuinely transient: overloaded (529) and the rest of the 5xx family. */
+  return { status: 502, message: "The invoice reader is busy. Try again in a moment." };
+}
