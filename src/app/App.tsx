@@ -9,7 +9,7 @@ import { ErrorBoundary } from "../components/ErrorBoundary";
 import { readLeadRef } from "../domain/leads/link";
 import { isPortalUrl } from "../domain/portal/token";
 import { useWorkspace, type WorkspaceData } from "../data/useWorkspace";
-import { isConfigured, loadProfile, onSessionChange, signOut, type SignedInUser } from "../data/session";
+import { isConfigured, lastAuthFailure, loadProfile, onSessionChange, signOut, type SignedInUser } from "../data/session";
 import { CHALLANS, CUSTOMERS, ORDERS, INVOICES, PROFORMAS, PURCHASE_ORDERS, QUOTATIONS, SETTINGS, SUBSCRIPTIONS, USERS } from "./demoData";
 import type { TeamMember } from "../features/team/TeamScreen";
 import type { Session } from "@supabase/supabase-js";
@@ -82,7 +82,7 @@ export function App() {
 type AuthState =
   | { status: "checking" }
   | { status: "signed-out" }
-  | { status: "no-profile"; email: string }
+  | { status: "no-profile"; email: string; reason: string }
   | { status: "signed-in"; user: SignedInUser };
 
 function LiveApp() {
@@ -96,7 +96,7 @@ function LiveApp() {
     const user = await loadProfile(session);
     setAuth(user
       ? { status: "signed-in", user }
-      : { status: "no-profile", email: session.user.email ?? "your account" });
+      : { status: "no-profile", email: session.user.email ?? "your account", reason: lastAuthFailure() });
   }, []);
 
   useEffect(() => {
@@ -109,7 +109,7 @@ function LiveApp() {
   if (auth.status === "checking") return <Splash message="Signing you in…" />;
   if (auth.status === "signed-out") return <SignIn />;
   if (auth.status === "no-profile") {
-    return <NoProfile email={auth.email} onSignOut={() => void signOut()} />;
+    return <NoProfile email={auth.email} reason={auth.reason} onSignOut={() => void signOut()} />;
   }
   return <LiveWorkbench user={auth.user} />;
 }

@@ -48,6 +48,28 @@ export const usesMicrosoftSignIn = signInWithEntra;
  */
 let entraSessionCache: Session | null = null;
 
+/**
+ * Why the last sign-in attempt did not produce a usable profile.
+ *
+ * The server knows exactly what went wrong — "This Microsoft account is not
+ * linked to a CRM user" is a different problem from a profile that cannot be
+ * read — and the screen that greets the person was throwing that away and
+ * asserting one cause of its own: no team record, ask an admin. When the
+ * team record plainly exists, that sends the admin to a screen where the
+ * person is already listed, and there is nowhere to go from there.
+ */
+let lastFailure = "";
+
+/** The server's own reason for the last refused sign-in, if it gave one. */
+export function lastAuthFailure(): string {
+  return lastFailure;
+}
+
+const noteFailure = (err: unknown): void => {
+  const message = String((err as { message?: string })?.message ?? err ?? "").trim();
+  lastFailure = message;
+};
+
 async function entraSessionFor(): Promise<Session | null> {
   if (entraSessionCache) return entraSessionCache;
   const account = await entraAccount();
@@ -93,7 +115,11 @@ async function entraSessionFor(): Promise<Session | null> {
     if (byOid) row = byOid as { id?: string; email?: string };
   }
 
-  if (!row?.id) return null;
+  if (!row?.id) {
+    noteFailure(error);
+    return null;
+  }
+  lastFailure = "";
 
   entraSessionCache = {
     user: { id: row.id, email: row.email || account.email },
@@ -166,7 +192,10 @@ export async function loadProfile(session: Session): Promise<SignedInUser | null
     /* Offline: the profile as it was last loaded on this device. */
     return recall<SignedInUser>("profile:" + session.user.id);
   }
-  if (error || !data) return null;
+  if (error || !data) {
+    noteFailure(error ?? "Your profile could not be read.");
+    return null;
+  }
   const row = data as Record<string, unknown>;
   const user: SignedInUser = {
     id: row.id as string,

@@ -133,17 +133,42 @@ export function SignIn() {
   );
 }
 
-/** Signed in, but with no profile row — the account exists and nothing in
- *  the CRM knows who it belongs to. An admin has to finish it. */
-export function NoProfile({ email, onSignOut }: { email: string; onSignOut: () => void }) {
+/**
+ * Signed in with Microsoft, but the CRM could not load a profile.
+ *
+ * THIS SCREEN USED TO NAME A CAUSE IT DID NOT KNOW: "has no team record …
+ * an admin can finish it from Settings → Team." When the team record exists
+ * — which it did, for an Admin with two company memberships — the admin
+ * opens Settings → Team, sees the person there, and has nowhere to go. A
+ * stale Microsoft account from the previous sign-in directory produces the
+ * same screen, and so does a profile that cannot be read.
+ *
+ * So it reports what actually failed when the server said, and otherwise
+ * describes the state rather than guessing at the reason. Signing out is
+ * offered first because it clears every cached Microsoft account, which is
+ * the fix for the most common cause.
+ */
+export function NoProfile({ email, reason, onSignOut }: {
+  email: string;
+  reason?: string;
+  onSignOut: () => void;
+}) {
   return (
     <main className="signin">
       <div className="signin-panel">
-        <Card title="Your account isn't set up yet">
+        <Card title="Signed in, but the CRM could not load your profile">
           <div className="stack">
             <p style={{ margin: 0 }}>
-              <strong>{email}</strong> can sign in, but has no team record, so there is nothing for it to
-              see yet. An admin can finish it from Settings → Team.
+              Microsoft signed <strong>{email}</strong> in, but the CRM could not match that to a
+              team member.
+            </p>
+            {reason ? (
+              <p style={{ margin: 0 }} className="muted">The server said: “{reason}”</p>
+            ) : null}
+            <p style={{ margin: 0 }} className="muted">
+              Sign out and in again first — that clears a Microsoft account left over from the old
+              sign-in directory, which is the usual cause. If it happens again, an admin should
+              check this address is on the team in Settings → Team.
             </p>
             <Button tone="default" onClick={onSignOut}>Sign out</Button>
           </div>

@@ -111,13 +111,25 @@ async function client(settings: EntraSettings): Promise<IPublicClientApplication
  * the API sees. Taking "the first account" picked the home one some of the
  * time, which is why "your account isn't set up yet" came and went.
  */
-function activeAccount(msal: IPublicClientApplication): AccountInfo | null {
+/* Exported for its test: which account is chosen decides whether sign-in
+   works at all, and the rule is easier to get wrong than it looks. */
+export function activeAccount(msal: IPublicClientApplication): AccountInfo | null {
   const tenant = entraSettings()?.tenantId?.toLowerCase();
   const all = msal.getAllAccounts();
-  const inTenant = tenant ? all.find((a) => a.tenantId?.toLowerCase() === tenant) : undefined;
   const active = msal.getActiveAccount();
-  if (active && (!tenant || active.tenantId?.toLowerCase() === tenant)) return active;
-  return inTenant ?? active ?? all[0] ?? null;
+  if (!tenant) return active ?? all[0] ?? null;
+  if (active?.tenantId?.toLowerCase() === tenant) return active;
+
+  /* AN ACCOUNT FROM ANOTHER DIRECTORY IS WORSE THAN NO ACCOUNT, and this
+     used to fall back to one (`active ?? all[0]`). Sign-in moved to the
+     company's own directory in 047, and every browser that signed in before
+     that still has the old ttpldelhi guest account cached. Handing it back
+     produces a token the API rejects — wrong issuer, wrong audience — which
+     surfaces as "your account isn't set up yet" on a profile that is
+     perfectly fine. Returning null instead means "signed out", so the next
+     click starts a real sign-in to the directory that can actually issue a
+     token this API accepts. */
+  return all.find((a) => a.tenantId?.toLowerCase() === tenant) ?? null;
 }
 
 /** The `oid` claim of an access token — the id the API links profiles by. */
@@ -227,8 +239,21 @@ export async function entraSignOut(): Promise<void> {
   const settings = entraSettings();
   if (!settings) return;
   const msal = await client(settings);
-  const account = activeAccount(msal);
-  await msal.logoutRedirect({ account: account ?? undefined });
+  /* EVERY cached account, not just the usable one. Signing out is what
+     somebody does when the CRM will not let them in, and the thing most
+     likely to be wrong is a stale account left over from the old directory
+     — which `activeAccount` now refuses to return, so passing it here would
+     log out nothing and leave the browser in exactly the state that sent
+     them to this screen. */
+  const accounts = msal.getAllAccounts();
+  for (const account of accounts.slice(0, -1)) {
+    try {
+      await msal.clearCache({ account });
+    } catch (err) {
+      console.warn("could not clear a cached Microsoft account:", err);
+    }
+  }
+  await msal.logoutRedirect({ account: accounts[accounts.length - 1] ?? undefined });
 }
 
 /** Who is signed in, or null. */
