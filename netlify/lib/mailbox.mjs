@@ -136,3 +136,23 @@ export async function getMessage(token, id) {
     },
   };
 }
+
+/**
+ * Mark one message read or unread.
+ *
+ * Mail.Read does not permit this — writing to a message needs Mail.ReadWrite
+ * — so a refusal here is expected on the narrow grant and must not read as a
+ * fault. The caller reports it as "could not mark it read", and the message
+ * is still perfectly readable.
+ */
+export async function setRead(token, id, isRead = true) {
+  const resp = await fetch(`${GRAPH}/me/messages/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ isRead: !!isRead }),
+  });
+  if (resp.ok) return { ok: true };
+  const body = await resp.json().catch(() => ({}));
+  console.warn("mark read refused:", resp.status, body?.error?.code);
+  return { ok: false, status: resp.status, error: "Could not change whether that is marked read." };
+}

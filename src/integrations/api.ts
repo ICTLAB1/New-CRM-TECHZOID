@@ -78,9 +78,12 @@ export interface IntegrationsApi {
    * Returns the Microsoft consent URL to send the browser to.
    *
    * `shared` connects a company mailbox (accounts@, billing@) that anybody
-   * authorised may send from, rather than the signer's own.
+   * authorised may send from, rather than the signer's own. `inbox` is the
+   * separate, read-only grant that lets the CRM show somebody their mail —
+   * deliberately not the same consent as sending, so losing one cannot cost
+   * the other.
    */
-  startMailboxConnection(purpose?: "own" | "shared"): Promise<string>;
+  startMailboxConnection(purpose?: "own" | "shared" | "inbox"): Promise<string>;
   disconnectMailbox(): Promise<void>;
   diagnostics(): Promise<Diagnostics>;
 
@@ -189,7 +192,7 @@ export function netlifyApi(): IntegrationsApi {
       };
     },
 
-    async startMailboxConnection(purpose: "own" | "shared" = "own") {
+    async startMailboxConnection(purpose: "own" | "shared" | "inbox" = "own") {
       const { url } = await post<{ url: string }>("ms-oauth-start", { purpose });
       return url;
     },

@@ -19,6 +19,7 @@ export const NAV: NavSection[] = [
       { id: "tasks", label: "Tasks" },
       { id: "pipeline", label: "Pipeline" },
       { id: "customers", label: "Customers" },
+      { id: "mail", label: "Mail" },
       { id: "quotations", label: "Quotations" },
       { id: "proformas", label: "Proformas" },
     ],

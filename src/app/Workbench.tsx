@@ -44,6 +44,7 @@ import { addAccount, readAccounts, type BankAccount } from "../domain/banking/ac
 import { integrations } from "../integrations";
 import { BRAND_LOGOS, DOC_IMAGES } from "./demoData";
 import type { CatalogProduct } from "../domain/catalog/types";
+import { MailScreen } from "../features/mail/MailScreen";
 import type { WorkspaceData } from "../data/useWorkspace";
 import type { Customer } from "../domain/customers/customer";
 import type { Workspace as OwnershipWorkspace } from "../domain/customers/cascade";
@@ -282,6 +283,8 @@ export function Workbench({
             onOpenCustomer={(c) => request("customers", "open", c.id)}
             startNew={intentFor("tasks")?.kind === "new" ? intentFor("tasks")!.n : undefined}
           />
+      ) : view === "mail" ? (
+        <MailScreen api={integrations} currentUser={user} />
       ) : view === "customers" ? (
         <CustomersScreen
           intent={intentFor("customers")}

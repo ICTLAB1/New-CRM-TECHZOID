@@ -1,7 +1,7 @@
 import { fail, guard, json, readJson } from "../lib/http.mjs";
 import { adminClient, signedInUser } from "../lib/auth.mjs";
 import { consume, tooManyMessage } from "../lib/ratelimit.mjs";
-import { getMessage, listMessages, readToken } from "../lib/mailbox.mjs";
+import { getMessage, listMessages, readToken, setRead } from "../lib/mailbox.mjs";
 
 /**
  * The CRM's view of one person's own mailbox.
@@ -35,6 +35,13 @@ export async function handler(event) {
        yet, and the screen needs to tell those apart to know whether to
        offer the Connect button. */
     return fail(event, access.needsConsent ? 409 : 400, access.error);
+  }
+
+  if (body.id && body.markRead !== undefined) {
+    const done = await setRead(access.token, String(body.id), !!body.markRead);
+    /* 200 either way: failing to mark a message read is not a failure to
+       show it, and the narrow Mail.Read grant cannot do it at all. */
+    return json(event, 200, { ok: done.ok, error: done.ok ? null : done.error });
   }
 
   if (body.id) {
