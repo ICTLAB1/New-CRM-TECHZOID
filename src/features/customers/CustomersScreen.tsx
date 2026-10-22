@@ -6,7 +6,8 @@ import { ShareLinkDialog } from "../leads/ShareLinkDialog";
 import { Button, Card, Chip, Empty, Input, Select, Tabs } from "../../components/primitives";
 import { useToast } from "../../components/Toast";
 import { blankCustomer, customerLabel, type Customer } from "../../domain/customers/customer";
-import { documentsForCustomer } from "../../domain/customers/documents";
+import { buildCustomerProfile } from "../../domain/customers/profile";
+import { loadCustomer360, type Customer360 } from "../../data/customer360";
 import type { SalesDocument } from "../../domain/documents/create";
 import { findDuplicate } from "../../domain/customers/duplicates";
 import { cascadeReassign, type Workspace } from "../../domain/customers/cascade";
@@ -27,6 +28,8 @@ export interface CustomersScreenProps {
    *  record. Separate from `workspace`, which is deliberately the narrow
    *  ownership projection the reassignment cascade needs. */
   documents?: { quotations?: SalesDocument[]; proformas?: SalesDocument[]; invoices?: SalesDocument[] };
+  /** What this customer holds — products, seats and term end dates. */
+  subscriptions?: unknown[];
   users: { id: string; name: string }[];
   customFields: { id: string; label: string }[];
   currentUser: { id: string; name: string; role: string; email?: string; designation?: string };
@@ -43,12 +46,26 @@ export interface CustomersScreenProps {
 type Pending = { customer: Customer; duplicate: ReturnType<typeof findDuplicate<Customer>> };
 
 export function CustomersScreen({
-  documents = {}, customers, workspace, users, customFields, currentUser, settings = {}, api, onChange, intent }: CustomersScreenProps) {
+  documents = {}, subscriptions = [], customers, workspace, users, customFields, currentUser, settings = {}, api, onChange, intent }: CustomersScreenProps) {
   const toast = useToast();
   const [query, setQuery] = useState("");
   const [stageFilter, setStageFilter] = useState<string>("all");
   const [owner, setOwner] = useState<string>("all");
   const [editing, setEditing] = useState<Customer | null>(null);
+  /* Contacts, activities, deals and bills are not in the workspace — loading
+     them globally would fetch every one of them on every screen to serve a
+     panel that opens for one customer at a time. */
+  const [extra, setExtra] = useState<Customer360>({
+    contacts: [], activities: [], deals: [], bills: [], unavailable: [],
+  });
+  useEffect(() => {
+    const id = editing?.id;
+    if (!id) return;
+    let live = true;
+    setExtra({ contacts: [], activities: [], deals: [], bills: [], unavailable: [] });
+    void loadCustomer360(id).then((got) => { if (live) setExtra(got); });
+    return () => { live = false; };
+  }, [editing?.id]);
   /* Whether the sheet is on a record that exists in the database yet. Held
      here rather than guessed inside the sheet: a blank customer already has
      an id, so there is nothing about the record itself that says. */
@@ -228,14 +245,20 @@ export function CustomersScreen({
         <CustomerSheet
           open={open}
           customer={record}
-          /* Quotations, proformas and invoices for this one company, which
-             otherwise meant opening three screens and filtering each by
-             name. The workspace already holds all three. */
-          documents={documentsForCustomer(
-            record.id,
+          /* The whole record: documents, people, licences, renewals, what
+             is owed, open opportunities. Assembled in domain/customers
+             /profile from what the workspace already holds plus the four
+             tables loaded for this one customer. */
+          profile={buildCustomerProfile(record, {
             documents,
-            String((settings?.["company"] as { state?: string } | undefined)?.state ?? "Delhi"),
-          )}
+            subscriptions: subscriptions as never,
+            contacts: extra.contacts,
+            activities: extra.activities,
+            deals: extra.deals,
+            bills: extra.bills,
+            sellerState: String((settings?.["company"] as { state?: string } | undefined)?.state ?? "Delhi"),
+          })}
+          unavailable={extra.unavailable}
           isNew={isNew}
           users={users}
           customFields={customFields}

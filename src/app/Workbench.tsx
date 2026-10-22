@@ -288,6 +288,7 @@ export function Workbench({
           customers={customers}
           workspace={ownershipOf(data)}
           documents={{ quotations, proformas, invoices }}
+          subscriptions={subscriptions}
           users={team}
           customFields={customFields}
           currentUser={user}

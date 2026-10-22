@@ -4,8 +4,8 @@ import { AttachmentsPanel } from "../attachments/AttachmentsPanel";
 import { NotesPanel } from "./NotesPanel";
 import { VerifyPanel } from "./VerifyPanel";
 import { PortalPanel } from "./PortalPanel";
-import { DocumentsPanel } from "./DocumentsPanel";
-import type { DocumentRow } from "../../domain/customers/documents";
+import { Customer360Panel } from "./Customer360Panel";
+import type { CustomerProfile } from "../../domain/customers/profile";
 import { addNote } from "../../domain/customers/notes";
 import { askBeforeSave, useConfirmedAction } from "../../components/useConfirmedAction";
 import { Button, Chip, Field, Input, Select, Textarea } from "../../components/primitives";
@@ -32,9 +32,12 @@ function GstinStatus({ gstin }: { gstin: string }) {
 }
 
 export interface CustomerSheetProps {
-  /** Everything raised for this customer — quotations, proformas, invoices.
-   *  Empty for a record that has never been saved. */
-  documents?: DocumentRow[];
+  /** Everything known about this customer, assembled in
+   *  domain/customers/profile. Absent for a record never saved. */
+  profile?: CustomerProfile;
+  /** Sections that could not be read, so the panel says so rather than
+   *  showing them empty. */
+  unavailable?: string[];
   /** False while the sheet is animating away. */
   open?: boolean;
   customer: Customer;
@@ -57,7 +60,7 @@ export interface CustomerSheetProps {
 }
 
 export function CustomerSheet({
-  documents = [], open = true, customer, isNew = false, users, customFields, canReassign, currentUser, settings = {}, onSave, onClose }: CustomerSheetProps) {
+  profile, unavailable = [], open = true, customer, isNew = false, users, customFields, canReassign, currentUser, settings = {}, onSave, onClose }: CustomerSheetProps) {
   const [f, setF] = useState<Customer>({ ...customer, notes: customer.notes ?? [], customFields: customer.customFields ?? {} });
   const set = <K extends keyof Customer>(k: K) => (e: { target: { value: string } }) =>
     setF((cur) => ({ ...cur, [k]: e.target.value }));
@@ -304,7 +307,7 @@ export function CustomerSheet({
 
         {/* What this company has been sent, and what came of it. Above the
             notes because it is the thing most often being looked for. */}
-        <DocumentsPanel documents={documents} />
+        {profile ? <Customer360Panel profile={profile} unavailable={unavailable} /> : null}
 
         {/* Calls, emails and meetings. Folded into the record being edited
             rather than saved on its own, so a note and the follow-up date
