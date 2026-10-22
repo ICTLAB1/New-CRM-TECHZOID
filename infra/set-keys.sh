@@ -6,8 +6,9 @@
 #   bash set-keys.sh anthropic     # invoice scanning
 #   bash set-keys.sh interakt      # WhatsApp reminders
 #
-# Typing is hidden; the key is never printed, never written to a file and
-# never put on the command line (it goes to Key Vault through a pipe).
+# Typing is hidden; the key is never printed and never put on a command
+# line. It reaches Key Vault through a private temporary file (mode 600)
+# that is deleted straight after.
 # The order is the safe one: secret first, then the app setting that
 # references it, then a check that the reference actually resolved.
 set -euo pipefail
@@ -64,6 +65,7 @@ case "${1:-}" in
     # An empty request: a good key gets "bad request", a wrong one 401.
     CODE="$(printf 'Authorization: Basic %s\n' "$KEY" | curl -s -o /dev/null -w '%{http_code}' -X POST https://api.interakt.ai/v1/public/track/users/ \
       -H @- -H "Content-Type: application/json" -d '{}')"
+    [ "$CODE" = "000" ] && bad "Couldn't reach Interakt to check the key. Nothing was stored."
     [ "$CODE" = "401" ] || [ "$CODE" = "403" ] && bad "Interakt rejected that key ($CODE). Nothing was stored."
     ok "Interakt accepted the key (answered $CODE)"
     printf %s "$KEY" | store interakt-api-key; unset KEY
