@@ -1,3 +1,5 @@
+import { whereSettingsLive } from "./whereSettingsLive.mjs";
+
 /**
  * Sandbox (sandbox.co.in) — GSTIN and PAN verification against the
  * government registers.
@@ -92,7 +94,7 @@ async function authenticate() {
        an auth failure body can name the account. */
     console.error("sandbox authenticate failed", resp.status, JSON.stringify(body)?.slice(0, 400));
     const message = resp.status === 401 || resp.status === 403
-      ? "Sandbox rejected the API key. Check SANDBOX_API_KEY and SANDBOX_API_SECRET in Netlify."
+      ? `Sandbox rejected the API key. Check SANDBOX_API_KEY and SANDBOX_API_SECRET in ${whereSettingsLive()}.`
       : `Sandbox would not issue a token (HTTP ${resp.status}).`;
     return { error: message, status: resp.status };
   }
@@ -157,7 +159,7 @@ export function providerMessage(status, payload) {
   if (status === 404) return "The register has no entry for that number.";
   if (status === 422 || status === 400) return said || "The register would not accept that number — check it for a typo.";
   if (status === 429) return "The verification service is rate-limiting us. Try again in a minute.";
-  if (status === 401 || status === 403) return "Sandbox rejected our credentials. Ask an admin to check them in Netlify.";
+  if (status === 401 || status === 403) return `Sandbox rejected our credentials. Ask an admin to check them in ${whereSettingsLive()}.`;
   if (status >= 500) return "The verification service is having trouble. Try again shortly.";
   return said || `The verification service answered ${status}.`;
 }
@@ -191,7 +193,7 @@ export function verifyPan({ pan, name = "", consent, reason }) {
 /** Prove the credentials work, without spending a verification. */
 export async function testConnection() {
   if (!credentialsPresent()) {
-    return { ok: false, error: "SANDBOX_API_KEY and SANDBOX_API_SECRET are not set in Netlify." };
+    return { ok: false, error: `SANDBOX_API_KEY and SANDBOX_API_SECRET are not set. ${whereSettingsLive()}.` };
   }
   forgetToken();
   const token = await authenticate();

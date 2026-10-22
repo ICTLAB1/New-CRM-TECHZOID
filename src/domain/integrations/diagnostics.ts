@@ -44,6 +44,18 @@ const STEP_OF: Record<string, number> = {
 /** Set, but not required for Microsoft 365 to work. */
 const OPTIONAL = new Set(["MS_TENANT_ID", "MS_STATE_SECRET", "RESEND_API_KEY"]);
 
+/**
+ * Where settings are changed, in one place.
+ *
+ * These messages said "Netlify → Site configuration" until the CRM moved to
+ * Azure, which sent admins to a dashboard this app no longer has. The server
+ * has its own copy in netlify/lib/whereSettingsLive.mjs, which can name the
+ * actual Function App because Azure tells it; the browser cannot, so it says
+ * where to look without pretending to know which one.
+ */
+export const WHERE_SETTINGS_LIVE =
+  "Azure → your Function App → Environment variables, then Apply";
+
 export function diagnosticLines(diag: Diagnostics): DiagnosticLine[] {
   const lines: DiagnosticLine[] = [];
 
@@ -56,7 +68,7 @@ export function diagnosticLines(diag: Diagnostics): DiagnosticLine[] {
         ? status.value ?? (status.hint ? `set (${status.hint})` : "set")
         : optional
           ? "not set — optional"
-          : `not set in Netlify — step ${STEP_OF[name] ?? 5}`,
+          : `not set — step ${STEP_OF[name] ?? 5}`,
     });
   }
 
@@ -89,10 +101,10 @@ export function nextAction(diag: Diagnostics): string | null {
     .filter(([name, s]) => !s.present && !OPTIONAL.has(name))
     .map(([name]) => name);
   if (missing.length) {
-    return `Add ${missing.join(", ")} in Netlify → Site configuration → Environment variables, then redeploy.`;
+    return `Add ${missing.join(", ")} in ${WHERE_SETTINGS_LIVE}.`;
   }
   if (!diag.table?.ready) {
-    return "Run supabase/003_ms_mail_accounts.sql in the Supabase SQL editor (step 6).";
+    return "The database is missing a table the mailbox needs. It is applied by the deploy, so push the branch again or ask for infra/migrate.sh to be run.";
   }
   if (diag.live?.checked && diag.live.ok === false) {
     return diag.live.message ?? "Microsoft rejected the credentials. Check the client ID and secret.";

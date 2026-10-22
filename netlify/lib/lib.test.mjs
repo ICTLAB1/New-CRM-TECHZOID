@@ -539,10 +539,13 @@ describe("what the verification service's answer is turned into", () => {
     expect(providerMessage(422, {})).toContain("check it for a typo");
   });
 
-  it("sends a credentials problem to whoever can fix it", () => {
+  it("sends a credentials problem to whoever can fix it, at the right dashboard", () => {
     for (const status of [401, 403]) {
       expect(providerMessage(status, {})).toContain("admin");
-      expect(providerMessage(status, {})).toContain("Netlify");
+      /* Azure, not Netlify: the CRM moved, and a message naming the old
+         dashboard sends the admin somewhere that holds nothing. */
+      expect(providerMessage(status, {})).toContain("Azure");
+      expect(providerMessage(status, {})).not.toContain("Netlify");
     }
   });
 

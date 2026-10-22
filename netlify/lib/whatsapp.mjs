@@ -21,6 +21,8 @@
  * this file free of any opinion about phone numbers at all.
  */
 
+import { askAdminToAdd, whereSettingsLive } from "./whereSettingsLive.mjs";
+
 const ENDPOINT = "https://api.interakt.ai/v1/public/message/";
 
 /**
@@ -31,7 +33,7 @@ export async function sendWhatsAppTemplate({ to, templateName, bodyValues, langu
   if (!key) {
     return {
       ok: false,
-      error: "WhatsApp isn't connected. Ask an admin to add INTERAKT_API_KEY in Netlify.",
+      error: "WhatsApp isn't connected. " + askAdminToAdd("INTERAKT_API_KEY"),
     };
   }
 
@@ -94,7 +96,7 @@ export async function sendWhatsAppTemplate({ to, templateName, bodyValues, langu
 function whyRefused(status, result) {
   const detail = String(result?.message ?? result?.error ?? "").toLowerCase();
   if (status === 401 || status === 403) {
-    return "WhatsApp rejected the account key. Check INTERAKT_API_KEY in Netlify against the key in Interakt.";
+    return `WhatsApp rejected the account key. Check INTERAKT_API_KEY in ${whereSettingsLive()} against the key in Interakt.`;
   }
   if (detail.includes("template")) {
     return "WhatsApp does not have a template by that name approved. Check the template names in Settings → Follow-ups against Interakt.";

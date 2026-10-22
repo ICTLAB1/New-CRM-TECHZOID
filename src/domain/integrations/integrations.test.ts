@@ -132,8 +132,13 @@ describe("Microsoft setup diagnostics", () => {
   });
 
   it("asks for the migration once the variables are in place", () => {
+    /* It used to name a file to paste into the Supabase SQL editor. There is
+       no Supabase now and migrations are applied by the deploy, so the
+       instruction is the one somebody can actually carry out. */
     const diag = { ...complete, table: { ready: false } };
-    expect(nextAction(diag)).toContain("003_ms_mail_accounts.sql");
+    const next = nextAction(diag) ?? "";
+    expect(next).toMatch(/deploy|migrate/i);
+    expect(next).not.toContain("Supabase SQL editor");
   });
 
   /* Azure's own error codes mean nothing the first time. The server
