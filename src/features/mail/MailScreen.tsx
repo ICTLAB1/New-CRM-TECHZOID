@@ -7,7 +7,8 @@ import { foldersInOutlookOrder, type ShownFolder } from "../../domain/mail/folde
 import {
   attachToDraft, deleteMail, fileToBase64, getAttachment, listAttachments,
   listFolders, listMail, markMail, moveMail, readMail,
-  saveDraft, saveNewDraft, sendDraft, MAX_ATTACHMENT_BYTES,
+  saveDraft, saveNewDraft, sendDraft, startUploadSession, uploadInChunks,
+  MAX_ATTACHMENT_BYTES, MAX_LARGE_ATTACHMENT_BYTES, TYPICAL_MESSAGE_LIMIT_BYTES,
   type MailAttachment, type MailDraft, type MailFolder, type MailMessage,
 } from "../../data/mail";
 import { IntegrationError, type IntegrationsApi } from "../../integrations/api";
@@ -58,6 +59,7 @@ export function MailScreen({ api }: { api: IntegrationsApi }) {
   const [files, setFiles] = useState<File[]>([]);
   const [showBcc, setShowBcc] = useState(false);
   const [onMessage, setOnMessage] = useState<MailAttachment[]>([]);
+  const [progress, setProgress] = useState<{ name: string; percent: number } | null>(null);
 
   const shown: ShownFolder[] = useMemo(() => foldersInOutlookOrder(folders), [folders]);
 
@@ -130,12 +132,37 @@ export function MailScreen({ api }: { api: IntegrationsApi }) {
     catch (err) { setError(err instanceof IntegrationError ? err.message : "Couldn't start the connection."); }
   };
 
-  /** Upload whatever was picked onto the draft that now exists. */
+  /**
+   * Upload whatever was picked onto the draft that now exists.
+   *
+   * TWO PATHS, because Graph insists on both. Under 3 MB goes in one
+   * request; a session for a file that small is refused outright
+   * (ErrorAttachmentSizeShouldNotBeLessThanMinimumSize). Over 3 MB goes
+   * chunk by chunk straight to Microsoft.
+   */
   const uploadFiles = async (id: string): Promise<boolean> => {
     for (const file of files) {
-      const base64 = await fileToBase64(file);
-      const done = await attachToDraft(id, { name: file.name, contentType: file.type, base64 });
-      if (done.error) { toast(done.error, "bad"); return false; }
+      try {
+        if (file.size <= MAX_ATTACHMENT_BYTES) {
+          const base64 = await fileToBase64(file);
+          const done = await attachToDraft(id, { name: file.name, contentType: file.type, base64 });
+          if (done.error) { toast(done.error, "bad"); return false; }
+        } else {
+          setProgress({ name: file.name, percent: 0 });
+          const session = await startUploadSession(id, {
+            name: file.name, contentType: file.type || "application/octet-stream", size: file.size,
+          });
+          if (session.error || !session.data?.uploadUrl) {
+            toast(session.error ?? `Could not start the upload for ${file.name}.`, "bad");
+            return false;
+          }
+          const sent = await uploadInChunks(session.data.uploadUrl, file,
+            (percent) => setProgress({ name: file.name, percent }));
+          if (!sent.ok) { toast(sent.error, "bad"); return false; }
+        }
+      } finally {
+        setProgress(null);
+      }
     }
     setFiles([]);
     return true;
@@ -255,7 +282,7 @@ export function MailScreen({ api }: { api: IntegrationsApi }) {
             <Field label="Subject"><Input value={draft.subject} onChange={(e) => setDraft({ ...draft, subject: e.target.value })} /></Field>
             <Textarea rows={10} value={draft.body} onChange={(e) => setDraft({ ...draft, body: e.target.value })} />
 
-            <Field label="Attachments" hint="Up to 3 MB each.">
+            <Field label="Attachments" hint="Up to 150 MB each. Over about 35 MB many mail servers refuse the whole message.">
               <input
                 type="file"
                 multiple
@@ -265,13 +292,26 @@ export function MailScreen({ api }: { api: IntegrationsApi }) {
                      attachment inline up to about 3 MB, and finding that out
                      after somebody has written the email is the worst moment
                      to find it out. */
-                  const tooBig = picked.filter((f) => f.size > MAX_ATTACHMENT_BYTES);
-                  if (tooBig.length) toast(`${tooBig.map((f) => f.name).join(", ")} — too large. Keep each file under 3 MB.`, "bad");
-                  setFiles((have) => [...have, ...picked.filter((f) => f.size <= MAX_ATTACHMENT_BYTES)]);
+                  /* 150 MB is Graph's ceiling and the only hard refusal.
+                     35 MB is Exchange Online's DEFAULT message limit, which
+                     an administrator can raise — so it warns and does not
+                     block: refusing on a number we cannot see the real value
+                     of would stop a mailbox configured for more. */
+                  const tooBig = picked.filter((f) => f.size > MAX_LARGE_ATTACHMENT_BYTES);
+                  if (tooBig.length) toast(`${tooBig.map((f) => f.name).join(", ")} — over 150 MB, which Outlook will not accept.`, "bad");
+                  const keepable = picked.filter((f) => f.size <= MAX_LARGE_ATTACHMENT_BYTES);
+                  const chunky = keepable.filter((f) => f.size > TYPICAL_MESSAGE_LIMIT_BYTES);
+                  if (chunky.length) toast(`${chunky.map((f) => f.name).join(", ")} is over 35 MB — many mail servers refuse messages that size.`, "warn");
+                  setFiles((have) => [...have, ...keepable]);
                   e.target.value = "";
                 }}
               />
             </Field>
+            {progress ? (
+              <p className="muted" style={{ margin: 0 }}>
+                Uploading {progress.name} — {progress.percent}%
+              </p>
+            ) : null}
             {files.length ? (
               <ul className="plain-list">
                 {files.map((f, i) => (

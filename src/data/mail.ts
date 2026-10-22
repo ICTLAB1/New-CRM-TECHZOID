@@ -100,6 +100,13 @@ export const attachToDraft = (id: string, file: { name: string; contentType: str
  *  sent, so nobody writes an email and then loses it to a 413. */
 export const MAX_ATTACHMENT_BYTES = 3 * 1024 * 1024;
 
+/** Graph's ceiling for a chunked upload. Past this there is no mechanism. */
+export const MAX_LARGE_ATTACHMENT_BYTES = 150 * 1024 * 1024;
+
+/** Exchange Online's DEFAULT message limit, which an admin can raise. A
+ *  warning, never a refusal — this tenant's real setting is unknown here. */
+export const TYPICAL_MESSAGE_LIMIT_BYTES = 35 * 1024 * 1024;
+
 /** A File as base64, without the data: prefix Graph will not accept. */
 export function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -108,4 +115,51 @@ export function fileToBase64(file: File): Promise<string> {
     reader.onload = () => resolve(String(reader.result ?? "").replace(/^data:[^,]*,/, ""));
     reader.readAsDataURL(file);
   });
+}
+
+export const startUploadSession = (id: string, file: { name: string; contentType: string; size: number }) =>
+  call<{ uploadUrl: string; expiresAt: string }>({ action: "attachSession", id, ...file });
+
+/**
+ * Upload a large file to Microsoft, in order, a chunk at a time.
+ *
+ * STRAIGHT TO MICROSOFT, not through our API — which has an 8 MB body cap a
+ * 30 MB file could not pass at all, and relaying it would double the
+ * transfer for no gain. The upload URL is pre-authenticated, so no
+ * Authorization header may be sent with it; adding one makes Microsoft
+ * reject the request.
+ *
+ * Chunks go up strictly in sequence because Graph assembles them in order
+ * and rejects a range that arrives early. That is why this is a loop and
+ * not a Promise.all.
+ */
+export async function uploadInChunks(
+  uploadUrl: string,
+  file: File,
+  onProgress?: (percent: number) => void,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const { chunksFor, percentDone } = await import("../domain/mail/chunks");
+  const chunks = chunksFor(file.size);
+  let done = 0;
+
+  for (const chunk of chunks) {
+    const slice = file.slice(chunk.start, chunk.end + 1);
+    let resp: Response;
+    try {
+      resp = await fetch(uploadUrl, {
+        method: "PUT",
+        headers: { "Content-Range": chunk.contentRange, "Content-Type": "application/octet-stream" },
+        body: slice,
+      });
+    } catch {
+      return { ok: false, error: `Upload of ${file.name} was interrupted.` };
+    }
+    /* 200 finishes the attachment; 201/202 accept a chunk and wait for the
+       next. Anything else and continuing would leave a half-written
+       attachment on the draft. */
+    if (!resp.ok) return { ok: false, error: `Upload of ${file.name} failed (${resp.status}).` };
+    done += chunk.size;
+    onProgress?.(percentDone(done, file.size));
+  }
+  return { ok: true };
 }

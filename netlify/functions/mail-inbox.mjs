@@ -2,7 +2,7 @@ import { fail, guard, json, readJson } from "../lib/http.mjs";
 import { adminClient, signedInUser } from "../lib/auth.mjs";
 import { consume, tooManyMessage } from "../lib/ratelimit.mjs";
 import {
-  addAttachment, createDraft, deleteMessage, getAttachment, getMessage,
+  addAttachment, createAttachmentSession, createDraft, deleteMessage, getAttachment, getMessage,
   listAttachments, listFolders, listMessages, moveMessage, readToken,
   sendDraft, sendNew, setRead, updateDraft,
 } from "../lib/mailbox.mjs";
@@ -22,7 +22,7 @@ import {
 
 const ACTIONS = new Set([
   "folders", "list", "read", "markRead", "draft", "saveDraft", "send", "sendNew", "delete", "move",
-  "attachments", "attachment", "attach",
+  "attachments", "attachment", "attach", "attachSession",
 ]);
 
 export async function handler(event) {
@@ -112,6 +112,20 @@ export async function handler(event) {
       /* The size refusal is the caller's mistake, not the mailbox's, so it
          comes back as 413 rather than a bad gateway. */
       return done.ok ? json(event, 200, { ok: true }) : fail(event, done.status === 413 ? 413 : 502, done.error);
+    }
+    case "attachSession": {
+      if (!id) return fail(event, 400, "Which draft?");
+      const made = await createAttachmentSession(token, id, {
+        name: body.name, contentType: body.contentType, size: body.size,
+      });
+      /* The URL goes to the browser, which uploads the bytes straight to
+         Microsoft. It is pre-authenticated, single-purpose and short-lived:
+         it can write this one attachment on this one draft and nothing
+         else. Relaying the bytes through here instead would hit the API's
+         own 8 MB body cap and double the transfer for no gain. */
+      return made.ok
+        ? json(event, 200, { uploadUrl: made.uploadUrl, expiresAt: made.expiresAt })
+        : fail(event, made.status === 413 ? 413 : 502, made.error);
     }
     case "delete": {
       if (!id) return fail(event, 400, "Which message?");

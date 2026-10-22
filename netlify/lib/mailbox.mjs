@@ -310,6 +310,17 @@ export async function moveMessage(token, id, destinationId) {
  */
 export const MAX_ATTACHMENT_BYTES = 3 * 1024 * 1024;
 
+/** Graph's ceiling for an upload session. Past this there is no mechanism. */
+export const MAX_LARGE_ATTACHMENT_BYTES = 150 * 1024 * 1024;
+
+/**
+ * Exchange Online's DEFAULT message size limit, which an administrator can
+ * raise to 150 MB. It is not ours to enforce and we do not know this
+ * tenant's setting, so it is a warning and never a refusal: a mailbox
+ * configured for 100 MB should not be stopped by a number hardcoded here.
+ */
+export const TYPICAL_MESSAGE_LIMIT_BYTES = 35 * 1024 * 1024;
+
 /** What is on a message, without pulling the contents of any of it down. */
 export async function listAttachments(token, id) {
   const url = `${GRAPH}/me/messages/${encodeURIComponent(id)}/attachments?$select=id,name,contentType,size,isInline`;
@@ -374,4 +385,54 @@ export async function addAttachment(token, draftId, { name, contentType, base64 
   const body = await resp.json().catch(() => ({}));
   console.error("attach refused:", resp.status, body?.error?.code);
   return { ok: false, status: resp.status, error: `Could not attach ${name}.` };
+}
+
+/**
+ * Begin a chunked upload for a file too big to attach in one request.
+ *
+ * Returns Microsoft's upload URL, which the BROWSER then PUTs chunks to
+ * directly. Two reasons it does not go through this server: the API has an
+ * 8 MB body cap, so a 30 MB file could not pass through it at all; and
+ * relaying tens of megabytes twice would make every large attachment cost
+ * double the bandwidth and twice the wait for no gain.
+ *
+ * The URL is pre-authenticated and carries its own short-lived token, which
+ * is why the browser must NOT send an Authorization header with it. It
+ * grants exactly one thing — writing the bytes of this one attachment on
+ * this one draft — and expires on its own.
+ *
+ * UNDER 3 MB THIS IS THE WRONG CALL. Graph refuses a session for a smaller
+ * file (ErrorAttachmentSizeShouldNotBeLessThanMinimumSize); those go through
+ * addAttachment in a single request. Both paths have to exist.
+ */
+export async function createAttachmentSession(token, draftId, { name, contentType, size }) {
+  const bytes = Number(size) || 0;
+  if (bytes <= MAX_ATTACHMENT_BYTES) {
+    return { ok: false, status: 400, error: "That file is small enough to attach directly." };
+  }
+  if (bytes > MAX_LARGE_ATTACHMENT_BYTES) {
+    return { ok: false, status: 413, error: `${name} is larger than 150 MB, which is the most Outlook will accept.` };
+  }
+
+  const resp = await fetch(
+    `${GRAPH}/me/messages/${encodeURIComponent(draftId)}/attachments/createUploadSession`,
+    {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        AttachmentItem: {
+          attachmentType: "file",
+          name: String(name ?? "attachment"),
+          contentType: String(contentType ?? "application/octet-stream"),
+          size: bytes,
+        },
+      }),
+    },
+  );
+  const body = await resp.json().catch(() => ({}));
+  if (!resp.ok || !body?.uploadUrl) {
+    console.error("upload session refused:", resp.status, body?.error?.code);
+    return { ok: false, status: resp.status, error: `Could not start the upload for ${name}.` };
+  }
+  return { ok: true, uploadUrl: String(body.uploadUrl), expiresAt: String(body.expirationDateTime ?? "") };
 }
