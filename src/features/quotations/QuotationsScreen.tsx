@@ -389,6 +389,7 @@ export function QuotationsScreen({
           customers={customers}
           catalog={catalog}
           onDraft={setEditing}
+          onCreateCustomer={onCreateCustomer}
         />
       ) : null}
 
