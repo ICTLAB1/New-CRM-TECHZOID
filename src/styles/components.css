@@ -1121,3 +1121,18 @@ button.path-hit { cursor: pointer; }
 }
 .view-chip-x:hover { color: var(--bad); }
 .view-name { height: 32px; width: 160px; font-size: var(--t-small); }
+
+/* Inline editing: a value that can be changed where it is read. The
+   affordance is quiet until hover, because a table full of visible
+   controls reads as a form rather than as data. */
+.inline-edit {
+  display: inline-flex; align-items: center; gap: 4px;
+  border: 1px solid transparent; background: none; font: inherit;
+  padding: 2px 4px; border-radius: var(--radius); cursor: pointer;
+  transition: border-color var(--dur-fast, 160ms) var(--ease), background var(--dur-fast, 160ms) var(--ease);
+}
+.inline-edit:hover { border-color: var(--rule-strong); background: var(--surface-2); }
+.inline-edit:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.inline-edit-hint { color: var(--ink-4); font-size: 9px; opacity: 0; transition: opacity var(--dur-fast, 160ms) var(--ease); }
+.inline-edit:hover .inline-edit-hint, .inline-edit:focus-visible .inline-edit-hint { opacity: 1; }
+.inline-select { height: 32px; padding-block: 0; font-size: var(--t-small); min-width: 130px; }

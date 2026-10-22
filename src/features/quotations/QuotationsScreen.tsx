@@ -24,6 +24,7 @@ import { orderFromProforma, type SalesOrder } from "../../domain/orders/create";
 import type { CatalogProduct } from "../../domain/catalog/types";
 import { QuoteComposer } from "./QuoteComposer";
 import { SavedViews } from "../../components/SavedViews";
+import { InlineSelect } from "../../components/InlineSelect";
 import { computeDocument } from "../../domain/tax/compute";
 import { formatTotals, isMixed, moneyList, totalsByCurrency } from "../../domain/currency/format";
 import { fmtDate, isOverdue } from "../../domain/dates";
@@ -475,7 +476,22 @@ export function QuotationsScreen({
                       <td data-label={isPo ? "Required by" : isInvoice ? "Payment due" : "Valid until"} className={isOverdue(d.validUntil) ? "" : "muted"} style={isOverdue(d.validUntil) ? { color: "var(--warn)" } : undefined}>
                         {fmtDate(d.validUntil)}
                       </td>
-                      <td data-label="Status"><Chip tone={STATUS_TONE[live] ?? "neutral"}>{live}</Chip></td>
+                      <td data-label="Status">
+                        {/* Changed here rather than by opening the record —
+                            the commonest edit on this screen. It goes through
+                            `save`, the editor's own path, so marking a
+                            quotation Sent still advances the deal on the
+                            pipeline board. An Expired row shows Expired and
+                            edits the stored status underneath it. */}
+                        <InlineSelect
+                          value={d.status}
+                          options={isPo ? PURCHASE_ORDER_STATUSES : isInvoice ? INVOICE_STATUSES : QUOTE_STATUSES}
+                          label={`Status of ${d.number}`}
+                          onCommit={(next) => save({ ...d, status: next })}
+                        >
+                          <Chip tone={STATUS_TONE[live] ?? "neutral"}>{live}</Chip>
+                        </InlineSelect>
+                      </td>
                       {isPo ? <td data-label="Received"><ReceiptCell doc={d} /></td> : null}
                       <td data-label="Value" className="num strong">{moneyList(totals.grand, d.currency)}</td>
                       <td data-actions>
