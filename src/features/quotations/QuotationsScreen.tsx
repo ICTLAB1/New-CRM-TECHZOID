@@ -23,6 +23,7 @@ import { OBJ_TYPE } from "../../domain/documents/objType";
 import { orderFromProforma, type SalesOrder } from "../../domain/orders/create";
 import type { CatalogProduct } from "../../domain/catalog/types";
 import { QuoteComposer } from "./QuoteComposer";
+import { SavedViews } from "../../components/SavedViews";
 import { computeDocument } from "../../domain/tax/compute";
 import { formatTotals, isMixed, moneyList, totalsByCurrency } from "../../domain/currency/format";
 import { fmtDate, isOverdue } from "../../domain/dates";
@@ -394,6 +395,17 @@ export function QuotationsScreen({
       ) : null}
 
       <Card padded={false}>
+        {/* The filter combinations this person keeps coming back to. Above
+            the tabs because it sets what the tabs are filtering within. */}
+        <SavedViews
+          screen={docType}
+          current={{ status, owner, query }}
+          onApply={(f) => {
+            setStatus(f.status ?? "all");
+            setOwner(f.owner ?? "all");
+            setQuery(f.query ?? "");
+          }}
+        />
         <div style={{ padding: "0 var(--gap-wide)" }}>
           <Tabs
             active={status}

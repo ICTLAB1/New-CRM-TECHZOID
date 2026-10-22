@@ -15,10 +15,26 @@ import { EXIT_MS, prefersReducedMotion } from "./usePresence";
 
 export type ToastTone = "good" | "info" | "warn" | "bad";
 
+/**
+ * An offer attached to a toast — in practice, Undo.
+ *
+ * IT IS AN OFFER AND NOT A PROMISE. A toast only ever offers this where the
+ * action behind it is genuinely reversible: moving a message back to the
+ * folder it came from, restoring a row the server still holds. It must
+ * never appear on something that cannot actually be put back, because an
+ * Undo that fails is worse than no Undo — the person stopped worrying the
+ * moment they saw it.
+ */
+export interface ToastAction {
+  label: string;
+  run: () => void | Promise<void>;
+}
+
 export interface ToastMessage {
   id: number;
   text: string;
   tone?: ToastTone;
+  action?: ToastAction;
 }
 
 /**
@@ -36,8 +52,17 @@ const LIFE: Record<ToastTone, number> = {
   bad: 9000,
 };
 
+/**
+ * A toast carrying an offer stays longer than one that only reports.
+ *
+ * The toast IS the window — when it goes, the offer goes with it. 3.8
+ * seconds is plenty to read "Moved to Deleted Items" and nowhere near
+ * enough to notice it, decide it was wrong, and reach the button.
+ */
+const LIFE_WITH_ACTION = 9000;
+
 interface Api {
-  push: (text: string, tone?: ToastTone) => void;
+  push: (text: string, tone?: ToastTone, action?: ToastAction) => void;
   dismiss: (id: number) => void;
 }
 
@@ -71,14 +96,14 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     timers.current.set(id, [setTimeout(() => drop(id), EXIT_MS)]);
   }, [drop]);
 
-  const push = useCallback((text: string, tone: ToastTone = "good") => {
+  const push = useCallback((text: string, tone: ToastTone = "good", action?: ToastAction) => {
     const id = Date.now() + Math.random();
-    setItems((cur) => [...cur, { id, text, tone }]);
+    setItems((cur) => [...cur, { id, text, tone, action }]);
 
     /* EACH TOAST IS TIMED ON ITS OWN. They used to be dismissed oldest-first
        off one timer, so three at once meant the third sat there for the sum
        of the other two — long past the moment it was about. */
-    const life = LIFE[tone] ?? LIFE.good;
+    const life = action ? LIFE_WITH_ACTION : (LIFE[tone] ?? LIFE.good);
     if (prefersReducedMotion()) {
       timers.current.set(id, [setTimeout(() => drop(id), life)]);
       return;
@@ -121,8 +146,21 @@ function Toast({ toast, leaving, onDismiss }: { toast: ToastMessage; leaving: bo
   return (
     <div className={"toast" + (toast.tone ? " toast-" + toast.tone : "") + (leaving ? " is-leaving" : "")}>
       <span className="toast-text">{toast.text}</span>
+      {toast.action ? (
+        <button
+          type="button"
+          className="toast-action"
+          onClick={() => { void toast.action?.run(); onDismiss(); }}
+        >
+          {toast.action.label}
+        </button>
+      ) : null}
       {/* How long it has left, drawn as a line that drains. Decoration only. */}
-      <span className="toast-life" aria-hidden style={{ animationDuration: `${LIFE[toast.tone ?? "good"] ?? LIFE.good}ms` }} />
+      <span
+        className="toast-life"
+        aria-hidden
+        style={{ animationDuration: `${toast.action ? LIFE_WITH_ACTION : (LIFE[toast.tone ?? "good"] ?? LIFE.good)}ms` }}
+      />
       {/* Reachable by keyboard and named for a screen reader, because a
           notification that can only be waited out is one a keyboard user
           cannot get out of the way. */}

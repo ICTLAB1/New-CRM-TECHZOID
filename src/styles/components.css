@@ -1089,3 +1089,35 @@ button.path-hit { cursor: pointer; }
   .mail-shell { grid-template-columns: 1fr; }
   .mail-list, .mail-pane { max-height: none; }
 }
+
+/* The offer on a toast — Undo. Set apart from the text so it reads as a
+   thing to press, and sized for a thumb: it appears for nine seconds and
+   missing it means the chance is gone. */
+.toast-action {
+  flex: none; border: 1px solid currentColor; background: transparent;
+  color: inherit; font: inherit; font-weight: 700; cursor: pointer;
+  padding: 4px 12px; min-height: 32px; border-radius: var(--radius);
+  transition: background var(--dur-fast, 160ms) var(--ease);
+}
+.toast-action:hover { background: color-mix(in srgb, currentColor 14%, transparent); }
+.toast-action:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+
+/* Saved views: a row of filter chips above a list. */
+.saved-views { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 10px var(--gap-wide) 0; }
+.view-chip-wrap { display: inline-flex; align-items: center; }
+.view-chip {
+  border: 1px solid var(--rule-strong); background: var(--surface); color: var(--ink-2);
+  font: inherit; font-size: var(--t-small); cursor: pointer;
+  padding: 5px 12px; min-height: 32px; border-radius: 999px;
+  transition: background var(--dur-fast, 160ms) var(--ease), border-color var(--dur-fast, 160ms) var(--ease);
+}
+.view-chip:hover { background: var(--surface-2); }
+.view-chip[aria-current="true"] {
+  background: var(--accent-weak); border-color: var(--accent-rule); color: var(--ink); font-weight: 700;
+}
+.view-chip-x {
+  border: 0; background: none; color: var(--ink-4); cursor: pointer;
+  font-size: 11px; line-height: 1; padding: 8px 6px; margin-left: -4px; border-radius: var(--radius);
+}
+.view-chip-x:hover { color: var(--bad); }
+.view-name { height: 32px; width: 160px; font-size: var(--t-small); }

@@ -208,25 +208,44 @@ export function MailScreen({ api }: { api: IntegrationsApi }) {
     } finally { setBusy(""); }
   };
 
+  /**
+   * Put a message back where it came from.
+   *
+   * THIS IS WHY DELETE AND ARCHIVE CAN OFFER UNDO AT ALL. Neither destroys
+   * anything — Graph's delete is a move to Deleted Items — so the reverse
+   * is another move, and it either works or reports that it did not. An
+   * Undo offered on something genuinely gone would be worse than none,
+   * because the person stops worrying the moment they see it.
+   */
+  const putBack = async (m: MailMessage, from: string) => {
+    const got = await moveMail(m.id, from);
+    if (got.error) { toast(got.error, "bad"); return; }
+    setMessages((l) => (l.some((x) => x.id === m.id) ? l : [m, ...l]));
+    toast("Put back");
+    void refreshFolders();
+  };
+
   const remove = async (m: MailMessage) => {
+    const from = folder;
     setBusy("delete");
     const got = await deleteMail(m.id);
     setBusy("");
     if (got.error) { toast(got.error, "bad"); return; }
     setMessages((l) => l.filter((x) => x.id !== m.id));
     setOpen(null);
-    toast("Moved to Deleted Items");
+    toast("Moved to Deleted Items", "good", { label: "Undo", run: () => void putBack(m, from) });
     void refreshFolders();
   };
 
   const archive = async (m: MailMessage) => {
     const to = folders.find((f) => f.name.toLowerCase() === "archive");
     if (!to) { toast("This mailbox has no Archive folder.", "warn"); return; }
+    const from = folder;
     const got = await moveMail(m.id, to.id);
     if (got.error) { toast(got.error, "bad"); return; }
     setMessages((l) => l.filter((x) => x.id !== m.id));
     setOpen(null);
-    toast("Archived");
+    toast("Archived", "good", { label: "Undo", run: () => void putBack(m, from) });
     void refreshFolders();
   };
 
