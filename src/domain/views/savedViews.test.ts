@@ -51,6 +51,38 @@ describe("saved views", () => {
     expect(removeView(views, "A").map((v) => v.name)).toEqual(["B"]);
   });
 
+  describe("a screen whose resting state is not \"all\"", () => {
+    /* The payment tracker opens on pending bills. Without declaring that,
+       its untouched list reads as filtered: Save on offer forever for the
+       screen exactly as it opens. */
+    const pending = { view: "open" };
+
+    it("counts the declared default as no filter", () => {
+      expect(isDefaultView({ view: "open", query: "" }, pending)).toBe(true);
+      expect(isDefaultView({ view: "open" })).toBe(false);
+    });
+
+    it("still counts a real filter as one", () => {
+      expect(isDefaultView({ view: "paid" }, pending)).toBe(false);
+      expect(isDefaultView({ view: "open", query: "acme" }, pending)).toBe(false);
+    });
+
+    it("keeps \"all\" meaningful where the default is narrower", () => {
+      /* Every bill including the paid ones is a move away from the default,
+         not towards it, so it is worth saving and worth matching. */
+      expect(isDefaultView({ view: "all" }, pending)).toBe(false);
+      expect(matchesCurrent(view("Everything", { view: "all" }), { view: "open" }, pending)).toBe(false);
+      expect(matchesCurrent(view("Everything", { view: "all" }), { view: "all" }, pending)).toBe(true);
+    });
+
+    it("saves and matches the view the screen opens on nothing", () => {
+      const saved = saveView([], "Paid only", { view: "paid", lane: "all", query: "" }, pending);
+      expect(saved[0]?.filters).toEqual({ view: "paid" });
+      expect(activeView(saved, { view: "paid", lane: "all", query: "" }, pending)?.name).toBe("Paid only");
+      expect(activeView(saved, { view: "open", lane: "all", query: "" }, pending)).toBe(null);
+    });
+  });
+
   it("survives whatever is actually in localStorage", () => {
     /* It is a string in a browser store: an old version wrote it, a person
        may have edited it, and a crash here takes the whole screen down. */

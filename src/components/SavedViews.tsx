@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { Button } from "./primitives";
 import { recall, remember } from "../data/offline";
 import {
-  activeView, isDefaultView, readViews, removeView, saveView, type SavedView,
+  activeView, isDefaultView, readViews, removeView, saveView,
+  type SavedView, type ViewDefaults,
 } from "../domain/views/savedViews";
 
 /**
@@ -16,11 +17,17 @@ import {
  * Stored per screen in this browser. Personal, not shared — see the note in
  * domain/views/savedViews.ts.
  */
-export function SavedViews({ screen, current, onApply }: {
+export function SavedViews({ screen, current, defaults, onApply }: {
   /** Namespaces the storage: "quotations", "customers". */
   screen: string;
   /** The screen's filter state, exactly as it holds it. */
   current: Record<string, string>;
+  /**
+   * The value each filter holds when the screen opens, for the screens whose
+   * resting state is not "all" — the payment tracker opens on pending bills.
+   * Without it an untouched list reads as filtered and offers to save itself.
+   */
+  defaults?: ViewDefaults;
   onApply: (filters: Record<string, string>) => void;
 }) {
   const key = `views:${screen}`;
@@ -35,15 +42,15 @@ export function SavedViews({ screen, current, onApply }: {
     remember(key, next);
   };
 
-  const active = activeView(views, current);
-  const atDefault = isDefaultView(current);
+  const active = activeView(views, current, defaults);
+  const atDefault = isDefaultView(current, defaults);
   /* Save is offered only for something not already saved and not simply
      the unfiltered list, which needs no name. */
   const canSave = !active && !atDefault;
 
   const commit = () => {
     if (!name.trim()) return;
-    write(saveView(views, name, current));
+    write(saveView(views, name, current, defaults));
     setName("");
     setNaming(false);
   };

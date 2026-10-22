@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { AnimatePresence, LayoutGroup, motion } from "motion/react";
 import { STAGES, applyStage, stageNeedsReason, type LostDetail, type StageId } from "../../domain/pipeline/stages";
 import type { Customer } from "../../domain/customers/customer";
@@ -8,6 +8,8 @@ import { backingFor, backingNote, type BackingSource } from "../../domain/pipeli
 import { countsAsWon } from "../../domain/pipeline/stages";
 import { fmtDateShort, isOverdue } from "../../domain/dates";
 import { LostReasonModal } from "./LostReasonModal";
+import { Button, Card, Input, Select } from "../../components/primitives";
+import { SavedViews } from "../../components/SavedViews";
 
 /**
  * The pipeline board. Drag a deal between stages.
@@ -20,6 +22,7 @@ import { LostReasonModal } from "./LostReasonModal";
 export function PipelineBoard({
   customers,
   documents,
+  users = [],
   onChange,
   onOpen,
 }: {
@@ -28,12 +31,29 @@ export function PipelineBoard({
    *  deal is being counted as won with nothing sold. Optional: the board
    *  still works without them, it just cannot make that check. */
   documents?: BackingSource;
+  /** For the owner filter. Without them the board shows everybody's deals,
+   *  which is the right default for one person and unreadable for ten. */
+  users?: { id: string; name: string }[];
   onChange: (next: Customer[]) => void;
   onOpen: (customer: Customer) => void;
 }) {
   const [dragId, setDragId] = useState<string | null>(null);
   const [overStage, setOverStage] = useState<StageId | null>(null);
   const [pendingLost, setPendingLost] = useState<Customer | null>(null);
+  const [owner, setOwner] = useState<string>("all");
+  const [query, setQuery] = useState("");
+
+  /* Filtering narrows what the columns show, never what a move writes:
+     `move` still maps over every customer, so a deal dragged while the board
+     is filtered does not take the hidden ones with it. */
+  const shown = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return customers.filter((c) => {
+      if (owner !== "all" && c.ownerId !== owner) return false;
+      if (!q) return true;
+      return [c.company, c.contact, c.email, c.city].some((v) => (v ?? "").toLowerCase().includes(q));
+    });
+  }, [customers, owner, query]);
 
   const move = (customer: Customer, stage: StageId, detail?: LostDetail) => {
     const next = customers.map((c) =>
@@ -56,13 +76,47 @@ export function PipelineBoard({
 
   return (
     <>
+      <Card padded={false} className="board-filters">
+        <SavedViews
+          screen="pipeline"
+          current={{ owner, query }}
+          onApply={(f) => {
+            setOwner(f.owner ?? "all");
+            setQuery(f.query ?? "");
+          }}
+        />
+        <div className="row wrap" style={{ padding: "var(--gap) var(--gap-wide)" }}>
+          <Input
+            style={{ maxWidth: 280 }}
+            placeholder="Search company, contact, email…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+          {users.length > 1 ? (
+            <Select style={{ maxWidth: 180 }} value={owner} onChange={(e) => setOwner(e.target.value)}>
+              <option value="all">Any owner</option>
+              {users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+            </Select>
+          ) : null}
+          {owner !== "all" || query ? (
+            <Button size="sm" tone="quiet" onClick={() => { setOwner("all"); setQuery(""); }}>
+              Clear
+            </Button>
+          ) : null}
+          <span className="grow" />
+          <span className="field-hint">
+            {shown.length} of {customers.length} deal{customers.length === 1 ? "" : "s"}
+          </span>
+        </div>
+      </Card>
+
       <div className="board-wrap">
       {/* One layout group, so a card dropped into another column travels
           there instead of vanishing from one and appearing in the other. */}
       <LayoutGroup>
       <div className="board scroll">
         {STAGES.map((stage) => {
-          const inStage = customers.filter((c) => (c.stage ?? "lead") === stage.id);
+          const inStage = shown.filter((c) => (c.stage ?? "lead") === stage.id);
           return (
             <div
               key={stage.id}

@@ -3,6 +3,7 @@ import { BellOff, BellRing, Camera, FileUp, Mail, MessageCircle, Plus, Settings2
 import { PageHead } from "../../app/AppShell";
 import { Button, Card, Chip, Empty, Input, Select } from "../../components/primitives";
 import { Presence } from "../../components/Presence";
+import { SavedViews } from "../../components/SavedViews";
 import { useToast } from "../../components/Toast";
 import { fmtDate, TODAY } from "../../domain/dates";
 import { moneyList } from "../../domain/currency/format";
@@ -325,6 +326,19 @@ export function PaymentTrackerScreen({ currentUser, users, customers, companyId 
           </section>
 
           <Card padded={false}>
+            {/* The tracker opens on pending bills, so that is the resting
+                state the chips measure against — see the defaults note in
+                components/SavedViews.tsx. */}
+            <SavedViews
+              screen="payment-tracker"
+              current={{ lane, view, query }}
+              defaults={{ view: "open" }}
+              onApply={(f) => {
+                setLane((f.lane as Lane) ?? "all");
+                setView((f.view as View) ?? "open");
+                setQuery(f.query ?? "");
+              }}
+            />
             <div className="row wrap" style={{ padding: "var(--gap) var(--gap-wide)" }}>
               <Input
                 style={{ maxWidth: 280 }}

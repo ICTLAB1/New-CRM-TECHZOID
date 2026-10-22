@@ -442,6 +442,9 @@ button.tile:hover { background: var(--surface-2); }
 
 /* The board always overflows on a laptop — seven stages do not fit. A fade
    at the right edge says so; a card sliced by the viewport just looks broken. */
+/* .page spaces its children individually; the board's filter bar is a
+   card sitting directly above a scroller that has none of its own. */
+.board-filters { margin-bottom: var(--gap); }
 .board-wrap { position: relative; }
 .board-wrap::after {
   content: ""; position: absolute; top: 0; right: 0; bottom: var(--gap); width: 28px;

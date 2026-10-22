@@ -21,32 +21,63 @@ export interface SavedView {
   filters: Record<string, string>;
 }
 
+/**
+ * What a screen calls "no filter".
+ *
+ * Empty and "all" are the common cases, but not every screen starts
+ * unfiltered at "all": the payment tracker opens on pending bills, because
+ * a list of every bill ever paid is not what anybody opens it for. A screen
+ * like that declares its own resting state here, otherwise its untouched
+ * list looks filtered — Save on offer forever for a view that is just the
+ * screen as it opens.
+ */
+export type ViewDefaults = Record<string, string>;
+
 /** A filter at its default is the same as a filter nobody set. */
-const meaningful = (filters: Record<string, string>): Record<string, string> => {
+const meaningful = (
+  filters: Record<string, string>,
+  defaults: ViewDefaults = {},
+): Record<string, string> => {
   const out: Record<string, string> = {};
   for (const [key, value] of Object.entries(filters ?? {})) {
     const v = String(value ?? "").trim();
-    if (v && v !== "all") out[key] = v;
+    if (!v) continue;
+    /* A declared default replaces the "all" convention rather than adding to
+       it. On the payment tracker "all" means every bill including the paid
+       ones, which is a narrower-to-wider move away from the default and so
+       very much worth saving. */
+    if (key in defaults) {
+      if (v === String(defaults[key] ?? "").trim()) continue;
+    } else if (v === "all") continue;
+    out[key] = v;
   }
   return out;
 };
 
 /** True when the screen is already showing this view. */
-export function matchesCurrent(view: SavedView, current: Record<string, string>): boolean {
-  const a = meaningful(view.filters);
-  const b = meaningful(current);
+export function matchesCurrent(
+  view: SavedView,
+  current: Record<string, string>,
+  defaults: ViewDefaults = {},
+): boolean {
+  const a = meaningful(view.filters, defaults);
+  const b = meaningful(current, defaults);
   const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
   for (const key of keys) if (a[key] !== b[key]) return false;
   return true;
 }
 
 /** The saved view the screen is currently showing, if any. */
-export const activeView = (views: readonly SavedView[], current: Record<string, string>): SavedView | null =>
-  views.find((v) => matchesCurrent(v, current)) ?? null;
+export const activeView = (
+  views: readonly SavedView[],
+  current: Record<string, string>,
+  defaults: ViewDefaults = {},
+): SavedView | null =>
+  views.find((v) => matchesCurrent(v, current, defaults)) ?? null;
 
 /** Nothing worth saving — every filter is at its default. */
-export const isDefaultView = (current: Record<string, string>): boolean =>
-  Object.keys(meaningful(current)).length === 0;
+export const isDefaultView = (current: Record<string, string>, defaults: ViewDefaults = {}): boolean =>
+  Object.keys(meaningful(current, defaults)).length === 0;
 
 /**
  * Add a view, or replace one of the same name.
@@ -59,6 +90,7 @@ export function saveView(
   views: readonly SavedView[],
   name: string,
   filters: Record<string, string>,
+  defaults: ViewDefaults = {},
 ): SavedView[] {
   const clean = name.trim();
   if (!clean) return [...views];
@@ -66,7 +98,7 @@ export function saveView(
     id: views.find((v) => v.name.toLowerCase() === clean.toLowerCase())?.id
       ?? `v${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
     name: clean,
-    filters: meaningful(filters),
+    filters: meaningful(filters, defaults),
   };
   const without = views.filter((v) => v.name.toLowerCase() !== clean.toLowerCase());
   return [...without, view];
