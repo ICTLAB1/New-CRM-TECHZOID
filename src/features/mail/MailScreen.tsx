@@ -5,14 +5,15 @@ import { useToast } from "../../components/Toast";
 import { plainTextFrom } from "../../domain/mail/plainText";
 import { foldersInOutlookOrder, type ShownFolder } from "../../domain/mail/folders";
 import {
-  deleteMail, listFolders, listMail, markMail, moveMail, readMail,
-  saveDraft, saveNewDraft, sendDraft,
-  type MailDraft, type MailFolder, type MailMessage,
+  attachToDraft, deleteMail, fileToBase64, getAttachment, listAttachments,
+  listFolders, listMail, markMail, moveMail, readMail,
+  saveDraft, saveNewDraft, sendDraft, MAX_ATTACHMENT_BYTES,
+  type MailAttachment, type MailDraft, type MailFolder, type MailMessage,
 } from "../../data/mail";
 import { IntegrationError, type IntegrationsApi } from "../../integrations/api";
 
 const PAGE = 25;
-const BLANK: MailDraft = { to: "", cc: "", subject: "", body: "" };
+const BLANK: MailDraft = { to: "", cc: "", bcc: "", subject: "", body: "" };
 
 const when = (iso: string) => {
   if (!iso) return "";
@@ -51,6 +52,12 @@ export function MailScreen({ api }: { api: IntegrationsApi }) {
   const [draft, setDraft] = useState<MailDraft | null>(null);
   const [draftId, setDraftId] = useState("");
   const [busy, setBusy] = useState("");
+  /* Files chosen for the message being written. They are not uploaded until
+     there is a draft to hang them on — a draft is what holds an attachment,
+     so one has to exist first. */
+  const [files, setFiles] = useState<File[]>([]);
+  const [showBcc, setShowBcc] = useState(false);
+  const [onMessage, setOnMessage] = useState<MailAttachment[]>([]);
 
   const shown: ShownFolder[] = useMemo(() => foldersInOutlookOrder(folders), [folders]);
 
@@ -72,10 +79,41 @@ export function MailScreen({ api }: { api: IntegrationsApi }) {
 
   useEffect(() => { void refreshFolders(); void load("inbox", 0, ""); }, [load, refreshFolders]);
 
+  /**
+   * Hand the browser the bytes as a file.
+   *
+   * Built from base64 rather than linked: an attachment is fetched through
+   * the API with this person's token, so there is no URL that could be
+   * shared or guessed to reach somebody else's mail.
+   */
+  const download = async (m: MailMessage, a: MailAttachment) => {
+    const got = await getAttachment(m.id, a.id);
+    if (got.error || !got.data?.attachment) { toast(got.error ?? "Could not download that.", "bad"); return; }
+    const { base64, contentType, name } = got.data.attachment;
+    try {
+      const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+      const url = URL.createObjectURL(new Blob([bytes], { type: contentType }));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = name;
+      link.click();
+      /* Revoked, or every attachment opened in a session is held in memory
+         until the tab closes. */
+      setTimeout(() => URL.revokeObjectURL(url), 10_000);
+    } catch {
+      toast("That attachment could not be decoded.", "bad");
+    }
+  };
+
   const show = async (m: MailMessage) => {
     setOpen(m);
+    setOnMessage([]);
     const got = await readMail(m.id);
     if (got.data?.message) setOpen(got.data.message);
+    if (m.hasAttachments) {
+      const list = await listAttachments(m.id);
+      if (list.data?.attachments) setOnMessage(list.data.attachments);
+    }
     if (m.unread) {
       const marked = await markMail(m.id, true);
       if (marked.data?.ok) {
@@ -92,6 +130,17 @@ export function MailScreen({ api }: { api: IntegrationsApi }) {
     catch (err) { setError(err instanceof IntegrationError ? err.message : "Couldn't start the connection."); }
   };
 
+  /** Upload whatever was picked onto the draft that now exists. */
+  const uploadFiles = async (id: string): Promise<boolean> => {
+    for (const file of files) {
+      const base64 = await fileToBase64(file);
+      const done = await attachToDraft(id, { name: file.name, contentType: file.type, base64 });
+      if (done.error) { toast(done.error, "bad"); return false; }
+    }
+    setFiles([]);
+    return true;
+  };
+
   /** Save first, then send by id, so nothing typed can be lost to a failure. */
   const send = async () => {
     if (!draft || busy) return;
@@ -102,10 +151,15 @@ export function MailScreen({ api }: { api: IntegrationsApi }) {
         const made = await saveNewDraft(draft);
         if (made.error || !made.data?.id) { toast(made.error ?? "Could not save that message.", "bad"); return; }
         id = made.data.id;
+        setDraftId(id);
       } else {
         const saved = await saveDraft(id, draft);
         if (saved.error) { toast(saved.error, "bad"); return; }
       }
+      /* Attachments before sending, and the draft is kept if one fails —
+         the message stays in Drafts with everything typed, rather than
+         going out without the file it was written to carry. */
+      if (!(await uploadFiles(id))) return;
       const sent = await sendDraft(id);
       if (sent.error) { toast(sent.error, "bad"); return; }
       toast("Sent");
@@ -120,7 +174,8 @@ export function MailScreen({ api }: { api: IntegrationsApi }) {
     try {
       const got = draftId ? await saveDraft(draftId, draft) : await saveNewDraft(draft);
       if (got.error) { toast(got.error, "bad"); return; }
-      if (got.data?.id) setDraftId(got.data.id);
+      const id = got.data?.id ?? draftId;
+      if (id) { setDraftId(id); await uploadFiles(id); }
       toast("Saved to Drafts");
       void refreshFolders();
     } finally { setBusy(""); }
@@ -176,7 +231,7 @@ export function MailScreen({ api }: { api: IntegrationsApi }) {
         actions={
           <div className="spread wrap" style={{ gap: 8 }}>
             <Button tone="quiet" onClick={() => void load(folder, skip, search)} disabled={loading}>Refresh</Button>
-            <Button tone="primary" onClick={() => { setDraft({ ...BLANK }); setDraftId(""); }}>New message</Button>
+            <Button tone="primary" onClick={() => { setDraft({ ...BLANK }); setDraftId(""); setFiles([]); setShowBcc(false); }}>New message</Button>
           </div>
         }
       />
@@ -190,10 +245,45 @@ export function MailScreen({ api }: { api: IntegrationsApi }) {
             <Field label="Cc" hint="Optional. Separate several with commas.">
               <Input value={draft.cc ?? ""} onChange={(e) => setDraft({ ...draft, cc: e.target.value })} />
             </Field>
+            {showBcc ? (
+              <Field label="Bcc" hint="Nobody on the message sees these addresses.">
+                <Input value={draft.bcc ?? ""} onChange={(e) => setDraft({ ...draft, bcc: e.target.value })} />
+              </Field>
+            ) : (
+              <div><Button tone="quiet" size="sm" onClick={() => setShowBcc(true)}>Add Bcc</Button></div>
+            )}
             <Field label="Subject"><Input value={draft.subject} onChange={(e) => setDraft({ ...draft, subject: e.target.value })} /></Field>
             <Textarea rows={10} value={draft.body} onChange={(e) => setDraft({ ...draft, body: e.target.value })} />
+
+            <Field label="Attachments" hint="Up to 3 MB each.">
+              <input
+                type="file"
+                multiple
+                onChange={(e) => {
+                  const picked = [...(e.target.files ?? [])];
+                  /* Refused here rather than at send. Graph takes an
+                     attachment inline up to about 3 MB, and finding that out
+                     after somebody has written the email is the worst moment
+                     to find it out. */
+                  const tooBig = picked.filter((f) => f.size > MAX_ATTACHMENT_BYTES);
+                  if (tooBig.length) toast(`${tooBig.map((f) => f.name).join(", ")} — too large. Keep each file under 3 MB.`, "bad");
+                  setFiles((have) => [...have, ...picked.filter((f) => f.size <= MAX_ATTACHMENT_BYTES)]);
+                  e.target.value = "";
+                }}
+              />
+            </Field>
+            {files.length ? (
+              <ul className="plain-list">
+                {files.map((f, i) => (
+                  <li key={`${f.name}:${i}`}>
+                    {f.name} <span className="muted">· {Math.ceil(f.size / 1024)} KB</span>{" "}
+                    <Button tone="quiet" size="sm" onClick={() => setFiles((have) => have.filter((_, n) => n !== i))}>Remove</Button>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
             <div className="spread wrap">
-              <Button tone="quiet" onClick={() => { setDraft(null); setDraftId(""); }}>Close</Button>
+              <Button tone="quiet" onClick={() => { setDraft(null); setDraftId(""); setFiles([]); }}>Close</Button>
               <div className="spread wrap" style={{ gap: 8 }}>
                 <Button tone="quiet" onClick={() => void keep()} disabled={!!busy}>
                   {busy === "save" ? "Saving…" : "Save draft"}
@@ -296,10 +386,18 @@ export function MailScreen({ api }: { api: IntegrationsApi }) {
                   <Button tone="quiet" onClick={() => void remove(open)} disabled={busy === "delete"}>Delete</Button>
                 </div>
               </div>
-              {open.hasAttachments ? (
-                <p className="muted" style={{ margin: 0 }}>
-                  This message has attachments. They are not downloadable here yet — open it in Outlook.
-                </p>
+              {onMessage.length ? (
+                <div className="stack">
+                  <div className="pt-section-title">Attachments<span className="muted"> · {onMessage.length}</span></div>
+                  <ul className="plain-list">
+                    {onMessage.map((a) => (
+                      <li key={a.id}>
+                        {a.name} <span className="muted">· {Math.ceil(a.size / 1024)} KB</span>{" "}
+                        <Button tone="quiet" size="sm" onClick={() => void download(open, a)}>Download</Button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               ) : null}
               {/* A text node, so React escapes it and the sender's markup
                   cannot execute. Never render a message body with

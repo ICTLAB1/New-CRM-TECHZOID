@@ -2,8 +2,9 @@ import { fail, guard, json, readJson } from "../lib/http.mjs";
 import { adminClient, signedInUser } from "../lib/auth.mjs";
 import { consume, tooManyMessage } from "../lib/ratelimit.mjs";
 import {
-  createDraft, deleteMessage, getMessage, listFolders, listMessages,
-  moveMessage, readToken, sendDraft, sendNew, setRead, updateDraft,
+  addAttachment, createDraft, deleteMessage, getAttachment, getMessage,
+  listAttachments, listFolders, listMessages, moveMessage, readToken,
+  sendDraft, sendNew, setRead, updateDraft,
 } from "../lib/mailbox.mjs";
 
 /**
@@ -21,6 +22,7 @@ import {
 
 const ACTIONS = new Set([
   "folders", "list", "read", "markRead", "draft", "saveDraft", "send", "sendNew", "delete", "move",
+  "attachments", "attachment", "attach",
 ]);
 
 export async function handler(event) {
@@ -52,7 +54,7 @@ export async function handler(event) {
   const token = access.token;
   const id = String(body.id ?? "");
   const fields = {
-    to: body.to, cc: body.cc, subject: body.subject, body: body.body,
+    to: body.to, cc: body.cc, bcc: body.bcc, subject: body.subject, body: body.body,
   };
 
   switch (action) {
@@ -91,6 +93,25 @@ export async function handler(event) {
     case "sendNew": {
       const sent = await sendNew(token, fields);
       return sent.ok ? json(event, 200, { ok: true }) : fail(event, 502, sent.error);
+    }
+    case "attachments": {
+      if (!id) return fail(event, 400, "Which message?");
+      const got = await listAttachments(token, id);
+      return got.ok ? json(event, 200, { attachments: got.attachments }) : fail(event, 502, got.error);
+    }
+    case "attachment": {
+      if (!id || !body.attachmentId) return fail(event, 400, "Which attachment?");
+      const got = await getAttachment(token, id, String(body.attachmentId));
+      return got.ok ? json(event, 200, { attachment: got.attachment }) : fail(event, 502, got.error);
+    }
+    case "attach": {
+      if (!id) return fail(event, 400, "Which draft?");
+      const done = await addAttachment(token, id, {
+        name: body.name, contentType: body.contentType, base64: body.base64,
+      });
+      /* The size refusal is the caller's mistake, not the mailbox's, so it
+         comes back as 413 rather than a bad gateway. */
+      return done.ok ? json(event, 200, { ok: true }) : fail(event, done.status === 413 ? 413 : 502, done.error);
     }
     case "delete": {
       if (!id) return fail(event, 400, "Which message?");

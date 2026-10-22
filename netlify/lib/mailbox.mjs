@@ -195,7 +195,7 @@ const recipients = (list) =>
     .filter((v) => v.includes("@"))
     .map((address) => ({ emailAddress: { address } }));
 
-function draftBody({ to, cc, subject, body }) {
+function draftBody({ to, cc, bcc, subject, body }) {
   return {
     subject: String(subject ?? ""),
     /* Text, not HTML. What somebody typed into a box is text, and sending it
@@ -203,6 +203,11 @@ function draftBody({ to, cc, subject, body }) {
     body: { contentType: "Text", content: String(body ?? "") },
     toRecipients: recipients(to),
     ...(cc && recipients(cc).length ? { ccRecipients: recipients(cc) } : {}),
+    /* Blind copies are sent and then NOT echoed back by Graph on a read, which
+       is the whole point of them. Nothing in this file tries to display them
+       afterwards; a Bcc that showed up in the sent copy would expose exactly
+       the address the sender meant to hide. */
+    ...(bcc && recipients(bcc).length ? { bccRecipients: recipients(bcc) } : {}),
   };
 }
 
@@ -293,4 +298,80 @@ export async function moveMessage(token, id, destinationId) {
   const body = await resp.json().catch(() => ({}));
   console.error("move refused:", resp.status, body?.error?.code);
   return { ok: false, status: resp.status, error: "Could not move that message." };
+}
+
+/* ── attachments ──────────────────────────────────────────────────────── */
+
+/**
+ * Graph takes an attachment inline up to about 3 MB; past that it wants an
+ * upload session, which is a different protocol and not built here. The cap
+ * is stated to the caller rather than discovered as a 413 halfway through
+ * sending, because by then the person has already written the email.
+ */
+export const MAX_ATTACHMENT_BYTES = 3 * 1024 * 1024;
+
+/** What is on a message, without pulling the contents of any of it down. */
+export async function listAttachments(token, id) {
+  const url = `${GRAPH}/me/messages/${encodeURIComponent(id)}/attachments?$select=id,name,contentType,size,isInline`;
+  const resp = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  const body = await resp.json().catch(() => ({}));
+  if (!resp.ok) {
+    console.error("attachment list refused:", resp.status, body?.error?.code);
+    return { ok: false, status: resp.status, error: "Could not list the attachments." };
+  }
+  return {
+    ok: true,
+    attachments: (body.value ?? [])
+      /* Inline images are the signature logos and tracking pixels that make
+         up most of a marketing email. Listing them as files to download
+         buries the one attachment somebody actually wants. */
+      .filter((a) => !a?.isInline)
+      .map((a) => ({
+        id: String(a?.id ?? ""),
+        name: String(a?.name ?? "attachment"),
+        contentType: String(a?.contentType ?? "application/octet-stream"),
+        size: Number(a?.size ?? 0),
+      })),
+  };
+}
+
+/** One attachment's bytes, base64, for the browser to save. */
+export async function getAttachment(token, messageId, attachmentId) {
+  const url = `${GRAPH}/me/messages/${encodeURIComponent(messageId)}/attachments/${encodeURIComponent(attachmentId)}`;
+  const resp = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  const body = await resp.json().catch(() => ({}));
+  if (!resp.ok) {
+    console.error("attachment read refused:", resp.status, body?.error?.code);
+    return { ok: false, status: resp.status, error: "Could not download that attachment." };
+  }
+  return {
+    ok: true,
+    attachment: {
+      name: String(body?.name ?? "attachment"),
+      contentType: String(body?.contentType ?? "application/octet-stream"),
+      base64: String(body?.contentBytes ?? ""),
+    },
+  };
+}
+
+/** Put a file on a draft. The draft has to exist first — it is what holds it. */
+export async function addAttachment(token, draftId, { name, contentType, base64 }) {
+  const bytes = Math.ceil((String(base64 ?? "").length * 3) / 4);
+  if (bytes > MAX_ATTACHMENT_BYTES) {
+    return { ok: false, status: 413, error: `${name} is too large to attach here. Keep each file under 3 MB.` };
+  }
+  const resp = await fetch(`${GRAPH}/me/messages/${encodeURIComponent(draftId)}/attachments`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      "@odata.type": "#microsoft.graph.fileAttachment",
+      name: String(name ?? "attachment"),
+      contentType: String(contentType ?? "application/octet-stream"),
+      contentBytes: String(base64 ?? ""),
+    }),
+  });
+  if (resp.ok) return { ok: true };
+  const body = await resp.json().catch(() => ({}));
+  console.error("attach refused:", resp.status, body?.error?.code);
+  return { ok: false, status: resp.status, error: `Could not attach ${name}.` };
 }
