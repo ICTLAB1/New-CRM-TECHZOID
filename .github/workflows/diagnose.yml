@@ -47,4 +47,5 @@ jobs:
           sudo apt-get install -y -qq postgresql-client >/dev/null
           DB="$(az keyvault secret show --vault-name "$KV" -n pg-connection-string --query value -o tsv)"; echo "::add-mask::$DB"
           psql "$DB" -tA -c "select 'mailbox: '||email||' provider='||coalesce(provider,'?')||' connected='||(refresh_token is not null) from email_accounts order by email" 2>&1 | while read -r l; do echo "::warning title=db::$l"; done
-          psql "$DB" -tA -c "select 'settings keys: '||string_agg(k, ', ') from (select jsonb_object_keys(data) k from settings) x where k ilike '%remind%' or k ilike '%payment%' or k ilike '%whatsapp%'" 2>&1 | while read -r l; do echo "::warning title=db::$l"; done
+          psql "$DB" -tA -c "select 'reminder settings: '||(select jsonb_object_agg(k,v) from jsonb_each(data) e(k,v) where k ~* '(send|whatsapp|email|digest|channel|on)')::text from payment_tracker_settings" 2>&1 | while read -r l; do echo "::warning title=db::${l:0:900}"; done
+          psql "$DB" -tA -c "select 'mailbox ids: '||string_agg(email||'='||id,', ') from email_accounts where email ilike 'accounts@%'" 2>&1 | while read -r l; do echo "::warning title=db::$l"; done
