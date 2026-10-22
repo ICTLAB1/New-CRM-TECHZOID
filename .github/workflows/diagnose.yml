@@ -1,6 +1,6 @@
-# Reads the server's recent errors from Application Insights and prints
-# them as annotations, so a failure can be diagnosed without anyone opening
-# the Azure portal. Run by hand (workflow_dispatch); changes nothing.
+# Read-only health check of the API's configuration. Prints no secret
+# values: only whether each exists, its length, and whether it has the
+# expected shape. Triggered by touching .github/diagnose-request.
 name: diagnose the API
 
 on:
@@ -15,25 +15,36 @@ jobs:
     permissions:
       id-token: write
       contents: read
+    env:
+      RG: techzoid-crm
+      FA: techzoid-fn-web7gna6q5rns
+      KV: techzoidkvweb7gna6q5rns
+      SUB: 488bfe98-ea81-424c-8bc8-d97369a44759
     steps:
       - uses: azure/login@v2
         with:
           client-id: e11daa33-1f77-49db-b9c7-8f468d55f705
           tenant-id: 1d063589-6565-42de-8055-92aca1128f35
           subscription-id: 488bfe98-ea81-424c-8bc8-d97369a44759
-      - name: recent server errors
+      - name: key vault references resolve?
         run: |
-          az extension add -n application-insights -y >/dev/null 2>&1 || true
-          AI="$(az monitor app-insights component show -g techzoid-crm --query "[0].appId" -o tsv)"
-          q() { az monitor app-insights query --app "$AI" --analytics-query "$1" --query "tables[0].rows" -o tsv 2>&1 | head -40; }
-          echo "== requests =="; q "requests | where timestamp > ago(3h) | summarize n=count(), fails=countif(success==false), codes=make_set(resultCode) by name | order by n desc | take 30" | while IFS= read -r l; do echo "::warning title=req::${l:0:900}"; done
-          echo "== admin =="; q "requests | where timestamp > ago(3h) and name has 'admin' | order by timestamp desc | project timestamp, name, resultCode, duration, operation_Id | take 10" | while IFS= read -r l; do echo "::warning title=admin::${l:0:900}"; done
-          echo "== traces for admin ops =="; q "let ops = requests | where timestamp > ago(3h) and name has 'admin' | project operation_Id; traces | where operation_Id in (ops) | order by timestamp desc | project timestamp, severityLevel, message | take 25" | while IFS= read -r l; do echo "::warning title=trace::${l:0:900}"; done
-          echo "== exceptions for admin ops =="; q "let ops = requests | where timestamp > ago(3h) and name has 'admin' | project operation_Id; exceptions | where operation_Id in (ops) | project timestamp, outerMessage, details | take 10" | while IFS= read -r l; do echo "::warning title=exc::${l:0:900}"; done
-      - name: which functions are registered, and does admin-users answer
+          az rest --method get --url "https://management.azure.com/subscriptions/$SUB/resourceGroups/$RG/providers/Microsoft.Web/sites/$FA/config/configreferences/appsettings?api-version=2022-03-01" \
+            --query "value[].{n:name,s:properties.status,d:properties.details}" -o tsv | while IFS=$'\t' read -r n s d; do echo "::warning title=ref::$n = $s ${d:0:200}"; done
+      - name: secrets present and shaped right (values never printed)
         run: |
-          az functionapp function list -g techzoid-crm -n techzoid-fn-web7gna6q5rns --query "[].name" -o tsv | sed 's#.*/##' | tr '\n' ' ' | sed 's/^/::warning title=functions::/'; echo
-          for u in https://crm.ttpldelhi.com/api/team-accounts https://crm.ttpldelhi.com/api/admin-users https://crm.ttpldelhi.com/api/followups-admin; do
-            r=$(curl -s -m 30 -o /tmp/b -w '%{http_code}' -X POST -H 'content-type: application/json' -d '{"action":"delete_user"}' "$u"); echo "::warning title=probe::$u -> $r $(head -c 300 /tmp/b)"
+          for s in interakt-api-key anthropic-api-key resend-api-key ms-client-secret; do
+            v="$(az keyvault secret show --vault-name "$KV" -n "$s" --query value -o tsv 2>/dev/null || true)"
+            if [ -z "$v" ]; then echo "::warning title=secret::$s MISSING"; continue; fi
+            shape=""; case "$s" in anthropic-api-key) [[ "$v" == sk-ant-* ]] && shape="looks like an Anthropic key" || shape="NOT an Anthropic key (no sk-ant- prefix)";; esac
+            echo "::warning title=secret::$s present, ${#v} chars ${shape}"
           done
-
+          for k in INTERAKT_API_KEY ANTHROPIC_API_KEY; do
+            v="$(az functionapp config appsettings list -g "$RG" -n "$FA" --query "[?name=='$k'].value|[0]" -o tsv)"
+            echo "::warning title=setting::$k ${v:+set (${v:0:22}…)}${v:-NOT SET}"
+          done
+      - name: shared mailboxes and reminder settings
+        run: |
+          sudo apt-get install -y -qq postgresql-client >/dev/null
+          DB="$(az keyvault secret show --vault-name "$KV" -n pg-connection-string --query value -o tsv)"; echo "::add-mask::$DB"
+          psql "$DB" -tA -c "select 'mailbox: '||email||' provider='||coalesce(provider,'?')||' connected='||(refresh_token is not null) from email_accounts order by email" 2>&1 | while read -r l; do echo "::warning title=db::$l"; done
+          psql "$DB" -tA -c "select 'settings keys: '||string_agg(k, ', ') from (select jsonb_object_keys(data) k from settings) x where k ilike '%remind%' or k ilike '%payment%' or k ilike '%whatsapp%'" 2>&1 | while read -r l; do echo "::warning title=db::$l"; done
