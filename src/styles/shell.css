@@ -2,6 +2,11 @@
    The application shell: sidebar, topbar, page frame, mobile nav.
    ───────────────────────────────────────────────────────────────────── */
 
+/* CHROME IS DARK, CONTENT IS LIGHT. Everything painted on .global-header
+   or .app-nav reads --shell-ink / --shell-ink-2, never --ink: those are for
+   content on white cards, and on charcoal they are invisible. The search box
+   is the exception that proves it — a white field on the dark bar, so its
+   text is --ink and correctly dark. */
 .shell { display: flex; flex-direction: column; min-height: 100vh; background: var(--bg); }
 
 /* ── global header ─────────────────────────────────────────────────────
@@ -19,7 +24,7 @@
 }
 .launcher-btn:hover { background: var(--shell-2); }
 .waffle { display: grid; grid-template-columns: repeat(3, 4px); gap: 3px; }
-.waffle i { width: 4px; height: 4px; border-radius: 50%; background: var(--ink-3); display: block; }
+.waffle i { width: 4px; height: 4px; border-radius: 50%; background: var(--shell-ink-2); display: block; }
 .launcher-btn:hover .waffle i { background: var(--accent); }
 .gh-brand { display: flex; align-items: center; gap: 8px; flex: none; }
 .brand-mark { width: 26px; height: 26px; border-radius: var(--radius); background: var(--accent); color: var(--on-accent); display: grid; place-items: center; font-size: 11px; font-weight: 700; flex: none; }
@@ -28,7 +33,7 @@
 .gh-search-wrap { display: flex; justify-content: center; min-width: 0; }
 .topsearch {
   width: min(560px, 100%); height: 32px; padding: 0 12px 0 32px;
-  font: inherit; font-size: var(--t-body); color: var(--shell-ink);
+  font: inherit; font-size: var(--t-body); color: var(--ink);
   background: var(--surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23747474' stroke-width='2.4' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-3.5-3.5'/%3E%3C/svg%3E") no-repeat 11px center;
   border: 1px solid var(--rule-strong); border-radius: var(--radius);
 }
@@ -59,16 +64,16 @@
   background: var(--shell);
   border-bottom: 3px solid var(--accent);
 }
-.app-name { display: flex; align-items: center; font-size: var(--t-lg); font-weight: 400; color: var(--ink); padding-right: var(--gap-wide); border-right: 1px solid var(--rule); white-space: nowrap; }
+.app-name { display: flex; align-items: center; font-size: var(--t-lg); font-weight: 400; color: var(--shell-ink); padding-right: var(--gap-wide); border-right: 1px solid var(--shell-rule); white-space: nowrap; }
 .app-tabs { display: flex; align-items: stretch; min-width: 0; overflow-x: auto; overflow-y: visible; scrollbar-width: none; }
 .app-tabs::-webkit-scrollbar { display: none; }
 .app-tab {
   position: relative; display: inline-flex; align-items: center; gap: 6px;
   padding: 0 12px; border: 0; background: transparent; cursor: pointer;
-  font: inherit; font-size: var(--t-body); color: var(--ink-2); white-space: nowrap;
+  font: inherit; font-size: var(--t-body); color: var(--shell-ink-2); white-space: nowrap;
 }
-.app-tab:hover { background: var(--accent-weak); color: var(--ink); }
-.app-tab[aria-current="page"] { color: var(--ink); font-weight: 700; background: var(--accent-weak); }
+.app-tab:hover { background: var(--shell-2); color: var(--shell-ink); }
+.app-tab[aria-current="page"] { color: var(--shell-ink); font-weight: 700; background: var(--shell-2); }
 .app-tab[aria-current="page"]::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: var(--accent); }
 .nav-badge {
   min-width: 18px; height: 18px; padding: 0 5px; display: inline-grid; place-items: center;
@@ -92,8 +97,8 @@
 .app-more-item .row-tight { align-items: center; gap: 10px; }
 .menu-scrim { position: fixed; inset: 0; z-index: 55; }
 .menu-head { padding: 6px 14px 4px; font-size: var(--t-micro); font-weight: 700; color: var(--ink-3); text-transform: uppercase; letter-spacing: .06em; }
-.app-tab-sub { font-weight: 400; color: var(--ink-3); }
-.app-caret { font-size: 10px; color: var(--ink-3); margin-left: 2px; }
+.app-tab-sub { font-weight: 400; color: var(--shell-ink-2); }
+.app-caret { font-size: 10px; color: var(--shell-ink-2); margin-left: 2px; }
 .gh-new { flex: none; }
 
 /* ── header search results ──────────────────────────────────────────── */

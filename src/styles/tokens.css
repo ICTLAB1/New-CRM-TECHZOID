@@ -38,9 +38,14 @@
      Asked for in October 2026: "make it look like Salesforce". The style,
      not the brand — no logo, name or icon set of theirs. What carries the
      resemblance is the structure (a global header, a row of app tabs, a
-     record page with a highlights strip and a stage path) and this palette:
-     a cool grey canvas, white cards on a warm-grey hairline, and one
-     saturated blue for every action. */
+     record page with a highlights strip and a stage path).
+
+     THE PALETTE IS NOT THEIRS. A charcoal shell, a neutral grey canvas,
+     white cards, and one restrained burnt orange for every action. The blue
+     it replaced read as somebody else's product and, at four shades of one
+     saturated hue, made every button on screen shout equally. Orange is
+     used sparingly on purpose: it marks the action worth taking, which only
+     works while it is rare. */
 
   /* ── ink ─────────────────────────────────────────────────────────── */
   --ink:          #181818;  /* values, headings */
@@ -49,7 +54,7 @@
   --ink-4:        #747474;  /* meta, placeholders */
 
   /* ── surfaces ────────────────────────────────────────────────────── */
-  --bg:           #EEF1F6;  /* the canvas behind the cards */
+  --bg:           #F2F2F1;  /* the canvas behind the cards — neutral, not blue */
   --surface:      #FFFFFF;  /* cards, tables, sheets */
   --surface-2:    #F3F3F3;  /* table headers, inset panels */
   --surface-3:    #E5E5E5;  /* hover, track */
@@ -58,11 +63,13 @@
   --rule:         #E5E5E5;  /* hairline between things */
   --rule-strong:  #C9C9C9;  /* card and control borders */
 
-  /* ── the one accent: action blue ─────────────────────────────────── */
-  --accent:       #0176D3;
-  --accent-hover: #014486;
-  --accent-weak:  #EEF4FF;  /* selected row, active tab wash, focus halo */
-  --accent-rule:  #AACBFF;
+  /* ── the one accent: burnt orange ──────────────────────────────────
+     5.9:1 against white, so white text on a filled button and the colour
+     itself as a link both clear AA without a second shade for each. */
+  --accent:       #C2410C;
+  --accent-hover: #9A3412;
+  --accent-weak:  #FDF1EA;  /* selected row, active tab wash, focus halo */
+  --accent-rule:  #F0BFA0;
   --on-accent:    #FFFFFF;
 
   /* ── semantic: each means exactly one thing ──────────────────────── */
@@ -75,12 +82,18 @@
   --neutral:      #5C5C5C;  /* draft, inactive */
   --neutral-weak: #F3F3F3;
 
-  /* ── the shell: white header, white tab bar ──────────────────────── */
-  --shell:        #FFFFFF;
-  --shell-2:      #F3F3F3;
-  --shell-ink:    #181818;
-  --shell-ink-2:  #5C5C5C;
-  --shell-rule:   #E5E5E5;
+  /* ── the shell: charcoal header and tab bar ──────────────────────────
+     Dark chrome around light content is what separates an enterprise tool
+     from a web page, and it does the orange a favour: one warm accent on
+     charcoal reads as deliberate where the same orange on white would
+     start competing with the content. Ink flips to light here — every rule
+     in shell.css reads these tokens rather than naming a colour, so the
+     two move together. */
+  --shell:        #1F2123;
+  --shell-2:      #2A2D30;
+  --shell-ink:    #F5F5F4;  /* 14:1 on the shell */
+  --shell-ink-2:  #B4B6B8;  /* 7:1 — muted, still AA for small text */
+  --shell-rule:   #35383B;
 
   /* ── object colours ────────────────────────────────────────────────
      The coloured tile beside each page title, one per kind of record, so
@@ -96,7 +109,7 @@
   --obj-8: #747474;  /* settings and the rest */
 
   /* ── chart series: fixed order, never reassigned ─────────────────── */
-  --series-1: #0176D3;
+  --series-1: #C2410C;
   --series-2: #B2560F;
   --series-3: #2E844A;
   --series-4: #7B3FD4;

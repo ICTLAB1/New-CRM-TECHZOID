@@ -80,6 +80,43 @@ describe("one accent", () => {
   });
 });
 
+describe("the chrome is dark and the content is light", () => {
+  /* Selectors painted on .global-header or .app-nav. Both are
+     background: var(--shell), which is charcoal. */
+  const CHROME = [
+    ".global-header", ".app-nav", ".app-name", ".app-tab", ".app-tab:hover",
+    ".app-tab-sub", ".app-caret", ".brand-name", ".topbar-crumb", ".waffle i",
+  ];
+
+  it("never paints content ink onto the dark shell", () => {
+    /* --ink is for content on white cards. On charcoal it is invisible, and
+       invisible is not something a screenshot review catches reliably —
+       somebody has to notice a label that was always there is now missing.
+       A rule may still use --ink if it paints itself a light background
+       first, which is what the search field does. */
+    const text = css["shell.css"] ?? "";
+    const offenders: string[] = [];
+
+    for (const match of text.matchAll(/([^{}]+)\{([^}]*)\}/g)) {
+      const selector = (match[1] ?? "").trim().split("\n").pop()?.trim() ?? "";
+      const body = match[2] ?? "";
+      if (!CHROME.some((c) => selector.split(",").some((part) => part.trim() === c))) continue;
+      const paintsItselfLight = /background:[^;]*var\(--surface/.test(body);
+      if (paintsItselfLight) continue;
+      if (/color:\s*var\(--ink/.test(body) || /background:\s*var\(--ink/.test(body)) {
+        offenders.push(selector);
+      }
+    }
+    expect(offenders, `these sit on the charcoal shell and use content ink: ${offenders.join(", ")}`).toEqual([]);
+  });
+
+  it("gives the shell an ink of its own, light enough to read on it", () => {
+    const tokens = code(css["tokens.css"] ?? "");
+    expect(tokens).toMatch(/--shell-ink:\s*#[0-9A-Fa-f]{6}/);
+    expect(tokens).toMatch(/--shell-ink-2:\s*#[0-9A-Fa-f]{6}/);
+  });
+});
+
 describe("colour means something", () => {
   it("names its semantic tokens by meaning, not by hue", () => {
     const tokens = code(css["tokens.css"] ?? "");
