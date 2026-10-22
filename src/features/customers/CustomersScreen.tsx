@@ -6,6 +6,8 @@ import { ShareLinkDialog } from "../leads/ShareLinkDialog";
 import { Button, Card, Chip, Empty, Input, Select, Tabs } from "../../components/primitives";
 import { useToast } from "../../components/Toast";
 import { blankCustomer, customerLabel, type Customer } from "../../domain/customers/customer";
+import { documentsForCustomer } from "../../domain/customers/documents";
+import type { SalesDocument } from "../../domain/documents/create";
 import { findDuplicate } from "../../domain/customers/duplicates";
 import { cascadeReassign, type Workspace } from "../../domain/customers/cascade";
 import { STAGES, stageOf } from "../../domain/pipeline/stages";
@@ -21,6 +23,10 @@ const uid = (): string => Math.random().toString(36).slice(2, 10) + Date.now().t
 export interface CustomersScreenProps {
   customers: Customer[];
   workspace: Workspace;
+  /** The three document tables, for showing one customer's history on their
+   *  record. Separate from `workspace`, which is deliberately the narrow
+   *  ownership projection the reassignment cascade needs. */
+  documents?: { quotations?: SalesDocument[]; proformas?: SalesDocument[]; invoices?: SalesDocument[] };
   users: { id: string; name: string }[];
   customFields: { id: string; label: string }[];
   currentUser: { id: string; name: string; role: string; email?: string; designation?: string };
@@ -36,7 +42,8 @@ export interface CustomersScreenProps {
 
 type Pending = { customer: Customer; duplicate: ReturnType<typeof findDuplicate<Customer>> };
 
-export function CustomersScreen({ customers, workspace, users, customFields, currentUser, settings = {}, api, onChange, intent }: CustomersScreenProps) {
+export function CustomersScreen({
+  documents = {}, customers, workspace, users, customFields, currentUser, settings = {}, api, onChange, intent }: CustomersScreenProps) {
   const toast = useToast();
   const [query, setQuery] = useState("");
   const [stageFilter, setStageFilter] = useState<string>("all");
@@ -221,6 +228,14 @@ export function CustomersScreen({ customers, workspace, users, customFields, cur
         <CustomerSheet
           open={open}
           customer={record}
+          /* Quotations, proformas and invoices for this one company, which
+             otherwise meant opening three screens and filtering each by
+             name. The workspace already holds all three. */
+          documents={documentsForCustomer(
+            record.id,
+            documents,
+            String((settings?.["company"] as { state?: string } | undefined)?.state ?? "Delhi"),
+          )}
           isNew={isNew}
           users={users}
           customFields={customFields}

@@ -287,6 +287,7 @@ export function Workbench({
           intent={intentFor("customers")}
           customers={customers}
           workspace={ownershipOf(data)}
+          documents={{ quotations, proformas, invoices }}
           users={team}
           customFields={customFields}
           currentUser={user}
