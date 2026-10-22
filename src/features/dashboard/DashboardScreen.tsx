@@ -95,7 +95,11 @@ export function DashboardScreen({
                     <tr key={`${row.kind}-${row.id}`} className={row.tone === "bad" ? "needs-bad" : "needs-warn"} style={{ cursor: "pointer" }} onClick={() => onNavigate(row.view)}>
                       <td className="edge-cell" />
                       <td>
-                        <div className="strong">{row.title}</div>
+                        <div className="strong">
+                          <button type="button" className="row-open" onClick={(e) => { e.stopPropagation(); onNavigate(row.view); }}>
+                            {row.title}
+                          </button>
+                        </div>
                         <div className="field-hint">{row.detail}</div>
                       </td>
                       <td className="num strong">{row.value ? moneyList(row.value, row.currency) : ""}</td>
@@ -143,7 +147,11 @@ export function DashboardScreen({
                 {deliveries.slice(0, 6).map((d) => (
                   <tr key={d.id} onClick={() => onNavigate("orders")} style={{ cursor: "pointer" }}>
                     <td>
-                      <div className="strong">{d.customer}</div>
+                      <div className="strong">
+                        <button type="button" className="row-open" onClick={(e) => { e.stopPropagation(); onNavigate("orders"); }}>
+                          {d.customer}
+                        </button>
+                      </div>
                       <div className="field-hint mono">{d.number} · {d.stage}</div>
                     </td>
                     <td style={{ width: 90 }}>

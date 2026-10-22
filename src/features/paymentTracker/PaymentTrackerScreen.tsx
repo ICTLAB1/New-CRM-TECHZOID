@@ -390,7 +390,11 @@ export function PaymentTrackerScreen({ currentUser, users, customers, companyId 
                         >
                           <td className="edge-cell" />
                           <td data-head>
-                            <div className="strong">{b.customerName}</div>
+                            <div className="strong">
+                              <button type="button" className="row-open" onClick={(e) => { e.stopPropagation(); setOpenId(b.id); }}>
+                                {b.customerName}
+                              </button>
+                            </div>
                             <div className="pt-sub">{b.contactName || b.email || "—"}{privileged && b.ownerId ? ` · ${nameOf.get(b.ownerId) ?? ""}` : ""}</div>
                           </td>
                           <td data-label="Invoice">

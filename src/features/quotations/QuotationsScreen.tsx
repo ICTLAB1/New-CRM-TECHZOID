@@ -470,7 +470,9 @@ export function QuotationsScreen({
                   return (
                     <tr key={d.id} className={stale ? "needs-warn" : undefined}>
                       <td className="edge-cell" />
-                      <td data-head className="mono strong" style={{ cursor: "pointer" }} onClick={() => setEditing(d)}>{d.number}</td>
+                      <td data-head className="mono strong">
+                        <button type="button" className="row-open" onClick={() => setEditing(d)}>{d.number}</button>
+                      </td>
                       <td data-label={isPo ? "Supplier" : "Customer"} className="strong">{(isPo ? d.vendorName : d.billName) || "—"}</td>
                       <td data-label="Date" className="muted">{fmtDate(d.date)}</td>
                       <td data-label={isPo ? "Required by" : isInvoice ? "Payment due" : "Valid until"} className={isOverdue(d.validUntil) ? "" : "muted"} style={isOverdue(d.validUntil) ? { color: "var(--warn)" } : undefined}>

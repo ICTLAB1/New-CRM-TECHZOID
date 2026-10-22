@@ -1136,3 +1136,15 @@ button.path-hit { cursor: pointer; }
 .inline-edit-hint { color: var(--ink-4); font-size: 9px; opacity: 0; transition: opacity var(--dur-fast, 160ms) var(--ease); }
 .inline-edit:hover .inline-edit-hint, .inline-edit:focus-visible .inline-edit-hint { opacity: 1; }
 .inline-select { height: 32px; padding-block: 0; font-size: var(--t-small); min-width: 130px; }
+
+/* The keyboard's way into a clickable row.
+   A row that opens on click gives a mouse an enormous target and a keyboard
+   nothing at all. The real control lives in the row's leading cell, looks
+   like the text it replaces, and is what Tab reaches and Enter activates —
+   the row's own onClick stays as the mouse convenience it always was. */
+.row-open {
+  border: 0; background: none; font: inherit; color: inherit; text-align: left;
+  padding: 0; cursor: pointer; border-radius: var(--radius);
+}
+.row-open:hover { text-decoration: underline; text-underline-offset: 2px; }
+.row-open:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

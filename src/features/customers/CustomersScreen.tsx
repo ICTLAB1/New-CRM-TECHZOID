@@ -7,6 +7,7 @@ import { Button, Card, Chip, Empty, Input, Select, Tabs } from "../../components
 import { useToast } from "../../components/Toast";
 import { blankCustomer, customerLabel, type Customer } from "../../domain/customers/customer";
 import { buildCustomerProfile } from "../../domain/customers/profile";
+import { SavedViews } from "../../components/SavedViews";
 import { loadCustomer360, type Customer360 } from "../../data/customer360";
 import type { SalesDocument } from "../../domain/documents/create";
 import { findDuplicate } from "../../domain/customers/duplicates";
@@ -164,6 +165,15 @@ export function CustomersScreen({
       />
 
       <Card padded={false}>
+        <SavedViews
+          screen="customers"
+          current={{ stage: stageFilter, owner, query }}
+          onApply={(f) => {
+            setStageFilter(f.stage ?? "all");
+            setOwner(f.owner ?? "all");
+            setQuery(f.query ?? "");
+          }}
+        />
         <div style={{ padding: "0 var(--gap-wide)" }}>
           <Tabs
             active={stageFilter}
@@ -222,7 +232,11 @@ export function CustomersScreen({
                   return (
                     <tr key={c.id} className={overdue ? "needs-warn" : undefined} onClick={() => { setIsNew(false); setEditing(c); }} style={{ cursor: "pointer" }}>
                       <td className="edge-cell" />
-                      <td data-head className="strong">{customerLabel(c)}</td>
+                      <td data-head className="strong">
+                        <button type="button" className="row-open" onClick={(e) => { e.stopPropagation(); setIsNew(false); setEditing(c); }}>
+                          {customerLabel(c)}
+                        </button>
+                      </td>
                       <td data-label="Contact">{c.contact || "—"}</td>
                       <td data-label="Location" className="muted">{[c.city, c.country].filter(Boolean).join(", ") || "—"}</td>
                       <td data-label="Stage"><Chip tone={stage.tone}>{stage.label}</Chip></td>
