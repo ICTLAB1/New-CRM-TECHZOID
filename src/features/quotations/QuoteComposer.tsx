@@ -42,8 +42,20 @@ export function QuoteComposer({ settings, currentUser, customers, catalog, onDra
     const said = text.trim();
     if (!said || busy) return;
     setBusy(true); setError(""); setReport(null); setCreated(""); setDuplicate("");
+    try {
+      await draft(said);
+    } catch (err) {
+      /* Anything thrown past here used to land as an unhandled rejection:
+         the button came back and absolutely nothing else happened, which is
+         indistinguishable from a dead button. Say what went wrong. */
+      setError(err instanceof Error ? err.message : "That could not be read.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const draft = async (said: string) => {
     const { fields, error: failed } = await readQuoteRequest(said);
-    setBusy(false);
     if (failed || !fields) { setError(failed || "That could not be read."); return; }
 
     const { doc, report: read } = draftFromText(fields, {
@@ -120,7 +132,10 @@ export function QuoteComposer({ settings, currentUser, customers, catalog, onDra
           rows={3}
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder="Quote ACME Infotech, 10 x Microsoft 365 Business Standard at 1,200 each, 20 x Acrobat Pro"
+          /* "e.g." earns its place: without it this example reads as text already
+             typed, the button is disabled because the box is in fact empty, and
+             the whole thing looks broken. Reported as exactly that. */
+          placeholder="e.g. Quote ACME Infotech, 10 x Microsoft 365 Business Standard at 1,200 each, 20 x Acrobat Pro"
           onKeyDown={(e) => {
             /* Ctrl/Cmd+Enter, because Enter alone belongs to the next line
                of a multi-line description. */
