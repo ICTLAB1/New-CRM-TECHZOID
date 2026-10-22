@@ -1,5 +1,6 @@
 import { getDb, hasBackend } from "./backend";
 import { fnPath, fnToken } from "./functions";
+import { squashCompanyName } from "../domain/customers/nameMatch";
 import { DEFAULT_SCHEDULE, dueDateFor, type ReminderSchedule } from "../domain/paymentTracker/schedule";
 import { splitNumber } from "../domain/integrations/interakt";
 import { localISO } from "../domain/dates";
@@ -465,7 +466,8 @@ export async function scanInvoice(file: File, sellerNames: string[]): Promise<Sc
 
 interface CustomerLike { id: string; company?: string; contact?: string; email?: string; phone?: string; gstin?: string }
 
-const squash = (s: string) => s.toLowerCase().replace(/\b(pvt|private|ltd|limited|llp|the|m\/s)\b/g, "").replace(/[^a-z0-9]/g, "");
+/* Shared with the quotation reader — see domain/customers/nameMatch.ts. */
+const squash = squashCompanyName;
 
 /** A new bill filled from a scanned invoice, matched to a CRM customer where possible. */
 export function billFromScan(

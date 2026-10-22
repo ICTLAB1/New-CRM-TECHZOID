@@ -1,6 +1,7 @@
 import { applyCustomer, blankItem, newQuotation, type DocSettings, type SalesDocument } from "../documents/create";
 import { addDays, TODAY } from "../dates";
 import type { Customer } from "../customers/customer";
+import { squashCompanyName } from "../customers/nameMatch";
 import type { CatalogProduct } from "../catalog/types";
 import type { LineItem } from "../tax/types";
 
@@ -94,15 +95,18 @@ const num = (v: unknown): number | undefined => {
  * quoting the wrong company is worse than asking which one.
  */
 export function matchCustomer(name: string, customers: readonly Customer[]): Customer | null {
-  const wanted = norm(name);
+  /* Legal forms carry no identity: "Pvt Ltd" and "Private Limited" are the
+     same company, and a second quotation to one you already deal with must
+     land on the record you already have. */
+  const wanted = squashCompanyName(name);
   if (!wanted) return null;
 
-  const exact = customers.filter((c) => norm(c.company) === wanted);
+  const exact = customers.filter((c) => squashCompanyName(c.company) === wanted);
   if (exact.length === 1) return exact[0] ?? null;
   if (exact.length > 1) return null;
 
   const partial = customers.filter((c) => {
-    const have = norm(c.company);
+    const have = squashCompanyName(c.company);
     return have.length > 0 && (have.includes(wanted) || wanted.includes(have));
   });
   return partial.length === 1 ? (partial[0] ?? null) : null;
