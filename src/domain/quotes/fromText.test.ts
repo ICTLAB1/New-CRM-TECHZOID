@@ -148,6 +148,23 @@ describe("building the draft", () => {
     expect(doc.items?.[0]?.rate).toBe(118000.5);
   });
 
+  it("honours a validity said out loud, and keeps the default otherwise", () => {
+    /* This was read and then dropped: the tool returned validityDays and
+       nothing consumed it, so "valid for 30 days" silently became the
+       workspace default. */
+    const said = draftFromText(
+      { items: [{ desc: "x", qty: 1, rate: 1 }], validityDays: 30 },
+      { ...ctx(), today: "2026-01-01" },
+    );
+    expect(said.doc.validUntil).toBe("2026-01-31");
+
+    const silent = draftFromText(
+      { items: [{ desc: "x", qty: 1, rate: 1 }] },
+      { ...ctx(), today: "2026-01-01" },
+    );
+    expect(silent.doc.validUntil).toBe("2026-01-16");
+  });
+
   it("produces an empty quotation rather than throwing on an empty reading", () => {
     const { doc, report } = draftFromText({}, ctx());
     expect(doc.status).toBe("Draft");

@@ -1,4 +1,5 @@
 import { applyCustomer, blankItem, newQuotation, type DocSettings, type SalesDocument } from "../documents/create";
+import { addDays, TODAY } from "../dates";
 import type { Customer } from "../customers/customer";
 import type { CatalogProduct } from "../catalog/types";
 import type { LineItem } from "../tax/types";
@@ -218,6 +219,15 @@ export function draftFromText(
   });
 
   if (items.length) doc = { ...doc, items };
+
+  /* "valid for 30 days" was being read and then dropped on the floor: the
+     tool returned it, nothing consumed it, and the quotation silently kept
+     the workspace default. Found by checking every field the model may
+     return against the fields this function actually uses. */
+  const validity = num(extracted.validityDays);
+  if (validity !== undefined && validity > 0) {
+    doc = { ...doc, validUntil: addDays(today ?? TODAY(), Math.round(validity)) };
+  }
   const currency = String(extracted.currency ?? "").trim().toUpperCase();
   if (currency) doc = { ...doc, currency };
   if (extracted.notes) doc = { ...doc, notes: String(extracted.notes) } as SalesDocument;
