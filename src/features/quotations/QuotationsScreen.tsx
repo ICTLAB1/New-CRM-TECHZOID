@@ -22,6 +22,7 @@ import { docSeries, nextDocNumber } from "../../data/docNumber";
 import { OBJ_TYPE } from "../../domain/documents/objType";
 import { orderFromProforma, type SalesOrder } from "../../domain/orders/create";
 import type { CatalogProduct } from "../../domain/catalog/types";
+import { QuoteComposer } from "./QuoteComposer";
 import { computeDocument } from "../../domain/tax/compute";
 import { formatTotals, isMixed, moneyList, totalsByCurrency } from "../../domain/currency/format";
 import { fmtDate, isOverdue } from "../../domain/dates";
@@ -377,6 +378,19 @@ export function QuotationsScreen({
         sub={`${documents.length} document${documents.length === 1 ? "" : "s"} this financial year.`}
         actions={<Button tone="primary" onClick={create}>New {label.toLowerCase()}</Button>}
       />
+
+      {/* Quotations only. A purchase order is raised against a supplier's
+          offer and an invoice against work already agreed — neither starts
+          from somebody describing what they want in a sentence. */}
+      {docType === "quotation" ? (
+        <QuoteComposer
+          settings={settings}
+          currentUser={currentUser}
+          customers={customers}
+          catalog={catalog}
+          onDraft={setEditing}
+        />
+      ) : null}
 
       <Card padded={false}>
         <div style={{ padding: "0 var(--gap-wide)" }}>
