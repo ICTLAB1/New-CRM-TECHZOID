@@ -33,9 +33,13 @@
  */
 const SEND_SCOPES = "openid profile offline_access User.Read Mail.Send";
 
-/** For reply detection. Only usable by a mailbox connected after Mail.Read
- *  was added to the consent screen. */
-export const READ_SCOPES = "openid profile offline_access User.Read Mail.Read";
+/** THE MAILBOX GRANT'S SCOPES — what a refresh of the inbox token may ask
+ *  for, and never what the SENDING token asks for. A refresh may request a
+ *  subset of what was consented and never a superset, so these must stay
+ *  equal to or narrower than what ms-oauth-start requested as INBOX_SCOPES.
+ *  Widening one without the other is how a connected mailbox stops
+ *  refreshing — which costs the inbox, and only the inbox. */
+export const READ_SCOPES = "openid profile offline_access User.Read Mail.ReadWrite Mail.Send";
 
 /**
  * @param {object} args

@@ -284,7 +284,7 @@ export function Workbench({
             startNew={intentFor("tasks")?.kind === "new" ? intentFor("tasks")!.n : undefined}
           />
       ) : view === "mail" ? (
-        <MailScreen api={integrations} currentUser={user} />
+        <MailScreen api={integrations} />
       ) : view === "customers" ? (
         <CustomersScreen
           intent={intentFor("customers")}

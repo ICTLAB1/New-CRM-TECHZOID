@@ -156,3 +156,141 @@ export async function setRead(token, id, isRead = true) {
   console.warn("mark read refused:", resp.status, body?.error?.code);
   return { ok: false, status: resp.status, error: "Could not change whether that is marked read." };
 }
+
+/* ── folders ──────────────────────────────────────────────────────────── */
+
+/**
+ * The folders a mail client shows down the side, with unread counts.
+ *
+ * Graph names the well-known ones in English regardless of the mailbox's
+ * language, and those names are what `listMessages` accepts as a folder —
+ * so the id is what gets passed around and the display name is only ever
+ * shown. A mailbox in another language would otherwise have a sidebar that
+ * works and labels that do not.
+ */
+export async function listFolders(token) {
+  const url = `${GRAPH}/me/mailFolders?$top=40&$select=id,displayName,unreadItemCount,totalItemCount`;
+  const resp = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  const body = await resp.json().catch(() => ({}));
+  if (!resp.ok) {
+    console.error("folder list refused:", resp.status, body?.error?.code);
+    return { ok: false, status: resp.status, error: "Could not read your folders." };
+  }
+  return {
+    ok: true,
+    folders: (body.value ?? []).map((f) => ({
+      id: String(f?.id ?? ""),
+      name: String(f?.displayName ?? ""),
+      unread: Number(f?.unreadItemCount ?? 0),
+      total: Number(f?.totalItemCount ?? 0),
+    })),
+  };
+}
+
+/* ── writing ──────────────────────────────────────────────────────────── */
+
+const recipients = (list) =>
+  (Array.isArray(list) ? list : String(list ?? "").split(/[,;]/))
+    .map((v) => String(v ?? "").trim())
+    .filter((v) => v.includes("@"))
+    .map((address) => ({ emailAddress: { address } }));
+
+function draftBody({ to, cc, subject, body }) {
+  return {
+    subject: String(subject ?? ""),
+    /* Text, not HTML. What somebody typed into a box is text, and sending it
+       as HTML means their angle brackets and ampersands arrive mangled. */
+    body: { contentType: "Text", content: String(body ?? "") },
+    toRecipients: recipients(to),
+    ...(cc && recipients(cc).length ? { ccRecipients: recipients(cc) } : {}),
+  };
+}
+
+/** Save a new draft. Returns its id, which is how it is edited and sent. */
+export async function createDraft(token, fields) {
+  const resp = await fetch(`${GRAPH}/me/messages`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify(draftBody(fields)),
+  });
+  const body = await resp.json().catch(() => ({}));
+  if (!resp.ok) {
+    console.error("draft create refused:", resp.status, body?.error?.code);
+    return { ok: false, status: resp.status, error: "Could not save that draft." };
+  }
+  return { ok: true, id: String(body?.id ?? "") };
+}
+
+/** Update a draft in place. */
+export async function updateDraft(token, id, fields) {
+  const resp = await fetch(`${GRAPH}/me/messages/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify(draftBody(fields)),
+  });
+  if (resp.ok) return { ok: true, id };
+  const body = await resp.json().catch(() => ({}));
+  console.error("draft update refused:", resp.status, body?.error?.code);
+  return { ok: false, status: resp.status, error: "Could not save that draft." };
+}
+
+/**
+ * Send a draft.
+ *
+ * Graph answers 202 with no body. Treating a missing body as a failure would
+ * report a sent message as unsent and invite somebody to send it twice.
+ */
+export async function sendDraft(token, id) {
+  const resp = await fetch(`${GRAPH}/me/messages/${encodeURIComponent(id)}/send`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Length": "0" },
+  });
+  if (resp.ok || resp.status === 202) return { ok: true };
+  const body = await resp.json().catch(() => ({}));
+  console.error("send refused:", resp.status, body?.error?.code);
+  return { ok: false, status: resp.status, error: body?.error?.message ?? "Could not send that message." };
+}
+
+/** Compose and send in one step, for a message nobody wants kept as a draft. */
+export async function sendNew(token, fields) {
+  const resp = await fetch(`${GRAPH}/me/sendMail`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ message: draftBody(fields), saveToSentItems: true }),
+  });
+  if (resp.ok || resp.status === 202) return { ok: true };
+  const body = await resp.json().catch(() => ({}));
+  console.error("sendMail refused:", resp.status, body?.error?.code);
+  return { ok: false, status: resp.status, error: body?.error?.message ?? "Could not send that message." };
+}
+
+/**
+ * Delete a message.
+ *
+ * To Deleted Items, never permanently: Graph's DELETE on a message is a move
+ * to the deleted folder, which is what a person means by delete and what
+ * they can undo from Outlook. A permanent one is a different call and this
+ * deliberately is not it.
+ */
+export async function deleteMessage(token, id) {
+  const resp = await fetch(`${GRAPH}/me/messages/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (resp.ok || resp.status === 204) return { ok: true };
+  console.error("delete refused:", resp.status);
+  return { ok: false, status: resp.status, error: "Could not delete that message." };
+}
+
+/** Move a message to another folder. */
+export async function moveMessage(token, id, destinationId) {
+  const resp = await fetch(`${GRAPH}/me/messages/${encodeURIComponent(id)}/move`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ destinationId: String(destinationId) }),
+  });
+  if (resp.ok) return { ok: true };
+  const body = await resp.json().catch(() => ({}));
+  console.error("move refused:", resp.status, body?.error?.code);
+  return { ok: false, status: resp.status, error: "Could not move that message." };
+}

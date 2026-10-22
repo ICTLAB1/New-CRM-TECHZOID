@@ -27,13 +27,18 @@ import { consume, tooManyMessage } from "../lib/ratelimit.mjs";
    should be explained anyway: at the moment somebody chooses the feature
    that needs it. READ_SCOPES in ../lib/mailer.mjs is already written for
    exactly that. */
-const SCOPES = "openid profile offline_access User.Read Mail.Send";
+export const SCOPES = "openid profile offline_access User.Read Mail.Send";
 
-/* READING IS A SEPARATE GRANT, and deliberately does not include Mail.Send.
-   Keeping the two apart is the whole point: the send token stays exactly as
-   it was consented, so a person who connects their inbox — or later revokes
-   it — cannot affect whether their quotations go out. */
-const INBOX_SCOPES = "openid profile offline_access User.Read Mail.Read";
+/* THE MAILBOX GRANT, separate from the quotation one all the way down.
+   ReadWrite because a mail client writes: drafts are saved, messages are
+   moved and deleted. Mail.Send because a draft is sent through the message
+   that holds it, not through /me/sendMail.
+   
+   It overlaps with SCOPES above and that is fine — they are different
+   consents producing different tokens in different columns. What must never
+   happen is ONE token covering both, because then losing the mailbox grant
+   takes quotations down with it. See mailer.mjs. */
+export const INBOX_SCOPES = "openid profile offline_access User.Read Mail.ReadWrite Mail.Send";
 
 export async function handler(event) {
   const stop = guard(event);

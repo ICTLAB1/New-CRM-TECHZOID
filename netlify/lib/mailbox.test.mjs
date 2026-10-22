@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { readToken } from "./mailbox.mjs";
+import { READ_SCOPES } from "./mailer.mjs";
+import { INBOX_SCOPES, SCOPES } from "../functions/ms-oauth-start.mjs";
 
 const ENV = { MS_CLIENT_ID: "cid", MS_CLIENT_SECRET: "secret", MS_TENANT_ID: "tid" };
 
@@ -37,15 +39,33 @@ describe("reading a mailbox never puts sending at risk", () => {
     expect(Object.keys(admin.writes[0])).not.toContain("refresh_token");
   });
 
-  it("asks only for the read scopes, never for Mail.Send", async () => {
+  it("never asks a refresh for more than the consent granted", async () => {
+    /* THE invariant, and the one that nearly took quotations offline once:
+       a refresh may request a SUBSET of what was consented and never a
+       superset (AADSTS65001). So what mailbox.mjs asks for on refresh must
+       stay within what ms-oauth-start asked the person to approve. Widening
+       one without the other is the bug, and it is silent until every
+       connected mailbox stops refreshing. */
     let sentScope = "";
     vi.stubGlobal("fetch", async (_url, init) => {
       sentScope = new URLSearchParams(init.body).get("scope") ?? "";
       return { ok: true, json: async () => ({ access_token: "at" }) };
     });
     await readToken(adminWith({ ms_email: "a@b.com", read_refresh_token: "OLD" }), "u1", ENV);
-    expect(sentScope).toContain("Mail.Read");
-    expect(sentScope).not.toContain("Mail.Send");
+
+    const consented = new Set(INBOX_SCOPES.split(/\s+/).filter(Boolean));
+    const asked = sentScope.split(/\s+/).filter(Boolean);
+    expect(asked.length).toBeGreaterThan(0);
+    for (const scope of asked) expect([...consented]).toContain(scope);
+  });
+
+  it("is a different grant from the one quotations use", async () => {
+    /* They overlap, and that is fine — they are separate consents producing
+       separate tokens. What must never happen is one token covering both,
+       because then losing the mailbox grant takes sending with it. */
+    expect(READ_SCOPES).not.toBe(SCOPES);
+    expect(READ_SCOPES).toContain("Mail.ReadWrite");
+    expect(SCOPES).not.toContain("Mail.ReadWrite");
   });
 
   it("treats a mailbox that never turned reading on as an offer, not a fault", async () => {
