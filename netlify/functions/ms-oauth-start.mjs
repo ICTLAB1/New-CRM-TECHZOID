@@ -29,6 +29,12 @@ import { consume, tooManyMessage } from "../lib/ratelimit.mjs";
    exactly that. */
 const SCOPES = "openid profile offline_access User.Read Mail.Send";
 
+/* READING IS A SEPARATE GRANT, and deliberately does not include Mail.Send.
+   Keeping the two apart is the whole point: the send token stays exactly as
+   it was consented, so a person who connects their inbox — or later revokes
+   it — cannot affect whether their quotations go out. */
+const INBOX_SCOPES = "openid profile offline_access User.Read Mail.Read";
+
 export async function handler(event) {
   const stop = guard(event);
   if (stop) return stop;
@@ -74,7 +80,7 @@ export async function handler(event) {
     + "&response_type=code"
     + "&redirect_uri=" + encodeURIComponent(redirectUri)
     + "&response_mode=query"
-    + "&scope=" + encodeURIComponent(SCOPES)
+    + "&scope=" + encodeURIComponent(asked === "inbox" ? INBOX_SCOPES : SCOPES)
     + "&state=" + state
     /* `login` for a shared mailbox, not `select_account`: they are signed in
        to Microsoft as themselves, and select_account would happily hand back

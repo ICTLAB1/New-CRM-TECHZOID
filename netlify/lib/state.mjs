@@ -19,13 +19,15 @@ export const STATE_TTL_MS = 15 * 60 * 1000;
 /**
  * What the connection is for. `own` attaches the mailbox to the person who
  * signed in; `shared` records it as a company mailbox anybody authorised may
- * send from. It rides inside the SIGNED payload rather than the query string
+ * send from; `inbox` is the separate, narrower grant that lets the CRM READ
+ * that person's mail, stored in its own column so a refused or revoked read
+ * grant can never stop sending. It rides inside the SIGNED payload rather than the query string
  * for the same reason the user id does: a caller who could change it could
  * turn their own mailbox into the company's sending address, or the other
  * way round. The set is closed so nothing else can be smuggled through, and
  * so a purpose can never contain the separator.
  */
-export const PURPOSES = new Set(["own", "shared"]);
+export const PURPOSES = new Set(["own", "shared", "inbox"]);
 
 function secretOf(env) {
   const secret = env.MS_STATE_SECRET || env.SUPABASE_SERVICE_ROLE_KEY;

@@ -196,6 +196,24 @@ export async function handler(event) {
         "The company can now send from " + msEmail + ". Choose it under Reminder settings → Send from, or when launching a campaign.", true);
     }
 
+    /* READING GOES IN ITS OWN COLUMN, and the send token is not touched.
+       A person connecting their inbox has already connected for sending;
+       writing this grant over that one would replace a Mail.Send token with
+       a Mail.Read one and stop their quotations. */
+    if (verified.purpose === "inbox") {
+      const { error: readErr } = await adminClient().from("ms_mail_accounts")
+        .update({ read_refresh_token: tok.refresh_token, read_granted_at: now, updated_at: now })
+        .eq("user_id", verified.userId);
+      if (readErr) {
+        console.error("saving inbox grant failed:", readErr.message);
+        return page(500, "Couldn't save the connection",
+          "Your inbox authorised correctly but the CRM could not store it. Please try again.", false);
+      }
+      console.log("inbox connected for", verified.userId);
+      return page(200, "Inbox connected",
+        "The CRM can now show your mail. Sending is unchanged.", true);
+    }
+
     const { error } = await adminClient().from("ms_mail_accounts").upsert({
       user_id: verified.userId,
       ms_email: msEmail,
