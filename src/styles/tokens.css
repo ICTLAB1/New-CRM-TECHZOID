@@ -109,17 +109,27 @@
   --obj-8: #747474;  /* settings and the rest */
 
   /* ── chart series: fixed order, never reassigned ─────────────────── */
+  /* SERIES ARE CHOSEN TO BE TOLD APART, not to match the brand. When
+     series-1 became orange, series-2 at #B2560F was a second burnt orange
+     a few percent away from it — two lines on one chart that nobody could
+     separate, which is worse than an ugly palette. It is a blue now: one
+     blue inside a five-colour series is distinguishability, not a blue
+     interface. */
   --series-1: #C2410C;
-  --series-2: #B2560F;
+  --series-2: #1F6FB2;
   --series-3: #2E844A;
   --series-4: #7B3FD4;
   --series-5: #A61E5A;
 
-  --ramp-1: #D8E6FE;
-  --ramp-2: #AACBFF;
-  --ramp-3: #57A3FD;
-  --ramp-4: #0176D3;
-  --ramp-5: #014486;
+  /* A SEQUENTIAL ramp, for intensity rather than identity: pale to deep
+     along one hue, so a heatmap reads as more-and-less at a glance. It was
+     left behind as the old blue when everything around it moved, which
+     would have put a Lightning-blue heatmap next to an orange interface. */
+  --ramp-1: #FDF1EA;
+  --ramp-2: #F8D5BC;
+  --ramp-3: #EFA873;
+  --ramp-4: #DC6B28;
+  --ramp-5: #9A3412;
 
   /* ── type: the system face, as Lightning falls back to ───────────── */
   --sans: -apple-system, "Segoe UI", system-ui, Roboto, "Helvetica Neue", Arial, sans-serif;
