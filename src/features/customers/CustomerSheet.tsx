@@ -9,10 +9,12 @@ import type { CustomerProfile } from "../../domain/customers/profile";
 import { addNote } from "../../domain/customers/notes";
 import { askBeforeSave, useConfirmedAction } from "../../components/useConfirmedAction";
 import { Button, Chip, Field, Input, Select, Textarea } from "../../components/primitives";
+import { MoreFields } from "../../components/MoreFields";
 import { applyCountry, applyGstin, customerLabel, type Customer } from "../../domain/customers/customer";
 import { checkDuplicate, duplicateCheckAvailable, type DuplicateHit } from "../../data/duplicateCheck";
 import { gstinMessage, validateGSTIN } from "../../domain/gstin/validate";
 import { COUNTRIES } from "../../domain/geo/countries";
+import { currencyForCountry } from "../../domain/geo/currencyForCountry";
 import { STATE_NAMES } from "../../domain/geo/states";
 import { SEGMENTS, SOURCES, STAGES, applyStage, type StageId } from "../../domain/pipeline/stages";
 import { CURRENCIES } from "../../domain/currency/currencies";
@@ -66,6 +68,16 @@ export function CustomerSheet({
     setF((cur) => ({ ...cur, [k]: e.target.value }));
 
   const isIndia = !f.country || f.country === "India";
+
+  /* Currency and tax regime always hold something, so "is it filled in" is
+     the wrong question for them — the useful one is whether somebody chose
+     it. Both follow the country unless overridden (applyCountry), and an
+     override is exactly the thing that must not end up behind a toggle:
+     a German account deliberately billed in dollars, an Indian one marked
+     export. */
+  const billingOverridden =
+    (f.currency ?? "INR") !== currencyForCountry(f.country ?? "India")
+    || (f.taxType ?? "gst") !== (isIndia ? "gst" : "none");
 
   /* LIVE DUPLICATE CHECK, on leaving a field rather than at save.
      Finding out at save that this company is already in the CRM means
@@ -131,14 +143,22 @@ export function CustomerSheet({
               placeholder="Acme Industries Pvt Ltd"
             />
           </Field>
+          {/* The four you have when somebody rings. The rest — their job
+              title, a second number, the website — are things you find out
+              later, and asking for them now is what made a new lead a
+              twenty-six-field form. */}
           <div className="grid grid-2">
             <Field label="Contact person"><Input value={f.contact ?? ""} onChange={set("contact")} placeholder="Rahul Sharma" /></Field>
-            <Field label="Designation"><Input value={f.designation ?? ""} onChange={set("designation")} placeholder="IT Head" /></Field>
             <Field label="Email"><Input type="email" value={f.email ?? ""} onChange={set("email")} /></Field>
             <Field label="Phone"><Input value={f.phone ?? ""} onChange={set("phone")} onBlur={() => dup.check()} /></Field>
-            <Field label="Alternate phone" hint="For when the first one doesn't answer."><Input value={f.altPhone ?? ""} onChange={set("altPhone")} /></Field>
-            <Field label="Website"><Input value={f.website ?? ""} onChange={set("website")} placeholder="www.example.com" /></Field>
           </div>
+          <MoreFields label="more contact details" filled={[f.designation, f.altPhone, f.website]}>
+            <div className="grid grid-2">
+              <Field label="Designation"><Input value={f.designation ?? ""} onChange={set("designation")} placeholder="IT Head" /></Field>
+              <Field label="Alternate phone" hint="For when the first one doesn't answer."><Input value={f.altPhone ?? ""} onChange={set("altPhone")} /></Field>
+              <Field label="Website"><Input value={f.website ?? ""} onChange={set("website")} placeholder="www.example.com" /></Field>
+            </div>
+          </MoreFields>
 
           {/* CONSENT, NOT A PREFERENCE. Meta requires opt-in before a
               business sends the first WhatsApp message, so this gates the
@@ -153,8 +173,6 @@ export function CustomerSheet({
             />
             <span>They have agreed to be contacted on WhatsApp</span>
           </label>
-          <div className="grid grid-2">
-          </div>
         </div>
 
         <div className="stack">
@@ -246,26 +264,6 @@ export function CustomerSheet({
         <div className="stack">
           <div className="eyebrow">Commercial</div>
           <div className="grid grid-2">
-            <Field label="Currency" hint="Flows into every new document for this customer.">
-              <Select value={f.currency ?? "INR"} onChange={set("currency")}>
-                {CURRENCIES.map(([code, , name]) => <option key={code} value={code}>{code} — {name}</option>)}
-              </Select>
-            </Field>
-            <Field label="Tax regime">
-              <Select value={f.taxType ?? "gst"} onChange={set("taxType")}>
-                {TAX_TYPES.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
-              </Select>
-            </Field>
-            <Field label="Segment">
-              <Select value={f.segment ?? ""} onChange={set("segment")}>
-                {SEGMENTS.map((s) => <option key={s}>{s}</option>)}
-              </Select>
-            </Field>
-            <Field label="Source">
-              <Select value={f.source ?? ""} onChange={set("source")}>
-                {SOURCES.map((s) => <option key={s}>{s}</option>)}
-              </Select>
-            </Field>
             <Field label="Stage">
               <Select
                 value={f.stage ?? "lead"}
@@ -287,6 +285,41 @@ export function CustomerSheet({
               </Select>
             </Field>
           </div>
+
+          {/* Currency and tax regime are already decided by the country —
+              see applyCountry in domain/customers/customer.ts — so on the
+              ordinary Indian account and the ordinary UAE one alike they are
+              two selects nobody touches. Segment and source are reporting
+              fields, worth having and not worth asking for before the
+              company's name is typed. All four still save exactly as they
+              did, and the group opens itself on a record that has them. */}
+          <MoreFields
+            label="billing, tax and classification"
+            filled={[f.segment, f.source, billingOverridden]}
+          >
+            <div className="grid grid-2">
+              <Field label="Currency" hint="Flows into every new document for this customer.">
+                <Select value={f.currency ?? "INR"} onChange={set("currency")}>
+                  {CURRENCIES.map(([code, , name]) => <option key={code} value={code}>{code} — {name}</option>)}
+                </Select>
+              </Field>
+              <Field label="Tax regime">
+                <Select value={f.taxType ?? "gst"} onChange={set("taxType")}>
+                  {TAX_TYPES.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+                </Select>
+              </Field>
+              <Field label="Segment">
+                <Select value={f.segment ?? ""} onChange={set("segment")}>
+                  {SEGMENTS.map((s) => <option key={s}>{s}</option>)}
+                </Select>
+              </Field>
+              <Field label="Source">
+                <Select value={f.source ?? ""} onChange={set("source")}>
+                  {SOURCES.map((s) => <option key={s}>{s}</option>)}
+                </Select>
+              </Field>
+            </div>
+          </MoreFields>
         </div>
 
         {customFields.length ? (

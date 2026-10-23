@@ -1106,6 +1106,29 @@ button.path-hit { cursor: pointer; }
 .toast-action:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
 
 /* Saved views: a row of filter chips above a list. */
+/* ── fields folded away until wanted ───────────────────────────────── */
+/* A quiet row, not a card: it sits between two groups of real fields and
+   must not read as heavier than they are. */
+.more-fields { display: flex; flex-direction: column; gap: var(--gap); }
+.more-toggle {
+  display: inline-flex; align-items: center; gap: 6px; align-self: flex-start;
+  background: none; border: 0; padding: 4px 0; cursor: pointer;
+  font: inherit; font-size: var(--t-small); font-weight: 600; color: var(--accent);
+  border-radius: var(--radius-sm);
+}
+.more-toggle:hover { color: var(--accent-hover); text-decoration: underline; }
+.more-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+/* "filled in" on a collapsed group. Carries real information — there is
+   something in there — so it is not decoration and does not get the muted
+   treatment a hint would. */
+.more-mark {
+  font-size: var(--t-micro); font-weight: 700; letter-spacing: .02em;
+  text-transform: uppercase; color: var(--accent);
+  background: var(--accent-weak); border: 1px solid var(--accent-rule);
+  border-radius: 999px; padding: 1px 7px;
+}
+.more-body { display: flex; flex-direction: column; gap: var(--gap); }
+
 .saved-views { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 10px var(--gap-wide) 0; }
 .view-chip-wrap { display: inline-flex; align-items: center; }
 .view-chip {

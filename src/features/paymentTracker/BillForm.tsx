@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Modal } from "../../components/Modal";
 import { Button, Field, Input, Select, Textarea } from "../../components/primitives";
+import { MoreFields } from "../../components/MoreFields";
 import { fmtDate } from "../../domain/dates";
 import { moneyList } from "../../domain/currency/format";
 import { dueDateFor, daysBetween } from "../../domain/paymentTracker/schedule";
@@ -166,6 +167,15 @@ export function BillForm({
           </div>
         </Field>
 
+        {/* The chips above already set both of these. They are here for the
+            21-day term and the due date agreed on the phone, which is a
+            minority of bills — and three controls for one concept read as
+            three decisions to make. Opens itself on a bill that used
+            them. */}
+        <MoreFields
+          label="an unusual credit period or an exact due date"
+          filled={[dueByHand, !TERMS.includes(b.creditDays)]}
+        >
         <div className="grid grid-2">
           <Field label="Credit days" hint="Any number — e.g. 21 or 120.">
             <Input
@@ -182,6 +192,7 @@ export function BillForm({
             <Input type="date" value={b.dueDate} onChange={(e) => { setDueByHand(true); setB((cur) => ({ ...cur, dueDate: e.target.value })); }} />
           </Field>
         </div>
+        </MoreFields>
 
         <div className="pt-section-title">Who gets the reminders</div>
         <div className="grid grid-2">
@@ -195,9 +206,6 @@ export function BillForm({
         <Field label="Email">
           <Input type="email" value={b.email} onChange={(e) => set({ email: e.target.value })} placeholder="accounts@customer.com" />
         </Field>
-        <Field label="CC (optional)" hint="Separate several addresses with commas — e.g. the purchase head.">
-          <Input value={b.cc} onChange={(e) => set({ cc: e.target.value })} />
-        </Field>
 
         <label className="pt-check">
           <input type="checkbox" checked={b.remindersOn} onChange={(e) => set({ remindersOn: e.target.checked })} />
@@ -209,9 +217,14 @@ export function BillForm({
           </div>
         ) : null}
 
-        <Field label="Notes (internal)">
-          <Textarea rows={3} value={b.notes} onChange={(e) => set({ notes: e.target.value })} placeholder="PO number, who approved the credit, anything useful…" />
-        </Field>
+        <MoreFields label="a CC and internal notes" filled={[b.cc, b.notes]}>
+          <Field label="CC" hint="Separate several addresses with commas — e.g. the purchase head.">
+            <Input value={b.cc} onChange={(e) => set({ cc: e.target.value })} />
+          </Field>
+          <Field label="Notes (internal)">
+            <Textarea rows={3} value={b.notes} onChange={(e) => set({ notes: e.target.value })} placeholder="PO number, who approved the credit, anything useful…" />
+          </Field>
+        </MoreFields>
 
         {amount > 0 ? (
           <div className="field-hint">

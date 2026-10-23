@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Button, Card, Field, Input, Select, Tabs, Textarea } from "../../components/primitives";
+import { MoreFields } from "../../components/MoreFields";
 import { DocumentActions } from "./DocumentActions";
 import { FollowUpStrip } from "./FollowUpStrip";
 import { AttachmentsPanel } from "../attachments/AttachmentsPanel";
@@ -139,6 +140,13 @@ export function DocumentEditor({
   const isIndia = !doc.billCountry || doc.billCountry === "India";
   const showTax = doc.taxType !== "none";
   const isPo = docType === "purchase_order";
+  /* "As specified" is what every document starts with, so it is a
+     placeholder and not somebody's decision. Only a term actually typed
+     counts as a reason to keep the references group open. */
+  const termsTyped = (v: string | undefined): boolean => {
+    const t = (v ?? "").trim();
+    return t !== "" && t !== "As specified";
+  };
   const isInvoice = docType === "invoice";
 
   /**
@@ -451,13 +459,34 @@ export function DocumentEditor({
                           </div>
                         </Field>
                       ) : null}
-                      <Field label={isPo ? "Supplier reference" : "Customer reference"}><Input value={doc.referenceNo} onChange={set("referenceNo")} placeholder={isPo ? "Their quotation number" : "PO/ABC/2425/078"} /></Field>
-                      <Field label="Enquiry reference"><Input value={doc.enquiryRef ?? ""} onChange={set("enquiryRef")} placeholder="ENQ-150826-01" /></Field>
-                      <Field label="Customer ID" hint="Printed on the document. Not the database id."><Input value={doc.customerCode ?? ""} onChange={set("customerCode")} placeholder="CUST-000123" /></Field>
-                      <Field label="Revision"><Input numeric value={String(doc.revisionNo)} onChange={set("revisionNo")} /></Field>
-                      <Field label="Payment terms"><Input value={doc.paymentTerms ?? ""} onChange={set("paymentTerms")} /></Field>
-                      <Field label="Delivery terms"><Input value={doc.deliveryTerms ?? ""} onChange={set("deliveryTerms")} /></Field>
                     </div>
+
+                    {/* Six boxes that are either filled in for you or left
+                        blank: the customer ID comes off the account, the
+                        revision counts itself, and the terms start at "As
+                        specified". Raising a quotation should not begin with
+                        them. They open themselves on a document that uses
+                        any of them, so an invoice carrying the customer's PO
+                        number shows it. */}
+                    <MoreFields
+                      label="references and terms"
+                      filled={[
+                        doc.referenceNo,
+                        doc.enquiryRef,
+                        doc.revisionNo > 0,
+                        termsTyped(doc.paymentTerms),
+                        termsTyped(doc.deliveryTerms),
+                      ]}
+                    >
+                      <div className="grid grid-2">
+                        <Field label={isPo ? "Supplier reference" : "Customer reference"}><Input value={doc.referenceNo} onChange={set("referenceNo")} placeholder={isPo ? "Their quotation number" : "PO/ABC/2425/078"} /></Field>
+                        <Field label="Enquiry reference"><Input value={doc.enquiryRef ?? ""} onChange={set("enquiryRef")} placeholder="ENQ-150826-01" /></Field>
+                        <Field label="Customer ID" hint="Printed on the document. Not the database id."><Input value={doc.customerCode ?? ""} onChange={set("customerCode")} placeholder="CUST-000123" /></Field>
+                        <Field label="Revision"><Input numeric value={String(doc.revisionNo)} onChange={set("revisionNo")} /></Field>
+                        <Field label="Payment terms"><Input value={doc.paymentTerms ?? ""} onChange={set("paymentTerms")} /></Field>
+                        <Field label="Delivery terms"><Input value={doc.deliveryTerms ?? ""} onChange={set("deliveryTerms")} /></Field>
+                      </div>
+                    </MoreFields>
 
                     <Field label="Subject"><Input value={doc.subject} onChange={set("subject")} /></Field>
                   </div>
