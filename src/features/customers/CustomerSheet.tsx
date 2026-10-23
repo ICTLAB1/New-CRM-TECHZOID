@@ -11,10 +11,10 @@ import { askBeforeSave, useConfirmedAction } from "../../components/useConfirmed
 import { Button, Chip, Field, Input, Select, Textarea } from "../../components/primitives";
 import { MoreFields } from "../../components/MoreFields";
 import { applyCountry, applyGstin, customerLabel, type Customer } from "../../domain/customers/customer";
+import { billingChosen } from "../../domain/customers/formGroups";
 import { checkDuplicate, duplicateCheckAvailable, type DuplicateHit } from "../../data/duplicateCheck";
 import { gstinMessage, validateGSTIN } from "../../domain/gstin/validate";
 import { COUNTRIES } from "../../domain/geo/countries";
-import { currencyForCountry } from "../../domain/geo/currencyForCountry";
 import { STATE_NAMES } from "../../domain/geo/states";
 import { SEGMENTS, SOURCES, STAGES, applyStage, type StageId } from "../../domain/pipeline/stages";
 import { CURRENCIES } from "../../domain/currency/currencies";
@@ -69,15 +69,6 @@ export function CustomerSheet({
 
   const isIndia = !f.country || f.country === "India";
 
-  /* Currency and tax regime always hold something, so "is it filled in" is
-     the wrong question for them — the useful one is whether somebody chose
-     it. Both follow the country unless overridden (applyCountry), and an
-     override is exactly the thing that must not end up behind a toggle:
-     a German account deliberately billed in dollars, an Indian one marked
-     export. */
-  const billingOverridden =
-    (f.currency ?? "INR") !== currencyForCountry(f.country ?? "India")
-    || (f.taxType ?? "gst") !== (isIndia ? "gst" : "none");
 
   /* LIVE DUPLICATE CHECK, on leaving a field rather than at save.
      Finding out at save that this company is already in the CRM means
@@ -295,7 +286,7 @@ export function CustomerSheet({
               did, and the group opens itself on a record that has them. */}
           <MoreFields
             label="billing, tax and classification"
-            filled={[f.segment, f.source, billingOverridden]}
+            filled={[billingChosen(f)]}
           >
             <div className="grid grid-2">
               <Field label="Currency" hint="Flows into every new document for this customer.">

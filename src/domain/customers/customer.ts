@@ -103,6 +103,18 @@ export interface CustomerNote {
 /** `code` is deliberately absent: it is allocated when the record is first
  *  SAVED, not when a blank form is opened, so cancelling out of "New
  *  customer" does not burn a number and leave a gap in the sequence. */
+/**
+ * What a new customer starts as, for the fields that are never empty.
+ *
+ * These are placeholders, not answers. A form asking "has somebody chosen
+ * this?" must compare against these rather than against the empty string,
+ * or every brand-new record looks like one where the segment was decided —
+ * which is how a progressive-disclosure group that should be shut opened
+ * itself on every new customer.
+ */
+export const DEFAULT_SEGMENT = "SMB";
+export const DEFAULT_SOURCE = "Inbound Call";
+
 export function blankCustomer(ownerId: string, id: string): Customer {
   return {
     id, ownerId,
@@ -111,7 +123,7 @@ export function blankCustomer(ownerId: string, id: string): Customer {
     country: "India", pincode: "", altPhone: "", website: "", whatsappOptIn: false,
     shipSame: true, shipAddress: "", shipCity: "", shipState: "",
     shipPincode: "", shipContact: "", shipPhone: "",
-    segment: "SMB", source: "Inbound Call", stage: "lead",
+    segment: DEFAULT_SEGMENT, source: DEFAULT_SOURCE, stage: "lead",
     value: "", nextFollowUp: "",
     currency: "INR", taxType: "gst",
     notes: [], customFields: {},
