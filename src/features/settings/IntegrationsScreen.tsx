@@ -487,10 +487,15 @@ function WhatsAppPanel({ status }: { status: IntegrationStatus | null }) {
         <ol className="steps" style={{ marginTop: 10 }}>
           <li className="step">
             <div className="step-body">
-              <div className="step-title">Sign up with a QR-linked provider and link the number</div>
+              {/* NAMED, because "a QR-linked provider" sent at least one
+                  admin looking for a token they already had. This channel
+                  calls gate.whapi.cloud — see netlify/functions/whatsapp-send.mjs —
+                  so a token from anywhere else will not work in it. */}
+              <div className="step-title">Open an account with Whapi.Cloud and link the number</div>
               <div>
-                Use the number customers should see the message coming from. In the provider&rsquo;s dashboard,
-                scan the QR code from WhatsApp on that phone (Settings → Linked Devices).
+                That is the service this channel calls. Use the number customers should see the message coming
+                from: in the Whapi dashboard, scan the QR code from WhatsApp on that phone
+                (Settings → Linked Devices).
               </div>
             </div>
           </li>
@@ -499,11 +504,28 @@ function WhatsAppPanel({ status }: { status: IntegrationStatus | null }) {
               <div className="step-title">Add the token in Azure</div>
               <div>
                 Function App techzoid-fn-web7gna6q5rns → Environment variables → <code className="mono">WHATSAPP_API_TOKEN</code>,
-                then press Apply.
+                then press Apply. This is a Whapi token and <strong>not</strong> the Interakt key from channel 2 —
+                different company, different API. Neither key works in the other channel.
               </div>
             </div>
           </li>
         </ol>
+        {/* Only when it is actually the problem. "Not connected" says the
+            variable is unset; it cannot say why, and every one of these has
+            caught somebody who was sure they had set it. */}
+        {status && !status.whatsappDirect ? (
+          <div className="notice" style={{ marginTop: 12 }}>
+            <span>
+              <strong>Set it and this still says Not connected?</strong> This line is read live from the Function
+              App each time the page loads, so reload first. Then check that the variable is on
+              <strong> techzoid-fn-web7gna6q5rns</strong> and not on the Static Web App; that
+              <strong> Apply</strong> was pressed afterwards, which restarts the app; that the name is exactly{" "}
+              <code className="mono">WHATSAPP_API_TOKEN</code> with no stray space or lowercase letter; and that
+              the value is not blank. Channel 2 below reads the same way, so if it shows Connected the mechanism
+              is working and only this one variable is missing.
+            </span>
+          </div>
+        ) : null}
         <div className="notice" style={{ marginTop: 12 }}>
           <span>
             <strong>Worth knowing:</strong> QR-linked services are not WhatsApp&rsquo;s official business channel —
