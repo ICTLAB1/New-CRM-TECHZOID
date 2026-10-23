@@ -1,6 +1,8 @@
 import { htmlHeaders, resultPage } from "../lib/html.mjs";
 import { adminClient } from "../lib/auth.mjs";
 import { verifyState } from "../lib/state.mjs";
+import { recordConsent } from "../lib/adminConsentStore.mjs";
+import { SCOPES as ADMIN_CONSENT_SCOPES } from "./ms-admin-consent.mjs";
 
 /**
  * Microsoft redirects the browser here after consent.
@@ -29,16 +31,37 @@ export async function handler(event) {
      thing everybody had been asking them to do. */
   if (params.admin_consent !== undefined) {
     const granted = String(params.admin_consent).toLowerCase() === "true";
-    return granted
-      ? page(200, "Approved for the whole organisation",
-          "Microsoft has recorded your approval. Everyone here can now connect their own mailbox "
-          + "from Settings \u2192 Integrations without being stopped \u2014 including anybody who hit "
-          + "\u201cNeed admin approval\u201d before. You do not need to do this again unless the "
-          + "permissions the CRM asks for change.", true)
-      : page(200, "Not approved",
-          "Nothing was changed. Colleagues will keep seeing \u201cNeed admin approval\u201d when they "
-          + "try to connect a mailbox, and quotation email from their own address will not work "
-          + "until this is granted.", false);
+    if (!granted) {
+      return page(200, "Not approved",
+        "Nothing was changed. Colleagues will keep seeing \u201cNeed admin approval\u201d when they "
+        + "try to connect a mailbox, and quotation email from their own address will not work "
+        + "until this is granted.", false);
+    }
+
+    /* WRITE IT DOWN. Microsoft remembers this; the CRM did not, so the panel
+       that sent the admin here looked untouched afterwards and they clicked
+       it again. Only on a state this server signed — an unsigned redirect is
+       a claim, not an approval. A state from a link issued before this
+       existed verifies as `own` and records nothing, which is right: it
+       proves a user, not an administrator. */
+    const check = verifyState(params.state, process.env);
+    if (check.ok && check.purpose === "adminconsent") {
+      /* WHAT WAS ASKED FOR, not what came back: Microsoft's admin-consent
+         redirect carries admin_consent, tenant and state and no scope at
+         all, so reading one off the query string records an empty list and
+         the panel then reports a fresh approval as covering nothing. The
+         link was built from this same constant moments ago. */
+      await recordConsent(adminClient(), {
+        scopes: ADMIN_CONSENT_SCOPES.split(" "),
+        byUserId: check.userId,
+      });
+    }
+
+    return page(200, "Approved for the whole organisation",
+      "Microsoft has recorded your approval. Everyone here can now connect their own mailbox "
+      + "from Settings \u2192 Integrations without being stopped \u2014 including anybody who hit "
+      + "\u201cNeed admin approval\u201d before. You do not need to do this again unless the "
+      + "permissions the CRM asks for change.", true);
   }
 
   if (params.error) {

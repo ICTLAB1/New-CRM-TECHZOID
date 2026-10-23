@@ -7,6 +7,7 @@ import { diagnosticLines, isReady, nextAction, type Diagnostics } from "../../do
 import { IntegrationError, type IntegrationsApi, type MailboxConnection } from "../../integrations/api";
 import { integrationStatus, testVerificationConnection, type IntegrationStatus } from "../../data/verification";
 import { fnPath, fnToken, fnUrl } from "../../data/functions";
+import { fmtDate } from "../../domain/dates";
 
 /**
  * Settings → Integrations.
@@ -978,13 +979,60 @@ function WebhooksPanel({
  * lives. The server builds the link, because only the server knows the
  * client id.
  */
+/** What the server knows about the tenant-wide approval. */
+interface ConsentInfo {
+  url: string;
+  scopes: string[];
+  granted: { grantedAt: string; scopes: string[]; covers: boolean } | null;
+  grantUnknown: boolean;
+}
+
+/**
+ * THE ONE-TIME SETUP THAT COULD NOT SAY IT WAS DONE.
+ *
+ * This was a button and three paragraphs, with no state behind it at all.
+ * An admin approved, got Microsoft's confirmation page, came back — and
+ * found the panel exactly as they had left it. So they did it again, and
+ * again, because nothing here could tell them otherwise. The approval was
+ * working every time; the screen simply had no memory of it.
+ *
+ * It now asks the server, which has recorded the grant since the callback
+ * started writing it down. Three states, and the difference between the
+ * last two is the one that matters: approved and still covering what the
+ * app asks for, versus approved for a smaller set than the app now asks for
+ * — which is not a stale note but a live problem, because it means
+ * everybody is about to be stopped by "Need admin approval" again.
+ */
 function AdminConsent() {
   const toast = useToast();
   const [busy, setBusy] = useState(false);
+  const [info, setInfo] = useState<ConsentInfo | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    try {
+      const res = await fetch(fnPath("ms-admin-consent"), {
+        credentials: "include",
+        headers: { Authorization: "Bearer " + ((await fnToken()) ?? "") },
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (res.ok && payload?.url) setInfo(payload as ConsentInfo);
+    } catch {
+      /* Left as unknown. A panel that cannot reach the server must not
+         announce that nothing was ever approved. */
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { void load(); }, [load]);
 
   async function open() {
     setBusy(true);
     try {
+      /* Re-fetched rather than reusing what was loaded: the link carries a
+         signed state that expires in fifteen minutes, and a panel left open
+         over lunch would otherwise hand the admin a dead link. */
       const res = await fetch(fnPath("ms-admin-consent"), { credentials: "include", headers: { Authorization: "Bearer " + ((await fnToken()) ?? "") } });
       const payload = await res.json().catch(() => ({}));
       if (!res.ok || !payload?.url) {
@@ -1000,26 +1048,68 @@ function AdminConsent() {
     }
   }
 
+  const granted = info?.granted ?? null;
+  const settled = granted !== null && granted.covers;
+
   return (
     <div>
-      <Button size="sm" tone="primary" loading={busy} onClick={() => void open()}>
-        Approve for the whole organisation
-      </Button>
-      <p className="field-hint" style={{ marginTop: 8 }}>
-        Opens Microsoft's approval screen. Sign in there as a Global Administrator and accept once —
-        after that nobody here sees <strong>“Need admin approval”</strong> again, and everyone can
-        connect their own mailbox.
-      </p>
-      <p className="field-hint">
-        You are approving the same three things a single person would approve for themselves: send
-        mail as themselves, read their own name and address, and stay signed in. Nothing reads
-        anybody else's mailbox, and nothing is tenant-wide.
-      </p>
-      <p className="field-hint">
-        Needed because this app is not a Microsoft-verified publisher, and most tenants only let
-        people approve verified apps for themselves. It is one screen, and it does not need repeating
-        unless the permissions change.
-      </p>
+      <div className="row-tight wrap" style={{ gap: 10 }}>
+        <Button size="sm" tone={settled ? "default" : "primary"} loading={busy} onClick={() => void open()}>
+          {settled ? "Approve again" : "Approve for the whole organisation"}
+        </Button>
+        {loading ? null : settled ? (
+          <Chip tone="good">Approved</Chip>
+        ) : granted ? (
+          <Chip tone="warn">Approved for fewer permissions</Chip>
+        ) : null}
+      </div>
+
+      {settled ? (
+        <>
+          <p className="field-hint" style={{ marginTop: 8 }}>
+            Approved for the whole organisation on <strong>{fmtDate(granted.grantedAt.slice(0, 10))}</strong>, for
+            exactly what the CRM asks for today. <strong>There is nothing to do here.</strong> Everyone can
+            connect their own mailbox, and approving again changes nothing.
+          </p>
+          <p className="field-hint">
+            Approving again is only needed if the permissions change — the button is left here for that.
+          </p>
+        </>
+      ) : granted ? (
+        <p className="field-hint" style={{ marginTop: 8 }}>
+          Approved on <strong>{fmtDate(granted.grantedAt.slice(0, 10))}</strong>, but for fewer permissions than
+          the CRM now asks for. Colleagues will hit <strong>“Need admin approval”</strong> until this is approved
+          again. Missing: <code className="mono">{info?.scopes.filter((x) => !granted.scopes.includes(x)).join(", ") || "—"}</code>
+        </p>
+      ) : (
+        <p className="field-hint" style={{ marginTop: 8 }}>
+          Opens Microsoft's approval screen. Sign in there as a Global Administrator and accept once —
+          after that nobody here sees <strong>“Need admin approval”</strong> again, and everyone can
+          connect their own mailbox.
+        </p>
+      )}
+
+      {!settled ? (
+        <>
+          <p className="field-hint">
+            You are approving the same three things a single person would approve for themselves: send
+            mail as themselves, read their own name and address, and stay signed in. Nothing reads
+            anybody else's mailbox, and nothing is tenant-wide.
+          </p>
+          <p className="field-hint">
+            Needed because this app is not a Microsoft-verified publisher, and most tenants only let
+            people approve verified apps for themselves. It is one screen, and it does not need repeating
+            unless the permissions change.
+          </p>
+        </>
+      ) : null}
+
+      {!loading && !granted && !info?.grantUnknown ? (
+        <p className="field-hint">
+          Nothing recorded here yet. An approval granted before this screen could remember it will not show
+          up — approve once more and it will, and a second approval costs nothing.
+        </p>
+      ) : null}
     </div>
   );
 }

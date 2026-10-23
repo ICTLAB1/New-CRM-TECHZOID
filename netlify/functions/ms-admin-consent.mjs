@@ -1,5 +1,7 @@
 import { fail, guard, json } from "../lib/http.mjs";
-import { signedInProfile } from "../lib/auth.mjs";
+import { adminClient, signedInProfile } from "../lib/auth.mjs";
+import { signState } from "../lib/state.mjs";
+import { consentCovers, readConsent } from "../lib/adminConsentStore.mjs";
 
 /**
  * The link a Microsoft administrator opens once to approve this CRM for the
@@ -37,7 +39,7 @@ import { signedInProfile } from "../lib/auth.mjs";
 /** Kept identical to ms-oauth-start.mjs on purpose. Consent granted for a
  *  different set than the one later requested sends everybody back to the
  *  approval screen, which is the failure this whole endpoint exists to end. */
-const SCOPES = "openid profile offline_access User.Read Mail.Send";
+export const SCOPES = "openid profile offline_access User.Read Mail.Send";
 
 export async function handler(event) {
   const stop = guard(event, "GET", "GET, OPTIONS");
@@ -63,10 +65,40 @@ export async function handler(event) {
      a single-tenant app must use its own. */
   const tenant = process.env.MS_TENANT_ID || "organizations";
 
+  /* SIGNED, like every other round trip through Microsoft. The callback
+     records an approval off the back of this redirect, and an unsigned one
+     would let anybody who knew the URL have the CRM report an approval
+     nobody granted. */
+  let state;
+  try {
+    state = signState(caller.user.id, process.env, Date.now(), "adminconsent");
+  } catch {
+    return fail(event, 500,
+      "The server cannot sign the approval link — neither MS_STATE_SECRET nor SUPABASE_SERVICE_ROLE_KEY is set in the Azure Function App.",
+      null, "GET, OPTIONS");
+  }
+
   const url = "https://login.microsoftonline.com/" + encodeURIComponent(tenant) + "/v2.0/adminconsent"
     + "?client_id=" + encodeURIComponent(clientId)
     + "&scope=" + encodeURIComponent(SCOPES)
-    + "&redirect_uri=" + encodeURIComponent(redirectUri);
+    + "&redirect_uri=" + encodeURIComponent(redirectUri)
+    + "&state=" + encodeURIComponent(state);
 
-  return json(event, 200, { url, scopes: SCOPES.split(" ") }, "GET, OPTIONS");
+  const asked = SCOPES.split(" ");
+  /* What the panel needs to stop looking like an undone job. Read here
+     rather than in integration-status because this endpoint is already
+     admin-only and already knows which scopes are being asked for. */
+  let granted = null;
+  let grantUnknown = false;
+  try {
+    const row = await readConsent(adminClient());
+    if (row) granted = { ...row, covers: consentCovers(row.scopes, asked) };
+  } catch (err) {
+    /* A grant that cannot be read is reported as unknown, never as absent:
+       "not approved" would send an admin to do again what they have done. */
+    console.error("admin consent: could not read the recorded grant —", err?.message ?? err);
+    grantUnknown = true;
+  }
+
+  return json(event, 200, { url, scopes: asked, granted, grantUnknown }, "GET, OPTIONS");
 }

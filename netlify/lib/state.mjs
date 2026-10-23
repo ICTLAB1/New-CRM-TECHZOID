@@ -24,10 +24,14 @@ export const STATE_TTL_MS = 15 * 60 * 1000;
  * grant can never stop sending. It rides inside the SIGNED payload rather than the query string
  * for the same reason the user id does: a caller who could change it could
  * turn their own mailbox into the company's sending address, or the other
- * way round. The set is closed so nothing else can be smuggled through, and
+ * way round. `adminconsent` is the tenant-wide approval coming back: it
+ * attaches no mailbox to anybody, and it is signed for the same reason as
+ * the rest — without it, anyone who knew the callback URL could ask for it
+ * with `?admin_consent=True` and have the CRM record an approval Microsoft
+ * never granted. The set is closed so nothing else can be smuggled through, and
  * so a purpose can never contain the separator.
  */
-export const PURPOSES = new Set(["own", "shared", "inbox"]);
+export const PURPOSES = new Set(["own", "shared", "inbox", "adminconsent"]);
 
 function secretOf(env) {
   const secret = env.MS_STATE_SECRET || env.SUPABASE_SERVICE_ROLE_KEY;
