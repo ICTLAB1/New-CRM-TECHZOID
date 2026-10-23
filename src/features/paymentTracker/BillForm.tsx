@@ -152,7 +152,16 @@ export function BillForm({
           </Field>
         </div>
 
-        <Field label="Credit period">
+        {/* The resulting date, said here. It used to be the hint under the
+            Due date box, and folding that box away took the answer with it:
+            picking "30 days" told you nothing about when that falls. */}
+        <Field
+          label="Credit period"
+          hint={b.dueDate
+            ? `${dueByHand ? "Due" : "Payment due"} ${fmtDate(b.dueDate)}`
+              + ` — ${daysToDue >= 0 ? `in ${daysToDue} day(s)` : `${-daysToDue} day(s) ago`}`
+            : undefined}
+        >
           <div className="pt-terms">
             {TERMS.map((t) => (
               <button
