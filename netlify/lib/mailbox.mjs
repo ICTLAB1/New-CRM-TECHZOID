@@ -1,4 +1,5 @@
 import { READ_SCOPES } from "./mailer.mjs";
+import { refreshFailure } from "./aadsts.mjs";
 
 /**
  * Reading one person's Microsoft mailbox.
@@ -72,11 +73,15 @@ export async function readToken(admin, userId, env = process.env) {
   const tok = await resp.json().catch(() => ({}));
 
   if (!resp.ok || !tok.access_token) {
-    console.error("inbox refresh failed:", resp.status, tok?.error);
+    const why = refreshFailure(tok, "inbox connection");
+    console.error("inbox refresh failed:", resp.status, why.code ?? tok?.error);
     return {
       ok: false,
-      error: "Your inbox connection has expired. Reconnect it in Settings → Integrations.",
-      needsConsent: true,
+      error: why.error,
+      /* Offering the Connect button for a fault no reconnection can fix is
+         how somebody ends up pressing it all afternoon. */
+      needsConsent: why.reconnect,
+      code: why.code,
     };
   }
 

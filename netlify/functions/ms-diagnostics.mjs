@@ -1,5 +1,11 @@
 import { fail, guard, json, isOriginLocked } from "../lib/http.mjs";
 import { adminClient, isAdmin, signedInProfile } from "../lib/auth.mjs";
+/* The table moved to lib so the refresh paths could reach it too — see
+   lib/aadsts.mjs. Re-exported because this module's explain() is part of
+   its surface. */
+import { explain } from "../lib/aadsts.mjs";
+
+export { explain };
 
 /**
  * Microsoft 365 setup diagnostics.
@@ -20,21 +26,6 @@ const hint = (value) => {
   return s.length <= 8 ? "…" + s.slice(-2) : "…" + s.slice(-4);
 };
 
-const AADSTS = {
-  AADSTS7000215: "The client secret is wrong. In Azure, copy the secret's VALUE, not its Secret ID — the Value is only shown once, right after you create it.",
-  AADSTS700016: "Azure doesn't recognise the application ID. Check MS_CLIENT_ID against the app registration's Application (client) ID.",
-  AADSTS50011: "The redirect URI doesn't match. Add exactly this URI to the app registration under Authentication → Web → Redirect URIs.",
-  AADSTS900023: "The tenant ID isn't valid. Use the Directory (tenant) ID from the app registration's overview, or leave MS_TENANT_ID unset to use 'common'.",
-  AADSTS65001: "Nobody has consented yet. The first person to connect will be asked to approve the permissions.",
-  AADSTS7000218: "Azure expected a client secret and didn't get one. Check MS_CLIENT_SECRET is set.",
-  AADSTS50020: "That account isn't in this tenant. Either sign in with a work account from your own organisation, or set MS_TENANT_ID to 'common'.",
-};
-
-export function explain(code) {
-  if (!code) return null;
-  const match = String(code).match(/AADSTS\d+/);
-  return match ? (AADSTS[match[0]] ?? null) : null;
-}
 
 export async function handler(event) {
   const stop = guard(event, "GET", "GET, OPTIONS");

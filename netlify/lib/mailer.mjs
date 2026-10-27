@@ -31,6 +31,8 @@
  * refusal means "this mailbox predates that permission" — which is
  * actionable, and only affects reading.
  */
+import { refreshFailure } from "./aadsts.mjs";
+
 const SEND_SCOPES = "openid profile offline_access User.Read Mail.Send";
 
 /** THE MAILBOX GRANT'S SCOPES — what a refresh of the inbox token may ask
@@ -136,8 +138,12 @@ async function sendViaMicrosoft({ mailbox, persistToken, to, cc, subject, messag
     const tok = await tokenResp.json().catch(() => ({}));
 
     if (!tokenResp.ok || !tok.access_token) {
-      console.error("ms refresh failed:", tokenResp.status, tok?.error);
-      return { ok: false, error: "Your Microsoft 365 connection has expired. Reconnect it in Settings → Integrations." };
+      /* Microsoft's own reason, not a guess at it. "Reconnect it" is right
+         for a stale grant and a dead end for an expired client secret, and
+         this path cannot tell which without reading what came back. */
+      const why = refreshFailure(tok, "Microsoft 365 connection");
+      console.error("ms refresh failed:", tokenResp.status, why.code ?? tok?.error);
+      return { ok: false, error: why.error, reconnect: why.reconnect, code: why.code };
     }
 
     /* Microsoft ROTATES refresh tokens. Store the new one or the next send
