@@ -119,7 +119,11 @@ export const DEFAULT_SETTINGS: TrackerSettings = {
     upi: "",
   },
   companyName: "TechZoid Technologies Pvt. Ltd.",
-  contactLine: "For any queries, write to sales@techzoidtechnologies.com or call +91 97114 92098.",
+  /* No phone number: asked for, and only the phone — the address is left as
+     it was. This is what a brand-new company's row starts as and nothing
+     more; a company already running has its own, edited in Payment tracker →
+     Settings, and migration 050 is what took the number out of those. */
+  contactLine: "For any queries, write to sales@techzoidtechnologies.com.",
   signOff: "Accounts Team\nTechZoid Technologies Pvt. Ltd.",
   appUrl: "https://crm.ttpldelhi.com",
 };
