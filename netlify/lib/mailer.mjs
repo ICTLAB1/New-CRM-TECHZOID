@@ -72,7 +72,7 @@ export async function sendMail({
         .eq("id", accountId)
         .maybeSingle();
       if (data?.refresh_token) {
-        mailbox = { refresh_token: data.refresh_token, ms_email: data.email };
+        mailbox = { refresh_token: data.refresh_token, ms_email: data.email, shared: true };
         persistToken = (token) =>
           admin.from("email_accounts")
             .update({ refresh_token: token, updated_at: new Date().toISOString() })
@@ -141,7 +141,7 @@ async function sendViaMicrosoft({ mailbox, persistToken, to, cc, subject, messag
       /* Microsoft's own reason, not a guess at it. "Reconnect it" is right
          for a stale grant and a dead end for an expired client secret, and
          this path cannot tell which without reading what came back. */
-      const why = refreshFailure(tok, "Microsoft 365 connection");
+      const why = refreshFailure(tok, { email: mailbox.ms_email, shared: !!mailbox.shared });
       console.error("ms refresh failed:", tokenResp.status, why.code ?? tok?.error);
       return { ok: false, error: why.error, reconnect: why.reconnect, code: why.code };
     }

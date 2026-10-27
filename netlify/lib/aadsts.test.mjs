@@ -73,8 +73,29 @@ describe("whether reconnecting is the fix", () => {
   });
 
   it("names the thing that failed, so an inbox is not called a mailbox", () => {
-    expect(refreshFailure({ error: "invalid_grant" }, "inbox connection").error).toContain("inbox connection");
-    expect(refreshFailure({}, "Microsoft 365 connection").error).toContain("Microsoft 365 connection");
+    expect(refreshFailure({ error: "invalid_grant" }, { what: "inbox connection" }).error).toContain("inbox connection");
+    expect(refreshFailure({}).error).toContain("Microsoft 365 connection");
+  });
+
+  it("names the shared mailbox, and sends you to the panel it is on", () => {
+    /* THE SECOND HALF OF THE TRAP. A payment reminder sends from the
+       company's accounts@ address, which is a different row in a different
+       table from the sender's own mailbox. "Your Microsoft 365 connection
+       has expired" sent somebody to reconnect their own — which worked, and
+       changed nothing, because the mailbox that failed was never theirs. */
+    const why = refreshFailure({ error: "invalid_grant" }, {
+      email: "accounts@techzoidtechnologies.com", shared: true,
+    });
+    expect(why.error).toContain("The shared mailbox accounts@techzoidtechnologies.com");
+    expect(why.error).not.toContain("Your Microsoft 365 connection");
+    expect(why.error).toContain("Shared mailboxes");
+  });
+
+  it("names the address on a personal mailbox too", () => {
+    const why = refreshFailure({ error: "invalid_grant" }, { email: "abhinav.jain@example.com" });
+    expect(why.error).toContain("abhinav.jain@example.com");
+    /* Not the shared panel: that is not where this one is reconnected. */
+    expect(why.error).not.toContain("Shared mailboxes");
   });
 
   it("never contradicts itself: advice follows the diagnosis", () => {
@@ -86,8 +107,10 @@ describe("whether reconnecting is the fix", () => {
       payload("whatever", 123456), {},
     ];
     for (const p of cases) {
-      const why = refreshFailure(p);
-      expect(why.error.includes("Reconnect it in Settings"), JSON.stringify(p)).toBe(why.reconnect);
+      for (const who of [{}, { email: "a@b.com" }, { email: "accounts@b.com", shared: true }]) {
+        const why = refreshFailure(p, who);
+        expect(why.error.includes("Reconnect it in Settings"), JSON.stringify([p, who])).toBe(why.reconnect);
+      }
     }
   });
 });

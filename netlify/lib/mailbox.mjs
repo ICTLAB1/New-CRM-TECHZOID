@@ -73,7 +73,7 @@ export async function readToken(admin, userId, env = process.env) {
   const tok = await resp.json().catch(() => ({}));
 
   if (!resp.ok || !tok.access_token) {
-    const why = refreshFailure(tok, "inbox connection");
+    const why = refreshFailure(tok, { what: "inbox connection", email: String(row.ms_email ?? "") });
     console.error("inbox refresh failed:", resp.status, why.code ?? tok?.error);
     return {
       ok: false,

@@ -78,13 +78,12 @@ export function explain(code) {
    saying "reconnect it" while reconnect is false is precisely the loop this
    module exists to end, and three hand-written sentences is how that gets
    reintroduced. */
-const RECONNECT = "Reconnect it in Settings \u2192 Integrations.";
 const ASK_ADMIN = "Ask an admin to check Settings \u2192 Integrations \u2192 Microsoft 365 diagnostics.";
 
-const answer = (code, reconnect, detail) => ({
+const answer = (code, reconnect, detail, where) => ({
   code,
   reconnect,
-  error: `${detail} ${reconnect ? RECONNECT : ASK_ADMIN}`,
+  error: `${detail} ${reconnect ? `Reconnect it in ${where}.` : ASK_ADMIN}`,
 });
 
 /**
@@ -97,24 +96,38 @@ const answer = (code, reconnect, detail) => ({
  * than as a fact, and carries the code so the real reason is one search away
  * instead of being lost in a log nobody reads.
  */
-export function refreshFailure(payload, what = "Microsoft 365 connection") {
+export function refreshFailure(payload, mailbox = {}) {
   const code = codeOf(payload);
   const oauth = String(payload?.error ?? "");
+  /* WHICH MAILBOX, and where to go for it. A payment reminder sends from
+     the company's accounts@ address, which lives in a different table from
+     the sender's own mailbox and is reconnected on a different panel. Told
+     only that "your Microsoft 365 connection" had expired, somebody
+     reconnects their own — successfully — and the reminder fails exactly as
+     before, because the mailbox that failed was never theirs. */
+  const subject = mailbox.shared && mailbox.email
+    ? `The shared mailbox ${mailbox.email}`
+    : mailbox.email
+      ? `Your ${mailbox.what ?? "Microsoft 365 connection"} (${mailbox.email})`
+      : `Your ${mailbox.what ?? "Microsoft 365 connection"}`;
+  const where = mailbox.shared
+    ? "Settings \u2192 Integrations \u2192 Shared mailboxes"
+    : "Settings \u2192 Integrations";
 
   /* invalid_client is about the APP's credentials, never the person's, so it
      is never fixed by that person reconnecting — even when Microsoft sends
      no numeric code with it. */
   if ((code && RECONNECT_CANNOT.has(code)) || oauth === "invalid_client") {
     return answer(code, false,
-      explain(code) ?? "Microsoft rejected this app's own credentials, so reconnecting will not help.");
+      explain(code) ?? "Microsoft rejected this app's own credentials, so reconnecting will not help.", where);
   }
 
   if ((code && RECONNECT_FIXES.has(code)) || oauth === "invalid_grant") {
-    return answer(code, true, explain(code) ?? `Your ${what} is no longer valid.`);
+    return answer(code, true, explain(code) ?? `${subject} is no longer valid.`, where);
   }
 
   return answer(code, true,
-    `Your ${what} could not be renewed${code ? ` (${code})` : ""}.`
+    `${subject} could not be renewed${code ? ` (${code})` : ""}.`
     + " This is usually a connection Microsoft has retired; if it comes straight back,"
-    + " ask an admin to check the Microsoft 365 diagnostics on that screen.");
+    + " ask an admin to check the Microsoft 365 diagnostics on that screen.", where);
 }
