@@ -67,12 +67,20 @@ export const DIWALI_2026: FestiveGreeting = {
   until: "2026-11-10",
   countries: ["India"],
   banner: {
-    path: "email/diwali-2026.jpg",
-    width: 1199,
-    height: 400,
+    /* A NEW FILENAME ON EVERY NEW ARTWORK. Gmail serves images through a
+       proxy that caches them hard, so replacing the bytes at a path already
+       mailed out leaves readers seeing the old strip. The path is the
+       version. */
+    path: "email/diwali-2026-strip.jpg",
+    width: 1200,
+    height: 177,
+    /* The strip is drawn to convey the greeting, so that is what its alt
+       says — in full, including the line the artwork leaves to the words.
+       Somebody whose client blocks images is owed the greeting, not a
+       description of a picture they cannot see. */
     alt: "Happy Diwali — May this Festival of Lights bring success, prosperity and new opportunities.",
-    /* It reads "Festive Quotation Attached". */
-    claimsAttachment: true,
+    /* This one makes no claim about the email's contents, so it may go on
+       any of them. */
   },
 };
 
@@ -124,4 +132,24 @@ export function bannerUrlFor(greeting: FestiveGreeting, origin?: string | null):
   const clean = String(origin ?? "").trim().replace(/\/+$/, "");
   const usable = /^https:\/\//i.test(clean) && !/^https:\/\/(localhost|127\.0\.0\.1|\[::1\])(:|$)/i.test(clean);
   return `${usable ? clean : PUBLIC_SITE}/${greeting.banner.path}`;
+}
+
+/**
+ * May this banner go on this particular email?
+ *
+ * Artwork can assert something about the message carrying it — the first
+ * Diwali strip read "Festive Quotation Attached" — and a picture claiming
+ * an attachment that is not there is worse than a plain sentence. A
+ * follow-up deliberately leaves the PDF off, because the customer already
+ * has it, so that is not a rare case.
+ *
+ * Lives here rather than inline in the send dialog so the rule can be
+ * stated once and tested, whatever artwork is dropped in next.
+ */
+export function bannerAllowed(
+  greeting: FestiveGreeting | null | undefined,
+  { hasAttachment }: { hasAttachment: boolean },
+): boolean {
+  if (!greeting?.banner) return false;
+  return hasAttachment || !greeting.banner.claimsAttachment;
 }

@@ -19,7 +19,9 @@ import {
   buildEmailHtml, buildEmailText,
   type EmailCompany, type EmailQuotation, type EmailSender,
 } from "../../domain/integrations/emailTemplate";
-import { bannerUrlFor, greetingFor, type FestiveGreeting } from "../../domain/greetings/festive";
+import {
+  bannerAllowed, bannerUrlFor, greetingFor, type FestiveGreeting,
+} from "../../domain/greetings/festive";
 import {
   autoFollowUpsOn, followUpBody, followUpSubject, planFollowUps, readSteps, stopReason,
   TONE_LABELS, type FollowUpFacts, type FollowUpTone,
@@ -472,13 +474,11 @@ function EmailDialog({
   /* What actually reaches the template: nothing at all once it is unticked,
      so the preview below and the send cannot disagree about it.
 
-     THE ARTWORK MAKES A CLAIM. This one reads "Festive Quotation Attached",
-     which is true of the quotation email and false of a follow-up, where
-     the PDF is deliberately left off because the customer already has it.
-     So the banner goes only on an email that really carries the file, and
-     the greeting falls back to its words otherwise — a picture asserting an
-     attachment that is not there is worse than a plain sentence. */
-  const bannerOk = !!greeting?.banner && (attach || !greeting.banner.claimsAttachment);
+     WHETHER THE ARTWORK MAY GO is a rule about the artwork, not about this
+     screen — see bannerAllowed in domain/greetings/festive.ts. The current
+     strip may go on anything; one that asserts an attachment may not go on
+     an email without one. */
+  const bannerOk = bannerAllowed(greeting, { hasAttachment: attach });
   const greetingToSend = greeting && withGreeting
     ? {
         headline: greeting.headline,

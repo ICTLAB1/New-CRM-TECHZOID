@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  bannerUrlFor, DIWALI_2026, greetingFor, greetingIsCurrent, PUBLIC_SITE,
+  bannerAllowed, bannerUrlFor, DIWALI_2026, greetingFor, greetingIsCurrent, PUBLIC_SITE,
   type FestiveGreeting,
 } from "./festive";
 
@@ -87,10 +87,18 @@ describe("the banner", () => {
     expect(b.alt).toContain(DIWALI_2026.line);
   });
 
-  it("declares that it claims an attachment", () => {
-    /* It reads "Festive Quotation Attached". The send dialog reads this
-       flag to keep it off an email with no file on it. */
-    expect(DIWALI_2026.banner?.claimsAttachment).toBe(true);
+  it("claims nothing about the email carrying it, so it may go on any", () => {
+    /* The first strip read "Festive Quotation Attached"; this one does
+       not. The rule below is what reads the difference. */
+    expect(DIWALI_2026.banner?.claimsAttachment).toBeFalsy();
+    expect(bannerAllowed(DIWALI_2026, { hasAttachment: true })).toBe(true);
+    expect(bannerAllowed(DIWALI_2026, { hasAttachment: false })).toBe(true);
+  });
+
+  it("is versioned by its filename", () => {
+    /* Gmail proxies and caches images hard, so new bytes at an already-
+       mailed path leave readers seeing the old strip. */
+    expect(DIWALI_2026.banner?.path).toContain("diwali-2026-strip");
   });
 
   it("is a real shape, so the markup can reserve it", () => {
@@ -103,21 +111,42 @@ describe("the banner", () => {
   it("becomes an absolute URL on the host the CRM is open on", () => {
     /* A relative path in an email resolves against nothing. */
     expect(bannerUrlFor(DIWALI_2026, "https://crm.ttpldelhi.com"))
-      .toBe("https://crm.ttpldelhi.com/email/diwali-2026.jpg");
+      .toBe("https://crm.ttpldelhi.com/email/diwali-2026-strip.jpg");
     expect(bannerUrlFor(DIWALI_2026, "https://happy-wave-0df67e900.3.azurestaticapps.net/"))
-      .toBe("https://happy-wave-0df67e900.3.azurestaticapps.net/email/diwali-2026.jpg");
+      .toBe("https://happy-wave-0df67e900.3.azurestaticapps.net/email/diwali-2026-strip.jpg");
   });
 
   it("never sends a customer a picture on somebody's laptop", () => {
     /* THE ONE THAT MATTERS. A developer sending a test from localhost would
        otherwise mail a customer an image only that machine can serve. */
     for (const local of ["http://localhost:5173", "https://localhost:5173", "https://127.0.0.1:8080", "http://crm.example", "", null]) {
-      expect(bannerUrlFor(DIWALI_2026, local), String(local)).toBe(`${PUBLIC_SITE}/email/diwali-2026.jpg`);
+      expect(bannerUrlFor(DIWALI_2026, local), String(local)).toBe(`${PUBLIC_SITE}/email/diwali-2026-strip.jpg`);
     }
   });
 
   it("says there is no banner for a greeting that has none", () => {
     const wordsOnly: FestiveGreeting = { ...DIWALI_2026, banner: undefined };
     expect(bannerUrlFor(wordsOnly, "https://crm.ttpldelhi.com")).toBe(null);
+  });
+});
+
+describe("artwork that claims an attachment", () => {
+  const claimy = { ...DIWALI_2026, banner: { ...DIWALI_2026.banner!, claimsAttachment: true } };
+
+  it("may go on an email that carries the file", () => {
+    expect(bannerAllowed(claimy, { hasAttachment: true })).toBe(true);
+  });
+
+  it("may not go on one that does not", () => {
+    /* A follow-up leaves the PDF off on purpose — the customer already has
+       it — so a strip reading "Quotation Attached" would be a picture
+       asserting something untrue. */
+    expect(bannerAllowed(claimy, { hasAttachment: false })).toBe(false);
+  });
+
+  it("answers no for a greeting with no artwork, and for no greeting", () => {
+    expect(bannerAllowed({ ...DIWALI_2026, banner: undefined }, { hasAttachment: true })).toBe(false);
+    expect(bannerAllowed(null, { hasAttachment: true })).toBe(false);
+    expect(bannerAllowed(undefined, { hasAttachment: true })).toBe(false);
   });
 });
