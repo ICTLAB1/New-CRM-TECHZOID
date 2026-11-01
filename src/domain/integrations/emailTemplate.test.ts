@@ -57,13 +57,69 @@ describe("a festival greeting", () => {
     expect(text.indexOf("HAPPY DIWALI")).toBeLessThan(text.indexOf("Dear Mr Sharma"));
   });
 
-  it("carries no image", () => {
-    /* Every mainstream client blocks remote images by default and Gmail
-       strips base64 ones, so a diya graphic is a broken box for most
-       readers — the same reason the certifications here are words. */
+  it("goes as words when there is no artwork for it", () => {
     const html = buildEmailHtml(content({ greeting: GREETING }));
-    const greetingBlock = html.slice(html.indexOf("happy Diwali") - 600, html.indexOf("happy Diwali") + 600);
-    expect(greetingBlock).not.toContain("<img");
+    const block = html.slice(html.indexOf("happy Diwali") - 600, html.indexOf("happy Diwali") + 600);
+    expect(block).not.toContain("<img");
+  });
+
+  describe("with artwork", () => {
+    const BANNER = {
+      src: "https://crm.ttpldelhi.com/email/diwali-2026.jpg",
+      width: 1199,
+      height: 400,
+      alt: "Happy Diwali — May this Festival of Lights bring success, prosperity and new opportunities.",
+    };
+    const withArt = (over = {}) => content({ greeting: { ...GREETING, banner: BANNER }, ...over });
+
+    it("shows the strip instead of the words, not as well as them", () => {
+      const html = buildEmailHtml(withArt());
+      expect(html).toContain(BANNER.src);
+      /* The sentence that used to be the greeting is gone from the HTML —
+         printing both would say it twice. */
+      expect(html).not.toContain(GREETING.line);
+    });
+
+    it("carries the whole greeting in the alt text", () => {
+      /* Outlook blocks images until the reader asks for them. Without this
+         the greeting silently does not happen for a large share of
+         readers. */
+      const html = buildEmailHtml(withArt());
+      expect(html).toContain(`alt="${BANNER.alt}"`);
+    });
+
+    it("sizes it by width on the tag, which is what Outlook reads", () => {
+      /* 564 is the 600px card less its 18px padding each side. */
+      expect(buildEmailHtml(withArt())).toMatch(/width="564"/);
+    });
+
+    it("reserves no height, so a blocked image collapses to its words", () => {
+      /* With a height attribute, a reader whose client blocks images got
+         one line of alt text in a 188px white hole. Without it they get the
+         sentence, which is what this greeting used to be. */
+      const img = /<img[^>]*alt="Happy Diwali[^"]*"[^>]*>/.exec(buildEmailHtml(withArt()))?.[0] ?? "";
+      expect(img).toBeTruthy();
+      expect(img).not.toMatch(/\sheight="/);
+    });
+
+    it("links the image rather than embedding it", () => {
+      /* Gmail strips a base64 image outright, leaving nothing at all. */
+      expect(buildEmailHtml(withArt())).not.toContain("data:image");
+    });
+
+    it("still says it in the plain-text email, which has no images at all", () => {
+      const text = buildEmailText(withArt());
+      expect(text).toContain(GREETING.line);
+      expect(text).not.toContain(BANNER.src);
+    });
+
+    it("escapes the URL and the alt text like everything else", () => {
+      const html = buildEmailHtml(content({
+        greeting: { ...GREETING, banner: { ...BANNER, src: 'x" onerror="alert(1)', alt: 'A & B' } },
+      }));
+      expect(html).not.toContain('onerror="alert(1)"');
+      expect(html).toContain("A &amp; B");
+    });
   });
 
   it("escapes it like everything else", () => {

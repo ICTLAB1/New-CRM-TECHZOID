@@ -100,8 +100,16 @@ export interface EmailContent {
   quotation?: EmailQuotation | null;
   /** A festival greeting to open with — see domain/greetings/festive.ts for
    *  when one applies. Absent is the ordinary case, and the sender can
-   *  always drop it on the send dialog. Plain text; styled here. */
-  greeting?: { headline: string; line: string } | null;
+   *  always drop it on the send dialog. */
+  greeting?: {
+    headline: string;
+    line: string;
+    /** The artwork, when there is some. An absolute https URL: a relative
+     *  path in an email resolves against nothing. `alt` carries the same
+     *  words, because Outlook blocks images until the reader asks for
+     *  them. */
+    banner?: { src: string; width: number; height: number; alt: string } | null;
+  } | null;
 }
 
 /* The website's transactional palette, so the two systems read as one
@@ -392,24 +400,45 @@ export function buildEmailHtml(content: EmailContent): string {
     ? `<h1 style="margin:0 0 14px;font-size:20px;font-weight:700;line-height:1.3;color:${HEAD};">Your ${escapeHtml(q.label.toLowerCase())} is ready</h1>`
     : "";
 
-  /* ABOVE THE HEADING, AND PLAIN. A festival greeting belongs at the top of
-     the message or it reads as an afterthought — but it is a courtesy, not
-     the subject of the email, so it gets a tinted band and ordinary text
-     rather than anything that competes with the document itself. No image:
-     every mainstream client blocks remote images by default and Gmail
-     strips base64 ones, so a diya graphic is a broken box for most readers
-     (the same reason the certification badges here are words). */
-  const greetingHtml = content.greeting
-    ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
-              style="margin:0 0 18px;background:${ZEBRA};border:1px solid ${RULE};border-radius:6px;">
-         <tr>
-           <td style="padding:12px 14px;">
-             <div style="font-size:14px;font-weight:700;color:${ACCENT};">${escapeHtml(content.greeting.headline)}</div>
-             <div style="margin-top:3px;font-size:13px;line-height:1.6;color:${INK};">${escapeHtml(content.greeting.line)}</div>
-           </td>
-         </tr>
-       </table>`
-    : "";
+  /* ABOVE THE HEADING. A festival greeting belongs at the top of the message
+     or it reads as an afterthought.
+
+     ARTWORK WHEN THERE IS ARTWORK, words otherwise. A hosted https image is
+     shown by Gmail and Apple Mail and blocked by Outlook until the reader
+     asks for it — so the alt text carries the same greeting in full, and
+     the plain-text part carries it too. That is the difference between this
+     and a base64 image, which Gmail strips outright leaving nothing, and
+     it is why the banner is linked rather than embedded.
+
+     WIDTH ON THE TAG, HEIGHT DELIBERATELY NOT. Outlook renders through Word
+     and sizes from the width attribute, keeping the drawn proportions. The
+     height was there too at first, and a blocked image then reserved its
+     full 188px — a reader with images off got one line of alt text floating
+     in a white hole the size of the strip, which reads as a broken email.
+     Without it the block collapses to the sentence, which is exactly what
+     this greeting used to be. */
+  const banner = content.greeting?.banner ?? null;
+  const greetingHtml = !content.greeting
+    ? ""
+    : banner
+      ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:0 0 18px;">
+           <tr>
+             <td>
+               <img src="${escapeHtml(banner.src)}" alt="${escapeHtml(banner.alt)}"
+                    width="564"
+                    style="display:block;width:100%;max-width:564px;height:auto;border:0;border-radius:6px;" />
+             </td>
+           </tr>
+         </table>`
+      : `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
+                style="margin:0 0 18px;background:${ZEBRA};border:1px solid ${RULE};border-radius:6px;">
+           <tr>
+             <td style="padding:12px 14px;">
+               <div style="font-size:14px;font-weight:700;color:${ACCENT};">${escapeHtml(content.greeting.headline)}</div>
+               <div style="margin-top:3px;font-size:13px;line-height:1.6;color:${INK};">${escapeHtml(content.greeting.line)}</div>
+             </td>
+           </tr>
+         </table>`;
 
   /* The outer table is what centres the message in Outlook, which does not
      honour margin:auto on a block element. */

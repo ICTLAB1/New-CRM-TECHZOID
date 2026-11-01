@@ -19,7 +19,7 @@ import {
   buildEmailHtml, buildEmailText,
   type EmailCompany, type EmailQuotation, type EmailSender,
 } from "../../domain/integrations/emailTemplate";
-import { greetingFor, type FestiveGreeting } from "../../domain/greetings/festive";
+import { bannerUrlFor, greetingFor, type FestiveGreeting } from "../../domain/greetings/festive";
 import {
   autoFollowUpsOn, followUpBody, followUpSubject, planFollowUps, readSteps, stopReason,
   TONE_LABELS, type FollowUpFacts, type FollowUpTone,
@@ -470,9 +470,28 @@ function EmailDialog({
   const [withGreeting, setWithGreeting] = useState(true);
 
   /* What actually reaches the template: nothing at all once it is unticked,
-     so the preview below and the send cannot disagree about it. */
+     so the preview below and the send cannot disagree about it.
+
+     THE ARTWORK MAKES A CLAIM. This one reads "Festive Quotation Attached",
+     which is true of the quotation email and false of a follow-up, where
+     the PDF is deliberately left off because the customer already has it.
+     So the banner goes only on an email that really carries the file, and
+     the greeting falls back to its words otherwise — a picture asserting an
+     attachment that is not there is worse than a plain sentence. */
+  const bannerOk = !!greeting?.banner && (attach || !greeting.banner.claimsAttachment);
   const greetingToSend = greeting && withGreeting
-    ? { headline: greeting.headline, line: greeting.line }
+    ? {
+        headline: greeting.headline,
+        line: greeting.line,
+        banner: bannerOk && greeting.banner
+          ? {
+              src: bannerUrlFor(greeting, typeof window === "undefined" ? "" : window.location.origin) ?? "",
+              width: greeting.banner.width,
+              height: greeting.banner.height,
+              alt: greeting.banner.alt,
+            }
+          : null,
+      }
     : null;
 
   /* What the current tone would have written. Kept so switching tone can
@@ -683,7 +702,14 @@ function EmailDialog({
             <span>
               Include {greeting.name}
               <span className="field-hint" style={{ marginLeft: 6 }}>
-                Added at the top. Preview shows exactly what goes.
+                {bannerOk
+                  ? "The festive strip, at the top. Preview shows exactly what goes."
+                  : greeting.banner?.claimsAttachment
+                    /* Said, not silently done: the strip reads "Festive
+                       Quotation Attached", so it cannot go on a mail
+                       without the file. */
+                    ? "Sent as words — the strip says a quotation is attached, and this one has none."
+                    : "Added at the top. Preview shows exactly what goes."}
               </span>
             </span>
           </label>

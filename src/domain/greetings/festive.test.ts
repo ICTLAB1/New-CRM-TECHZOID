@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { DIWALI_2026, greetingFor, greetingIsCurrent, type FestiveGreeting } from "./festive";
+import {
+  bannerUrlFor, DIWALI_2026, greetingFor, greetingIsCurrent, PUBLIC_SITE,
+  type FestiveGreeting,
+} from "./festive";
 
 const on = (today: string, country?: string | null) => greetingFor({ today, country });
 
@@ -71,5 +74,50 @@ describe("the window rule on its own", () => {
     const earlier: FestiveGreeting = { ...DIWALI_2026, id: "old", from: "2026-01-01", until: "2026-01-02" };
     const now: FestiveGreeting = { ...DIWALI_2026, id: "now", from: "2026-11-01", until: "2026-11-10" };
     expect(greetingFor({ today: "2026-11-05", country: "India" }, [earlier, now])?.id).toBe("now");
+  });
+});
+
+describe("the banner", () => {
+  it("says on the artwork what it says in words", () => {
+    /* A reader with images off must get the same greeting as one with them
+       on, so the alt text, the headline and the line cannot drift from what
+       is drawn on the strip. */
+    const b = DIWALI_2026.banner!;
+    expect(b.alt).toContain(DIWALI_2026.headline);
+    expect(b.alt).toContain(DIWALI_2026.line);
+  });
+
+  it("declares that it claims an attachment", () => {
+    /* It reads "Festive Quotation Attached". The send dialog reads this
+       flag to keep it off an email with no file on it. */
+    expect(DIWALI_2026.banner?.claimsAttachment).toBe(true);
+  });
+
+  it("is a real shape, so the markup can reserve it", () => {
+    const b = DIWALI_2026.banner!;
+    expect(b.width).toBeGreaterThan(0);
+    expect(b.height).toBeGreaterThan(0);
+    expect(b.path).not.toMatch(/^\//);
+  });
+
+  it("becomes an absolute URL on the host the CRM is open on", () => {
+    /* A relative path in an email resolves against nothing. */
+    expect(bannerUrlFor(DIWALI_2026, "https://crm.ttpldelhi.com"))
+      .toBe("https://crm.ttpldelhi.com/email/diwali-2026.jpg");
+    expect(bannerUrlFor(DIWALI_2026, "https://happy-wave-0df67e900.3.azurestaticapps.net/"))
+      .toBe("https://happy-wave-0df67e900.3.azurestaticapps.net/email/diwali-2026.jpg");
+  });
+
+  it("never sends a customer a picture on somebody's laptop", () => {
+    /* THE ONE THAT MATTERS. A developer sending a test from localhost would
+       otherwise mail a customer an image only that machine can serve. */
+    for (const local of ["http://localhost:5173", "https://localhost:5173", "https://127.0.0.1:8080", "http://crm.example", "", null]) {
+      expect(bannerUrlFor(DIWALI_2026, local), String(local)).toBe(`${PUBLIC_SITE}/email/diwali-2026.jpg`);
+    }
+  });
+
+  it("says there is no banner for a greeting that has none", () => {
+    const wordsOnly: FestiveGreeting = { ...DIWALI_2026, banner: undefined };
+    expect(bannerUrlFor(wordsOnly, "https://crm.ttpldelhi.com")).toBe(null);
   });
 });

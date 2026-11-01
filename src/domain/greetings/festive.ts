@@ -30,6 +30,24 @@ export interface FestiveGreeting {
   until: string;
   /** Countries this belongs to, as the CRM spells them. */
   countries: string[];
+  /** The artwork, served from this app's own public/ folder. Absent means
+   *  the greeting goes as words. */
+  banner?: {
+    /** Path under the site root, no leading slash. */
+    path: string;
+    /** As drawn, so the markup can reserve the right shape. */
+    width: number;
+    height: number;
+    /** THE WORDS ON THE ARTWORK, for the alt attribute and for the
+     *  plain-text email. Outlook blocks images until the reader asks for
+     *  them, and a text email has no images at all, so a banner with no
+     *  words behind it is a greeting that silently does not happen. */
+    alt: string;
+    /** True when the artwork claims the document is attached, as this one
+     *  does — "Festive Quotation Attached". Then it may only be used on an
+     *  email that really has the attachment. */
+    claimsAttachment?: boolean;
+  };
 }
 
 /**
@@ -40,11 +58,22 @@ export interface FestiveGreeting {
 export const DIWALI_2026: FestiveGreeting = {
   id: "diwali-2026",
   name: "Diwali greetings",
-  headline: "Wishing you a very happy Diwali",
-  line: "May the festival of lights bring prosperity and good health to you, your family and your team.",
+  /* The words on the artwork, so the alt text, the plain-text email and the
+     banner itself all say the same thing. A reader with images turned off
+     must get the same greeting as one with them on. */
+  headline: "Happy Diwali",
+  line: "May this Festival of Lights bring success, prosperity and new opportunities.",
   from: "2026-10-01",
   until: "2026-11-10",
   countries: ["India"],
+  banner: {
+    path: "email/diwali-2026.jpg",
+    width: 1199,
+    height: 400,
+    alt: "Happy Diwali — May this Festival of Lights bring success, prosperity and new opportunities.",
+    /* It reads "Festive Quotation Attached". */
+    claimsAttachment: true,
+  },
 };
 
 export const FESTIVE_GREETINGS: readonly FestiveGreeting[] = [DIWALI_2026];
@@ -77,4 +106,22 @@ export function greetingFor(
 ): FestiveGreeting | null {
   return greetings.find((g) =>
     greetingIsCurrent(g, today) && g.countries.some((c) => sameCountry(country ?? "", c))) ?? null;
+}
+
+/**
+ * Where the artwork actually lives, as an absolute https URL.
+ *
+ * An email leaves the building, so a relative path in it resolves against
+ * nothing. The origin is the one the agent has the CRM open on, which is by
+ * definition a host that serves this image — except on a developer's
+ * machine, where it would send the customer a picture on localhost. That
+ * case falls back to the production site.
+ */
+export const PUBLIC_SITE = "https://crm.ttpldelhi.com";
+
+export function bannerUrlFor(greeting: FestiveGreeting, origin?: string | null): string | null {
+  if (!greeting.banner) return null;
+  const clean = String(origin ?? "").trim().replace(/\/+$/, "");
+  const usable = /^https:\/\//i.test(clean) && !/^https:\/\/(localhost|127\.0\.0\.1|\[::1\])(:|$)/i.test(clean);
+  return `${usable ? clean : PUBLIC_SITE}/${greeting.banner.path}`;
 }
