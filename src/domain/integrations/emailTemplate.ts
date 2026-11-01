@@ -98,6 +98,10 @@ export interface EmailContent {
   /** Absent for a plain covering note; present turns this into the full
    *  document email with a summary, the lines and the next steps. */
   quotation?: EmailQuotation | null;
+  /** A festival greeting to open with — see domain/greetings/festive.ts for
+   *  when one applies. Absent is the ordinary case, and the sender can
+   *  always drop it on the send dialog. Plain text; styled here. */
+  greeting?: { headline: string; line: string } | null;
 }
 
 /* The website's transactional palette, so the two systems read as one
@@ -388,6 +392,25 @@ export function buildEmailHtml(content: EmailContent): string {
     ? `<h1 style="margin:0 0 14px;font-size:20px;font-weight:700;line-height:1.3;color:${HEAD};">Your ${escapeHtml(q.label.toLowerCase())} is ready</h1>`
     : "";
 
+  /* ABOVE THE HEADING, AND PLAIN. A festival greeting belongs at the top of
+     the message or it reads as an afterthought — but it is a courtesy, not
+     the subject of the email, so it gets a tinted band and ordinary text
+     rather than anything that competes with the document itself. No image:
+     every mainstream client blocks remote images by default and Gmail
+     strips base64 ones, so a diya graphic is a broken box for most readers
+     (the same reason the certification badges here are words). */
+  const greetingHtml = content.greeting
+    ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
+              style="margin:0 0 18px;background:${ZEBRA};border:1px solid ${RULE};border-radius:6px;">
+         <tr>
+           <td style="padding:12px 14px;">
+             <div style="font-size:14px;font-weight:700;color:${ACCENT};">${escapeHtml(content.greeting.headline)}</div>
+             <div style="margin-top:3px;font-size:13px;line-height:1.6;color:${INK};">${escapeHtml(content.greeting.line)}</div>
+           </td>
+         </tr>
+       </table>`
+    : "";
+
   /* The outer table is what centres the message in Outlook, which does not
      honour margin:auto on a block element. */
   return `<!doctype html>
@@ -402,6 +425,7 @@ export function buildEmailHtml(content: EmailContent): string {
           ${headerHtml(company)}
           <tr>
             <td style="padding:22px 18px 26px;">
+              ${greetingHtml}
               ${heading}
               ${paragraphs(content.body)}
               ${q ? summaryHtml(q) : ""}
@@ -451,6 +475,12 @@ export function buildEmailText(content: EmailContent): string {
   const PAD = 16;
 
   if (company.name) out.push(company.name.toUpperCase(), "Connect, Communicate & Collaborate", "");
+
+  /* Same place as in the HTML, so the two versions of one email do not
+     greet the reader in a different order. */
+  if (content.greeting) {
+    out.push(content.greeting.headline.toUpperCase(), content.greeting.line, "");
+  }
 
   if (q) out.push(`YOUR ${q.label.toUpperCase()} IS READY`, "");
 

@@ -19,6 +19,7 @@ import {
   buildEmailHtml, buildEmailText,
   type EmailCompany, type EmailQuotation, type EmailSender,
 } from "../../domain/integrations/emailTemplate";
+import { greetingFor, type FestiveGreeting } from "../../domain/greetings/festive";
 import {
   autoFollowUpsOn, followUpBody, followUpSubject, planFollowUps, readSteps, stopReason,
   TONE_LABELS, type FollowUpFacts, type FollowUpTone,
@@ -215,6 +216,19 @@ export function DocumentActions({
     confirmTo: currentUser?.email || undefined,
   };
 
+  /* A FESTIVAL GREETING, WHEN THERE IS ONE TODAY.
+     Country off the document rather than the customer record, because the
+     document is what is actually being sent and its billing country is what
+     was checked when it was raised — a customer record edited since then
+     should not change what this email says.
+     Offers only: a quotation or a proforma opens a conversation, and that is
+     where a greeting belongs. Not on a purchase order, which goes to a
+     supplier and not a customer; not on a tax invoice, which asks for money.
+     Say the word and either is one entry in this list. */
+  const greeting = (docType === "quotation" || docType === "proforma")
+    ? greetingFor({ today: TODAY(), country: doc.billCountry || customer?.country || "" })
+    : null;
+
   /* A follow-up chases a document the customer already has, so it is offered
      on the two that ask them for a decision. A purchase order chases a
      supplier and an invoice chases money — both are different conversations
@@ -330,6 +344,7 @@ export function DocumentActions({
         sender={emailSender}
         company={emailBrand}
         quotation={emailQuotation}
+        greeting={greeting}
         armable={armable}
         cannotArm={cannotArm}
         onSent={onSent}
@@ -348,6 +363,10 @@ export function DocumentActions({
           sender={emailSender}
           company={emailBrand}
           quotation={emailQuotation}
+          /* A follow-up typed here goes out now, so today's greeting applies
+             to it exactly as it does to the quotation itself. The ARMED
+             ones below are the opposite case — see the note there. */
+          greeting={greeting}
           /* A follow-up carries the figures but not the file by default: the
              customer already has the PDF, and a second copy of a 300 KB
              attachment is how a chaser lands in a spam folder. The tick box
@@ -388,6 +407,9 @@ interface EmailDialogProps {
   /** The document's facts, so the email carries a summary and the lines
    *  rather than only whatever the sender typed. */
   quotation?: EmailQuotation | null;
+  /** A festival greeting that applies to this customer today, or null.
+   *  Present turns on the tick box; the sender decides whether it goes. */
+  greeting?: FestiveGreeting | null;
   /** Present on a follow-up: turns on the tone picker, which rewrites the
    *  subject and message from the document's own facts. */
   followUp?: FollowUpFacts;
@@ -425,7 +447,7 @@ interface EmailDialogProps {
 
 function EmailDialog({
   open, api, defaultTo = "", defaultCc = "", defaultSubject, defaultMessage,
-  sender, company, quotation, followUp, attachByDefault = true, armable = null,
+  sender, company, quotation, greeting = null, followUp, attachByDefault = true, armable = null,
   cannotArm = null, onSent, title, description, getAttachment, onClose,
 }: EmailDialogProps) {
   const toast = useToast();
@@ -442,6 +464,16 @@ function EmailDialog({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [showPreview, setShowPreview] = useState(false);
+  /* ON BY DEFAULT, which is what "automatically" means — but a tick box and
+     not a rule, because the one case no table can encode is the customer
+     who has just had bad news. Untick it and this email goes out plain. */
+  const [withGreeting, setWithGreeting] = useState(true);
+
+  /* What actually reaches the template: nothing at all once it is unticked,
+     so the preview below and the send cannot disagree about it. */
+  const greetingToSend = greeting && withGreeting
+    ? { headline: greeting.headline, line: greeting.line }
+    : null;
 
   /* What the current tone would have written. Kept so switching tone can
      tell "untouched" from "typed into" without asking every time. */
@@ -475,6 +507,7 @@ function EmailDialog({
         sender,
         company,
         quotation,
+        greeting: greetingToSend,
         attachmentName: attachment?.filename ?? null,
       };
       const result = await api.sendEmail({
@@ -498,6 +531,12 @@ function EmailDialog({
             const base = { step: p.step, steps: armable.plan.length, tone: p.tone, dueOn: p.dueOn };
 
             if (channels.email) {
+              /* NO GREETING ON THESE, deliberately. They are rendered now
+                 and sent weeks later, by which time the festival is over —
+                 a chaser arriving in December wishing somebody a happy
+                 Diwali is the exact failure the dated window exists to
+                 prevent. The one typed in the Follow up dialog goes out
+                 today and does carry it. */
               rows.push({
                 ...base,
                 channel: "email",
@@ -631,6 +670,25 @@ function EmailDialog({
           <span>Attach the PDF</span>
         </label>
 
+        {/* Only when there is one to send. A tick box reading "Include
+            Diwali greetings" in February is clutter, and one that is there
+            but does nothing is worse. */}
+        {greeting ? (
+          <label className="row-tight" style={{ cursor: "pointer" }}>
+            <input
+              type="checkbox"
+              checked={withGreeting}
+              onChange={(e) => setWithGreeting(e.target.checked)}
+            />
+            <span>
+              Include {greeting.name}
+              <span className="field-hint" style={{ marginLeft: 6 }}>
+                Added at the top. Preview shows exactly what goes.
+              </span>
+            </span>
+          </label>
+        ) : null}
+
         {/* The dates, not a promise. These emails leave with nobody
             watching, so the last person who can stop them is looking at
             exactly when they will go. */}
@@ -697,7 +755,7 @@ function EmailDialog({
             <iframe
               title="Email preview"
               sandbox=""
-              srcDoc={buildEmailHtml({ body: message, sender, company, quotation, attachmentName: attach ? "quotation.pdf" : null })}
+              srcDoc={buildEmailHtml({ body: message, sender, company, quotation, greeting: greetingToSend, attachmentName: attach ? "quotation.pdf" : null })}
               style={{ width: "100%", height: 380, border: "1px solid var(--rule)", borderRadius: 8, marginTop: 10, background: "#fff" }}
             />
           ) : null}

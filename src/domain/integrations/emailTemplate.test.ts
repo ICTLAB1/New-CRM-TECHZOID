@@ -29,6 +29,63 @@ const content = (over = {}) => ({
   ...over,
 });
 
+describe("a festival greeting", () => {
+  const GREETING = {
+    headline: "Wishing you a very happy Diwali",
+    line: "May the festival of lights bring prosperity and good health.",
+  };
+
+  it("is absent unless one was passed, which is the ordinary case", () => {
+    expect(buildEmailHtml(content())).not.toMatch(/diwali/i);
+    expect(buildEmailText(content())).not.toMatch(/diwali/i);
+  });
+
+  it("reaches both versions of the email, not just the pretty one", () => {
+    /* A greeting in the HTML and not the text would greet some readers and
+       not others from the same send. */
+    expect(buildEmailHtml(content({ greeting: GREETING }))).toContain("Wishing you a very happy Diwali");
+    expect(buildEmailText(content({ greeting: GREETING }))).toMatch(/WISHING YOU A VERY HAPPY DIWALI/);
+    expect(buildEmailText(content({ greeting: GREETING }))).toContain(GREETING.line);
+  });
+
+  it("opens the message rather than trailing it", () => {
+    /* A courtesy that arrives under the signature reads as an
+       afterthought. */
+    const html = buildEmailHtml(content({ greeting: GREETING, quotation: QUOTE }));
+    expect(html.indexOf("happy Diwali")).toBeLessThan(html.indexOf("Dear Mr Sharma"));
+    const text = buildEmailText(content({ greeting: GREETING, quotation: QUOTE }));
+    expect(text.indexOf("HAPPY DIWALI")).toBeLessThan(text.indexOf("Dear Mr Sharma"));
+  });
+
+  it("carries no image", () => {
+    /* Every mainstream client blocks remote images by default and Gmail
+       strips base64 ones, so a diya graphic is a broken box for most
+       readers — the same reason the certifications here are words. */
+    const html = buildEmailHtml(content({ greeting: GREETING }));
+    const greetingBlock = html.slice(html.indexOf("happy Diwali") - 600, html.indexOf("happy Diwali") + 600);
+    expect(greetingBlock).not.toContain("<img");
+  });
+
+  it("escapes it like everything else", () => {
+    const html = buildEmailHtml(content({
+      greeting: { headline: "Smith & Sons", line: "<script>alert(1)</script>" },
+    }));
+    expect(html).toContain("Smith &amp; Sons");
+    expect(html).not.toContain("<script>");
+  });
+
+  it("leaves the document's own content exactly as it was", () => {
+    /* The greeting is an addition, not a rewrite: the summary, the lines
+       and the total must be untouched by it. */
+    const without = buildEmailHtml(content({ quotation: QUOTE }));
+    const with_ = buildEmailHtml(content({ quotation: QUOTE, greeting: GREETING }));
+    for (const fact of [QUOTE.number, QUOTE.grand, QUOTE.date]) {
+      expect(without).toContain(fact);
+      expect(with_).toContain(fact);
+    }
+  });
+});
+
 describe("escaping", () => {
   it("escapes the characters that would break the markup", () => {
     expect(escapeHtml(`Smith & Sons <"Ltd">`)).toBe("Smith &amp; Sons &lt;&quot;Ltd&quot;&gt;");
