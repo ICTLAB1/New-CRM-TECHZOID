@@ -108,7 +108,12 @@ export function LineItemsEditor({ items, rows, currency, showTax, onChange, onPi
                 <label className="label">Unit
                   <Input value={String(item.unit ?? "")} onChange={(e) => set(item.id, "unit", e.target.value)} />
                 </label>
-                <label className="label">Rate
+                {/* The currency is named here because this is where the
+                    number is typed. It used to say only "Rate", on the one
+                    tab that showed no currency anywhere — so a rate entered
+                    against a dirham quotation looked exactly like a rupee
+                    one. */}
+                <label className="label">Rate ({currency})
                   <Input numeric value={String(item.rate ?? "")} onChange={(e) => set(item.id, "rate", e.target.value)} />
                 </label>
                 <label className="label">Disc %

@@ -667,6 +667,30 @@ export function DocumentEditor({
             <Button tone="primary" onClick={save.ask}>Save</Button>
             <Button tone="quiet" onClick={onClose}>Cancel</Button>
             <span className="grow" />
+
+            {/* CURRENCY, BESIDE THE TOTAL IT GOVERNS.
+                It is also a field on the Document tab, under Commercial,
+                and that is where it stayed — but the tab where somebody
+                types a Rate is Items, and that tab said nothing about which
+                currency the rate was in and offered no way to change it. On
+                a phone the Commercial block is most of a screen's scrolling
+                away, past Bill To and Ship To, which is how it reads as a
+                setting that does not exist.
+                This row sits outside the tabs, so the answer is on screen
+                whichever one you are on. Both controls write doc.currency,
+                so they cannot disagree. */}
+            <label className="row-tight" style={{ gap: 6 }}>
+              <span className="field-hint">Currency</span>
+              <Select
+                aria-label="Currency for this document"
+                value={doc.currency}
+                onChange={set("currency")}
+                style={{ width: "auto", minWidth: 78 }}
+              >
+                {CURRENCIES.map(([code]) => <option key={code} value={code}>{code}</option>)}
+              </Select>
+            </label>
+
             <span className="field-hint">
               {totals.rows.length} line{totals.rows.length === 1 ? "" : "s"} ·{" "}
               {/* THE NUMBER THAT MOVES MOST, and the one a person watches:
