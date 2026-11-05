@@ -12,12 +12,20 @@ import { pickBankAccount, readAccounts } from "../../domain/banking/accounts";
  * re-derives a total of its own — that is how an exempt quotation ends up
  * charging 18% on one screen and nothing on another.
  */
-export function useDocumentModel(
+/**
+ * The same work, callable outside a component.
+ *
+ * Extracted so that previewing a document the user has just saved goes
+ * through this exact path rather than a second assembly of the same three
+ * steps — a preview built differently from the editor's is a preview that
+ * can disagree with it.
+ */
+export function documentModelFor(
   doc: SalesDocument,
   settings: Record<string, unknown>,
   docType: DocType,
 ) {
-  return useMemo(() => {
+  {
     const sellerState = ((settings["company"] as { state?: string } | undefined)?.state) ?? "Delhi";
     /* CGST+SGST versus IGST is decided by comparing the counterparty's state
        against ours — and on a purchase order the counterparty is the
@@ -35,5 +43,13 @@ export function useDocumentModel(
       pickBankAccount(accounts, doc.bankAccountId, doc.currency) ?? (settings["bank"] as object) ?? {};
     const model = buildDocumentModel({ doc, settings, totals, docType, template, bankAccount });
     return { totals, model };
-  }, [doc, settings, docType]);
+  }
+}
+
+export function useDocumentModel(
+  doc: SalesDocument,
+  settings: Record<string, unknown>,
+  docType: DocType,
+) {
+  return useMemo(() => documentModelFor(doc, settings, docType), [doc, settings, docType]);
 }

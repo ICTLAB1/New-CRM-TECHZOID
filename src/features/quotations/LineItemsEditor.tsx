@@ -1,4 +1,6 @@
+import { AnimatePresence, LayoutGroup, motion } from "motion/react";
 import { Button, Input, Textarea } from "../../components/primitives";
+import { layoutSpring, listRow } from "../../components/motion";
 import type { LineItem } from "../../domain/tax/types";
 import type { ComputedRow } from "../../domain/tax/types";
 import { fmtMoneyCellPdf } from "../../domain/currency/format";
@@ -44,10 +46,28 @@ export function LineItemsEditor({ items, rows, currency, showTax, onChange, onPi
 
   return (
     <div className="stack">
+      {/* ONE LAYOUT GROUP for the whole list, so a row moved with the arrows
+          travels to its new place and the rows it displaced slide around it
+          — rather than the three of them repainting in their new order and
+          leaving the eye to work out what moved. The same group carries the
+          rows below an added or removed line into the gap. */}
+      <LayoutGroup>
+      <AnimatePresence initial={false}>
       {items.map((item, i) => {
         const row = rows[i];
         return (
-          <div className="card card-pad" key={item.id} style={{ background: "var(--surface-2)" }}>
+          <motion.div
+            className="card card-pad"
+            key={item.id}
+            layout
+            layoutId={"line-" + item.id}
+            transition={layoutSpring}
+            variants={listRow}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+            style={{ background: "var(--surface-2)" }}
+          >
             <div className="spread" style={{ marginBottom: "var(--gap-tight)" }}>
               <span className="eyebrow">Item {i + 1}</span>
               <span className="row-tight">
@@ -108,9 +128,11 @@ export function LineItemsEditor({ items, rows, currency, showTax, onChange, onPi
                 </div>
               ) : null}
             </div>
-          </div>
+          </motion.div>
         );
       })}
+      </AnimatePresence>
+      </LayoutGroup>
 
       <div className="row-tight">
         <Button tone="default" onClick={add}>Add a line</Button>

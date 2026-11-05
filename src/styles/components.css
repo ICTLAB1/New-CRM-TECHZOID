@@ -1106,6 +1106,58 @@ button.path-hit { cursor: pointer; }
 .toast-action:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
 
 /* Saved views: a row of filter chips above a list. */
+/* ── saving a document ──────────────────────────────────────────────── */
+/* Fixed, above everything, and centred low enough not to sit over the thing
+   that was just saved. */
+.saveflow {
+  position: fixed; inset: 0; z-index: 90;
+  display: flex; align-items: flex-end; justify-content: center;
+  padding: 0 var(--gap) 10vh;
+}
+.saveflow-card {
+  display: flex; align-items: center; gap: 14px;
+  background: var(--surface); border: 1px solid var(--rule-strong);
+  border-radius: var(--radius-card); box-shadow: var(--lift-lg, var(--lift));
+  padding: 14px 16px; max-width: min(520px, 100%);
+}
+.saveflow-body { display: flex; align-items: center; gap: 14px; }
+.saveflow-title { font-size: var(--t-body); font-weight: 600; color: var(--ink); }
+.saveflow-number { margin-top: 2px; font-size: var(--t-small); color: var(--ink-3); letter-spacing: .02em; }
+
+/* The ring. One element, one transform — no layout, no repaint beyond the
+   compositor. */
+.saveflow-ring {
+  width: 26px; height: 26px; flex: none; border-radius: 50%;
+  border: 2.5px solid var(--accent-rule);
+  border-top-color: var(--accent);
+  animation: mo-spin .7s linear infinite;
+}
+@keyframes mo-spin { to { transform: rotate(360deg); } }
+
+.saveflow-check {
+  width: 26px; height: 26px; flex: none; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  /* The surface colour on a solid fill, not a literal white: the token file
+     is the only place a colour is written — see design-rules.test.ts. */
+  background: var(--good); color: var(--surface);
+}
+
+/* The document assembling: three rules of decreasing width. */
+.saveflow-lines { display: flex; flex-direction: column; gap: 3px; margin-top: 5px; }
+.saveflow-lines span {
+  display: block; height: 3px; border-radius: 2px;
+  background: var(--accent-rule); transform-origin: left center;
+}
+.saveflow-lines span:nth-child(1) { width: 110px; }
+.saveflow-lines span:nth-child(2) { width: 84px; }
+.saveflow-lines span:nth-child(3) { width: 62px; }
+
+/* A ring that spins forever is the one thing reduced motion must stop. */
+@media (prefers-reduced-motion: reduce) {
+  .saveflow-ring { animation: none; border-top-color: var(--accent); }
+  .saveflow-lines span { transform: none !important; }
+}
+
 /* ── fields folded away until wanted ───────────────────────────────── */
 /* A quiet row, not a card: it sits between two groups of real fields and
    must not read as heavier than they are. */

@@ -7,6 +7,7 @@ import { AttachmentsPanel } from "../attachments/AttachmentsPanel";
 import { askBeforeSave, useConfirmedAction } from "../../components/useConfirmedAction";
 import { useHotkeys } from "../../components/hotkeys";
 import { previewPdf } from "../../documents/pdf/deliver";
+import { AnimatedNumber } from "../../components/AnimatedNumber";
 import {
   accountSummary, blankAccount, pickBankAccount, readAccounts,
   type BankAccount,
@@ -667,7 +668,14 @@ export function DocumentEditor({
             <Button tone="quiet" onClick={onClose}>Cancel</Button>
             <span className="grow" />
             <span className="field-hint">
-              {totals.rows.length} line{totals.rows.length === 1 ? "" : "s"} · {moneyList(totals.grand, doc.currency)} grand total
+              {totals.rows.length} line{totals.rows.length === 1 ? "" : "s"} ·{" "}
+              {/* THE NUMBER THAT MOVES MOST, and the one a person watches:
+                  it changes on every quantity, rate, discount and tax edit.
+                  Counting to the new figure shows WHICH WAY it went, which a
+                  value that simply replaces itself cannot. AnimatedNumber
+                  takes the formatted string, so the currency symbol and the
+                  Indian grouping are exactly what they were. */}
+              <strong><AnimatedNumber value={moneyList(totals.grand, doc.currency)} duration={420} /></strong> grand total
               {/* INTERNAL. Cost and margin are on this screen and on the
                   record; they are not in the model the PDF is built from,
                   and a test asserts that. */}
@@ -675,7 +683,7 @@ export function DocumentEditor({
                 <>
                   {" · "}
                   <span style={{ color: `var(--${marginTone(margin) === "good" ? "good" : marginTone(margin) === "bad" ? "bad" : "warn"})` }}>
-                    {moneyList(margin.amount, doc.currency)} margin
+                    <AnimatedNumber value={moneyList(margin.amount, doc.currency)} duration={420} /> margin
                     {margin.percent !== null ? ` (${margin.percent.toFixed(1)}%)` : ""}
                   </span>
                 </>

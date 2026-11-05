@@ -9,6 +9,9 @@ import { GoodsReceiptDialog } from "../purchasing/GoodsReceiptDialog";
 import { removeAttachmentsFor } from "../../data/attachments";
 import { useToast } from "../../components/Toast";
 import { DocumentEditor } from "./DocumentEditor";
+import { documentModelFor } from "./useDocumentModel";
+import { previewPdf } from "../../documents/pdf/deliver";
+import { SaveFlowOverlay, type SaveFlowState } from "../../components/SaveFlow";
 import {
   duplicateQuotation, effectiveStatus, invoiceFrom, newProforma, newPurchaseOrder, newQuotation,
   proformaFromQuotation, INVOICE_STATUSES, PURCHASE_ORDER_STATUSES, QUOTE_STATUSES,
@@ -209,14 +212,44 @@ export function QuotationsScreen({
   }, [intent?.n]);
 
 
+  /* What the save is doing, and what it says when it is done. Driven by the
+     real round trip below — see components/SaveFlow.tsx. */
+  const [flow, setFlow] = useState<SaveFlowState>({ phase: "idle" });
+
+  /* Through the editor's own model builder, so what the preview shows and
+     what the editor showed cannot differ. */
+  const previewSaved = (d: SalesDocument) => {
+    const { totals, model } = documentModelFor(d, settings, docType);
+    previewPdf({ model, rows: totals.rows, images: docImages });
+  };
+
   const save = async (draft: SalesDocument) => {
     /* Allocating a number is a round trip, and the editor stays on screen
        until it comes back. A second click in that window would take a second
        number and file a second copy of the same document. */
     if (saving.current) return;
     saving.current = true;
+    /* Set before the await, cleared after it: the ring is on screen for
+       exactly as long as the work takes, and for no longer. */
+    setFlow({ phase: "working", label: `Filing ${label.toLowerCase()} ${draft.number}…` });
     try {
-      await commit(draft);
+      const saved = await commit(draft);
+      setFlow({
+        phase: "done",
+        title: `${label} saved`,
+        /* The number the DATABASE gave it, which is the whole reason there
+           was something to wait for. A new document's provisional number is
+           not the one it keeps. */
+        number: saved?.number ?? draft.number,
+        action: saved
+          ? { label: "Open preview", run: () => void previewSaved(saved) }
+          : undefined,
+      });
+    } catch (err) {
+      /* A failed save must not look like a successful one. The toast is the
+         right channel for an error: it stays until it is read. */
+      setFlow({ phase: "idle" });
+      toast(err instanceof Error ? err.message : "That document could not be saved.", "bad");
     } finally {
       saving.current = false;
     }
@@ -255,7 +288,11 @@ export function QuotationsScreen({
     }
 
     setEditing(null);
-    toast(`${label} ${doc.number} saved.`, "good");
+    /* NO "saved" TOAST HERE ANY MORE. The save flow card is the
+       confirmation now, and it carries the allocated number and a way
+       straight to the preview. Two notices for one event is how people
+       learn to read neither; the card keeps the toast's role="status" so
+       a screen reader hears it just the same. */
     /* Bringing a closed deal back onto the board is a bigger thing than a
        save, and it happens to the customer record rather than to the
        document somebody was looking at. Say so, and say what did not
@@ -267,6 +304,7 @@ export function QuotationsScreen({
         "info",
       );
     }
+    return doc;
   };
 
   const duplicate = async (doc: SalesDocument) => {
@@ -369,6 +407,12 @@ export function QuotationsScreen({
           onSave={save}
           onClose={() => setEditing(null)}
         />
+        {/* Rendered in BOTH branches on purpose: the ring belongs to the
+            editor the save was started from, and the confirmation that
+            follows lands after the editor has closed. One state, two
+            places, so the sequence survives the screen changing under
+            it. */}
+        <SaveFlowOverlay state={flow} onDismiss={() => setFlow({ phase: "idle" })} />
       </main>
     );
   }
@@ -568,6 +612,8 @@ export function QuotationsScreen({
         />
         )}
       </Presence>
+
+      <SaveFlowOverlay state={flow} onDismiss={() => setFlow({ phase: "idle" })} />
     </main>
   );
 }
