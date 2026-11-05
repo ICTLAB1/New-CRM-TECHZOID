@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { AnimatePresence, motion } from "motion/react";
+import { layoutSpring, listRow } from "../../components/motion";
 import { Button, Field, Input, Select, Textarea } from "../../components/primitives";
 import { NOTE_OUTCOMES, NOTE_TYPES, blankNote, noteIsEmpty, sortedNotes, type NoteDraft } from "../../domain/customers/notes";
 import type { Customer } from "../../domain/customers/customer";
@@ -90,8 +92,21 @@ export function NotesPanel({ customer, currentUser, onAdd }: NotesPanelProps) {
 
       {notes.length ? (
         <ol className="note-list">
+          {/* The note just typed arrives at the top rather than being there
+              already — the only confirmation this panel gives that it was
+              kept, since a note cannot be edited afterwards. */}
+          <AnimatePresence initial={false}>
           {notes.map((n) => (
-            <li key={n.id} className="note">
+            <motion.li
+              key={n.id}
+              className="note"
+              layout
+              transition={layoutSpring}
+              variants={listRow}
+              initial="initial"
+              animate="animate"
+              exit="exit"
+            >
               <div className="note-head">
                 <strong>{n.type}</strong>
                 <span className="field-hint">
@@ -102,8 +117,9 @@ export function NotesPanel({ customer, currentUser, onAdd }: NotesPanelProps) {
               <p className="note-text">{n.text}</p>
               {n.outcome ? <div className="field-hint">Outcome — {n.outcome}</div> : null}
               {n.nextAction ? <div className="field-hint">Next — {n.nextAction}</div> : null}
-            </li>
+            </motion.li>
           ))}
+          </AnimatePresence>
         </ol>
       ) : (
         <p className="field-hint">

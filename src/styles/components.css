@@ -975,6 +975,9 @@ button.tile:hover { background: var(--surface-2); }
    say the same thing. Cut with clip-path rather than borders or a
    background image: one shape, no artwork, and it scales with the type. */
 .path { display: flex; gap: 3px; list-style: none; margin: 0; padding: 0; width: 100%; }
+/* A stage change washes across the path rather than snapping: colour only,
+   so nothing is laid out again. */
+.path-step { transition: background-color var(--t-enter) var(--ease), color var(--t-enter) var(--ease); }
 .path-step {
   flex: 1 1 0; min-width: 0;
   background: var(--surface-3);
@@ -1106,6 +1109,9 @@ button.path-hit { cursor: pointer; }
 .toast-action:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
 
 /* Saved views: a row of filter chips above a list. */
+.pt-settled { display: flex; flex-direction: column; gap: 4px; }
+.pt-settled .meter { width: 100%; }
+
 /* ── saving a document ──────────────────────────────────────────────── */
 /* Fixed, above everything, and centred low enough not to sit over the thing
    that was just saved. */

@@ -1,7 +1,8 @@
 import { useRef, useState } from "react";
 import { Mail, MessageCircle, Pencil } from "lucide-react";
 import { Modal } from "../../components/Modal";
-import { Button, Chip, Field, Input, Select } from "../../components/primitives";
+import { Meter, Button, Chip, Field, Input, Select } from "../../components/primitives";
+import { AnimatedNumber } from "../../components/AnimatedNumber";
 import { useToast } from "../../components/Toast";
 import { fmtDate } from "../../domain/dates";
 import { moneyList } from "../../domain/currency/format";
@@ -42,6 +43,10 @@ export function BillPanel({
   const balance = outstandingOf(bill);
   const days = daysBetween(bill.dueDate, today);
   const closed = bill.status !== "open" || balance <= 0;
+  /* Guarded against a zero-value bill, which would otherwise read NaN%. */
+  const paidPct = bill.amount > 0
+    ? Math.max(0, Math.min(100, (bill.amountPaid / bill.amount) * 100))
+    : (balance <= 0 ? 100 : 0);
 
   const [paying, setPaying] = useState(false);
   const [amount, setAmount] = useState(String(balance));
@@ -52,19 +57,31 @@ export function BillPanel({
   const [sending, setSending] = useState<string | null>(null);
   const [preview, setPreview] = useState<{ subject: string; html: string } | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [recording, setRecording] = useState(false);
 
   const recordPayment = async () => {
     const value = Number(amount.replace(/,/g, "")) || 0;
     if (value <= 0) return;
-    const payments = [...bill.payments, { id: newPaymentId(), amount: value, date, method, reference: reference.trim() }];
-    const paidNow = payments.reduce((a, p) => a + (Number(p.amount) || 0), 0);
-    const fully = paidNow >= bill.amount - 0.005;
-    await onSave(
-      { ...bill, payments, status: fully ? "paid" : bill.status },
-      fully ? `${bill.invoiceNo} fully paid — reminders stopped` : `${moneyList(value, bill.currency)} recorded against ${bill.invoiceNo}`,
-    );
-    setPaying(false);
-    setReference("");
+    /* Recording a payment is a write to the server, and the button said
+       nothing about it — so a slow connection looked like a dead click,
+       and a second click filed the payment twice. */
+    if (recording) return;
+    setRecording(true);
+    try {
+      const payments = [...bill.payments, { id: newPaymentId(), amount: value, date, method, reference: reference.trim() }];
+      const paidNow = payments.reduce((a, p) => a + (Number(p.amount) || 0), 0);
+      const fully = paidNow >= bill.amount - 0.005;
+      await onSave(
+        { ...bill, payments, status: fully ? "paid" : bill.status },
+        fully
+          ? `${bill.invoiceNo} fully paid — reminders stopped`
+          : `${moneyList(value, bill.currency)} recorded against ${bill.invoiceNo}`,
+      );
+      setPaying(false);
+      setReference("");
+    } finally {
+      setRecording(false);
+    }
   };
 
   const send = async (channel: "email" | "whatsapp") => {
@@ -173,8 +190,27 @@ export function BillPanel({
         <dl className="pt-kv">
           <dt>Due date</dt><dd>{fmtDate(bill.dueDate)}</dd>
           <dt>Invoice amount</dt><dd>{moneyList(bill.amount, bill.currency)}</dd>
-          <dt>Received</dt><dd>{moneyList(bill.amountPaid, bill.currency)}</dd>
-          <dt><strong>Balance</strong></dt><dd><strong>{moneyList(balance, bill.currency)}</strong></dd>
+          {/* THESE TWO MOVE WHEN A PAYMENT LANDS, and they move in opposite
+              directions: received climbs, balance falls. A figure that
+              simply replaces itself shows neither — and on this screen the
+              direction is the whole news. */}
+          <dt>Received</dt>
+          <dd><AnimatedNumber value={moneyList(bill.amountPaid, bill.currency)} duration={620} /></dd>
+          <dt><strong>Balance</strong></dt>
+          <dd><strong><AnimatedNumber value={moneyList(balance, bill.currency)} duration={620} /></strong></dd>
+          <dt>Settled</dt>
+          <dd>
+            {/* HOW FAR THROUGH, which the three figures above never said.
+                A part payment on a large bill reads very differently from
+                the same sum against a small one, and the bar is the only
+                thing on this panel that says which this is. */}
+            <div className="pt-settled">
+              <Meter pct={paidPct} tone={paidPct >= 100 ? "good" : paidPct > 0 ? "warn" : undefined} />
+              <span className="field-hint">
+                <AnimatedNumber value={`${Math.round(paidPct)}%`} duration={620} /> of {moneyList(bill.amount, bill.currency)}
+              </span>
+            </div>
+          </dd>
           <dt>Contact</dt><dd>{bill.contactName || "—"}</dd>
           <dt>Email</dt><dd>{bill.email || <span style={{ color: "var(--warn)" }}>none</span>}</dd>
           <dt>WhatsApp</dt><dd>{bill.phone || <span style={{ color: "var(--warn)" }}>none</span>}</dd>
@@ -202,7 +238,15 @@ export function BillPanel({
             </div>
             <div className="row-tight" style={{ justifyContent: "flex-end", gap: 8 }}>
               <Button tone="quiet" onClick={() => setPaying(false)}>Cancel</Button>
-              <Button tone="primary" disabled={(Number(amount) || 0) <= 0} onClick={() => void recordPayment()}>Save payment</Button>
+              <Button
+                tone="primary"
+                loading={recording}
+                loadingLabel="Recording…"
+                disabled={recording || (Number(amount) || 0) <= 0}
+                onClick={() => void recordPayment()}
+              >
+                Save payment
+              </Button>
             </div>
           </div>
         ) : null}

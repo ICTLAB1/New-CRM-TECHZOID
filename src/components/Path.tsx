@@ -13,6 +13,9 @@
  * customer header does while stages still belong to deals.
  */
 
+import { AnimatePresence, motion } from "motion/react";
+import { confirm } from "./motion";
+
 export interface PathStep {
   id: string;
   label: string;
@@ -39,7 +42,27 @@ export function Path({ steps, current, tone = "accent", onPick }: PathProps) {
         const state = i < at ? "is-done" : i === at ? "is-current is-" + tone : "is-todo";
         const label = (
           <>
-            <span className="path-tick" aria-hidden="true">{i < at ? "✓" : ""}</span>
+            {/* THE TICK IS THE EVENT. Moving a deal forward turns the step
+                behind it into a completed one, and a tick that is simply
+                there on the next paint says nothing happened. Popping it
+                in is the smallest possible way to show the move — the
+                colours wash across underneath it in CSS. */}
+            <span className="path-tick" aria-hidden="true">
+              <AnimatePresence initial={false}>
+                {i < at ? (
+                  <motion.span
+                    key="tick"
+                    variants={confirm}
+                    initial="initial"
+                    animate="animate"
+                    exit="exit"
+                    style={{ display: "inline-block" }}
+                  >
+                    ✓
+                  </motion.span>
+                ) : null}
+              </AnimatePresence>
+            </span>
             <span className="path-label">{step.label}</span>
           </>
         );

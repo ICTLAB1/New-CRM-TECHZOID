@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { AnimatePresence, motion } from "motion/react";
+import { layoutSpring, listRow } from "../../components/motion";
 import { Button, Card, Chip, Empty, Field, Select, Textarea } from "../../components/primitives";
 import { stageOf, STAGES } from "../../domain/pipeline/stages";
 import { Path } from "../../components/Path";
@@ -82,7 +84,20 @@ function DealRow({ deal }: { deal: Deal }) {
 
 function Entry({ entry }: { entry: RecordEntry }) {
   return (
-    <li className={"entry entry-" + entry.kind}>
+    /* A NOTE LOGGED HERE APPEARS AT THE TOP OF THIS LIST, under today.
+       Without this it was simply there on the next paint, and the one
+       thing a person wants confirmed — that what they typed was kept —
+       was the one thing the screen did not show. `layout` carries the
+       entries below it down rather than jumping them. */
+    <motion.li
+      className={"entry entry-" + entry.kind}
+      layout
+      transition={layoutSpring}
+      variants={listRow}
+      initial="initial"
+      animate="animate"
+      exit="exit"
+    >
       <span className={"entry-pip is-" + (entry.tone ?? "neutral")} aria-hidden="true" />
       <div className="entry-body">
         <div className="entry-head">
@@ -92,7 +107,7 @@ function Entry({ entry }: { entry: RecordEntry }) {
         {entry.body ? <div className="entry-text">{entry.body}</div> : null}
         {entry.by ? <div className="entry-by">{entry.by}</div> : null}
       </div>
-    </li>
+    </motion.li>
   );
 }
 
@@ -212,7 +227,9 @@ export function CustomerRecord({
                   <section className="entry-day" key={day.date}>
                     <div className="entry-date">{fmtDate(day.date)}</div>
                     <ul className="entry-list">
-                      {day.entries.map((e) => <Entry entry={e} key={e.id} />)}
+                      <AnimatePresence initial={false}>
+                        {day.entries.map((e) => <Entry entry={e} key={e.id} />)}
+                      </AnimatePresence>
                     </ul>
                   </section>
                 ))}
