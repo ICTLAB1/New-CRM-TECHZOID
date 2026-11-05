@@ -387,7 +387,16 @@ input[type="checkbox"]:focus-visible, input[type="radio"]:focus-visible { box-sh
 
 /* ── figures ────────────────────────────────────────────────────────── */
 .num-anim { font-variant-numeric: tabular-nums; }
-.bar-grow { transform-origin: bottom center; animation: mo-grow-y 700ms var(--ease-spring) backwards; }
+/* Grows from the baseline on load, and EASES when the figure behind it
+   changes — a won deal landing from another user's session, or a refetch,
+   moved these bars with no transition at all. Height rather than a scale
+   because the value label sits on top of each bar and has to travel with
+   it; six divs in a flex row is a layout cost worth paying for that. */
+.bar-grow {
+  transform-origin: bottom center;
+  animation: mo-grow-y 700ms var(--ease-spring) backwards;
+  transition: height 420ms var(--ease-out), background-color var(--m-base) var(--ease-out);
+}
 .meter-fill { animation: mo-grow-x 800ms var(--ease-expo) backwards 120ms; }
 
 /* ── stat tiles answer the pointer ──────────────────────────────────── */
