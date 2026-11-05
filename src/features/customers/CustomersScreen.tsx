@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
+import { motion } from "motion/react";
+import { layoutSpring } from "../../components/motion";
 import type { Intent } from "../../app/intent";
 import { Presence } from "../../components/Presence";
 import { PageHead } from "../../app/AppShell";
@@ -212,7 +214,10 @@ export function CustomersScreen({
           />
         ) : (
           <div className="table-wrap">
-            <table className="table">
+            {/* Motion owns the rows' transforms here, so the CSS entry
+                animation must not also write one — see the note on
+                .table.is-live in motion.css. */}
+            <table className="table is-live">
               <thead>
                 <tr>
                   <th style={{ width: 4 }} />
@@ -230,7 +235,24 @@ export function CustomersScreen({
                   const stage = stageOf(c.stage);
                   const overdue = isOverdue(c.nextFollowUp);
                   return (
-                    <tr key={c.id} className={overdue ? "needs-warn" : undefined} onClick={() => { setIsNew(false); setEditing(c); }} style={{ cursor: "pointer" }}>
+                    /* FILTERING AND SEARCH. The rows that survive a filter
+                       slide to where they now belong instead of the table
+                       repainting in its new arrangement — which is the
+                       difference between seeing a list narrow and being
+                       handed a different list.
+                       NO EXIT ANIMATION, deliberately: a leaving <tr> holds
+                       its height until it has faded, so a search that drops
+                       forty rows would stutter through forty fades. They go
+                       at once and the survivors travel, which is both
+                       faster to read and faster to run. */
+                    <motion.tr
+                      key={c.id}
+                      layout="position"
+                      transition={layoutSpring}
+                      className={overdue ? "needs-warn" : undefined}
+                      onClick={() => { setIsNew(false); setEditing(c); }}
+                      style={{ cursor: "pointer" }}
+                    >
                       <td className="edge-cell" />
                       <td data-head className="strong">
                         <button type="button" className="row-open" onClick={(e) => { e.stopPropagation(); setIsNew(false); setEditing(c); }}>
@@ -245,7 +267,7 @@ export function CustomersScreen({
                         {fmtDate(c.nextFollowUp)}
                       </td>
                       <td data-label="Value" className="num strong">{Number(c.value) > 0 ? moneyList(c.value, c.currency) : "—"}</td>
-                    </tr>
+                    </motion.tr>
                   );
                 })}
               </tbody>

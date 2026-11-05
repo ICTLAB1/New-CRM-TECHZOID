@@ -9,6 +9,8 @@ import { GoodsReceiptDialog } from "../purchasing/GoodsReceiptDialog";
 import { removeAttachmentsFor } from "../../data/attachments";
 import { useToast } from "../../components/Toast";
 import { DocumentEditor } from "./DocumentEditor";
+import { motion } from "motion/react";
+import { layoutSpring } from "../../components/motion";
 import { documentModelFor } from "./useDocumentModel";
 import { previewPdf } from "../../documents/pdf/deliver";
 import { SaveFlowOverlay, type SaveFlowState } from "../../components/SaveFlow";
@@ -490,7 +492,9 @@ export function QuotationsScreen({
           />
         ) : (
           <div className="table-wrap">
-            <table className="table">
+            {/* is-live: Motion owns these rows' transforms, so the CSS
+                entry animation stands down — see motion.css. */}
+            <table className="table is-live">
               <thead>
                 <tr>
                   <th style={{ width: 4 }} />
@@ -512,7 +516,12 @@ export function QuotationsScreen({
                   const live = effectiveStatus(d);
                   const stale = live === "Expired" && d.status === "Sent";
                   return (
-                    <tr key={d.id} className={stale ? "needs-warn" : undefined}>
+                    <motion.tr
+                      key={d.id}
+                      layout="position"
+                      transition={layoutSpring}
+                      className={stale ? "needs-warn" : undefined}
+                    >
                       <td className="edge-cell" />
                       <td data-head className="mono strong">
                         <button type="button" className="row-open" onClick={() => setEditing(d)}>{d.number}</button>
@@ -563,7 +572,7 @@ export function QuotationsScreen({
                           <Button size="sm" tone="danger" onClick={() => setConfirmDelete(d)}>Delete</Button>
                         </span>
                       </td>
-                    </tr>
+                    </motion.tr>
                   );
                 })}
               </tbody>

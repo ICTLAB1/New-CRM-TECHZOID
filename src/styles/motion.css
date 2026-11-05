@@ -93,6 +93,12 @@
 .table tbody tr:nth-child(n+8) { animation-delay: 140ms; }
 .table tbody tr { transition: background-color var(--m-fast) var(--ease-out); }
 
+/* A TABLE WHOSE ROWS MOTION DRIVES. Two owners of `transform` on one
+   element is one too many: the CSS entry animation and a layout animation
+   fight, and the row jumps. Marked tables hand transforms to Motion and
+   keep only the colour transition. */
+.table.is-live tbody tr { animation: none; }
+
 /* Lists of documents, deals, activity, notes, notifications. */
 .doc-row, .deal-row, .timeline-row, .entry, .note, .bell-item, .portal-row {
   animation: mo-rise-sm var(--m-base) var(--ease-out) backwards;
