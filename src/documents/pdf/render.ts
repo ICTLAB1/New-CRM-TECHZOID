@@ -55,6 +55,12 @@ export interface RenderOptions {
 const A4 = { w: 210, h: 297 };
 const M = 13;
 const CW = A4.w - M * 2;
+
+/* Clause typography, shared by the money block's terms column and the
+   note blocks below it, so the same list does not set differently in two
+   places on one page. */
+const TERM_LEAD = 2.75;
+const TERM_GAP = 0.6;
 /* The footer band's type. Its HEIGHT is not fixed — it is measured per
    document from the closing line, which wraps (see the render function).
    Reserving a fixed 20mm for a 12mm band cost a whole page on short
@@ -410,8 +416,6 @@ export function renderDocumentPdf(opts: RenderOptions): jsPDF {
     const sumX = M + CW - sumW;
     const leftW = CW - sumW - 7;
     const rowH = 5.6;
-    const TERM_LEAD = 2.75;
-    const TERM_GAP = 0.6;
 
     /* Measure BOTH columns before deciding where the block goes. Sizing the
        break from the summary alone let a fourteen-clause terms column run
@@ -553,6 +557,37 @@ export function renderDocumentPdf(opts: RenderOptions): jsPDF {
     pdf.setFont("helvetica", "bold").setFontSize(7.6).setTextColor(...NAVY);
     pdf.text(bank.heading, M, y + 4.4);
     y = colonRows(bank.rows, M, CW * 0.5, y + 10, 30, 7) + 4;
+  }
+
+  /* ──────────────── notes and terms below the money block ────────────────
+   * A PROFORMA'S TERMS LIVE HERE. Its money-block column is given over to
+   * the bank details — the thing a proforma exists to carry — so its terms
+   * have nowhere else to go. The model built these blocks all along and
+   * nothing drew them, so a proforma printed neither its terms nor its
+   * payment instructions. */
+  function drawNoteBlocks(): void {
+    for (const block of m.notes) {
+      if (!block.lines.length) continue;
+      const wrapped = block.lines.map((line) => pdf.splitTextToSize(line, CW - 6) as string[]);
+      /* The heading plus the first item, so a block never starts with its
+         heading stranded at the foot of a page. */
+      need(9 + wrapped[0]!.length * TERM_LEAD + TERM_GAP);
+      pdf.setFont("helvetica", "bold").setFontSize(7.6).setTextColor(...NAVY);
+      pdf.text(block.heading, M, y + 4.4);
+      y += 9;
+      wrapped.forEach((lines, i) => {
+        const h = lines.length * TERM_LEAD + TERM_GAP;
+        /* Flow rather than squeeze: fourteen clauses do not fit under a
+           full items table, and shrinking them to fit is how a term becomes
+           unreadable. */
+        need(h);
+        pdf.setFont("helvetica", "normal").setFontSize(6.2).setTextColor(...INK);
+        pdf.text(`${i + 1}.`, M, y);
+        pdf.text(lines, M + 5.5, y);
+        y += h;
+      });
+      y += 2;
+    }
   }
 
   /* ─────────────────────── signature block ─────────────────────── */
@@ -743,6 +778,7 @@ export function renderDocumentPdf(opts: RenderOptions): jsPDF {
   drawMoneyBlock();
   drawHsnSummary();
   drawBankDetails();
+  drawNoteBlocks();
   drawStrips();
   drawSignature();
 

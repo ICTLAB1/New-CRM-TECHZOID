@@ -192,6 +192,17 @@ describe("document variants", () => {
     expect(text).toContain("Advance (50%)");
   });
 
+  it("shows a proforma's terms and payment notes below the money block", () => {
+    /* Not in the terms column — the bank details have that — but on the
+       page, under their own headings. The preview and the PDF read the
+       same model.notes, so a preview promising terms the file does not
+       carry is the one thing this cannot do. */
+    const { text } = build({}, "proforma");
+    expect(text).toContain("TERMS & CONDITIONS");
+    expect(text).toContain(DOMESTIC_TERMS[0]!.replace("{company}", "TechZoid Technologies Private Limited"));
+    expect(text).toContain("Kindly make the payment as per the bank details mentioned.");
+  });
+
   it("renders an exempt export with no tax row", () => {
     const { model, text } = build({ taxType: "none", currency: "AED", billCountry: "United Arab Emirates", billGstin: "" });
     // Round-off is on for this document, so it earns a row; no tax row does.

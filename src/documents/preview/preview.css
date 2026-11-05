@@ -92,6 +92,13 @@
 .doc-terms { flex: 1 1 auto; min-width: 0; }
 .doc-terms ol { margin: 3mm 0 0; padding-left: 5mm; }
 .doc-terms li { font-size: 2.3mm; margin-bottom: 0.8mm; color: #18202A; }
+/* Notes and terms below the money block, on a proforma. Set like the
+   terms column so the same clause list reads the same either side of the
+   page. */
+.doc-notes { margin-top: 4mm; }
+.doc-notes ol { margin: 2mm 0 0; padding-left: 5mm; }
+.doc-notes li { font-size: 2.3mm; margin-bottom: 0.8mm; color: #18202A; }
+
 .doc-summary { width: 78mm; flex: none; border: 0.2mm solid #D7DCE2; }
 .doc-summary-head { background: #F1F4F8; color: #0D2B55; font-size: 2.7mm; font-weight: 700; padding: 1.5mm 3mm; }
 .doc-sum-row { display: flex; justify-content: space-between; gap: 3mm; padding: 1.4mm 3mm; border-bottom: 0.15mm solid #D7DCE2; font-size: 2.6mm; }

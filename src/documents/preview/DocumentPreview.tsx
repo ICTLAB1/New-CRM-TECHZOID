@@ -307,6 +307,16 @@ export function DocumentPreview({ model: m, rows, brandLogos = {}, scale = 1 }: 
           </section>
         ) : null}
 
+        {/* A proforma's terms and payment instructions. The PDF draws these
+            in drawNoteBlocks; both read the same model.notes, so the
+            preview cannot promise something the file does not carry. */}
+        {m.notes.map((block) => (
+          <section className="doc-notes" key={block.heading}>
+            <div className="doc-block-title">{block.heading}</div>
+            <ol>{block.lines.map((line, i) => <li key={i}>{line}</li>)}</ol>
+          </section>
+        ))}
+
         {strips.length ? (
           <section className="doc-strips" style={{ gridTemplateColumns: `repeat(${strips.length}, 1fr)` }}>
             {strips.map((strip) => (

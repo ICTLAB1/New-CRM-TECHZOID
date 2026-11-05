@@ -183,12 +183,45 @@ describe("proforma specifics", () => {
     expect(build({}, "quotation", {}, bank).money.bank?.rows).toContainEqual(["Bank Name", "HDFC Bank"]);
   });
 
-  it("prints notes instead of terms", () => {
+  it("moves a proforma's terms out of the money column into their own block", () => {
+    /* The column is given over to the bank details, which is what a
+       proforma exists to carry. The terms are not dropped: they print
+       below, under their own heading. Whether anything DRAWS that block is
+       a question only the PDF can answer — see documents/pdf/render.test.ts,
+       which exists because for months nothing did. */
     const m = build({}, "proforma");
-    expect(m.notes.length).toBeGreaterThan(0);
     expect(m.money.terms).toEqual([]);
+
+    const headings = m.notes.map((b) => b.heading);
+    expect(headings).toContain("NOTES");
+    expect(headings).toContain("TERMS & CONDITIONS");
+
+    const terms = m.notes.find((b) => b.heading === "TERMS & CONDITIONS");
+    expect(terms?.lines).toHaveLength(2);
+    expect(m.notes.find((b) => b.heading === "NOTES")?.lines[0])
+      .toContain("Kindly make the payment");
+  });
+
+  it("gives every other document its terms in the money column and no blocks", () => {
     expect(build().notes).toEqual([]);
     expect(build().money.terms).toHaveLength(2);
+  });
+
+  it("drops the proforma terms block when terms are switched off", () => {
+    /* ONE SWITCH, wherever the terms happen to print. Built directly here
+       because the switch lives on the template, which `build` holds
+       fixed. */
+    const totals = computeDocument(DOC, "Delhi");
+    const off = buildDocumentModel({
+      doc: DOC, settings: SETTINGS, totals, docType: "proforma",
+      template: {
+        ...DEFAULT_DOC_TEMPLATE,
+        sections: { ...DEFAULT_DOC_TEMPLATE.sections, terms: false },
+      },
+      bankAccount: {},
+    });
+    expect(off.notes.map((b) => b.heading)).not.toContain("TERMS & CONDITIONS");
+    expect(off.notes.map((b) => b.heading)).toContain("NOTES");
   });
 
   it("closes with the not-a-tax-invoice line", () => {

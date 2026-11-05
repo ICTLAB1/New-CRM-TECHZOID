@@ -132,7 +132,11 @@ export interface DocumentModel {
     bank: { heading: string; rows: Pair[]; upiQr: string | null } | null;
   };
 
-  notes: string[];
+  /** Blocks printed under the money block: a heading and its lines. A
+   *  proforma carries its payment instructions and its terms here, because
+   *  its terms column is given over to the bank details. Empty on every
+   *  other document, which prints terms in that column instead. */
+  notes: Array<{ heading: string; lines: string[] }>;
 
   /** HSN/SAC summary table. Every column after "HSN / SAC" is already
    *  formatted for display; `columns` names them so a renderer draws
@@ -531,16 +535,38 @@ export function buildDocumentModel(input: BuildModelInput): DocumentModel {
      quotation. On a proforma they are replaced by the payment notes block. */
   const terms = !isProforma && isOn(SEC.terms) ? (doc.terms || []).filter(Boolean).map(String) : [];
 
-  /* ---- notes (proforma only) ---- */
-  const notes =
-    isProforma && isOn(SEC.notes)
-      ? [
+  /* ---- notes and terms, below the money block (proforma only) ----
+     TWO BLOCKS, NOT ONE. These used to be a single list with the terms
+     appended to the payment instructions, and the whole thing was never
+     rendered — the model built it, no renderer read it, and a proforma
+     went out carrying neither its terms nor its payment instructions while
+     every test passed, because every test asked the model.
+     Separating them is also how a proforma should read: "Terms &
+     Conditions" under its own heading, not as items 4 to 17 of a note
+     about where to pay. */
+  const noteBlocks: DocumentModel["notes"] = [];
+  if (isProforma) {
+    if (isOn(SEC.notes)) {
+      noteBlocks.push({
+        heading: (L.notesHeading || "Notes").toUpperCase(),
+        lines: [
           "Kindly make the payment as per the bank details mentioned.",
           "After payment, the invoice and licence details will be shared.",
           "This is a computer generated document and does not require a signature.",
-          ...(doc.terms || []).filter(Boolean).map(String),
-        ]
-      : [];
+        ],
+      });
+    }
+    /* The same switch that governs terms everywhere else. A proforma's
+       terms do not print in the money column — the bank details have it —
+       so they print here, which is the only reason this block exists. */
+    const proformaTerms = isOn(SEC.terms) ? (doc.terms || []).filter(Boolean).map(String) : [];
+    if (proformaTerms.length) {
+      noteBlocks.push({
+        heading: (L.termsHeading || "Terms & Conditions").toUpperCase(),
+        lines: proformaTerms,
+      });
+    }
+  }
 
   /* ---- signature ---- */
   /* A purchase order ALWAYS carries an acknowledgement box, and it is the
@@ -673,7 +699,7 @@ export function buildDocumentModel(input: BuildModelInput): DocumentModel {
       terms,
       bank: bankBlock,
     },
-    notes,
+    notes: noteBlocks,
     hsnSummary,
     signature,
     strips,
