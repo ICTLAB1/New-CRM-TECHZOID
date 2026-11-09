@@ -50,7 +50,10 @@ export function CompanySwitcher({
       )}
 
       {canAdd ? (
-        <Button tone="quiet" size="sm" onClick={() => setAdding(true)}>+ Company</Button>
+        /* Classed so the phone layout can drop it: at 390px the header has
+           no room for an action taken once a year, and adding a company has
+           a whole screen of its own under Companies. */
+        <Button className="gh-add-company" tone="quiet" size="sm" onClick={() => setAdding(true)}>+ Company</Button>
       ) : null}
 
       {adding ? (

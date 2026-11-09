@@ -318,8 +318,27 @@
   .brand-logo { max-width: 70px; }
   .gh-new { width: 36px; height: 36px; padding: 0; border-radius: 50%; font-size: 20px; }
   .gh-new-label { display: none; }
-  .gh-search-wrap { min-width: 0; }
-  .topsearch { height: 36px; }
+  /* THE HEADER AT PHONE WIDTH.
+     Measured at 390px: launcher 30 + logo 70 + "+" 36 + company picker 134
+     + bell 41 + avatar 34, plus gaps and padding, comes to 397 — seven
+     pixels more than the phone has, before the search box is given
+     anything at all. Being the only flexible item, search was the one that
+     paid: it collapsed to zero width and its input, which keeps its own
+     intrinsic size, painted out over the logo beside it. That is the
+     overlap in the report, and no amount of shrinking the search fixes it,
+     because the problem is the other six.
+     So two things go, chosen for what is cheapest to lose on a phone:
+     the logo, whose job here is done by the launcher button and the page
+     itself, and + Company, which is a once-a-year action with its own
+     screen under Companies. The picker stays — switching between TechZoid
+     and the FZE is an everyday thing — but narrows to a width that shows a
+     short name rather than 220px of one. */
+  .gh-brand { display: none; }
+  .gh-add-company { display: none; }
+  .topbar-company { max-width: 110px; }
+  /* A floor, so the search can never be crushed to nothing again. */
+  .gh-search-wrap { min-width: 0; flex: 1 1 90px; }
+  .topsearch { height: 36px; min-width: 0; width: 100%; }
   .launcher-btn { width: 36px; height: 36px; }
   .who-mark { width: 34px; height: 34px; }
 

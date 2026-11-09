@@ -32,7 +32,7 @@ import { SavedViews } from "../../components/SavedViews";
 import { InlineSelect } from "../../components/InlineSelect";
 import { computeDocument } from "../../domain/tax/compute";
 import { formatTotals, isMixed, moneyList, totalsByCurrency } from "../../domain/currency/format";
-import { fmtDate, isOverdue } from "../../domain/dates";
+import { fmtDate, isOverdue, TODAY } from "../../domain/dates";
 import { receiptStatusLabel, summarizeReceipts } from "../../domain/purchasing/receipts";
 import type { Tone } from "../../components/primitives";
 import type { DocImages } from "../../documents/pdf/render";
@@ -310,7 +310,9 @@ export function QuotationsScreen({
   };
 
   const duplicate = async (doc: SalesDocument) => {
-    const { doc: copy, seq } = await allocateNumber(duplicateQuotation(doc, settings as DocSettings));
+    const { doc: copy, seq } = await allocateNumber(
+      duplicateQuotation(doc, settings as DocSettings, TODAY(), docType),
+    );
     onChange([copy, ...documents], settings);
     noteSequence(seq);
     toast(`Duplicated as ${copy.number}, back to Draft.`, "good");
@@ -555,13 +557,16 @@ export function QuotationsScreen({
                           {isPo && d.status !== "Cancelled" && d.status !== "Draft" ? (
                             <Button size="sm" tone="default" onClick={() => setReceiving(d)}>Receive</Button>
                           ) : null}
-                          {docType === "quotation" || isPo ? (
-                            <>
-                              <Button size="sm" tone="quiet" onClick={() => duplicate(d)}>Duplicate</Button>
-                              {isPo ? null : (
-                                <Button size="sm" tone="default" onClick={() => raiseProforma(d)}>Proforma</Button>
-                              )}
-                            </>
+                          {/* ON EVERY KIND, not just quotations and purchase
+                              orders. Billing the same customer the same thing
+                              next month is the commonest thing anybody does
+                              with a tax invoice, and the only route was
+                              retyping it. The copy is a fresh draft with its
+                              own number from its own series, and carries no
+                              payments across. */}
+                          <Button size="sm" tone="quiet" onClick={() => duplicate(d)}>Duplicate</Button>
+                          {docType === "quotation" ? (
+                            <Button size="sm" tone="default" onClick={() => raiseProforma(d)}>Proforma</Button>
                           ) : null}
                           {onCreateInvoice && !isPo && !isInvoice ? (
                             <Button size="sm" tone="default" onClick={() => raiseInvoice(d)}>Invoice</Button>

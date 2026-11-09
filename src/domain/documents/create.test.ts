@@ -1,3 +1,4 @@
+import { OBJ_TYPE } from "./objType";
 import { describe, expect, it } from "vitest";
 import {
   applyCustomer, CARRIED_FIELDS, CUSTOMER_DERIVED_FIELDS, documentFieldsFrom,
@@ -364,5 +365,48 @@ describe("terms follow the customer", () => {
   it("does the same for a quotation, which is where it was already right", () => {
     const q = newQuotation({ settings: SETTINGS, user: USER });
     expect(applyCustomer(q, foreign(), SETTINGS).terms.join(" ")).toContain("Incoterms 2020");
+  });
+});
+
+describe("duplicating a document of any kind", () => {
+  /* It was quotation-only in everything but name: it stamped the quotation
+     objType and drew its preview number from the quotation prefix whatever
+     it was handed, which is why the button was only ever offered on
+     quotations and purchase orders. */
+  const base = { ...newQuotation({ settings: SETTINGS, user: USER, today: TODAY }), billName: "Acme" };
+
+  it("keeps a purchase order a purchase order", () => {
+    const copy = duplicateQuotation({ ...base }, SETTINGS, TODAY, "purchase_order");
+    expect(copy.objType).toBe(OBJ_TYPE.purchase_order);
+    expect(copy.number).toContain("PO");
+  });
+
+  it("keeps a tax invoice a tax invoice", () => {
+    const copy = duplicateQuotation({ ...base }, SETTINGS, TODAY, "invoice");
+    expect(copy.objType).toBe(OBJ_TYPE.invoice);
+    expect(copy.number).toContain("INV");
+  });
+
+  it("keeps a proforma a proforma", () => {
+    const copy = duplicateQuotation({ ...base }, SETTINGS, TODAY, "proforma");
+    expect(copy.objType).toBe(OBJ_TYPE.proforma);
+    expect(copy.number).toContain("PI");
+  });
+
+  it("still defaults to a quotation", () => {
+    expect(duplicateQuotation({ ...base }, SETTINGS, TODAY).objType).toBe(OBJ_TYPE.quotation);
+  });
+
+  it("carries no payments across", () => {
+    /* Copying a tax invoice to bill the same customer again must not
+       present itself as part paid, which would take it out of the
+       receivables it belongs in. */
+    const paid = { ...base, paymentHistory: [{ id: "p1", amount: 5000, date: TODAY, method: "NEFT", reference: "x" }] };
+    expect(duplicateQuotation(paid as never, SETTINGS, TODAY, "invoice").paymentHistory).toEqual([]);
+  });
+
+  it("comes back as a draft, whatever the original was", () => {
+    const sent = { ...base, status: "Sent" as const };
+    expect(duplicateQuotation(sent, SETTINGS, TODAY, "invoice").status).toBe("Draft");
   });
 });

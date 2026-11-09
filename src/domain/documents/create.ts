@@ -4,6 +4,7 @@ import type { Customer } from "../customers/customer";
 import type { LineItem } from "../tax/types";
 import type { PaymentEntry } from "../payments/ledger";
 import type { GoodsReceipt } from "../purchasing/receipts";
+import type { DocType } from "./model";
 import {
   DOMESTIC_TERMS, INTERNATIONAL_TERMS, INVOICE_EXPORT_TERMS, INVOICE_TERMS,
   PURCHASE_ORDER_TERMS, forCompany, suggestTermsSet,
@@ -608,16 +609,40 @@ export function invoiceFrom(
  * same one, and copying an Accepted status would claim the customer accepted
  * something they have never seen.
  */
+/**
+ * Copy a document as a fresh draft of the SAME KIND.
+ *
+ * It used to be quotation-only in everything but name: it stamped
+ * OBJ_TYPE.quotation and drew its preview number from the quotation
+ * prefix, whatever it was handed. That was survivable only because the
+ * screen allocates the real number from its own series afterwards and the
+ * table a document is written to is what decides its type on the next
+ * read — so a duplicated purchase order corrected itself, having briefly
+ * claimed to be a quotation.
+ *
+ * `of` makes that explicit rather than lucky, and is what lets the button
+ * be offered on a proforma and a tax invoice, which never had it.
+ */
 export function duplicateQuotation(
   quote: SalesDocument,
   settings: DocSettings,
   today: string = TODAY(),
+  of: DocType = "quotation",
 ): SalesDocument {
+  const objType = of === "purchase_order" ? OBJ_TYPE.purchase_order
+    : of === "invoice" ? OBJ_TYPE.invoice
+    : of === "proforma" ? OBJ_TYPE.proforma
+    : OBJ_TYPE.quotation;
+  const [prefix, seq] = of === "purchase_order"
+    ? [settings.purchaseOrderPrefix ?? DEFAULT_PREFIX.purchaseOrder, settings.purchaseOrderSeq]
+    : of === "invoice" ? [settings.invoicePrefix ?? DEFAULT_PREFIX.invoice, settings.invoiceSeq]
+    : of === "proforma" ? [settings.proformaPrefix ?? DEFAULT_PREFIX.proforma, settings.proformaSeq]
+    : [settings.quotePrefix ?? DEFAULT_PREFIX.quotation, settings.quoteSeq];
   return {
     ...quote,
     id: uid(),
-    objType: OBJ_TYPE.quotation,
-    number: buildDocNumber(settings.quotePrefix ?? DEFAULT_PREFIX.quotation, settings.quoteSeq),
+    objType,
+    number: buildDocNumber(prefix, seq),
     /* The number above is a preview of what this document will get. The
        real one is allocated by the database when it is first saved — see
        src/data/docNumber.ts. Typing over it in the editor clears this
@@ -635,6 +660,11 @@ export function duplicateQuotation(
        the line ids are fresh above, so the old receipt lines would dangle
        against items that no longer exist. */
     receipts: [],
+    /* NOR DOES THE MONEY. Copying a tax invoice to bill the same customer
+       again must not carry last month's receipts across and present itself
+       as part paid, which would take it straight out of the receivables
+       it belongs in. */
+    paymentHistory: [],
     createdAt: Date.now(), updatedAt: Date.now(),
   };
 }
