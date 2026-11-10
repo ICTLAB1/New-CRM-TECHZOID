@@ -6,6 +6,7 @@ import { fitBox } from "../../domain/documents/model";
 import type { ComputedRow } from "../../domain/tax/types";
 import { BASE_FONT_PT, PADDING_MM } from "../../domain/documents/columns";
 import { splitClause } from "../../domain/documents/clauses";
+import { scanMatrix } from "../../domain/documents/scanCode";
 import { hexToRgb, pdfSafeText } from "./text";
 
 /**
@@ -842,6 +843,66 @@ export function renderDocumentPdf(opts: RenderOptions): jsPDF {
     pdf.text(foot, M, y);
   }
 
+  /* ─────────────────────────── the scan code ───────────────────────────
+   * A QR of the document's own number, so a printed page can be found in
+   * the CRM by pointing a camera at it rather than typing a number off a
+   * creased sheet.
+   *
+   * DRAWN AS MERGED RUNS, not one rectangle per module. A 25x25 code is
+   * 625 rectangles drawn separately, and adjacent ones leave hairline
+   * white seams where the PDF rasterises their shared edge — on screen it
+   * looks like a dusting of noise and a phone reads it as damage. Each row
+   * of dark modules becomes one rectangle, overlapping its neighbours by a
+   * fiftieth of a millimetre.
+   *
+   * The white field around it is not decoration either: a QR needs a quiet
+   * zone to be found at all, and a code butted against the page's own
+   * content is a code that reads only sometimes.
+   */
+  let scanDrawn = false;
+
+  /** @param atTop draw it in a band somebody else measured, at this y, and
+   *  leave y alone. Omitted, it flows like everything else. */
+  function drawScanCode(atTop?: number): void {
+    if (!m.scan || scanDrawn) return;
+    scanDrawn = true;
+    const SIZE = 18;
+    const QUIET = 2;
+    const box = SIZE + QUIET * 2;
+    const flowing = atTop === undefined;
+    if (flowing) need(box + 2);
+    const top = atTop ?? y;
+
+    const modules = scanMatrix(m.scan.payload);
+    const n = modules.length;
+    const cell = SIZE / n;
+    const x0 = M + QUIET;
+    const y0 = top + QUIET;
+
+    pdf.setFillColor(255, 255, 255);
+    pdf.rect(M, top, box, box, "F");
+    pdf.setFillColor(...INK);
+    for (let r = 0; r < n; r++) {
+      const row = modules[r]!;
+      let c = 0;
+      while (c < n) {
+        if (!row[c]) { c += 1; continue; }
+        let run = 1;
+        while (c + run < n && row[c + run]) run += 1;
+        pdf.rect(x0 + c * cell, y0 + r * cell, cell * run + 0.02, cell + 0.02, "F");
+        c += run;
+      }
+    }
+
+    const tx = M + box + 2.5;
+    pdf.setFont("helvetica", "normal").setFontSize(6.2).setTextColor(...MUTED);
+    pdf.text(m.scan.caption, tx, top + QUIET + 4);
+    pdf.setFont("helvetica", "bold").setFontSize(7.4).setTextColor(...INK);
+    pdf.text(m.scan.payload, tx, top + QUIET + 9);
+
+    if (flowing) y = top + box + 2;
+  }
+
   /* ─────────────────────── signature block ─────────────────────── */
   function drawSignature(): void {
     /* Sized from the number of fields, not fixed: a purchase order's
@@ -852,6 +913,14 @@ export function renderDocumentPdf(opts: RenderOptions): jsPDF {
     const boxH = m.signature.acceptance ? 8 + fieldCount * 7 + 5 : 26;
     need(boxH);
     const top = y;
+
+    /* The scan code goes in this band's left half when nothing else is
+       using it — which is the usual case, and costs the document no
+       height at all. Given its own flow it took a page of its own on a
+       full quotation, which is a page the customer has to print to get a
+       square they can already see on page one. When there IS an
+       acceptance box here, it falls through to flowing below instead. */
+    if (!m.signature.acceptance) drawScanCode(top);
 
     if (m.signature.acceptance) {
       const accW = CW * 0.55;
@@ -1033,6 +1102,11 @@ export function renderDocumentPdf(opts: RenderOptions): jsPDF {
   drawNoteBlocks();
   drawStrips();
   drawSignature();
+  /* Under the signature, where there is room on every kind of document.
+     Above it would mean finding a gap that the acceptance box, the bank
+     details or a long address might already have taken. */
+  /* A no-op when the signature block already placed it beside itself. */
+  drawScanCode();
   /* LAST, and on a page of its own. */
   drawTermsPage();
 

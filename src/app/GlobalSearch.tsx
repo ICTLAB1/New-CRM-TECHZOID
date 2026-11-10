@@ -60,6 +60,49 @@ export function searchWorkspace(data: WorkspaceData, q: string, limit = 10): Sea
     .slice(0, limit);
 }
 
+/**
+ * The one document whose number is exactly this — what a scanned code
+ * resolves to.
+ *
+ * EXACT, not the substring match the search box uses. A scan is not a
+ * guess: "TZ/QT/2026-27/0042" must open that quotation, never the first
+ * of forty near-misses, and a code that belongs to no document here has
+ * to say so rather than open something plausible.
+ *
+ * Searches every kind that carries a number, in the order somebody is
+ * most likely to be holding, and stops at the first exact hit. Numbers
+ * are unique per series, so the order only decides which to prefer if a
+ * company has configured two series to collide — in which case the
+ * document they are holding is the problem, not this.
+ */
+export function findByNumber(data: WorkspaceData, number: string | null | undefined): SearchHit | null {
+  const want = String(number ?? "").trim().toLowerCase();
+  if (!want) return null;
+  const sets: Array<[keyof WorkspaceData, string, string]> = [
+    ["quotations", "quotations", "Quotation"],
+    ["proformas", "proformas", "Proforma"],
+    ["invoices", "invoices", "Tax invoice"],
+    ["purchaseOrders", "purchase-orders", "Purchase order"],
+    ["orders", "orders", "Sales order"],
+    ["challans", "dispatch", "Delivery challan"],
+  ];
+  for (const [key, view, kind] of sets) {
+    const list = (data[key] ?? []) as unknown as Array<Record<string, unknown>>;
+    for (const d of list) {
+      if (norm(d["number"]).trim() !== want) continue;
+      const party = d["billName"] ?? d["vendorName"] ?? d["customerName"];
+      return {
+        view,
+        id: String(d["id"] ?? ""),
+        kind,
+        title: String(d["number"] ?? ""),
+        meta: [party, d["status"]].filter(Boolean).join(" · "),
+      };
+    }
+  }
+  return null;
+}
+
 export function GlobalSearch({ data, onOpen }: { data: WorkspaceData; onOpen: (hit: SearchHit) => void }) {
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);

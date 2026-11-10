@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useAutomations } from "./useAutomations";
 import { GlobalSearch, type SearchHit } from "./GlobalSearch";
+import { ScanScreen } from "../features/scan/ScanScreen";
 import type { NewKind } from "./AppShell";
 import type { Intent } from "./intent";
 import { TasksScreen } from "../features/tasks/TasksScreen";
@@ -391,6 +392,8 @@ export function Workbench({
           onCreateCustomer={(c: Customer) => handleCustomersChange([c, ...customers])}
           onCreateBankAccount={addBankAccount}
         />
+      ) : view === "scan" ? (
+        <ScanScreen data={data} onOpen={openHit} />
       ) : view === "receivables" ? (
         <ReceivablesScreen
           invoices={invoices}

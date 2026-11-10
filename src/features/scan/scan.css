@@ -1,0 +1,36 @@
+/* Scan a document — its own styles, tokens only (no raw colours). */
+
+.scan-stage {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Tall enough to hold a page at arm's length, capped so the controls
+     below it stay on screen on a phone without scrolling. */
+  aspect-ratio: 4 / 3;
+  max-height: 56vh;
+  background: var(--neutral-weak);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.scan-video { width: 100%; height: 100%; object-fit: cover; }
+.scan-placeholder { padding: var(--gap-wide); color: var(--neutral); font-size: var(--t-small); text-align: center; }
+
+/* Where to hold the code. Not a target the decoder uses — jsQR reads the
+   whole frame — but people aim at a box, and one that is roughly the right
+   size stops them filling the frame with a square too big to focus on. */
+.scan-reticle {
+  position: absolute;
+  width: min(60%, 260px);
+  aspect-ratio: 1;
+  border: 2px solid var(--accent);
+  border-radius: var(--radius);
+}
+
+.scan-note { margin: 0; font-size: var(--t-small); color: var(--neutral); line-height: 1.5; }
+.scan-note-warn { color: var(--ink); }
+
+@media (prefers-reduced-motion: no-preference) {
+  .scan-reticle { transition: opacity var(--m-fast) var(--ease-out); }
+}

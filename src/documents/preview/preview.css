@@ -205,3 +205,11 @@
 }
 .doc-closing > span:first-child { flex: 1 1 auto; min-width: 0; }
 .doc-closing > span + span { flex: 0 0 auto; white-space: nowrap; }
+
+/* The scan code, beside the signature. Matches the PDF: an 18mm square
+   with a 2mm white quiet zone, the caption and the number to its right. */
+.doc-scan { display: flex; gap: 2.5mm; align-items: flex-start; margin-top: 2mm; }
+.doc-scan-quiet { flex: none; background: #fff; padding: 2mm; }
+.doc-scan-img { display: block; width: 18mm; height: 18mm; shape-rendering: crispEdges; }
+.doc-scan-caption { font-size: 2.2mm; color: #6B6B68; }
+.doc-scan-number { margin-top: 1mm; font-size: 2.6mm; font-weight: 700; color: #181818; }

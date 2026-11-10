@@ -349,6 +349,7 @@ const TOGGLE_LABELS: Record<string, string> = {
   notes: "Notes (proforma)",
   salutation: "Salutation line",
   amountInWords: "Amount in words",
+  scanCode: "Scan code (opens the document in the CRM)",
 };
 
 const COLUMN_LABELS: Record<string, string> = {

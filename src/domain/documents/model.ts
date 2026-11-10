@@ -4,6 +4,7 @@ import { taxTypeLabel } from "../tax/types";
 import type { DocumentTotals } from "../tax/types";
 import { stateNameForCode, STATES } from "../geo/states";
 import { partitionClauses } from "./clauses";
+import { SCAN_CAPTION, scanPayload } from "./scanCode";
 import { buildItemColumns, type ItemColumn } from "./columns";
 import { isOn, type DocTemplate, type SectionKey } from "./template";
 import { DEFAULT_CERTIFICATIONS } from "./brandDefaults";
@@ -174,6 +175,18 @@ export interface DocumentModel {
     /** The line that stops a detached page being read as something else. */
     footNote: string;
   } | null;
+
+  /**
+   * The square printed near the signature, so a document on paper can be
+   * found again by scanning it. Null when there is no number to encode or
+   * the section is switched off.
+   *
+   * The PAYLOAD is here, not the grid of modules: both renderers build the
+   * grid from it with the same function, and a model carrying a few
+   * hundred booleans per document would be a model nobody can read in a
+   * failing test.
+   */
+  scan: { payload: string; caption: string } | null;
 
   /** Blocks printed under the money block: a heading and its lines. A
    *  proforma carries its payment instructions and its terms here, because
@@ -802,6 +815,10 @@ export function buildDocumentModel(input: BuildModelInput): DocumentModel {
       bank: bankBlock,
     },
     termsPage,
+    /* On every kind of document, not only the ones that are signed: the
+       point is to find a piece of paper again, and a delivery challan
+       gets lost as readily as a quotation. */
+    scan: isOn(SEC.scanCode) && docNo ? { payload: scanPayload(docNo), caption: SCAN_CAPTION } : null,
     notes: noteBlocks,
     hsnSummary,
     signature,

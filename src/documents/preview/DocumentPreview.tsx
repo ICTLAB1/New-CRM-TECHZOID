@@ -4,6 +4,7 @@ import { STRIP_TITLES } from "../../domain/documents/model";
 import type { ComputedRow } from "../../domain/tax/types";
 import { CONTENT_WIDTH_MM, splitDescription } from "../../domain/documents/columns";
 import { splitClause } from "../../domain/documents/clauses";
+import { scanMatrix } from "../../domain/documents/scanCode";
 
 /**
  * The on-screen document.
@@ -36,6 +37,44 @@ export interface DocumentPreviewProps {
 function Clause({ text }: { text: string }) {
   const { label, body } = splitClause(text);
   return <>{label ? <b className="doc-clause-label">{label}:</b> : null}{label ? " " : ""}{body}</>;
+}
+
+/**
+ * The same square the PDF prints, built from the same matrix.
+ *
+ * Drawn as one path of merged runs rather than 625 elements: a div per
+ * module is 625 nodes re-laid-out on every keystroke in the editor beside
+ * it, and the merged runs are also what the PDF draws, so the two cannot
+ * disagree about a seam.
+ */
+function ScanCode({ scan }: { scan: NonNullable<DocumentModel["scan"]> }) {
+  const grid = scanMatrix(scan.payload);
+  const n = grid.length;
+  const runs: string[] = [];
+  for (let r = 0; r < n; r++) {
+    const row = grid[r]!;
+    let c = 0;
+    while (c < n) {
+      if (!row[c]) { c += 1; continue; }
+      let run = 1;
+      while (c + run < n && row[c + run]) run += 1;
+      runs.push(`M${c} ${r}h${run}v1h-${run}z`);
+      c += run;
+    }
+  }
+  return (
+    <div className="doc-scan">
+      <div className="doc-scan-quiet">
+        <svg className="doc-scan-img" viewBox={`0 0 ${n} ${n}`} role="img" aria-label={`Scan code for ${scan.payload}`}>
+          <path d={runs.join("")} fill="#181818" />
+        </svg>
+      </div>
+      <div>
+        <div className="doc-scan-caption">{scan.caption}</div>
+        <div className="doc-scan-number">{scan.payload}</div>
+      </div>
+    </div>
+  );
 }
 
 function Rows({ pairs }: { pairs: readonly Pair[] }) {
@@ -356,7 +395,7 @@ export function DocumentPreview({ model: m, rows, brandLogos = {}, scale = 1 }: 
               ))}
               <div className="doc-acceptance-seal">{m.signature.acceptance.sealLabel}</div>
             </div>
-          ) : <div />}
+          ) : m.scan ? <ScanCode scan={m.scan} /> : <div />}
           <div className="doc-for-company">
             <div className="doc-for-line">{m.signature.forLine}</div>
             <div className="doc-sig-line" />
@@ -366,6 +405,10 @@ export function DocumentPreview({ model: m, rows, brandLogos = {}, scale = 1 }: 
             ) : null}
           </div>
         </section>
+
+        {/* Below the block when the acceptance box has taken the space
+            beside it — the PDF places it the same way. */}
+        {m.scan && m.signature.acceptance ? <ScanCode scan={m.scan} /> : null}
 
         {/* THE SAME ANNEXURE THE PDF PRINTS, from the same model. Shown
             here under a divider rather than as a true second sheet — the

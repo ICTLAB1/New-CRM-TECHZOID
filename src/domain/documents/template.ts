@@ -37,6 +37,8 @@ export interface SectionToggles {
   notes?: boolean;
   salutation?: boolean;
   amountInWords?: boolean;
+  /** The square that opens the document again when scanned. */
+  scanCode?: boolean;
 }
 
 /** Optional items-table columns. Same `!== false` rule as sections. */
@@ -102,7 +104,7 @@ export const DEFAULT_DOC_TEMPLATE: DocTemplate = {
        "For {company} / Authorised signatory" block, which always prints. */
     uaeOffice: true, isoCerts: true, terms: true, bankDetails: true,
     customerAcceptance: false, partnerLogos: true, yearsOfExcellence: true,
-    notes: true, salutation: true, amountInWords: true,
+    notes: true, salutation: true, amountInWords: true, scanCode: true,
   },
   columns: { subDesc: true, brand: true, sku: true, hsn: true },
   labels: DEFAULT_LABELS,

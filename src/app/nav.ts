@@ -17,6 +17,12 @@ export const NAV: NavSection[] = [
     items: [
       { id: "dashboard", label: "Home" },
       { id: "tasks", label: "Tasks" },
+      /* An action rather than a place, and it is here because it is how
+         somebody holding a printed document gets to the record: point the
+         camera at the square on the page. A phone is the only device this
+         is ever done on, which is why it is not a header button — the
+         header is where a phone has the least room. */
+      { id: "scan", label: "Scan a document" },
       { id: "pipeline", label: "Pipeline" },
       { id: "customers", label: "Customers" },
       { id: "mail", label: "Mail" },

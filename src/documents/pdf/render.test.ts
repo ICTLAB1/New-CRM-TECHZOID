@@ -4,6 +4,7 @@ import { renderDocumentPdf } from "./render";
 import { buildDocumentModel } from "../../domain/documents/model";
 import { DEFAULT_DOC_TEMPLATE } from "../../domain/documents/template";
 import { computeDocument } from "../../domain/tax/compute";
+import { scanMatrix } from "../../domain/documents/scanCode";
 
 /**
  * WHAT IS ACTUALLY ON THE PAGE.
@@ -269,5 +270,91 @@ describe("terms written with run-in headings", () => {
     /* A signing page arrives detached. The number identifies the
        quotation; the name identifies the company without decoding it. */
     expect(labelled().runs).toContain("TECHZOID TECHNOLOGIES PRIVATE LIMITED");
+  });
+});
+
+describe("the scan code on the page", () => {
+  /**
+   * REBUILT FROM THE FILE, not from the model.
+   *
+   * The renderer draws each horizontal run of dark modules as one
+   * rectangle, because 625 separate ones leave hairline seams a phone
+   * reads as damage. That merging is where this can go wrong — an
+   * off-by-one in a run, a transposed row — and none of it shows in a
+   * model assertion or to the eye: a corrupted QR still looks like a QR.
+   *
+   * So the modules are read back out of the PDF's own rectangle
+   * operators and compared to the matrix the document asked for. The
+   * geometry is self-locating: the module rows are the only rectangles on
+   * the page with that height.
+   */
+  const modulesFromPdf = (bytes: Uint8Array, size: number): boolean[][] => {
+    const stream = pdfStreams(bytes);
+    const rects: Array<{ x: number; y: number; w: number; h: number }> = [];
+    const re = /([-\d.]+) ([-\d.]+) ([-\d.]+) ([-\d.]+) re\s+f/g;
+    for (let m = re.exec(stream); m; m = re.exec(stream)) {
+      rects.push({ x: +m[1]!, y: +m[2]!, w: +m[3]!, h: +m[4]! });
+    }
+    /* One cell is 18mm/size; everything else drawn on the page is taller
+       than two of them. */
+    const cellPt = (18 / size) * (72 / 25.4);
+    const cells = rects.filter((r) => Math.abs(Math.abs(r.h) - cellPt) < cellPt * 0.2);
+    expect(cells.length, "no module rows found in the PDF").toBeGreaterThan(0);
+
+    const x0 = Math.min(...cells.map((r) => r.x));
+    const x1 = Math.max(...cells.map((r) => r.x + r.w));
+    const yTop = Math.max(...cells.map((r) => r.y));
+    const cell = (x1 - x0) / size;
+
+    const grid = Array.from({ length: size }, () => Array.from({ length: size }, () => false));
+    for (const r of cells) {
+      const row = Math.round((yTop - r.y) / cell);
+      const col = Math.round((r.x - x0) / cell);
+      const run = Math.max(1, Math.round(r.w / cell));
+      for (let i = 0; i < run; i++) {
+        if (grid[row] && col + i < size) grid[row]![col + i] = true;
+      }
+    }
+    return grid;
+  };
+
+  it("carries the document's number, module for module", () => {
+    const { model, rows } = modelFor("quotation");
+    const bytes = new Uint8Array(renderDocumentPdf({ model, rows }).output("arraybuffer"));
+    const want = scanMatrix(model.scan!.payload);
+    expect(modulesFromPdf(bytes, want.length)).toEqual(want);
+  });
+
+  it("prints the number beside it, for anyone without a camera", () => {
+    expect(render("quotation")).toContain("TZ/PI/2026-27/0007");
+    expect(pdfRuns(new Uint8Array(renderDocumentPdf(modelFor("quotation")).output("arraybuffer"))))
+      .toContain("Scan in the CRM");
+  });
+
+  it("is on every kind of document", () => {
+    /* A delivery challan gets lost as readily as a quotation. */
+    for (const kind of ["quotation", "proforma", "invoice", "purchase_order"] as const) {
+      const { model, rows } = modelFor(kind);
+      expect(model.scan, kind).not.toBeNull();
+      const bytes = new Uint8Array(renderDocumentPdf({ model, rows }).output("arraybuffer"));
+      const want = scanMatrix(model.scan!.payload);
+      expect(modulesFromPdf(bytes, want.length), kind).toEqual(want);
+    }
+  });
+
+  it("costs the document no extra page", () => {
+    /* It is drawn inside the signature band. Given its own flow it took a
+       page of its own on a full quotation — a page somebody has to print
+       to get a square that was already on page one. */
+    const { model, rows } = modelFor("quotation");
+    const withCode = renderDocumentPdf({ model, rows }).getNumberOfPages();
+    const without = renderDocumentPdf({ model: { ...model, scan: null }, rows }).getNumberOfPages();
+    expect(withCode).toBe(without);
+  });
+
+  it("is left off when the section is switched off", () => {
+    const { model, rows } = modelFor("quotation");
+    const bytes = new Uint8Array(renderDocumentPdf({ model: { ...model, scan: null }, rows }).output("arraybuffer"));
+    expect(pdfRuns(bytes)).not.toContain("Scan in the CRM");
   });
 });

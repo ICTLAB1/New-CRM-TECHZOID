@@ -10,7 +10,7 @@ describe("navigation", () => {
   it("covers every screen the brief lists", () => {
     const ids = new Set(NAV.flatMap((s) => s.items.map((i) => i.id)));
     for (const required of [
-      "dashboard", "pipeline", "customers", "quotations", "proformas",
+      "dashboard", "pipeline", "customers", "quotations", "proformas", "scan",
       "purchase-orders",
       "orders", "dispatch", "subscriptions", "renewals",
       "invoices", "receivables",
