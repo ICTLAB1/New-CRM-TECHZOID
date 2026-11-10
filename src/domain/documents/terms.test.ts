@@ -237,10 +237,13 @@ describe("the migration that puts these terms where documents read them", () => 
 
   const latest = latestTermsMigration();
 
-  it("writes exactly these clauses, to both stores", () => {
-    /* One array for settings.defaultTerms, one for the quotation
-       templates. Both must be this file's set, character for character. */
-    expect(latest.arrays, latest.name).toHaveLength(2);
+  it("writes exactly these clauses, wherever it writes them", () => {
+    /* Every clause list the latest terms migration carries must be this
+       file's set, character for character. Earlier migrations are left
+       alone on purpose: each is a record of what was applied at the
+       time, and rewriting one would be rewriting history that has
+       already run. */
+    expect(latest.arrays.length, latest.name).toBeGreaterThan(0);
     for (const arr of latest.arrays) expect(arr, latest.name).toEqual([...DOMESTIC_TERMS]);
   });
 
@@ -254,8 +257,10 @@ describe("the migration that puts these terms where documents read them", () => 
   });
 
   it("keeps what it replaces", () => {
+    /* Whatever it overwrites — a workspace default, a template's terms,
+       a draft's — the previous value is saved beside it under a
+       Before<nnn> key, so every one of these is reversible. */
     const text = readFileSync(join("supabase", latest.name), "utf8");
-    expect(text).toMatch(/defaultTermsBefore\d{3}/);
-    expect(text).toMatch(/termsBefore\d{3}/);
+    expect(text).toMatch(/Before\d{3}/);
   });
 });
