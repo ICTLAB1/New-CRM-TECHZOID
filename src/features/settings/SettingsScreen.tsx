@@ -11,6 +11,7 @@ import { useToast } from "../../components/Toast";
 import { CURRENCIES } from "../../domain/currency/currencies";
 import { STATE_NAMES } from "../../domain/geo/states";
 import { normalizeDocTemplate, SECTION_ORDER_META, type DocTemplate, type SectionKey } from "../../domain/documents/template";
+import { DEFAULT_VALIDITY_DAYS } from "../../domain/documents/create";
 import { DOMESTIC_TERMS } from "../../domain/documents/terms";
 import { DEFAULT_REVENUE_BASIS, REVENUE_BASES, type IncentiveScheme, type IncentiveSlab } from "../../domain/incentives/incentives";
 import { DEFAULT_PREFIX, buildDocNumber } from "../../domain/numbering/docNumber";
@@ -504,7 +505,7 @@ function NumberingPanel({ settings, canEdit, onChange }: { settings: Record<stri
       defaultCurrency: String(settings["defaultCurrency"] ?? "INR"),
       defaultTaxType: String(settings["defaultTaxType"] ?? "gst"),
       defaultGst: Number(settings["defaultGst"] ?? 18),
-      defaultValidityDays: Number(settings["defaultValidityDays"] ?? 15),
+      defaultValidityDays: Number(settings["defaultValidityDays"] ?? DEFAULT_VALIDITY_DAYS),
     },
     (next) => onChange({ ...settings, ...next }),
     "Numbering and tax defaults saved",

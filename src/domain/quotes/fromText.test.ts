@@ -162,7 +162,9 @@ describe("building the draft", () => {
       { items: [{ desc: "x", qty: 1, rate: 1 }] },
       { ...ctx(), today: "2026-01-01" },
     );
-    expect(silent.doc.validUntil).toBe("2026-01-16");
+    /* Seven days: this ctx sets no defaultValidityDays, so the draft falls
+       to DEFAULT_VALIDITY_DAYS, which agrees with clause 1 of the terms. */
+    expect(silent.doc.validUntil).toBe("2026-01-08");
   });
 
   it("produces an empty quotation rather than throwing on an empty reading", () => {

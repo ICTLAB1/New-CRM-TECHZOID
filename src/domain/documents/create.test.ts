@@ -122,6 +122,17 @@ describe("new quotation", () => {
     expect(q.items[0]?.gst).toBe(18);
   });
 
+  it("falls back to seven days when Settings has no validity set", () => {
+    /* The fallback is load-bearing: a company whose settings row has no
+       defaultValidityDays gets this, and it has to agree with clause 1 of
+       the terms the same document carries. */
+    const { defaultValidityDays: _omitted, ...noValidity } = SETTINGS;
+    const q = newQuotation({ settings: noValidity, user: USER, customer: domestic(), today: TODAY });
+    /* TODAY is 2026-08-24. */
+    expect(q.validUntil).toBe("2026-08-31");
+    expect(q.terms[0]).toContain("valid for 7 days");
+  });
+
   it("uses domestic terms for an Indian customer", () => {
     expect(q.terms[0]).toContain("valid for 7 days");
   });

@@ -75,7 +75,7 @@ export const SETTINGS: Record<string, unknown> = {
   },
   quotePrefix: "TZ/QT", quoteSeq: 118,
   proformaPrefix: "TZ/PI", proformaSeq: 43,
-  defaultCurrency: "INR", defaultTaxType: "gst", defaultGst: 18, defaultValidityDays: 15,
+  defaultCurrency: "INR", defaultTaxType: "gst", defaultGst: 18, defaultValidityDays: 7,
   defaultTerms: DOMESTIC_TERMS,
   signatoryName: "Abhinav Jain", signatoryDesignation: "Managing Director",
   partnerDesignations: DEFAULT_PARTNER_DESIGNATIONS,

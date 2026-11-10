@@ -30,6 +30,22 @@ export type ProformaStatus = "Draft" | "Sent" | "Paid" | "Expired";
  *  agreeing — so it tracks despatch and receipt rather than acceptance. */
 export type PurchaseOrderStatus = "Draft" | "Issued" | "Acknowledged" | "Partially Received" | "Received" | "Cancelled";
 
+/**
+ * How long a new quotation stays valid, when Settings does not say.
+ *
+ * Seven, to agree with the company's own first clause — "Quotation
+ * Validity: This quotation is valid for 7 days from the date of issue,
+ * unless otherwise specified." The Valid Until printed on the document IS
+ * that specification, so a longer window was never a contradiction; a
+ * document whose terms say one thing and whose date says another simply
+ * invites the argument the terms exist to prevent.
+ *
+ * This is only the fallback. Every company in this CRM has the value set,
+ * and migration 051 moved those to 7 as well — changing this alone would
+ * have left every new quotation dated exactly as before.
+ */
+export const DEFAULT_VALIDITY_DAYS = 7;
+
 export const QUOTE_STATUSES: readonly DocStatus[] = ["Draft", "Sent", "Accepted", "Rejected", "Expired"];
 export const PROFORMA_STATUSES: readonly ProformaStatus[] = ["Draft", "Sent", "Paid", "Expired"];
 export const PURCHASE_ORDER_STATUSES: readonly PurchaseOrderStatus[] = [
@@ -337,7 +353,7 @@ export function newQuotation({ settings, user, customer = null, today = TODAY() 
     referenceNo: "", enquiryRef: "", revisionNo: 0,
     paymentTerms: "As specified", deliveryTerms: "As specified",
     date: today,
-    validUntil: addDays(today, settings.defaultValidityDays ?? 15),
+    validUntil: addDays(today, settings.defaultValidityDays ?? DEFAULT_VALIDITY_DAYS),
     status: "Draft",
     items: [blankItem(settings.defaultGst)],
     templateId: template?.id,
@@ -370,7 +386,7 @@ export function newProforma({ settings, user, customer = null, today = TODAY() }
     referenceNo: "", enquiryRef: "", revisionNo: 0, bankAccountId: "",
     paymentTerms: "As specified", deliveryTerms: "As specified",
     date: today,
-    validUntil: addDays(today, settings.defaultValidityDays ?? 15),
+    validUntil: addDays(today, settings.defaultValidityDays ?? DEFAULT_VALIDITY_DAYS),
     status: "Draft",
     items: [blankItem(settings.defaultGst)],
     terms: termsFor(customer, settings),
@@ -449,7 +465,7 @@ export function newPurchaseOrder({ settings, user, customer = null, today = TODA
     date: today,
     /* Not a validity date here — it is when the goods are required by, and
        it is what the delay clauses are measured against. */
-    validUntil: addDays(today, settings.defaultValidityDays ?? 15),
+    validUntil: addDays(today, settings.defaultValidityDays ?? DEFAULT_VALIDITY_DAYS),
     status: "Draft",
     items: [blankItem(settings.defaultGst)],
     terms: forCompany(PURCHASE_ORDER_TERMS, settings.company?.name),
@@ -507,7 +523,7 @@ export function proformaFromQuotation(
     quoteNumber: quote.number,
     ...carryOver(quote),
     date: today,
-    validUntil: addDays(today, settings.defaultValidityDays ?? 15),
+    validUntil: addDays(today, settings.defaultValidityDays ?? DEFAULT_VALIDITY_DAYS),
     status: "Draft",
     revisionNo: 0,
     items: quote.items.map((it) => ({ ...it, id: uid() })),
@@ -652,7 +668,7 @@ export function duplicateQuotation(
     status: "Draft",
     revisionNo: 0,
     date: today,
-    validUntil: addDays(today, settings.defaultValidityDays ?? 15),
+    validUntil: addDays(today, settings.defaultValidityDays ?? DEFAULT_VALIDITY_DAYS),
     items: quote.items.map((it) => ({ ...it, id: uid() })),
     terms: [...(quote.terms ?? [])],
     /* Deliveries do NOT come across. Duplicating a purchase order to re-order
