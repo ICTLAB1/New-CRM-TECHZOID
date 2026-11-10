@@ -1,12 +1,30 @@
 import { describe, expect, it } from "vitest";
 import {
-  bannerAllowed, bannerUrlFor, DIWALI_2026, greetingFor, greetingIsCurrent, PUBLIC_SITE,
+  bannerAllowed, bannerUrlFor, DIWALI_2026, FESTIVE_GREETINGS, greetingFor,
+  greetingIsCurrent, PUBLIC_SITE,
   type FestiveGreeting,
 } from "./festive";
 
-const on = (today: string, country?: string | null) => greetingFor({ today, country });
+/* Against DIWALI_2026 explicitly. It is no longer in the live registry —
+   see the test below — but the rules it proved are what the next greeting
+   will run on, so they stay tested rather than deleted with it. */
+const on = (today: string, country?: string | null) =>
+  greetingFor({ today, country }, [DIWALI_2026]);
 
-describe("Diwali 2026", () => {
+describe("what is live today", () => {
+  it("offers nothing, because nothing is registered", () => {
+    /* THE SWITCH. greetingFor only offers what FESTIVE_GREETINGS holds, so
+       an empty list is the greeting off everywhere at once: no banner, no
+       alt text, no plain-text greeting, and no tick box on the send dialog,
+       which appears only when there is something to send. */
+    expect(FESTIVE_GREETINGS).toEqual([]);
+    for (const day of ["2026-11-08", "2026-11-10", "2026-11-11", "2027-11-08"]) {
+      expect(greetingFor({ today: day, country: "India" }), day).toBe(null);
+    }
+  });
+});
+
+describe("the rules a greeting runs on", () => {
   it("goes out on the last day of the window and not the day after", () => {
     /* THE WHOLE POINT OF THE END DATE. "Till the 10th" includes the 10th,
        and a greeting on the 11th is a company not looking at what it

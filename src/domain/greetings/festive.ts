@@ -84,7 +84,18 @@ export const DIWALI_2026: FestiveGreeting = {
   },
 };
 
-export const FESTIVE_GREETINGS: readonly FestiveGreeting[] = [DIWALI_2026];
+/**
+ * WHAT IS LIVE TODAY. Empty: Diwali 2026 is over and was taken off the day
+ * after, rather than left to expire on its own date.
+ *
+ * DIWALI_2026 is kept below as a worked example, not as something that can
+ * reach a customer — `greetingFor` only ever offers what is in this list,
+ * so an entry removed from it is off everywhere at once: the banner, the
+ * alt text, the plain-text greeting and the tick box on the send dialog,
+ * which only appears when there is something to send. Next year's is one
+ * line here plus its artwork.
+ */
+export const FESTIVE_GREETINGS: readonly FestiveGreeting[] = [];
 
 /**
  * BLANK COUNTS AS INDIA, which is the convention the rest of this CRM

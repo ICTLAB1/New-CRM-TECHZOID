@@ -355,6 +355,42 @@ export function DocumentPreview({ model: m, rows, brandLogos = {}, scale = 1 }: 
           </div>
         </section>
 
+        {/* THE SAME ANNEXURE THE PDF PRINTS, from the same model. Shown
+            here under a divider rather than as a true second sheet — the
+            preview is one scrolling page — but with the same content and in
+            the same order, so what is checked on screen is what the
+            customer receives. */}
+        {m.termsPage ? (
+          <section className="doc-terms-page">
+            <div className="doc-page-break" aria-hidden />
+            <h2 className="doc-terms-title">{m.termsPage.title}</h2>
+            <div className="doc-terms-sub">{m.termsPage.subtitle}</div>
+            <ol className="doc-terms-clauses">
+              {m.termsPage.clauses.map((clause, i) => <li key={i}>{clause}</li>)}
+            </ol>
+
+            <div className="doc-accept">
+              <div className="doc-block-title">{m.termsPage.acceptance.heading}</div>
+              <p className="doc-accept-statement">{m.termsPage.acceptance.statement}</p>
+              <div className="doc-accept-cols">
+                {[m.termsPage.acceptance.customerName, m.termsPage.acceptance.companyName].map((party, i) => (
+                  <div className="doc-accept-col" key={party + i}>
+                    <div className="doc-accept-for">For and on behalf of</div>
+                    <div className="doc-accept-party">{party}</div>
+                    <div className="doc-accept-sign" />
+                    <div className="doc-accept-role">Authorised Signatory</div>
+                    {m.termsPage!.acceptance.fields.map((f) => (
+                      <div className="doc-accept-field" key={f}><span>{f}:</span><i /></div>
+                    ))}
+                    {i === 0 ? <div className="doc-accept-seal">{m.termsPage!.acceptance.sealLabel}</div> : null}
+                  </div>
+                ))}
+              </div>
+              <p className="doc-accept-note">{m.termsPage.footNote}</p>
+            </div>
+          </section>
+        ) : null}
+
         <hr className="doc-foot-rule" />
         <div className="doc-closing">
           <span>{m.footer.closing}</span>

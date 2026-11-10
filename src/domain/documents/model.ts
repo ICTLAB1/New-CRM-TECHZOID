@@ -132,6 +132,42 @@ export interface DocumentModel {
     bank: { heading: string; rows: Pair[]; upiQr: string | null } | null;
   };
 
+  /**
+   * A QUOTATION'S OWN LAST PAGE: the terms in full, and the box the
+   * customer signs to accept them.
+   *
+   * Why a page and not a column. A quotation is an offer; a signature on
+   * it is what turns it into a contract, and the terms it incorporates
+   * have to be legible and complete beside that signature — not set at
+   * 6.2pt beside a totals box, wrapping wherever the items table left
+   * room. The acceptance block repeats the number, the date and the amount
+   * so the sheet means something on its own: signed pages get detached,
+   * scanned and emailed back by themselves.
+   *
+   * Null on every other document. A proforma and an invoice are demands
+   * for payment, not offers to be countersigned, and a purchase order is
+   * already acknowledged by its own box.
+   */
+  termsPage: {
+    title: string;
+    /** "Annexure to Quotation No. … dated …" */
+    subtitle: string;
+    clauses: string[];
+    acceptance: {
+      heading: string;
+      /** The sentence above the signatures, naming what is accepted. */
+      statement: string;
+      /** Left column: the customer. Right column: us. */
+      customerName: string;
+      companyName: string;
+      /** Blank rules under each signature. */
+      fields: string[];
+      sealLabel: string;
+    };
+    /** The line that stops a detached page being read as something else. */
+    footNote: string;
+  } | null;
+
   /** Blocks printed under the money block: a heading and its lines. A
    *  proforma carries its payment instructions and its terms here, because
    *  its terms column is given over to the bank details. Empty on every
@@ -531,9 +567,19 @@ export function buildDocumentModel(input: BuildModelInput): DocumentModel {
         }
       : null;
 
-  /* Terms print on a purchase order and a tax invoice as well as a
-     quotation. On a proforma they are replaced by the payment notes block. */
-  const terms = !isProforma && isOn(SEC.terms) ? (doc.terms || []).filter(Boolean).map(String) : [];
+  const allTerms = isOn(SEC.terms) ? (doc.terms || []).filter(Boolean).map(String) : [];
+
+  /* WHERE THE TERMS GO, by document.
+     A quotation's go on their own last page, beside the acceptance block —
+     see termsPage below. A proforma's go under the money block, because
+     its column is given to the bank details. A purchase order's and a tax
+     invoice's stay in the column, which is where they have always been and
+     where there is room for them.
+     Taking them out of a quotation's column is what frees it for the bank
+     details; drawBankDetails stands down when the column has taken them,
+     so they cannot print twice. */
+  const isQuotation = docType === "quotation";
+  const terms = isProforma || isQuotation ? [] : allTerms;
 
   /* ---- notes and terms, below the money block (proforma only) ----
      TWO BLOCKS, NOT ONE. These used to be a single list with the terms
@@ -544,6 +590,39 @@ export function buildDocumentModel(input: BuildModelInput): DocumentModel {
      Separating them is also how a proforma should read: "Terms &
      Conditions" under its own heading, not as items 4 to 17 of a note
      about where to pay. */
+  /* ---- the quotation's terms-and-acceptance page ---- */
+  const docNo = String(doc.number ?? "");
+  const issued = fmtDate(doc.date);
+  const buyer = (doc.billName || "").trim();
+  const termsPage: DocumentModel["termsPage"] = isQuotation && allTerms.length
+    ? {
+        title: (L.termsHeading || "Terms & Conditions").toUpperCase(),
+        /* Named as an annexure, and carrying the number and date, so a page
+           that arrives on its own can be matched to the offer it belongs
+           to. */
+        subtitle: `Annexure to Quotation No. ${docNo} dated ${issued}`,
+        clauses: allTerms,
+        acceptance: {
+          heading: "ACCEPTANCE OF QUOTATION",
+          /* The amount is named in figures AND words, as on the quotation
+             itself: a signature against a figure alone is the easiest
+             thing in the world to dispute. */
+          statement:
+            `${buyer ? buyer + ", having" : "Having"} read and understood the terms and conditions set out above, `
+            + `we hereby accept Quotation No. ${docNo} dated ${issued} for a total consideration of `
+            + `${money(t.grand)} (${amountInWordsForCurrency(t.grand, currency)}), `
+            + "and confirm our order on the terms stated herein.",
+          customerName: buyer || "the Customer",
+          companyName: c.name || "",
+          fields: ["Name", "Designation", "Date"],
+          sealLabel: L.sealLabel || "Company Seal",
+        },
+        footNote:
+          `This annexure forms an integral part of Quotation No. ${docNo} and is to be read together with it. `
+          + "Acceptance may be signified by returning this page signed, or by issuing a purchase order referring to the quotation number above.",
+      }
+    : null;
+
   const noteBlocks: DocumentModel["notes"] = [];
   if (isProforma) {
     if (isOn(SEC.notes)) {
@@ -699,6 +778,7 @@ export function buildDocumentModel(input: BuildModelInput): DocumentModel {
       terms,
       bank: bankBlock,
     },
+    termsPage,
     notes: noteBlocks,
     hsnSummary,
     signature,

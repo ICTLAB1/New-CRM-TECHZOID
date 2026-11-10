@@ -202,9 +202,23 @@ describe("proforma specifics", () => {
       .toContain("Kindly make the payment");
   });
 
-  it("gives every other document its terms in the money column and no blocks", () => {
-    expect(build().notes).toEqual([]);
-    expect(build().money.terms).toHaveLength(2);
+  it("leaves a tax invoice and a purchase order their terms in the money column", () => {
+    /* They keep the column, which is where terms have always been and
+       where there is room. Only a quotation's move off it — onto their own
+       signing page — and only a proforma's move below it. */
+    for (const kind of ["invoice", "purchase_order"] as const) {
+      expect(build({}, kind).money.terms, kind).toHaveLength(2);
+      expect(build({}, kind).notes, kind).toEqual([]);
+      expect(build({}, kind).termsPage, kind).toBe(null);
+    }
+  });
+
+  it("moves a quotation's terms onto its own page, and prints them nowhere else", () => {
+    const q = build();
+    expect(q.money.terms).toEqual([]);
+    expect(q.notes).toEqual([]);
+    expect(q.termsPage?.clauses).toHaveLength(2);
+    expect(q.termsPage?.acceptance.heading).toBe("ACCEPTANCE OF QUOTATION");
   });
 
   it("drops the proforma terms block when terms are switched off", () => {

@@ -69,12 +69,33 @@ const FOOT_SIZE = 6.6;
 const FOOT_LINE = 2.6;
 const FOOT_GAP = 4;
 
-/* Palette, from the design tokens. */
-const NAVY = hexToRgb("#0D2B55");
-const INK = hexToRgb("#18202A");
-const MUTED = hexToRgb("#64748B");
-const BORDER = hexToRgb("#D7DCE2");
-const HEAD_BG = hexToRgb("#F1F4F8");
+/* Palette, from the design tokens.
+ *
+ * ONE COMPANY, ONE SET OF COLOURS. This document was navy (#0D2B55 with
+ * blue-grey rules and a blue-tinted table head) while the app it is made
+ * in is charcoal and orange and the email that carries it is near-black
+ * and bronze — so a customer opened an orange-accented email, found a
+ * blue PDF inside it, and the two did not look like the same business.
+ * These are the app's own tokens: --shell, --ink, --rule, --surface-2 and
+ * --accent, so the quotation, the covering email and the screen it was
+ * written on finally agree.
+ *
+ * ACCENT IS USED ONCE, on the grand total. A neutral document with a
+ * single point of colour reads as deliberate; colour spread across every
+ * band reads as decoration. */
+/*
+ * One ink and one tint. Every band on the page -- the document number, the
+ * BILL TO / SHIP TO caps, the item table head, the grand total -- is the same
+ * navy, so nothing competes with the figures. An earlier draft gave the grand
+ * total its own accent colour; two colours on one page read as decoration on a
+ * commercial document, so it was taken back out.
+ */
+const BRAND = hexToRgb("#16304D");   /* every filled band and heading */
+const ACCENT = BRAND;                /* the grand total: deliberately the same */
+const INK = hexToRgb("#181818");     /* --ink */
+const MUTED = hexToRgb("#6B6B68");   /* neutral grey, not blue-grey */
+const BORDER = hexToRgb("#DEDEDC");  /* --rule */
+const HEAD_BG = hexToRgb("#F0F3F7"); /* the one tint: summary + table head fill */
 
 export function renderDocumentPdf(opts: RenderOptions): jsPDF {
   const { model: m, rows } = opts;
@@ -163,7 +184,7 @@ export function renderDocumentPdf(opts: RenderOptions): jsPDF {
        "TECHZOID" wordmark here above it, which printed the company's name
        twice and printed the WRONG name for anyone who changes it in
        Settings. */
-    pdf.setFont("helvetica", "bold").setFontSize(logo ? 11 : 14).setTextColor(...NAVY);
+    pdf.setFont("helvetica", "bold").setFontSize(logo ? 11 : 14).setTextColor(...BRAND);
     pdf.text(m.header.companyName.toUpperCase(), M, y + (logo ? 1 : 2));
     pdf.setFont("helvetica", "normal").setFontSize(7.4).setTextColor(...MUTED);
     pdf.text(m.header.tagline, M, y + (logo ? 6 : 7.5));
@@ -186,10 +207,10 @@ export function renderDocumentPdf(opts: RenderOptions): jsPDF {
     const leftBottom = ly;
 
     /* Title, number plaque, then the date/validity/revision/currency rows. */
-    pdf.setFont("helvetica", "bold").setFontSize(19).setTextColor(...NAVY);
+    pdf.setFont("helvetica", "bold").setFontSize(19).setTextColor(...BRAND);
     pdf.text(m.title, M + CW, top + 6, { align: "right" });
 
-    pdf.setFillColor(...NAVY);
+    pdf.setFillColor(...BRAND);
     pdf.rect(rightX, top + 9, rightW, 8, "F");
     pdf.setFont("helvetica", "bold").setFontSize(10).setTextColor(255, 255, 255);
     pdf.text(m.number, rightX + rightW / 2, top + 14.6, { align: "center" });
@@ -198,7 +219,7 @@ export function renderDocumentPdf(opts: RenderOptions): jsPDF {
     const metaEnd = colonRows(m.header.meta, rightX, rightW, metaTop, 24, 7.4);
 
     y = Math.max(leftBottom, metaEnd) + 3;
-    rule(y, M, M + CW, NAVY, 0.7);
+    rule(y, M, M + CW, BRAND, 0.7);
     y += 4;
 
     /* UAE office banner — a highlighted strip spanning the full width,
@@ -210,7 +231,7 @@ export function renderDocumentPdf(opts: RenderOptions): jsPDF {
       pdf.setFillColor(...HEAD_BG);
       pdf.rect(M, y, CW, bandH, "F");
       pdf.setDrawColor(...BORDER).setLineWidth(0.2).rect(M, y, CW, bandH, "S");
-      pdf.setFont("helvetica", "bold").setFontSize(6.6).setTextColor(...NAVY);
+      pdf.setFont("helvetica", "bold").setFontSize(6.6).setTextColor(...BRAND);
       pdf.text("UAE OFFICE", M + 3, textY);
       pdf.setFont("helvetica", "normal").setFontSize(7).setTextColor(...INK);
       pdf.text(m.header.uaeOffice.addressLine, M + 26, textY);
@@ -242,7 +263,7 @@ export function renderDocumentPdf(opts: RenderOptions): jsPDF {
     const colW = unit;
     const top = y;
 
-    pdf.setFont("helvetica", "bold").setFontSize(7.6).setTextColor(...NAVY);
+    pdf.setFont("helvetica", "bold").setFontSize(7.6).setTextColor(...BRAND);
     pdf.text(m.detailsHeading, M, top + 4);
     const detailsEnd = colonRows(m.details, M, detailsW, top + 10, detailsW * 0.4, 7.2);
 
@@ -250,7 +271,7 @@ export function renderDocumentPdf(opts: RenderOptions): jsPDF {
     const boxEnds: number[] = [];
     m.parties.forEach((party, i) => {
       const x = M + detailsW + gap + i * (colW + gap);
-      pdf.setFillColor(...NAVY);
+      pdf.setFillColor(...BRAND);
       pdf.rect(x, top, colW, 6.4, "F");
       pdf.setFont("helvetica", "bold").setFontSize(7.4).setTextColor(255, 255, 255);
       pdf.text(party.heading, x + 3, top + 4.4);
@@ -299,7 +320,7 @@ export function renderDocumentPdf(opts: RenderOptions): jsPDF {
     cells.forEach((cell, i) => {
       const x = M + i * colW;
       if (i > 0) pdf.line(x, top, x, top + 13.4);
-      pdf.setFont("helvetica", "bold").setFontSize(6.6).setTextColor(...NAVY);
+      pdf.setFont("helvetica", "bold").setFontSize(6.6).setTextColor(...BRAND);
       pdf.text(cell.label.toUpperCase(), x + colW / 2, top + 4.2, { align: "center" });
       pdf.setFont("helvetica", "normal").setFontSize(7.4).setTextColor(...INK);
       const value = (pdf.splitTextToSize(cell.value, colW - 6) as string[])[0] ?? "";
@@ -322,10 +343,20 @@ export function renderDocumentPdf(opts: RenderOptions): jsPDF {
         cellPadding: PADDING_MM[cd.pad],
       };
       if (cd.mono) style["font"] = "courier";
-      /* The description is drawn plain and its first line redrawn bold in
-         didDrawCell; bolding the whole cell would bold the specification. */
+      /* THE DESCRIPTION CELL IS BOLD, and its specification lines are
+         redrawn light in didDrawCell — not the other way round.
+         It used to be the other way round, and the product name came out
+         clipped: autoTable wrapped the text using REGULAR metrics, then
+         the first line was redrawn in BOLD, which is wider, so a name that
+         just fitted ran past the cell and was cut off by the next column's
+         fill. "Autodesk AutoCAD LT - single user, 1 year" reached the
+         customer as "...1 yea".
+         Wrapping in the font the line is actually drawn in is what fixes
+         it, and the redraw now goes the safe way: regular is narrower than
+         bold, so a continuation line can never outgrow the space its wrap
+         was measured for. */
       if (cd.bold && cd.key !== "desc") style["fontStyle"] = "bold";
-      if (cd.key === "desc") style["textColor"] = MUTED;
+      if (cd.key === "desc") { style["fontStyle"] = "bold"; style["textColor"] = INK; }
       if (cd.muted) style["textColor"] = MUTED;
       columnStyles[i] = style;
     });
@@ -353,8 +384,8 @@ export function renderDocumentPdf(opts: RenderOptions): jsPDF {
         valign: "middle", overflow: "linebreak",
       },
       headStyles: {
-        fillColor: NAVY, textColor: [255, 255, 255], fontStyle: "bold", fontSize: 6.2,
-        halign: "center", valign: "middle", lineWidth: 0.15, lineColor: NAVY,
+        fillColor: BRAND, textColor: [255, 255, 255], fontStyle: "bold", fontSize: 6.2,
+        halign: "center", valign: "middle", lineWidth: 0.15, lineColor: BRAND,
       },
       columnStyles,
       /* A brand with an approved logo asset draws it, fitted inside the cell
@@ -363,32 +394,45 @@ export function renderDocumentPdf(opts: RenderOptions): jsPDF {
       didDrawCell: (data: Record<string, unknown>) => {
         const section = data["section"] as string;
         const column = data["column"] as { index: number };
+        const bodyRow = data["row"] as { index: number } | undefined;
         const cell = data["cell"] as {
           x: number; y: number; width: number; height: number; text: string[];
           styles: { fontSize: number; cellPadding: { top: number; left: number } };
         };
         if (section !== "body") return;
 
-        /* The description cell: product name bold, specification beneath it
-           lighter, as the design shows. autoTable styles a whole cell at
-           once, so the text is drawn plain and the first line redrawn bold
-           over a white patch.
-           
-           This runs for a one-line description too. It used to require a
-           second line, so a product with no specification printed its NAME in
-           the grey meant for specifications — while the preview showed it
-           bold. */
-        if (column.index === descIndex && cell.text.length > 0) {
+        /* The product name is already bold and dark, drawn by autoTable
+           from the cell's own style. What is left is the SPECIFICATION
+           underneath it — every line after the first — which the design
+           sets lighter. Those are repainted here.
+           A description with no specification has one line and nothing to
+           repaint, which is the case that used to print a product name in
+           the grey meant for specifications. */
+        if (column.index === descIndex && cell.text.length > 1) {
           const fs = cell.styles.fontSize;
           const lead = fs * 0.3528 * 1.15;
           const px = cell.styles.cellPadding.left;
           const py = cell.styles.cellPadding.top;
-          const first = cell.text[0] ?? "";
           const top = cell.y + py + (cell.height - py * 2 - cell.text.length * lead) / 2;
+          /* WHERE THE NAME ENDS, not simply "after the first line". A
+             product name long enough to wrap occupies two lines and both
+             are the name; greying from line two put half of it in the
+             colour reserved for the specification beneath. Measured in the
+             same bold the cell is set in, so the count matches the wrap
+             autoTable actually performed. */
+          pdf.setFont("helvetica", "bold").setFontSize(fs);
+          const name = String(rows[bodyRow?.index ?? -1]?.desc ?? "");
+          const nameLines = name
+            ? (pdf.splitTextToSize(name, cell.width - px * 2) as string[]).length
+            : 1;
+          if (nameLines >= cell.text.length) return;
+          const rest = cell.text.slice(nameLines);
           pdf.setFillColor(255, 255, 255);
-          pdf.rect(cell.x + px - 0.3, top - 0.2, cell.width - px * 2 + 0.6, lead + 0.4, "F");
-          pdf.setFont("helvetica", "bold").setFontSize(fs).setTextColor(...INK);
-          pdf.text(first, cell.x + px, top + lead * 0.72);
+          pdf.rect(cell.x + px - 0.3, top + lead * nameLines - 0.2, cell.width - px * 2 + 0.6, rest.length * lead + 0.6, "F");
+          pdf.setFont("helvetica", "normal").setFontSize(fs).setTextColor(...MUTED);
+          rest.forEach((line, li) => {
+            pdf.text(line, cell.x + px, top + lead * (nameLines + li) + lead * 0.72);
+          });
           return;
         }
 
@@ -443,7 +487,7 @@ export function renderDocumentPdf(opts: RenderOptions): jsPDF {
     /* ── summary ── */
     pdf.setFillColor(...HEAD_BG);
     pdf.rect(sumX, top, sumW, 6.4, "F");
-    pdf.setFont("helvetica", "bold").setFontSize(7.6).setTextColor(...NAVY);
+    pdf.setFont("helvetica", "bold").setFontSize(7.6).setTextColor(...BRAND);
     pdf.text("SUMMARY", sumX + 3, top + 4.4);
 
     let sy = top + 6.4;
@@ -460,7 +504,8 @@ export function renderDocumentPdf(opts: RenderOptions): jsPDF {
     for (const r of m.money.rows) line(r.label, r.value);
     if (m.money.advance) line(m.money.advance.label, m.money.advance.value, true);
 
-    pdf.setFillColor(...NAVY);
+    /* The one place colour appears. */
+    pdf.setFillColor(...ACCENT);
     pdf.rect(sumX, sy, sumW, 9, "F");
     pdf.setFont("helvetica", "bold").setFontSize(8.4).setTextColor(255, 255, 255);
     pdf.text(m.money.grandLabel.toUpperCase(), sumX + 3, sy + 5.9);
@@ -469,7 +514,7 @@ export function renderDocumentPdf(opts: RenderOptions): jsPDF {
     sy += 9;
 
     if (m.money.amountInWords) {
-      pdf.setFont("helvetica", "bold").setFontSize(6.8).setTextColor(...NAVY);
+      pdf.setFont("helvetica", "bold").setFontSize(6.8).setTextColor(...BRAND);
       pdf.text("Amount in Words:", sumX + 3, sy + 4.5);
       pdf.setFont("helvetica", "normal").setFontSize(6.8).setTextColor(...INK);
       const words = pdf.splitTextToSize(m.money.amountInWords, sumW - 6) as string[];
@@ -481,7 +526,7 @@ export function renderDocumentPdf(opts: RenderOptions): jsPDF {
     /* ── terms / bank details, flowing if they outgrow the page ── */
     let ly = top;
     if (wrappedTerms.length) {
-      pdf.setFont("helvetica", "bold").setFontSize(7.6).setTextColor(...NAVY);
+      pdf.setFont("helvetica", "bold").setFontSize(7.6).setTextColor(...BRAND);
       pdf.text("TERMS & CONDITIONS", M, ly + 4.4);
       ly += 9;
       wrappedTerms.forEach((lines, i) => {
@@ -490,7 +535,7 @@ export function renderDocumentPdf(opts: RenderOptions): jsPDF {
           pdf.addPage();
           ly = M;
           sy = M;
-          pdf.setFont("helvetica", "bold").setFontSize(7.6).setTextColor(...NAVY);
+          pdf.setFont("helvetica", "bold").setFontSize(7.6).setTextColor(...BRAND);
           pdf.text("TERMS & CONDITIONS (continued)", M, ly + 4.4);
           ly += 9;
         }
@@ -500,7 +545,7 @@ export function renderDocumentPdf(opts: RenderOptions): jsPDF {
         ly += h;
       });
     } else if (m.money.bank) {
-      pdf.setFont("helvetica", "bold").setFontSize(7.6).setTextColor(...NAVY);
+      pdf.setFont("helvetica", "bold").setFontSize(7.6).setTextColor(...BRAND);
       pdf.text(m.money.bank.heading, M, ly + 4.4);
       ly = colonRows(m.money.bank.rows, M, leftW, ly + 10, 26, 7);
       if (images.qr) {
@@ -518,7 +563,7 @@ export function renderDocumentPdf(opts: RenderOptions): jsPDF {
     const { columns, rows, totalRow } = m.hsnSummary;
 
     need(10 + (rows.length + 1) * 6);
-    pdf.setFont("helvetica", "bold").setFontSize(7.6).setTextColor(...NAVY);
+    pdf.setFont("helvetica", "bold").setFontSize(7.6).setTextColor(...BRAND);
     pdf.text("HSN / SAC SUMMARY", M, y + 4.4);
     y += 8;
 
@@ -539,22 +584,25 @@ export function renderDocumentPdf(opts: RenderOptions): jsPDF {
         font: "helvetica", fontSize: 7, cellPadding: 1.6,
         lineColor: BORDER, lineWidth: 0.15, textColor: INK, valign: "middle",
       },
-      headStyles: { fillColor: HEAD_BG, textColor: NAVY, fontStyle: "bold", fontSize: 6.6 },
+      headStyles: { fillColor: HEAD_BG, textColor: BRAND, fontStyle: "bold", fontSize: 6.6 },
       footStyles: { fillColor: HEAD_BG, textColor: INK, fontStyle: "bold", fontSize: 7 },
       columnStyles,
     });
     y = (pdf as PdfWithAutoTable).lastAutoTable.finalY + 5;
   }
 
-  /* ─────────────────── bank details (quotation only) ─────────────────── *
-   * A proforma already carries these beside its terms column, inside
-   * drawMoneyBlock — this is only for a quotation, which has no terms
-   * column to share the space with. */
+  /* ─────────────────── bank details, below ─────────────────── *
+   * ONLY WHEN THE MONEY COLUMN DID NOT TAKE THEM. That column prints the
+   * terms if there are any and the bank details if there are not, so the
+   * test is the terms, not the document type: a quotation's terms now live
+   * on their own last page, which frees its column for the bank exactly as
+   * a proforma's always was. Keyed off isProforma, this printed them twice
+   * the moment that changed. */
   function drawBankDetails(): void {
-    if (m.isProforma || !m.money.bank) return;
+    if (!m.money.terms.length || !m.money.bank) return;
     const bank = m.money.bank;
     need(10 + bank.rows.length * 5);
-    pdf.setFont("helvetica", "bold").setFontSize(7.6).setTextColor(...NAVY);
+    pdf.setFont("helvetica", "bold").setFontSize(7.6).setTextColor(...BRAND);
     pdf.text(bank.heading, M, y + 4.4);
     y = colonRows(bank.rows, M, CW * 0.5, y + 10, 30, 7) + 4;
   }
@@ -572,7 +620,7 @@ export function renderDocumentPdf(opts: RenderOptions): jsPDF {
       /* The heading plus the first item, so a block never starts with its
          heading stranded at the foot of a page. */
       need(9 + wrapped[0]!.length * TERM_LEAD + TERM_GAP);
-      pdf.setFont("helvetica", "bold").setFontSize(7.6).setTextColor(...NAVY);
+      pdf.setFont("helvetica", "bold").setFontSize(7.6).setTextColor(...BRAND);
       pdf.text(block.heading, M, y + 4.4);
       y += 9;
       wrapped.forEach((lines, i) => {
@@ -590,6 +638,106 @@ export function renderDocumentPdf(opts: RenderOptions): jsPDF {
     }
   }
 
+  /* ──────────────── the quotation's terms-and-acceptance page ────────────────
+   * ITS OWN SHEET, and the last one. A quotation is an offer; the signature
+   * that turns it into a contract belongs beside the terms it incorporates,
+   * at a size somebody can actually read — not at 6.2pt beside a totals
+   * box, wrapping wherever the items table left room.
+   *
+   * The page is built to survive being detached. Signed pages get pulled
+   * out, scanned and emailed back on their own, so this one repeats the
+   * number, the date and the amount, and says in its last line what it
+   * belongs to. */
+  function drawTermsPage(): void {
+    const tp = m.termsPage;
+    if (!tp) return;
+
+    pdf.addPage();
+    y = M;
+
+    pdf.setFont("helvetica", "bold").setFontSize(12.5).setTextColor(...BRAND);
+    pdf.text(tp.title, A4.w / 2, y + 6, { align: "center" });
+    y += 11;
+    pdf.setFont("helvetica", "normal").setFontSize(7.4).setTextColor(...MUTED);
+    pdf.text(tp.subtitle, A4.w / 2, y, { align: "center" });
+    y += 4.5;
+    rule(y, M, M + CW, BRAND, 0.5);
+    y += 7;
+
+    /* 7.4pt, not the column's 6.2: this page exists so the terms can be
+       read before they are signed. */
+    const NUM_W = 7;
+    const CLAUSE_LEAD = 3.6;
+    for (let i = 0; i < tp.clauses.length; i++) {
+      const lines = pdf.splitTextToSize(tp.clauses[i]!, CW - NUM_W) as string[];
+      const h = lines.length * CLAUSE_LEAD + 2.2;
+      need(h);
+      pdf.setFont("helvetica", "normal").setFontSize(7.4).setTextColor(...INK);
+      pdf.text(`${i + 1}.`, M, y);
+      pdf.text(lines, M + NUM_W, y);
+      y += h;
+    }
+
+    /* ---- acceptance ---- */
+    const statement = pdf.splitTextToSize(tp.acceptance.statement, CW - 8) as string[];
+    const SIGN_H = 46;
+    const blockH = 10 + statement.length * 4 + 6 + SIGN_H;
+    /* The whole block or none of it. An acceptance whose signature lines
+       start on the next page is a page nobody can sign. */
+    need(blockH + 6);
+    y += 6;
+
+    rule(y, M, M + CW, BORDER, 0.3);
+    y += 7;
+    pdf.setFont("helvetica", "bold").setFontSize(9).setTextColor(...BRAND);
+    pdf.text(tp.acceptance.heading, M, y);
+    y += 6;
+    pdf.setFont("helvetica", "normal").setFontSize(7.6).setTextColor(...INK);
+    pdf.text(statement, M, y);
+    y += statement.length * 4 + 7;
+
+    /* Two columns, the customer on the left because they sign first. */
+    const colW = (CW - 10) / 2;
+    const cols: Array<{ x: number; forLine: string; party: string; seal: boolean }> = [
+      { x: M, forLine: "For and on behalf of", party: tp.acceptance.customerName, seal: true },
+      { x: M + colW + 10, forLine: "For and on behalf of", party: tp.acceptance.companyName, seal: false },
+    ];
+    const top = y;
+    for (const col of cols) {
+      let cy = top;
+      pdf.setFont("helvetica", "normal").setFontSize(6.8).setTextColor(...MUTED);
+      pdf.text(col.forLine, col.x, cy);
+      cy += 4.5;
+      pdf.setFont("helvetica", "bold").setFontSize(8).setTextColor(...BRAND);
+      pdf.text(pdf.splitTextToSize(col.party, colW) as string[], col.x, cy);
+      /* Room to sign: a band above the rule, not a rule under the name. */
+      cy += 18;
+      rule(cy, col.x, col.x + colW, INK, 0.3);
+      cy += 4;
+      pdf.setFont("helvetica", "normal").setFontSize(6.6).setTextColor(...MUTED);
+      pdf.text("Authorised Signatory", col.x, cy);
+      cy += 5.5;
+      for (const field of tp.acceptance.fields) {
+        pdf.text(field + ":", col.x, cy);
+        rule(cy + 0.8, col.x + 16, col.x + colW, BORDER, 0.2);
+        cy += 5.5;
+      }
+      if (col.seal) {
+        pdf.setFont("helvetica", "italic").setFontSize(6.4).setTextColor(...MUTED);
+        pdf.text(tp.acceptance.sealLabel, col.x + colW, cy - 1, { align: "right" });
+      }
+    }
+    y = top + SIGN_H;
+
+    const foot = pdf.splitTextToSize(tp.footNote, CW) as string[];
+    need(foot.length * 3.4 + 6);
+    y += 4;
+    rule(y, M, M + CW, BORDER, 0.2);
+    y += 4;
+    pdf.setFont("helvetica", "italic").setFontSize(6.4).setTextColor(...MUTED);
+    pdf.text(foot, M, y);
+  }
+
   /* ─────────────────────── signature block ─────────────────────── */
   function drawSignature(): void {
     /* Sized from the number of fields, not fixed: a purchase order's
@@ -604,7 +752,7 @@ export function renderDocumentPdf(opts: RenderOptions): jsPDF {
     if (m.signature.acceptance) {
       const accW = CW * 0.55;
       pdf.setDrawColor(...BORDER).setLineWidth(0.2).rect(M, top, accW, boxH, "S");
-      pdf.setFont("helvetica", "bold").setFontSize(7.2).setTextColor(...NAVY);
+      pdf.setFont("helvetica", "bold").setFontSize(7.2).setTextColor(...BRAND);
       pdf.text(m.signature.acceptance.heading.toUpperCase(), M + 3, top + 5);
       let fy = top + 11;
       pdf.setFont("helvetica", "normal").setFontSize(6.8).setTextColor(...MUTED);
@@ -620,7 +768,7 @@ export function renderDocumentPdf(opts: RenderOptions): jsPDF {
     /* "For {company}", a blank band for a physical signature and seal, then
        the signatory's line — drawn unconditionally, since a document leaves
        the building without ever having had this printed at all. */
-    pdf.setFont("helvetica", "bold").setFontSize(7.6).setTextColor(...NAVY);
+    pdf.setFont("helvetica", "bold").setFontSize(7.6).setTextColor(...BRAND);
     pdf.text(m.signature.forLine, M + CW, top + 5, { align: "right" });
 
     const lineY = top + boxH - 8;
@@ -697,7 +845,7 @@ export function renderDocumentPdf(opts: RenderOptions): jsPDF {
       const w = group.w;
       if (gi > 0) pdf.line(x, top, x, top + stripH);
 
-      pdf.setFont("helvetica", "bold").setFontSize(5.8).setTextColor(...NAVY);
+      pdf.setFont("helvetica", "bold").setFontSize(5.8).setTextColor(...BRAND);
       pdf.text(group.title, x + w / 2, top + 4, { align: "center" });
 
       const slotW = w / group.perRow;
@@ -745,7 +893,7 @@ export function renderDocumentPdf(opts: RenderOptions): jsPDF {
              licence/certificate number beneath, centred. No ring: the
              approved reference shows certifications this way, not as a
              medallion. */
-          pdf.setFont("helvetica", "bold").setTextColor(...NAVY);
+          pdf.setFont("helvetica", "bold").setTextColor(...BRAND);
           pdf.setFontSize(fitFont(slot.text, slotW - 3, 6.2, "wrap", 4.2));
           const titleLines = (pdf.splitTextToSize(slot.text, slotW - 3) as string[]).slice(0, 2);
           const titleY = cellTop + rowH / 2 + (slot.certNo ? -1.4 : 0.8) - (titleLines.length > 1 ? 1 : 0);
@@ -781,6 +929,8 @@ export function renderDocumentPdf(opts: RenderOptions): jsPDF {
   drawNoteBlocks();
   drawStrips();
   drawSignature();
+  /* LAST, and on a page of its own. */
+  drawTermsPage();
 
   /* Closing line and page numbers, stamped on every page inside the band
      measured above — so they cannot collide with content, or with each

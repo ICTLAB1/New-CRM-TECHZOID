@@ -17,7 +17,7 @@
   min-height: 297mm;
   padding: 13mm;
   background: #fff;
-  color: #18202A;
+  color: #181818;
   font-family: var(--sans);
   font-size: 2.4mm;
   line-height: 1.35;
@@ -34,56 +34,56 @@
 .doc-legal-lead { font-size: 4.4mm; margin-top: 0; }
 /* Same box the PDF fits the logo into: 46mm x 12mm, aspect ratio kept. */
 .doc-logo { max-width: 46mm; max-height: 12mm; object-fit: contain; object-position: left center; display: block; }
-.doc-legal { margin-top: 2.5mm; font-size: 3.4mm; font-weight: 700; color: #0D2B55; }
-.doc-tagline { margin-top: 1.2mm; font-size: 2.5mm; color: #64748B; }
-.doc-head-line { margin-top: 0.8mm; font-size: 2.2mm; color: #64748B; }
-.doc-head-reg { margin-top: 0.8mm; font-size: 2.2mm; font-weight: 700; color: #18202A; }
-.doc-title { font-size: 6.6mm; font-weight: 700; color: #0D2B55; text-align: right; line-height: 1; }
-.doc-plaque { margin-top: 2.5mm; padding: 1.6mm 3mm; background: #0D2B55; color: #fff; font-weight: 700; font-size: 3.4mm; text-align: center; }
+.doc-legal { margin-top: 2.5mm; font-size: 3.4mm; font-weight: 700; color: #16304D; }
+.doc-tagline { margin-top: 1.2mm; font-size: 2.5mm; color: #6B6B68; }
+.doc-head-line { margin-top: 0.8mm; font-size: 2.2mm; color: #6B6B68; }
+.doc-head-reg { margin-top: 0.8mm; font-size: 2.2mm; font-weight: 700; color: #181818; }
+.doc-title { font-size: 6.6mm; font-weight: 700; color: #16304D; text-align: right; line-height: 1; }
+.doc-plaque { margin-top: 2.5mm; padding: 1.6mm 3mm; background: #16304D; color: #fff; font-weight: 700; font-size: 3.4mm; text-align: center; }
 .doc-headmeta { margin-top: 2.5mm; }
-.doc-rule-navy { border: 0; border-top: 0.7mm solid #0D2B55; margin: 3mm 0 3mm; }
+.doc-rule-navy { border: 0; border-top: 0.7mm solid #16304D; margin: 3mm 0 3mm; }
 
 /* ── UAE office banner ── */
-.doc-uae { display: flex; align-items: baseline; gap: 4mm; background: #F1F4F8; border: 0.2mm solid #D7DCE2; padding: 1.8mm 3mm; margin-bottom: 4mm; }
-.doc-uae-label { flex: none; font-size: 2.2mm; font-weight: 700; color: #0D2B55; }
+.doc-uae { display: flex; align-items: baseline; gap: 4mm; background: #F0F3F7; border: 0.2mm solid #DEDEDC; padding: 1.8mm 3mm; margin-bottom: 4mm; }
+.doc-uae-label { flex: none; font-size: 2.2mm; font-weight: 700; color: #16304D; }
 .doc-uae-body { display: flex; flex-direction: column; gap: 0.6mm; }
-.doc-uae-address { font-size: 2.4mm; color: #18202A; }
-.doc-uae-reg { font-size: 2.2mm; color: #64748B; }
+.doc-uae-address { font-size: 2.4mm; color: #181818; }
+.doc-uae-reg { font-size: 2.2mm; color: #6B6B68; }
 
 /* ── label : value rows ── */
 .doc-rows { display: grid; grid-template-columns: auto 2mm 1fr; row-gap: 1.1mm; column-gap: 0; align-items: baseline; }
-.doc-rows dt { color: #64748B; font-size: 2.5mm; }
-.doc-rows .sep { color: #64748B; }
-.doc-rows dd { margin: 0; font-weight: 700; color: #18202A; font-size: 2.5mm; }
+.doc-rows dt { color: #6B6B68; font-size: 2.5mm; }
+.doc-rows .sep { color: #6B6B68; }
+.doc-rows dd { margin: 0; font-weight: 700; color: #181818; font-size: 2.5mm; }
 
 /* ── details + parties ── */
 .doc-parties { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5mm; align-items: start; }
-.doc-block-title { font-size: 2.7mm; font-weight: 700; color: #0D2B55; margin-bottom: 3mm; }
-.doc-party { border: 0.2mm solid #D7DCE2; }
-.doc-party-head { background: #0D2B55; color: #fff; font-size: 2.6mm; font-weight: 700; padding: 1.4mm 2.5mm; }
+.doc-block-title { font-size: 2.7mm; font-weight: 700; color: #16304D; margin-bottom: 3mm; }
+.doc-party { border: 0.2mm solid #DEDEDC; }
+.doc-party-head { background: #16304D; color: #fff; font-size: 2.6mm; font-weight: 700; padding: 1.4mm 2.5mm; }
 .doc-party-body { padding: 2.5mm; }
-.doc-party-name { font-weight: 700; font-size: 3mm; color: #18202A; }
-.doc-party-line { color: #64748B; font-size: 2.5mm; }
+.doc-party-name { font-weight: 700; font-size: 3mm; color: #181818; }
+.doc-party-line { color: #6B6B68; font-size: 2.5mm; }
 .doc-party .doc-rows { margin-top: 1.5mm; }
 
 /* ── reference strip ── */
-.doc-refs { display: grid; border: 0.2mm solid #D7DCE2; margin-top: 5mm; }
-.doc-ref { text-align: center; border-left: 0.2mm solid #D7DCE2; }
+.doc-refs { display: grid; border: 0.2mm solid #DEDEDC; margin-top: 5mm; }
+.doc-ref { text-align: center; border-left: 0.2mm solid #DEDEDC; }
 .doc-ref:first-child { border-left: 0; }
-.doc-ref-label { background: #F1F4F8; color: #0D2B55; font-size: 2.3mm; font-weight: 700; padding: 1.4mm 1mm; border-bottom: 0.2mm solid #D7DCE2; }
+.doc-ref-label { background: #F0F3F7; color: #16304D; font-size: 2.3mm; font-weight: 700; padding: 1.4mm 1mm; border-bottom: 0.2mm solid #DEDEDC; }
 .doc-ref-value { padding: 1.8mm 1mm; font-size: 2.6mm; }
 
 /* ── items ── */
 .doc-items { width: 100%; border-collapse: collapse; margin-top: 5mm; table-layout: fixed; }
-.doc-items th { background: #0D2B55; color: #fff; font-size: 2.2mm; font-weight: 700; text-align: center; padding: 1.4mm 0.8mm; vertical-align: middle; white-space: pre-line; }
-.doc-items td { border: 0.15mm solid #D7DCE2; padding: 1.4mm 0.8mm; vertical-align: middle; }
+.doc-items th { background: #16304D; color: #fff; font-size: 2.2mm; font-weight: 700; text-align: center; padding: 1.4mm 0.8mm; vertical-align: middle; white-space: pre-line; }
+.doc-items td { border: 0.15mm solid #DEDEDC; padding: 1.4mm 0.8mm; vertical-align: middle; }
 .doc-items tbody tr:nth-child(odd) td { background: #FAFBFC; }
 .doc-items .a-left { text-align: left; }
 .doc-items .a-center { text-align: center; }
 .doc-items .a-right { text-align: right; }
 .doc-items .mono { font-family: var(--mono); }
 .doc-items .bold { font-weight: 700; }
-.doc-items .muted { color: #64748B; }
+.doc-items .muted { color: #6B6B68; }
 .doc-items .desc { white-space: pre-line; }
 .doc-brand-logo { max-width: 100%; max-height: 9mm; object-fit: contain; display: block; margin: 0 auto; }
 
@@ -91,32 +91,55 @@
 .doc-money { display: flex; gap: 7mm; margin-top: 5mm; align-items: flex-start; }
 .doc-terms { flex: 1 1 auto; min-width: 0; }
 .doc-terms ol { margin: 3mm 0 0; padding-left: 5mm; }
-.doc-terms li { font-size: 2.3mm; margin-bottom: 0.8mm; color: #18202A; }
+.doc-terms li { font-size: 2.3mm; margin-bottom: 0.8mm; color: #181818; }
 /* Notes and terms below the money block, on a proforma. Set like the
    terms column so the same clause list reads the same either side of the
    page. */
 .doc-notes { margin-top: 4mm; }
 .doc-notes ol { margin: 2mm 0 0; padding-left: 5mm; }
-.doc-notes li { font-size: 2.3mm; margin-bottom: 0.8mm; color: #18202A; }
+.doc-notes li { font-size: 2.3mm; margin-bottom: 0.8mm; color: #181818; }
 
-.doc-summary { width: 78mm; flex: none; border: 0.2mm solid #D7DCE2; }
-.doc-summary-head { background: #F1F4F8; color: #0D2B55; font-size: 2.7mm; font-weight: 700; padding: 1.5mm 3mm; }
-.doc-sum-row { display: flex; justify-content: space-between; gap: 3mm; padding: 1.4mm 3mm; border-bottom: 0.15mm solid #D7DCE2; font-size: 2.6mm; }
-.doc-sum-row span:first-child { color: #64748B; }
+/* ── the quotation's terms-and-acceptance annexure ────────────────────
+   Printed on its own sheet; here it follows a divider, because the preview
+   is one scrolling page. */
+.doc-terms-page { margin-top: 6mm; }
+.doc-page-break { border-top: 0.4mm dashed #B9C2CC; margin-bottom: 5mm; }
+.doc-terms-title { margin: 0; text-align: center; font-size: 4.4mm; color: #16304D; letter-spacing: .02em; }
+.doc-terms-sub { margin-top: 1mm; text-align: center; font-size: 2.6mm; color: #6B6B68; }
+.doc-terms-clauses { margin: 4mm 0 0; padding-left: 6mm; }
+.doc-terms-clauses li { font-size: 2.7mm; line-height: 1.5; margin-bottom: 1.4mm; color: #181818; }
+.doc-accept { margin-top: 7mm; border-top: 0.2mm solid #DEDEDC; padding-top: 4mm; }
+.doc-accept-statement { margin: 2mm 0 0; font-size: 2.7mm; line-height: 1.5; color: #181818; }
+.doc-accept-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 8mm; margin-top: 6mm; }
+.doc-accept-for { font-size: 2.4mm; color: #6B6B68; }
+.doc-accept-party { font-size: 2.9mm; font-weight: 700; color: #16304D; }
+/* The band a signature actually goes in. */
+.doc-accept-sign { height: 14mm; border-bottom: 0.3mm solid #181818; }
+.doc-accept-role { margin-top: 1.4mm; font-size: 2.4mm; color: #6B6B68; }
+.doc-accept-field { display: flex; align-items: flex-end; gap: 2mm; margin-top: 2mm; font-size: 2.4mm; color: #6B6B68; }
+.doc-accept-field i { flex: 1; border-bottom: 0.2mm solid #DEDEDC; }
+.doc-accept-seal { margin-top: 2mm; text-align: right; font-size: 2.3mm; font-style: italic; color: #6B6B68; }
+.doc-accept-note { margin: 5mm 0 0; font-size: 2.3mm; font-style: italic; line-height: 1.5; color: #6B6B68; }
+
+.doc-summary { width: 78mm; flex: none; border: 0.2mm solid #DEDEDC; }
+.doc-summary-head { background: #F0F3F7; color: #16304D; font-size: 2.7mm; font-weight: 700; padding: 1.5mm 3mm; }
+.doc-sum-row { display: flex; justify-content: space-between; gap: 3mm; padding: 1.4mm 3mm; border-bottom: 0.15mm solid #DEDEDC; font-size: 2.6mm; }
+.doc-sum-row span:first-child { color: #6B6B68; }
 .doc-sum-row span:last-child { font-family: var(--mono); }
-.doc-grand { display: flex; justify-content: space-between; gap: 3mm; padding: 2.4mm 3mm; background: #0D2B55; color: #fff; font-weight: 700; font-size: 3mm; }
+/* The one place colour appears, as in the PDF. */
+.doc-grand { display: flex; justify-content: space-between; gap: 3mm; padding: 2.4mm 3mm; background: #16304D; color: #fff; font-weight: 700; font-size: 3mm; }
 .doc-grand span:last-child { font-family: var(--mono); }
 .doc-words { padding: 2mm 3mm 2.5mm; }
-.doc-words-label { font-size: 2.4mm; font-weight: 700; color: #0D2B55; }
-.doc-words-value { font-size: 2.4mm; color: #18202A; }
+.doc-words-label { font-size: 2.4mm; font-weight: 700; color: #16304D; }
+.doc-words-value { font-size: 2.4mm; color: #181818; }
 
 /* ── HSN / SAC summary ── */
 .doc-hsn { margin-top: 5mm; }
 .doc-hsn-table { width: 100%; border-collapse: collapse; margin-top: 2mm; }
-.doc-hsn-table th, .doc-hsn-table td { border: 0.15mm solid #D7DCE2; padding: 1.6mm 2.4mm; font-size: 2.4mm; }
-.doc-hsn-table th { background: #F1F4F8; color: #0D2B55; font-weight: 700; text-transform: uppercase; font-size: 2.1mm; }
+.doc-hsn-table th, .doc-hsn-table td { border: 0.15mm solid #DEDEDC; padding: 1.6mm 2.4mm; font-size: 2.4mm; }
+.doc-hsn-table th { background: #F0F3F7; color: #16304D; font-weight: 700; text-transform: uppercase; font-size: 2.1mm; }
 .doc-hsn-table td { font-family: var(--mono); }
-.doc-hsn-table tfoot td { font-weight: 700; background: #F1F4F8; color: #18202A; }
+.doc-hsn-table tfoot td { font-weight: 700; background: #F0F3F7; color: #181818; }
 .doc-hsn-table .a-left { text-align: left; font-family: var(--sans); }
 .doc-hsn-table .a-center { text-align: center; }
 .doc-hsn-table .a-right { text-align: right; }
@@ -125,10 +148,10 @@
 .doc-bank { margin-top: 5mm; }
 
 /* ── strips ── */
-.doc-strips { display: grid; border: 0.2mm solid #D7DCE2; margin-top: 5mm; }
-.doc-strip { border-left: 0.2mm solid #D7DCE2; padding: 1.6mm 2mm 2.4mm; }
+.doc-strips { display: grid; border: 0.2mm solid #DEDEDC; margin-top: 5mm; }
+.doc-strip { border-left: 0.2mm solid #DEDEDC; padding: 1.6mm 2mm 2.4mm; }
 .doc-strip:first-child { border-left: 0; }
-.doc-strip-title { text-align: center; font-size: 2.1mm; font-weight: 700; color: #0D2B55; margin-bottom: 2mm; }
+.doc-strip-title { text-align: center; font-size: 2.1mm; font-weight: 700; color: #16304D; margin-bottom: 2mm; }
 /* Taller now that the certification marks are real artwork: the PDF strip
    grew from 20mm to 27mm for the same reason.
 
@@ -145,27 +168,27 @@
 .doc-slot img { max-width: 100%; max-height: 8.5mm; object-fit: contain; display: block; margin: 0 auto; }
 /* A round mark needs the height a wide logo does not — see Slot(). */
 .doc-slot-mark img { max-height: 17mm; }
-.doc-slot-text { font-size: 2.3mm; font-weight: 700; color: #18202A; }
+.doc-slot-text { font-size: 2.3mm; font-weight: 700; color: #181818; }
 /* Certifications: plain text, no ring — name and licence number, centred. */
 .doc-cert { display: flex; flex-direction: column; align-items: center; gap: 0.6mm; text-align: center; }
-.doc-cert-title { font-size: 2.2mm; font-weight: 700; color: #0D2B55; }
-.doc-cert-no { font-size: 1.9mm; color: #64748B; font-family: var(--mono); }
+.doc-cert-title { font-size: 2.2mm; font-weight: 700; color: #16304D; }
+.doc-cert-no { font-size: 1.9mm; color: #6B6B68; font-family: var(--mono); }
 
 /* ── signature block ── */
 .doc-signature { display: grid; grid-template-columns: 1fr 1fr; gap: 7mm; margin-top: 6mm; align-items: end; }
-.doc-acceptance { border: 0.2mm solid #D7DCE2; padding: 2.5mm 3mm; }
-.doc-acceptance-field { display: flex; align-items: baseline; gap: 2mm; margin-top: 3mm; font-size: 2.3mm; color: #64748B; }
+.doc-acceptance { border: 0.2mm solid #DEDEDC; padding: 2.5mm 3mm; }
+.doc-acceptance-field { display: flex; align-items: baseline; gap: 2mm; margin-top: 3mm; font-size: 2.3mm; color: #6B6B68; }
 .doc-acceptance-field span:first-child { flex: none; }
-.doc-acceptance-line { flex: 1 1 auto; border-bottom: 0.15mm solid #D7DCE2; }
-.doc-acceptance-seal { margin-top: 4mm; text-align: right; font-size: 2.1mm; font-style: italic; color: #64748B; }
+.doc-acceptance-line { flex: 1 1 auto; border-bottom: 0.15mm solid #DEDEDC; }
+.doc-acceptance-seal { margin-top: 4mm; text-align: right; font-size: 2.1mm; font-style: italic; color: #6B6B68; }
 .doc-for-company { text-align: right; }
-.doc-for-line { font-size: 2.7mm; font-weight: 700; color: #0D2B55; }
-.doc-sig-line { margin: 8mm 0 1.5mm auto; width: 55mm; border-bottom: 0.2mm solid #18202A; }
-.doc-sig-name { font-size: 2.5mm; font-weight: 700; color: #18202A; }
-.doc-sig-designation { font-size: 2.2mm; color: #64748B; }
+.doc-for-line { font-size: 2.7mm; font-weight: 700; color: #16304D; }
+.doc-sig-line { margin: 8mm 0 1.5mm auto; width: 55mm; border-bottom: 0.2mm solid #181818; }
+.doc-sig-name { font-size: 2.5mm; font-weight: 700; color: #181818; }
+.doc-sig-designation { font-size: 2.2mm; color: #6B6B68; }
 
 /* ── footer ── */
-.doc-foot-rule { border: 0; border-top: 0.5mm solid #0D2B55; margin: 5mm 0 0; }
+.doc-foot-rule { border: 0; border-top: 0.5mm solid #16304D; margin: 5mm 0 0; }
 /* The closing is a disclaimer of no fixed length and the page marker sits
    beside it. `gap` keeps them apart, the marker never shrinks or wraps, and
    the closing takes the rest and wraps within it — matching the PDF, where
@@ -174,7 +197,7 @@
   margin-top: 2mm; padding-top: 2mm;
   display: flex; align-items: flex-start; justify-content: space-between;
   gap: 4mm;
-  font-size: 2.4mm; color: #64748B;
+  font-size: 2.4mm; color: #6B6B68;
 }
 .doc-closing > span:first-child { flex: 1 1 auto; min-width: 0; }
 .doc-closing > span + span { flex: 0 0 auto; white-space: nowrap; }
