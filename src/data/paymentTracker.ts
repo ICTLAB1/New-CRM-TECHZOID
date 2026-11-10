@@ -68,6 +68,16 @@ export interface TrackerSettings {
   enabled: boolean;
   emailOn: boolean;
   whatsappOn: boolean;
+  /**
+   * "Thank you for your payment", sent when one is recorded — from the
+   * Payment Tracker or from Receivables.
+   *
+   * ON unless switched off: it was asked for, and a payment that is
+   * silently swallowed is the complaint it exists to answer. Off is for a
+   * company that issues its own receipts from Tally and does not want the
+   * customer to get two different acknowledgements of one payment.
+   */
+  thanksOn: boolean;
   /** Whose connected mailbox the reminders go out from. */
   sendFromUserId: string;
   /**
@@ -97,6 +107,7 @@ export const DEFAULT_SETTINGS: TrackerSettings = {
   enabled: true,
   emailOn: true,
   whatsappOn: false,
+  thanksOn: true,
   sendFromUserId: "",
   sendFromAccountId: "",
   ccEmails: "",

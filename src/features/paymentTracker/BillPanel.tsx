@@ -7,6 +7,7 @@ import { useToast } from "../../components/Toast";
 import { fmtDate } from "../../domain/dates";
 import { moneyList } from "../../domain/currency/format";
 import { PAYMENT_METHODS } from "../../domain/payments/ledger";
+import { sendThanksFor, thanksNote } from "../../data/paymentThanks";
 import {
   daysBetween, dueDateFor, upcomingReminder, outstandingOf, standingOf, stepDueToday, stepKey, toneFor,
 } from "../../domain/paymentTracker/schedule";
@@ -68,7 +69,8 @@ export function BillPanel({
     if (recording) return;
     setRecording(true);
     try {
-      const payments = [...bill.payments, { id: newPaymentId(), amount: value, date, method, reference: reference.trim() }];
+      const paymentId = newPaymentId();
+      const payments = [...bill.payments, { id: paymentId, amount: value, date, method, reference: reference.trim() }];
       const paidNow = payments.reduce((a, p) => a + (Number(p.amount) || 0), 0);
       const fully = paidNow >= bill.amount - 0.005;
       await onSave(
@@ -79,6 +81,17 @@ export function BillPanel({
       );
       setPaying(false);
       setReference("");
+
+      /* The customer is thanked for it, after the save rather than as
+         part of it: this bill has just stopped being chased, and the
+         acknowledgement is the other half of that. It is not awaited —
+         a slow mailbox must not make recording a payment feel slow —
+         and the server sends one per payment however many times this
+         button is pressed. */
+      void sendThanksFor({ source: "bill", refId: bill.id, paymentId }).then((outcome) => {
+        const note = thanksNote(outcome, bill.email || bill.customerName);
+        if (note) toast(note, outcome.state === "failed" ? "warn" : "good");
+      });
     } finally {
       setRecording(false);
     }

@@ -1,6 +1,6 @@
 import { sendMail } from "./mailer.mjs";
 import { sendWhatsAppTemplate } from "./whatsapp.mjs";
-import { renderReminderEmail, whatsappFor } from "./paymentMessages.mjs";
+import { renderReminderEmail, renderThanksEmail, whatsappFor } from "./paymentMessages.mjs";
 
 /**
  * Send one reminder for one bill on one channel — exactly once.
@@ -91,3 +91,90 @@ export async function sendReminder({ admin, row, step, tone, channel, today, set
 
 export const splitList = (value) =>
   String(value ?? "").split(/[,;\s]+/).map((s) => s.trim()).filter((s) => s.includes("@"));
+
+/**
+ * Thank a customer for one payment — exactly once, ever.
+ *
+ * THE SAME CLAIM-FIRST SHAPE AS sendReminder, and for a sharper reason.
+ * A reminder that goes twice is an irritation; a second thank-you for a
+ * payment made once reads either as incompetence or as a second demand,
+ * and this one is triggered by a person pressing Save rather than by a
+ * schedule — so it meets double-clicks, retried saves on a bad connection
+ * and two people in accounts entering the same cheque. The row keyed
+ * (source, ref_id, payment_id) is inserted before anything is sent, and
+ * the second attempt finds it already there.
+ *
+ * THE RECIPIENT IS NEVER TAKEN FROM THE REQUEST. It is read out of the
+ * bill or the invoice by the caller, so this cannot be used to send mail
+ * to an address somebody typed into a browser console.
+ *
+ * NO BANK DETAILS, unlike a reminder: a message about money already
+ * received that repeats where to send money is the shape of every
+ * payment-redirection fraud. renderThanksEmail leaves them out.
+ *
+ * @returns {Promise<{state: "sent"|"failed"|"already", error?: string}>}
+ */
+export async function sendThanks({ admin, receipt, settings, today }) {
+  const sendTo = String(receipt.email ?? "").trim();
+  if (!sendTo.includes("@")) {
+    return { state: "failed", error: "No email address on this customer, so there was nobody to thank." };
+  }
+
+  const id = `${receipt.source}:${receipt.ref_id}:${receipt.payment_id}`;
+  const { data: claimed, error: claimError } = await admin
+    .from("payment_receipts")
+    .upsert(
+      {
+        id,
+        company_id: receipt.company_id,
+        source: receipt.source,
+        ref_id: receipt.ref_id,
+        payment_id: receipt.payment_id,
+        state: "sending",
+        sent_on: today,
+        send_to: sendTo,
+        amount: Number(receipt.paid_now) || 0,
+        currency: receipt.currency || "INR",
+      },
+      { onConflict: "source,ref_id,payment_id", ignoreDuplicates: true },
+    )
+    .select("id");
+
+  if (claimError) {
+    console.error("payment thanks: could not claim", id, "—", claimError.message);
+    return { state: "failed", error: "Could not record the acknowledgement, so it was not sent." };
+  }
+  if (!claimed || claimed.length === 0) return { state: "already" };
+
+  const mail = renderThanksEmail(receipt, settings);
+  /* The customer's own further contacts, and not the company's ccEmails
+     list: that exists so somebody sees the chasing, and copying it on
+     every acknowledgement turns an accounts inbox into a feed. */
+  const cc = [...new Set(splitList(receipt.cc).map((c) => c.toLowerCase()))];
+  const result = await sendMail({
+    admin,
+    accountId: String(settings.sendFromAccountId ?? "").trim() || null,
+    userId: settings.sendFromUserId || receipt.owner_id,
+    to: sendTo,
+    cc,
+    subject: mail.subject,
+    message: mail.text,
+    html: mail.html,
+    replyTo: String(settings.replyTo ?? "").trim(),
+  });
+
+  const now = new Date().toISOString();
+  if (result?.ok) {
+    await admin.from("payment_receipts").update({
+      state: "sent",
+      error: null,
+      ...(result.id ? { provider_message_id: String(result.id) } : {}),
+      updated_at: now,
+    }).eq("id", id);
+    return { state: "sent" };
+  }
+
+  const error = String(result?.error ?? "Not sent.").slice(0, 500);
+  await admin.from("payment_receipts").update({ state: "failed", error, updated_at: now }).eq("id", id);
+  return { state: "failed", error };
+}

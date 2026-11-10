@@ -5,6 +5,7 @@ import { Button, Card, Chip, Empty, Field, Input, Select, StatTile, SummaryBar }
 import { Modal } from "../../components/Modal";
 import { useToast } from "../../components/Toast";
 import { computeDocument } from "../../domain/tax/compute";
+import { sendThanksFor, thanksNote } from "../../data/paymentThanks";
 import { computePaymentInfo, PAYMENT_METHODS } from "../../domain/payments/ledger";
 import { AGE_BUCKETS, buildReceivables, type AgeBucketId } from "../../domain/payments/receivables";
 import { formatTotals, isMixed, moneyList, totalsByCurrency } from "../../domain/currency/format";
@@ -46,6 +47,7 @@ export function ReceivablesScreen({ invoices, users, currentUser, settings, onCh
   const [owner, setOwner] = useState("all");
   const [query, setQuery] = useState("");
   const [paying, setPaying] = useState<SalesDocument | null>(null);
+  const toast = useToast();
 
   const sellerState = ((settings["company"] as { state?: string })?.state) ?? "Delhi";
   const today = TODAY();
@@ -86,20 +88,34 @@ export function ReceivablesScreen({ invoices, users, currentUser, settings, onCh
   const bucketTotals = (bucket: string) => totalsOf(report.open.filter((r) => r.bucket === bucket));
 
   const recordPayment = (invoice: SalesDocument, entry: { amount: number; date: string; method: string; reference: string }) => {
+    const paymentId = Math.random().toString(36).slice(2, 10);
     const next = invoices.map((i) =>
       i.id === invoice.id
         ? {
             ...i,
-            paymentHistory: [
-              ...(i.paymentHistory ?? []),
-              { id: Math.random().toString(36).slice(2, 10), ...entry },
-            ],
+            paymentHistory: [...(i.paymentHistory ?? []), { id: paymentId, ...entry }],
             updatedAt: Date.now(),
           }
         : i,
     );
     onChange(next);
     setPaying(null);
+
+    /* THE CUSTOMER IS THANKED, and the save does not wait for it. The
+       payment is the thing being recorded; the email is a consequence.
+       A slow mail server, a mailbox whose consent has lapsed, a customer
+       with no address on file — none of those may hold up entering a
+       payment or leave anyone wondering whether it went in. The server
+       sends it once per payment however many times this is pressed. */
+    void sendThanksFor({
+      source: "invoice",
+      refId: invoice.id,
+      paymentId,
+      invoiceAmount: computeDocument(invoice as never, sellerState).grand,
+    }).then((outcome) => {
+      const note = thanksNote(outcome, invoice.billEmail || invoice.billName);
+      if (note) toast(note, outcome.state === "failed" ? "warn" : "good");
+    });
   };
 
   return (

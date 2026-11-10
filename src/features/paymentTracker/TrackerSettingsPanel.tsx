@@ -137,6 +137,14 @@ export function TrackerSettingsPanel({
           <input type="checkbox" checked={s.emailOn} onChange={(e) => set({ emailOn: e.target.checked })} />
           Send reminders by email
         </label>
+        {/* Not under the master reminder switch on purpose: a company can
+            want to stop chasing and still want to acknowledge what arrives,
+            and the two are read separately by the server. */}
+        <label className="pt-check">
+          <input type="checkbox" checked={s.thanksOn !== false}
+            onChange={(e) => set({ thanksOn: e.target.checked })} />
+          Thank the customer by email when a payment is recorded
+        </label>
         <Field
           label="Send from"
           hint={s.sendFromAccountId

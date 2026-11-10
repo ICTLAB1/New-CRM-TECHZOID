@@ -175,6 +175,114 @@ ${contactLine ? `<p style="margin:0 0 12px">${escapeHtml(contactLine)}</p>` : ""
 }
 
 /**
+ * The acknowledgement a customer gets the moment a payment is recorded.
+ *
+ * THE OPPOSITE JOB FROM A REMINDER, and written like it: it asks for
+ * nothing, it leads with the thanks rather than the figures, and it
+ * carries no bank details — a message about money already received that
+ * repeats where to send money is the shape of every payment-redirection
+ * fraud, and a customer who has just paid should not have to wonder.
+ *
+ * It does carry the reference the customer gave, because the one real
+ * question behind "did you get my payment" is "did you match it to the
+ * right invoice", and showing the UTR back answers it without a reply.
+ *
+ * WHAT IT IS NOT. Not a receipt voucher, not a tax invoice, and it says
+ * so: under GST those are documents with their own rules, and a cheerful
+ * email that a customer's accounts team files as one is a problem for
+ * them at assessment. The line is small and it is not optional.
+ *
+ * @param {object} r         the payment, as recorded
+ * @param {object} settings  the company's tracker settings
+ */
+export function renderThanksEmail(r, settings = {}) {
+  const currency = r.currency || "INR";
+  const amount = Number(r.amount) || 0;
+  const received = Number(r.amount_paid) || 0;
+  const now = Number(r.paid_now) || 0;
+  /* Rounded to the paisa before it is called settled: a float that lands
+     0.004 short must not print a balance of "0.00" and call it open. */
+  const balance = Math.max(0, Math.round((amount - received) * 100) / 100);
+  const settled = amount > 0 && balance < 0.005;
+  const name = greetingName(r);
+  const company = String(settings.companyName || "TechZoid Technologies Pvt. Ltd.");
+  const contactLine = String(settings.contactLine || "").trim();
+  const signOff = String(settings.signOff || `Accounts Team\n${company}`).trim();
+  const invoice = String(r.invoice_no ?? "");
+
+  const opening = settled
+    ? `Thank you. We have received your payment of ${money(now, currency)} against invoice ${invoice}, which is now settled in full.`
+    : `Thank you. We have received your payment of ${money(now, currency)} against invoice ${invoice}.`;
+  const closing = settled
+    ? "We appreciate your promptness, and we look forward to working with you again."
+    : `A balance of ${money(balance, currency)} remains outstanding on this invoice.`;
+
+  const facts = [
+    ["Invoice no.", invoice],
+    ["Payment received", money(now, currency)],
+    ["Received on", fmtDate(r.paid_on)],
+    ...(String(r.method ?? "").trim() ? [["Mode", String(r.method).trim()]] : []),
+    ...(String(r.reference ?? "").trim() ? [["Reference", String(r.reference).trim()]] : []),
+    ...(amount > 0 ? [["Invoice amount", money(amount, currency)]] : []),
+    ...(amount > 0 && received !== now ? [["Total received", money(received, currency)]] : []),
+    ...(amount > 0 ? [["Balance", money(balance, currency)]] : []),
+  ];
+
+  const NOTE = "This is a computer-generated acknowledgement of payment received. "
+    + "It is not a tax invoice or a receipt voucher under GST.";
+
+  const subject = settled
+    ? `Payment received with thanks — Invoice ${invoice}`
+    : `Payment received — Invoice ${invoice}`;
+
+  const text = [
+    `Dear ${name},`,
+    "",
+    opening,
+    "",
+    ...facts.map(([k, v]) => `${k}: ${v}`),
+    "",
+    closing,
+    "",
+    ...(contactLine ? [contactLine, ""] : []),
+    "Regards,",
+    signOff,
+    "",
+    NOTE,
+  ].join("\n");
+
+  const accent = "#067647";
+  const tr = ([k, v], strong) =>
+    `<tr><td style="padding:6px 0;color:#667085;font-size:13px">${escapeHtml(k)}</td>` +
+    `<td style="padding:6px 0;text-align:right;font-size:13px;${strong ? "font-weight:700;color:#101828" : "color:#344054"}">${escapeHtml(v)}</td></tr>`;
+
+  const html = `<!doctype html><html><body style="margin:0;background:#f4f5f7;font-family:Segoe UI,Arial,sans-serif;color:#344054">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f5f7;padding:24px 12px"><tr><td align="center">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:10px;overflow:hidden;border:1px solid #e4e7ec">
+<tr><td style="height:4px;background:${accent}"></td></tr>
+<tr><td style="padding:26px 28px 8px">
+<div style="font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:${accent};font-weight:700">${escapeHtml(settled ? "Payment received in full" : "Payment received")}</div>
+<p style="margin:16px 0 0;font-size:14px;line-height:1.6">Dear ${escapeHtml(name)},</p>
+<p style="margin:12px 0 0;font-size:14px;line-height:1.6">${escapeHtml(opening)}</p>
+</td></tr>
+<tr><td style="padding:12px 28px">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid #eaecf0;border-bottom:1px solid #eaecf0">
+${facts.map((row, i) => tr(row, i === 1 || (amount > 0 && i === facts.length - 1))).join("\n")}
+</table>
+</td></tr>
+<tr><td style="padding:8px 28px 26px;font-size:14px;line-height:1.6">
+<p style="margin:0">${escapeHtml(closing)}</p>
+${contactLine ? `<p style="margin:12px 0 0">${escapeHtml(contactLine)}</p>` : ""}
+<p style="margin:12px 0 0">Regards,<br>${escapeHtml(signOff).replace(/\n/g, "<br>")}</p>
+</td></tr>
+</table>
+<div style="font-size:11px;color:#98a2b3;padding:12px">${escapeHtml(NOTE)}</div>
+</td></tr></table></body></html>`;
+
+  return { subject, text, html, settled, balance };
+}
+
+/**
  * WhatsApp: an approved template and its four placeholders.
  *   {{1}} name   {{2}} invoice no.   {{3}} amount outstanding   {{4}} due date
  */
