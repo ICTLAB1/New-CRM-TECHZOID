@@ -123,7 +123,7 @@ describe("new quotation", () => {
   });
 
   it("uses domestic terms for an Indian customer", () => {
-    expect(q.terms[0]).toContain("valid for 30 days");
+    expect(q.terms[0]).toContain("valid for 7 days");
   });
 
   it("uses export terms for a customer outside India", () => {

@@ -98,6 +98,7 @@
 .doc-notes { margin-top: 4mm; }
 .doc-notes ol { margin: 2mm 0 0; padding-left: 5mm; }
 .doc-notes li { font-size: 2.3mm; margin-bottom: 0.8mm; color: #181818; }
+.doc-notes-aside { margin: 1.5mm 0 0; font-size: 2.3mm; line-height: 1.45; color: #181818; }
 
 /* ── the quotation's terms-and-acceptance annexure ────────────────────
    Printed on its own sheet; here it follows a divider, because the preview
@@ -105,7 +106,10 @@
 .doc-terms-page { margin-top: 6mm; }
 .doc-page-break { border-top: 0.4mm dashed #B9C2CC; margin-bottom: 5mm; }
 .doc-terms-title { margin: 0; text-align: center; font-size: 4.4mm; color: #16304D; letter-spacing: .02em; }
+.doc-terms-issuer { margin-top: 1.4mm; text-align: center; font-size: 2.8mm; font-weight: 700; color: #181818; letter-spacing: .02em; }
 .doc-terms-sub { margin-top: 1mm; text-align: center; font-size: 2.6mm; color: #6B6B68; }
+.doc-clause-label { color: #16304D; }
+.doc-terms-note { margin: 4mm 0 0; background: #F0F3F7; border-left: 0.8mm solid #16304D; padding: 2.4mm 3mm; font-size: 2.6mm; line-height: 1.5; color: #181818; }
 .doc-terms-clauses { margin: 4mm 0 0; padding-left: 6mm; }
 .doc-terms-clauses li { font-size: 2.7mm; line-height: 1.5; margin-bottom: 1.4mm; color: #181818; }
 .doc-accept { margin-top: 7mm; border-top: 0.2mm solid #DEDEDC; padding-top: 4mm; }

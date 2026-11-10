@@ -3,6 +3,7 @@ import type { DocumentModel, LogoSlot, Pair } from "../../domain/documents/model
 import { STRIP_TITLES } from "../../domain/documents/model";
 import type { ComputedRow } from "../../domain/tax/types";
 import { CONTENT_WIDTH_MM, splitDescription } from "../../domain/documents/columns";
+import { splitClause } from "../../domain/documents/clauses";
 
 /**
  * The on-screen document.
@@ -28,6 +29,13 @@ export interface DocumentPreviewProps {
   brandLogos?: Record<string, { src: string }>;
   /** 1 = actual size. The editor scales to fit its pane. */
   scale?: number;
+}
+
+/** A term with its run-in heading in bold, as the PDF sets it. Both read
+ *  from the same splitter, so the two cannot drift apart. */
+function Clause({ text }: { text: string }) {
+  const { label, body } = splitClause(text);
+  return <>{label ? <b className="doc-clause-label">{label}:</b> : null}{label ? " " : ""}{body}</>;
 }
 
 function Rows({ pairs }: { pairs: readonly Pair[] }) {
@@ -310,10 +318,14 @@ export function DocumentPreview({ model: m, rows, brandLogos = {}, scale = 1 }: 
         {/* A proforma's terms and payment instructions. The PDF draws these
             in drawNoteBlocks; both read the same model.notes, so the
             preview cannot promise something the file does not carry. */}
-        {m.notes.map((block) => (
-          <section className="doc-notes" key={block.heading}>
-            <div className="doc-block-title">{block.heading}</div>
-            <ol>{block.lines.map((line, i) => <li key={i}>{line}</li>)}</ol>
+        {m.notes.map((block, bi) => (
+          <section className="doc-notes" key={block.heading || `note-${bi}`}>
+            {block.heading ? <div className="doc-block-title">{block.heading}</div> : null}
+            {block.numbered === false
+              ? block.lines.map((line, i) => (
+                <p className="doc-notes-aside" key={i}><Clause text={line} /></p>
+              ))
+              : <ol>{block.lines.map((line, i) => <li key={i}><Clause text={line} /></li>)}</ol>}
           </section>
         ))}
 
@@ -364,10 +376,16 @@ export function DocumentPreview({ model: m, rows, brandLogos = {}, scale = 1 }: 
           <section className="doc-terms-page">
             <div className="doc-page-break" aria-hidden />
             <h2 className="doc-terms-title">{m.termsPage.title}</h2>
+            {m.termsPage.issuer ? (
+              <div className="doc-terms-issuer">{m.termsPage.issuer.toUpperCase()}</div>
+            ) : null}
             <div className="doc-terms-sub">{m.termsPage.subtitle}</div>
             <ol className="doc-terms-clauses">
-              {m.termsPage.clauses.map((clause, i) => <li key={i}>{clause}</li>)}
+              {m.termsPage.clauses.map((clause, i) => <li key={i}><Clause text={clause} /></li>)}
             </ol>
+            {m.termsPage.notes.map((note, i) => (
+              <p className="doc-terms-note" key={i}><Clause text={note} /></p>
+            ))}
 
             <div className="doc-accept">
               <div className="doc-block-title">{m.termsPage.acceptance.heading}</div>

@@ -3,20 +3,59 @@ import {
   DOMESTIC_TERMS, INTERNATIONAL_TERMS, INVOICE_EXPORT_TERMS, INVOICE_TERMS,
   INVOICE_TERMS_SETS, SELLER_TOKEN, forCompany, suggestTermsSet, termsSetsFor, TERMS_SETS,
 } from "./terms";
+import { partitionClauses } from "./clauses";
 
 describe("default terms", () => {
-  it("carries the fourteen supplied domestic clauses", () => {
-    expect(DOMESTIC_TERMS).toHaveLength(14);
-    expect(DOMESTIC_TERMS[0]).toContain("valid for 30 days");
-    expect(DOMESTIC_TERMS[13]).toContain("courts at New Delhi");
+  it("carries the twenty supplied domestic clauses and the GeM note", () => {
+    expect(DOMESTIC_TERMS).toHaveLength(21);
+    expect(DOMESTIC_TERMS[0]).toContain("valid for 7 days");
+    expect(DOMESTIC_TERMS[19]).toContain("Acceptance of Terms:");
+    /* The note is last and is not one of the twenty — partitionClauses
+       keeps it out of the numbering. */
+    expect(DOMESTIC_TERMS[20]).toMatch(/^Important Note: /);
+    expect(partitionClauses(DOMESTIC_TERMS).numbered).toHaveLength(20);
   });
 
-  it("mentions no licence keys, activation or provisioning", () => {
-    // The approved design's spec is explicit about this. It also means the
-    // non-returnable-licence cover from v1 is gone — see docs/DEVIATIONS.md.
-    for (const t of DOMESTIC_TERMS) {
-      expect(t.toLowerCase()).not.toMatch(/licence key|license key|activation|provisioning/);
-    }
+  it("covers what this business actually sells", () => {
+    /* The point of replacing the generic fourteen. Each of these is a real
+       exposure for a licence reseller that the old set said nothing about. */
+    const joined = DOMESTIC_TERMS.join(" ");
+    expect(joined).toContain("No TDS shall be deducted on the purchase of software licenses");
+    expect(joined).toContain("non-cancellable and non-refundable");
+    expect(joined).toContain("Auto-renewal shall not be assumed");
+    expect(joined).toContain("exchange-rate fluctuations");
+    expect(joined).toContain("End User License Agreement (EULA)");
+  });
+
+  it("quotes the TDS notification exactly", () => {
+    /* A citation that is almost right is worse than none: somebody will
+       rely on it. Reproduced character for character as supplied. */
+    expect(DOMESTIC_TERMS[2]).toContain(
+      "CBDT Notification No. 21/2012 [F. No. 142/10/2012-SO (TPL)], S.O. 1323(E), dated 13 June 2012, effective from 1 July 2012",
+    );
+  });
+
+  it("names no company of its own, so the second company's terms are its own", () => {
+    /* The supplied text names TechZoid in the force majeure clause. A
+       force majeure clause naming the wrong business excuses the wrong
+       one — see SELLER_TOKEN. */
+    for (const t of DOMESTIC_TERMS) expect(t).not.toMatch(/TechZoid/i);
+    expect(DOMESTIC_TERMS[16]).toContain(SELLER_TOKEN);
+    expect(forCompany(DOMESTIC_TERMS, "Vertex Trading FZE")[16]).toContain(
+      "Vertex Trading FZE shall not be held liable",
+    );
+  });
+
+  it("deliberately covers licence activation, which the old set could not", () => {
+    /* The reverse of what this file used to assert. The approved design's
+       spec said not to mention licence keys, activation or provisioning,
+       which left a licence reseller with no cancellation cover on its main
+       product line — recorded as deviation 4b. The company has now
+       supplied terms that cover it directly, so the restriction is spent.
+       Pinned so it is not quietly reintroduced. */
+    const joined = DOMESTIC_TERMS.join(" ").toLowerCase();
+    expect(joined).toContain("activation keys");
+    expect(joined).toContain("license activation & delivery");
   });
 
   it("keeps the export set, which differs in law and not only in wording", () => {
@@ -96,11 +135,13 @@ describe("tax invoice terms", () => {
     }
   });
 
-  it("follows the design's wording preference on licence keys", () => {
-    /* Same rule as the quotation set: the approved spec says not to
-       mention licence keys, activation or provisioning. The cover is
-       written around the publisher's own licence terms instead — see
-       docs/DEVIATIONS.md. */
+  it("keeps its cover written around the publisher's own licence terms", () => {
+    /* The quotation set no longer avoids these words — the company has
+       supplied terms that name activation directly. The invoice sets
+       still phrase the same cover around what the publisher and
+       distributor allow, which is deliberate and is what this pins: an
+       invoice is not the document on which to argue about entitlement.
+       See docs/DEVIATIONS.md 4b and 4b-ii. */
     for (const t of [...INVOICE_TERMS, ...INVOICE_EXPORT_TERMS]) {
       expect(t.toLowerCase()).not.toMatch(/licence key|license key|activation|provisioning/);
     }
@@ -139,12 +180,15 @@ describe("the seller's own name", () => {
     expect(out.join(" ")).not.toContain(SELLER_TOKEN);
   });
 
-  it("renders TechZoid's terms exactly as they read before", () => {
+  it("renders TechZoid's force majeure clause exactly as supplied", () => {
+    /* The one clause where the supplied text named the company. Filled in
+       for TechZoid it must read character for character as written. */
     const out = forCompany(DOMESTIC_TERMS, "TechZoid Technologies Private Limited");
-    expect(out[11]).toBe(
-      "TechZoid Technologies Private Limited shall not be responsible for delays caused by "
-      + "circumstances beyond its reasonable control, including manufacturer, distributor, "
-      + "logistics or regulatory delays.",
+    expect(out[16]).toBe(
+      "Force Majeure: TechZoid Technologies Private Limited shall not be held liable for delays "
+      + "or failure to perform obligations due to circumstances beyond its reasonable control, "
+      + "including natural disasters, government restrictions, strikes, war, internet outages or "
+      + "manufacturer disruptions.",
     );
   });
 

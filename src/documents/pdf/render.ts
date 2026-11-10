@@ -5,6 +5,7 @@ import { STRIP_TITLES } from "../../domain/documents/model";
 import { fitBox } from "../../domain/documents/model";
 import type { ComputedRow } from "../../domain/tax/types";
 import { BASE_FONT_PT, PADDING_MM } from "../../domain/documents/columns";
+import { splitClause } from "../../domain/documents/clauses";
 import { hexToRgb, pdfSafeText } from "./text";
 
 /**
@@ -613,25 +614,84 @@ export function renderDocumentPdf(opts: RenderOptions): jsPDF {
    * have nowhere else to go. The model built these blocks all along and
    * nothing drew them, so a proforma printed neither its terms nor its
    * payment instructions. */
+  /* ─────────────────────────── clause typesetting ───────────────────────────
+   * A clause sets as one paragraph with its heading run in bold at the
+   * front — "Payment Terms: Payment shall be made ..." — because a schedule
+   * of twenty terms is only usable if the one you want can be found without
+   * reading the other nineteen.
+   *
+   * splitTextToSize cannot wrap this: it measures in a single font, and the
+   * bold heading is wider than the same characters in regular. That is
+   * exactly the mis-measurement that used to clip item descriptions. So the
+   * first line is wrapped against the width the heading leaves and the rest
+   * against the full width, word by word.
+   *
+   * Shared by the terms page and the proforma's terms block, so a clause
+   * does not set one way on a quotation and another on a proforma.
+   */
+  const layoutClause = (text: string, width: number, size: number) => {
+    const { label, body } = splitClause(text);
+    pdf.setFont("helvetica", "bold").setFontSize(size);
+    /* A measured space is under a millimetre at these sizes — a word gap,
+       not the break between a heading and the sentence it heads. */
+    const labelW = label ? pdf.getTextWidth(`${label}:`) + size * 0.19 : 0;
+    pdf.setFont("helvetica", "normal").setFontSize(size);
+    const lines: string[] = [];
+    let cur = "";
+    let avail = width - labelW;
+    for (const word of body.split(/\s+/).filter(Boolean)) {
+      const trial = cur ? `${cur} ${word}` : word;
+      /* `!cur` keeps a word longer than the line from looping for ever; it
+         overruns by design rather than disappearing. */
+      if (!cur || pdf.getTextWidth(trial) <= avail) { cur = trial; continue; }
+      lines.push(cur);
+      cur = word;
+      avail = width;
+    }
+    if (cur) lines.push(cur);
+    return { label, labelW, lines };
+  };
+
+  const drawClause = (
+    c: ReturnType<typeof layoutClause>, x: number, size: number, lead: number,
+  ): void => {
+    if (c.label) {
+      pdf.setFont("helvetica", "bold").setFontSize(size).setTextColor(...BRAND);
+      pdf.text(`${c.label}:`, x, y);
+    }
+    pdf.setFont("helvetica", "normal").setFontSize(size).setTextColor(...INK);
+    c.lines.forEach((line, i) => {
+      pdf.text(line, i === 0 ? x + c.labelW : x, y + i * lead);
+    });
+  };
+
   function drawNoteBlocks(): void {
+    const SIZE = 6.2;
     for (const block of m.notes) {
       if (!block.lines.length) continue;
-      const wrapped = block.lines.map((line) => pdf.splitTextToSize(line, CW - 6) as string[]);
+      const numbered = block.numbered !== false;
+      const indent = numbered ? 5.5 : 0;
+      const wrapped = block.lines.map((line) => layoutClause(line, CW - 6 - indent, SIZE));
+      const headH = block.heading ? 9 : 0;
       /* The heading plus the first item, so a block never starts with its
          heading stranded at the foot of a page. */
-      need(9 + wrapped[0]!.length * TERM_LEAD + TERM_GAP);
-      pdf.setFont("helvetica", "bold").setFontSize(7.6).setTextColor(...BRAND);
-      pdf.text(block.heading, M, y + 4.4);
-      y += 9;
-      wrapped.forEach((lines, i) => {
-        const h = lines.length * TERM_LEAD + TERM_GAP;
-        /* Flow rather than squeeze: fourteen clauses do not fit under a
-           full items table, and shrinking them to fit is how a term becomes
+      need(headH + wrapped[0]!.lines.length * TERM_LEAD + TERM_GAP);
+      if (block.heading) {
+        pdf.setFont("helvetica", "bold").setFontSize(7.6).setTextColor(...BRAND);
+        pdf.text(block.heading, M, y + 4.4);
+        y += 9;
+      }
+      wrapped.forEach((c, i) => {
+        const h = c.lines.length * TERM_LEAD + TERM_GAP;
+        /* Flow rather than squeeze: twenty clauses do not fit under a full
+           items table, and shrinking them to fit is how a term becomes
            unreadable. */
         need(h);
-        pdf.setFont("helvetica", "normal").setFontSize(6.2).setTextColor(...INK);
-        pdf.text(`${i + 1}.`, M, y);
-        pdf.text(lines, M + 5.5, y);
+        if (numbered) {
+          pdf.setFont("helvetica", "normal").setFontSize(SIZE).setTextColor(...INK);
+          pdf.text(`${i + 1}.`, M, y);
+        }
+        drawClause(c, M + indent, SIZE, TERM_LEAD);
         y += h;
       });
       y += 2;
@@ -658,6 +718,14 @@ export function renderDocumentPdf(opts: RenderOptions): jsPDF {
     pdf.setFont("helvetica", "bold").setFontSize(12.5).setTextColor(...BRAND);
     pdf.text(tp.title, A4.w / 2, y + 6, { align: "center" });
     y += 11;
+    if (tp.issuer) {
+      /* Whose terms these are. A page that arrives detached from the
+         quotation carries the number in the line below; this says the
+         name without anyone having to decode a document number. */
+      pdf.setFont("helvetica", "bold").setFontSize(8).setTextColor(...INK);
+      pdf.text(tp.issuer.toUpperCase(), A4.w / 2, y, { align: "center" });
+      y += 4.8;
+    }
     pdf.setFont("helvetica", "normal").setFontSize(7.4).setTextColor(...MUTED);
     pdf.text(tp.subtitle, A4.w / 2, y, { align: "center" });
     y += 4.5;
@@ -667,15 +735,37 @@ export function renderDocumentPdf(opts: RenderOptions): jsPDF {
     /* 7.4pt, not the column's 6.2: this page exists so the terms can be
        read before they are signed. */
     const NUM_W = 7;
+    const CLAUSE_SIZE = 7.4;
     const CLAUSE_LEAD = 3.6;
+
     for (let i = 0; i < tp.clauses.length; i++) {
-      const lines = pdf.splitTextToSize(tp.clauses[i]!, CW - NUM_W) as string[];
-      const h = lines.length * CLAUSE_LEAD + 2.2;
+      const c = layoutClause(tp.clauses[i]!, CW - NUM_W, CLAUSE_SIZE);
+      const h = c.lines.length * CLAUSE_LEAD + 2.2;
       need(h);
-      pdf.setFont("helvetica", "normal").setFontSize(7.4).setTextColor(...INK);
+      pdf.setFont("helvetica", "normal").setFontSize(CLAUSE_SIZE).setTextColor(...INK);
       pdf.text(`${i + 1}.`, M, y);
-      pdf.text(lines, M + NUM_W, y);
+      drawClause(c, M + NUM_W, CLAUSE_SIZE, CLAUSE_LEAD);
       y += h;
+    }
+
+    /* Notes, after the numbered terms and set apart from them. A note that
+       says the GeM bid conditions PREVAIL over these terms must not read
+       as one of the terms it overrides, so it is boxed rather than
+       numbered. */
+    for (const note of tp.notes) {
+      const PAD = 3;
+      const c = layoutClause(note, CW - PAD * 2, CLAUSE_SIZE);
+      const boxH = c.lines.length * CLAUSE_LEAD + PAD * 2;
+      need(boxH + 8);
+      y += 4;
+      const top = y;
+      pdf.setFillColor(...HEAD_BG);
+      pdf.rect(M, top, CW, boxH, "F");
+      pdf.setDrawColor(...BRAND).setLineWidth(0.8);
+      pdf.line(M + 0.4, top, M + 0.4, top + boxH);
+      y = top + PAD + 2.4;
+      drawClause(c, M + PAD + 1.5, CLAUSE_SIZE, CLAUSE_LEAD);
+      y = top + boxH + 2;
     }
 
     /* ---- acceptance ---- */
@@ -684,11 +774,25 @@ export function renderDocumentPdf(opts: RenderOptions): jsPDF {
     const blockH = 10 + statement.length * 4 + 6 + SIGN_H;
     /* The whole block or none of it. An acceptance whose signature lines
        start on the next page is a page nobody can sign. */
+    const pagesBefore = pdf.getNumberOfPages();
     need(blockH + 6);
-    y += 6;
-
-    rule(y, M, M + CW, BORDER, 0.3);
-    y += 7;
+    if (pdf.getNumberOfPages() !== pagesBefore) {
+      /* It took a page of its own. The divider below separates the
+         acceptance from the clauses above it — at the top of a fresh page
+         there is nothing above it to separate, and a rule hanging there
+         reads as the bottom of something missing. A continuation line
+         says what this page belongs to instead, which is what a signing
+         page sent on its own needs anyway. */
+      pdf.setFont("helvetica", "normal").setFontSize(6.8).setTextColor(...MUTED);
+      pdf.text(`${tp.subtitle} — continued`, A4.w / 2, y + 2, { align: "center" });
+      y += 6.5;
+      rule(y, M, M + CW, BRAND, 0.5);
+      y += 8;
+    } else {
+      y += 6;
+      rule(y, M, M + CW, BORDER, 0.3);
+      y += 7;
+    }
     pdf.setFont("helvetica", "bold").setFontSize(9).setTextColor(...BRAND);
     pdf.text(tp.acceptance.heading, M, y);
     y += 6;

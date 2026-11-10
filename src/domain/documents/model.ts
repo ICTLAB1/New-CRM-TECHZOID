@@ -3,6 +3,7 @@ import { fmtCurrencyPdf } from "../currency/format";
 import { taxTypeLabel } from "../tax/types";
 import type { DocumentTotals } from "../tax/types";
 import { stateNameForCode, STATES } from "../geo/states";
+import { partitionClauses } from "./clauses";
 import { buildItemColumns, type ItemColumn } from "./columns";
 import { isOn, type DocTemplate, type SectionKey } from "./template";
 import { DEFAULT_CERTIFICATIONS } from "./brandDefaults";
@@ -150,9 +151,15 @@ export interface DocumentModel {
    */
   termsPage: {
     title: string;
+    /** The company whose terms these are, under the title. */
+    issuer: string;
     /** "Annexure to Quotation No. … dated …" */
     subtitle: string;
+    /** The numbered terms. */
     clauses: string[];
+    /** Statements ABOUT the terms, printed after them and never numbered
+     *  — see partitionClauses in clauses.ts. */
+    notes: string[];
     acceptance: {
       heading: string;
       /** The sentence above the signatures, naming what is accepted. */
@@ -172,7 +179,13 @@ export interface DocumentModel {
    *  proforma carries its payment instructions and its terms here, because
    *  its terms column is given over to the bank details. Empty on every
    *  other document, which prints terms in that column instead. */
-  notes: Array<{ heading: string; lines: string[] }>;
+  notes: Array<{
+    heading: string;
+    lines: string[];
+    /** False for a block that is not a list of terms — a note printed
+     *  after them, which must not be numbered among them. */
+    numbered?: boolean;
+  }>;
 
   /** HSN/SAC summary table. Every column after "HSN / SAC" is already
    *  formatted for display; `columns` names them so a renderer draws
@@ -594,14 +607,17 @@ export function buildDocumentModel(input: BuildModelInput): DocumentModel {
   const docNo = String(doc.number ?? "");
   const issued = fmtDate(doc.date);
   const buyer = (doc.billName || "").trim();
+  const splitTerms = partitionClauses(allTerms);
   const termsPage: DocumentModel["termsPage"] = isQuotation && allTerms.length
     ? {
         title: (L.termsHeading || "Terms & Conditions").toUpperCase(),
+        issuer: c.name || "",
         /* Named as an annexure, and carrying the number and date, so a page
            that arrives on its own can be matched to the offer it belongs
            to. */
         subtitle: `Annexure to Quotation No. ${docNo} dated ${issued}`,
-        clauses: allTerms,
+        clauses: splitTerms.numbered,
+        notes: splitTerms.notes,
         acceptance: {
           heading: "ACCEPTANCE OF QUOTATION",
           /* The amount is named in figures AND words, as on the quotation
@@ -640,10 +656,17 @@ export function buildDocumentModel(input: BuildModelInput): DocumentModel {
        so they print here, which is the only reason this block exists. */
     const proformaTerms = isOn(SEC.terms) ? (doc.terms || []).filter(Boolean).map(String) : [];
     if (proformaTerms.length) {
+      /* Split the same way as the quotation's page. A note saying the GeM
+         conditions prevail OVER these terms, numbered as the last of them,
+         would be one of the things it overrides — and it would say so on a
+         proforma while saying the opposite on the quotation that produced
+         it. */
+      const split = partitionClauses(proformaTerms);
       noteBlocks.push({
         heading: (L.termsHeading || "Terms & Conditions").toUpperCase(),
-        lines: proformaTerms,
+        lines: split.numbered,
       });
+      if (split.notes.length) noteBlocks.push({ heading: "", lines: split.notes, numbered: false });
     }
   }
 

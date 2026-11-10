@@ -125,7 +125,7 @@ USD, AED, EUR and the rest.
 `parity.test.ts` → "deviation: INR groups in lakhs and crores", which also
 asserts non-INR currencies still match v1 exactly.
 
-### 4b. The licence-key clause is gone from the default terms
+### 4b. The licence-key clause is gone from the default terms — CLOSED
 
 v1's domestic terms carried:
 
@@ -133,14 +133,43 @@ v1's domestic terms carried:
 > activated, are strictly non-returnable and non-refundable as per the
 > respective OEM's licensing policy.
 
-The supplied spec omits it and instructs that the standard terms must not
-mention licence keys, activation or provisioning at all. The fourteen supplied
-clauses are used verbatim, so **that cover is no longer in the default terms**
-for a business whose main product line is software licences.
+The approved design's spec omitted it and instructed that the standard terms
+must not mention licence keys, activation or provisioning at all. The fourteen
+supplied clauses were used verbatim, which left a business whose main product
+line is software licences with no cancellation cover on it.
 
-Decided explicitly. Terms remain fully editable per document, so the clause
-can be re-added to any individual quotation, and `terms.ts` records where it
-went. Restoring it as a default is a one-line change to `DOMESTIC_TERMS`.
+**Closed on 10 Nov 2026.** The company supplied its own twenty-clause domestic
+set, which covers the exposure directly and by name — "Cancellation & Refund:
+Once software licenses, subscriptions, activation keys or digital entitlements
+have been procured, issued or activated, orders shall be non-cancellable and
+non-refundable ..." — along with activation and delivery, subscription renewal
+and price variation. The wording restriction came from the design spec; the
+owner has now overridden it with their own text, so it no longer binds
+`DOMESTIC_TERMS`. `terms.test.ts` pins the cover so it is not quietly dropped
+again.
+
+Two things about that set are worth recording, because they are the only
+places it is not reproduced literally:
+
+- **The company's own name is a token.** The supplied force majeure clause
+  names TechZoid. This CRM raises documents for a second company, and a force
+  majeure clause naming the wrong business excuses the wrong one, so the name
+  is `{{company}}` and is filled in per document. Filled in for TechZoid it
+  reads character for character as supplied, and a test asserts that.
+
+- **The GeM note is not clause 21.** It says the GeM bid conditions *prevail
+  over* these terms; numbered among them it would be one of the things it
+  overrides. It travels with the document as an ordinary line of its terms —
+  which keeps it editable per document and saved with documents already sent —
+  is recognised by its "Important Note" label, and prints after the numbered
+  list, boxed, on both the quotation's terms page and a proforma. See
+  `clauses.ts`.
+
+**Still open, and the owner's call:** the supplied clause 1 says a quotation is
+valid for 7 days, while the CRM's default Valid Until is
+`settings.defaultValidityDays` (15 unless changed). The clause says "unless
+otherwise specified" and the printed date is what is specified, so the document
+is not self-contradictory — but the two should be set to agree.
 
 ### 4b-ii. The tax invoice has its own terms, and part of that cover is back
 

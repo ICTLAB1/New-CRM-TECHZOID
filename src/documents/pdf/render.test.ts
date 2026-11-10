@@ -19,8 +19,8 @@ import { computeDocument } from "../../domain/tax/compute";
  * an intention.
  */
 
-/** Every text run in the rendered PDF, in one string. */
-function pdfText(bytes: Uint8Array): string {
+/** The inflated content streams, exactly as written — escapes intact. */
+function pdfStreams(bytes: Uint8Array): string {
   const raw = Buffer.from(bytes);
   let out = "";
   let at = 0;
@@ -39,9 +39,30 @@ function pdfText(bytes: Uint8Array): string {
     }
     at = end + 9;
   }
-  /* jsPDF writes text as (escaped literal) Tj — unescape the few that
-     matter so a clause with a bracket in it still matches. */
-  return out.replace(/\\([()\\])/g, "$1");
+  return out;
+}
+
+/** jsPDF writes text as (escaped literal) Tj — unescape the few that
+ *  matter so a clause with a bracket in it still matches. */
+const unescapePdf = (text: string): string => text.replace(/\\([()\\])/g, "$1");
+
+/** Every text run in the rendered PDF, in one string. */
+function pdfText(bytes: Uint8Array): string {
+  return unescapePdf(pdfStreams(bytes));
+}
+
+/** Every text run in order, as drawn. Joined with single spaces this
+ *  reconstructs a paragraph, which is how the hand-rolled wrap on the
+ *  terms page is checked for dropped or repeated words. */
+function pdfRuns(bytes: Uint8Array): string[] {
+  /* Read BEFORE unescaping: a clause containing "(PO)" is written with
+     its brackets escaped, and unescaping first would end the literal
+     early and silently drop the rest of the clause. */
+  const stream = pdfStreams(bytes);
+  const runs: string[] = [];
+  const re = /\(((?:[^()\\]|\\.)*)\)\s*Tj/g;
+  for (let m = re.exec(stream); m; m = re.exec(stream)) runs.push(unescapePdf(m[1]!));
+  return runs;
 }
 
 const TERMS = [
@@ -170,5 +191,83 @@ describe("the quotation's terms and acceptance page", () => {
       expect(render(kind), kind).not.toContain("ACCEPTANCE OF QUOTATION");
     }
     expect(modelFor("purchase_order").model.termsPage).toBe(null);
+  });
+});
+
+describe("terms written with run-in headings", () => {
+  /* The supplied domestic set is written "Heading: sentence." The heading
+     is set in bold, which splitTextToSize cannot wrap — it measures in one
+     font — so the wrap is hand-rolled. These check what that produces. */
+  const LABELLED = [
+    "Delivery Timeline: Delivery and execution timelines are indicative and subject to product "
+    + "availability, vendor approvals, licensing activation and other dependencies beyond our "
+    + "reasonable control.",
+    "Order Confirmation: Orders shall be considered confirmed only upon receipt of an official "
+    + "Purchase Order (PO) and/or advance payment, as applicable.",
+    "Important Note: For Government and GeM transactions, the applicable GeM bid conditions, "
+    + "contract terms, SLA and statutory requirements shall prevail over these standard quotation "
+    + "terms wherever there is any inconsistency.",
+  ];
+
+  const labelled = (docType: "quotation" | "proforma" = "quotation") => {
+    const d = { ...doc, terms: LABELLED };
+    const totals = computeDocument(d, "Delhi");
+    const model = buildDocumentModel({
+      doc: d, settings, totals, docType, template: DEFAULT_DOC_TEMPLATE,
+      bankAccount: { name: "HDFC Bank Ltd", accountName: "TechZoid", account: "50200045678901", ifsc: "HDFC0000123" },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any);
+    return { model, runs: pdfRuns(new Uint8Array(renderDocumentPdf({ model, rows: totals.rows }).output("arraybuffer"))) };
+  };
+
+  it("loses no word and repeats none, wrapping around the bold heading", () => {
+    /* THE TEST THAT MATTERS for a hand-rolled wrap. Joining the runs in
+       order has to give back each clause exactly: a word dropped at a line
+       break, or one drawn twice, shows up here and nowhere else. */
+    const joined = labelled().runs.join(" ").replace(/\s+/g, " ");
+    for (const clause of LABELLED) expect(joined).toContain(clause);
+  });
+
+  it("draws the heading as its own run, so it can be bold", () => {
+    const { runs } = labelled();
+    expect(runs).toContain("Delivery Timeline:");
+    expect(runs).toContain("Order Confirmation:");
+  });
+
+  it("numbers the terms but not the note", () => {
+    /* The note says the GeM conditions prevail OVER these terms. Numbered
+       among them it would be one of the things it overrides. */
+    const { model, runs } = labelled();
+    expect(model.termsPage!.clauses).toHaveLength(2);
+    expect(model.termsPage!.notes).toHaveLength(1);
+    expect(model.termsPage!.notes[0]).toContain("GeM bid conditions");
+    expect(runs).toContain("1.");
+    expect(runs).toContain("2.");
+    expect(runs).not.toContain("3.");
+  });
+
+  it("keeps the note out of the numbering on a proforma too", () => {
+    /* A proforma prints its terms under the money block rather than on a
+       page of its own. Numbering the note there and not on the quotation
+       would have the same document say both things. */
+    const { model, runs } = labelled("proforma");
+    expect(model.termsPage).toBe(null);
+    const blocks = model.notes.filter((b) => b.lines.length);
+    expect(blocks.at(-1)!.numbered).toBe(false);
+    expect(blocks.at(-1)!.lines[0]).toContain("GeM bid conditions");
+    /* The terms block itself carries the two clauses and nothing else;
+       the note is its own block below it. (A proforma also prints a
+       payment-instructions block, which is numbered and is why counting
+       "3." across the whole page would prove nothing here.) */
+    const termsBlock = blocks.find((b) => b.heading === "TERMS & CONDITIONS")!;
+    expect(termsBlock.lines).toHaveLength(2);
+    expect(termsBlock.numbered).not.toBe(false);
+    expect(runs).toContain("Important Note:");
+  });
+
+  it("says whose terms they are, under the heading", () => {
+    /* A signing page arrives detached. The number identifies the
+       quotation; the name identifies the company without decoding it. */
+    expect(labelled().runs).toContain("TECHZOID TECHNOLOGIES PRIVATE LIMITED");
   });
 });

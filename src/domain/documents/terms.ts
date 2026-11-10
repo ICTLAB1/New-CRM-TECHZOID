@@ -36,32 +36,58 @@ export function forCompany(terms: readonly string[], company: string | null | un
 }
 
 /**
- * Domestic (India) — the fourteen clauses supplied with the approved
- * quotation design, used verbatim.
+ * Domestic (India) — the terms supplied by the company, used verbatim.
  *
- * NOTE, deliberately recorded: v1's domestic terms carried a clause making
- * licence keys, activation codes and subscriptions non-returnable once
- * delivered or activated. The approved design's terms omit it and its spec
- * says not to mention licence keys, activation or provisioning at all. That
- * removes the clause that covered the company's main product line on returns.
- * Retained here as supplied, on an explicit decision — see
- * docs/DEVIATIONS.md before restoring it.
+ * Replaces the fourteen clauses of the original approved design. These are
+ * longer, they carry run-in headings, and they cover the things that set
+ * this business apart from a generic reseller: TDS on software licences,
+ * licence activation and delivery, subscription renewal, price variation
+ * on foreign-currency subscriptions, and the precedence of GeM bid
+ * conditions on government orders.
+ *
+ * THREE THINGS WERE NOT COPIED LITERALLY, and each is deliberate:
+ *
+ *  - The company's own name, in the force majeure clause, is the
+ *    {{company}} token. The supplied text names TechZoid; this CRM also
+ *    raises documents for a second company, and a force majeure clause
+ *    naming the wrong business excuses the wrong one. See SELLER_TOKEN.
+ *
+ *  - The GeM note is the last entry rather than a twenty-first clause. It
+ *    says the GeM conditions PREVAIL over these terms, so numbering it
+ *    among them would make it one of the things it overrides. It is
+ *    recognised by its "Important Note" label and printed after the
+ *    numbered list — see clauses.ts.
+ *
+ *  - Nothing else. The clause wording, including the citation in the TDS
+ *    clause, is the company's own and is reproduced exactly.
+ *
+ * Standing caveat, and it applies with more force to a set this specific:
+ * these are commercial terms supplied by the company, not legal advice
+ * from this CRM. The TDS, limitation of liability, cancellation and
+ * jurisdiction clauses are the ones tested when something goes wrong.
  */
 export const DOMESTIC_TERMS: readonly string[] = [
-  "Quotation is valid for 30 days from the date of issue unless otherwise specified.",
-  "Prices are exclusive of applicable GST, taxes, duties, freight and other charges unless specifically stated otherwise.",
-  "Product, service and availability are subject to confirmation at the time of order.",
-  "Order confirmation is subject to receipt and acceptance of a valid Purchase Order and/or payment, as applicable.",
-  "Payment terms shall be as specified in this quotation and are subject to {{company}}'s approved commercial terms.",
-  "Delivery timelines are indicative and may vary depending on product availability, manufacturer/distributor schedules and logistics.",
-  "Product specifications, models and availability may be subject to change by the respective manufacturer without prior notice.",
-  "Hardware products are subject to the applicable manufacturer's warranty and support terms.",
-  "Any installation, configuration, deployment or other professional services are included only where specifically mentioned in this quotation.",
-  "Any cancellation, modification or change to an order after confirmation shall be subject to applicable commercial and supplier terms.",
-  "The customer is responsible for providing accurate billing, delivery and order-related information required for fulfilment.",
-  "{{company}} shall not be responsible for delays caused by circumstances beyond its reasonable control, including manufacturer, distributor, logistics or regulatory delays.",
-  "Acceptance of this quotation constitutes acceptance of the applicable terms and conditions stated herein, unless otherwise agreed in writing.",
-  "All disputes shall be subject to the jurisdiction of the courts at New Delhi, India.",
+  "Quotation Validity: This quotation is valid for 7 days from the date of issue, unless otherwise specified. Prices and product availability are subject to change thereafter.",
+  "Taxes & GST: All applicable taxes shall be charged at the rates prevailing on the date of invoicing. Currently, GST at 18% is applicable wherever applicable and shall be charged extra unless specifically included in the quotation.",
+  "TDS on Software Licenses: No TDS shall be deducted on the purchase of software licenses wherever the transaction qualifies for exemption under applicable provisions of the Income-tax Act, 1961, read with CBDT Notification No. 21/2012 [F. No. 142/10/2012-SO (TPL)], S.O. 1323(E), dated 13 June 2012, effective from 1 July 2012. The exemption shall be subject to fulfilment of the prescribed conditions under the applicable law.",
+  "Payment Terms: Payment shall be made as per the terms specified in the quotation. Unless otherwise agreed in writing, advance payment shall be required before processing the order.",
+  "Order Confirmation: Orders shall be considered confirmed only upon receipt of an official Purchase Order (PO) and/or advance payment, as applicable.",
+  "Delivery Timeline: Delivery and execution timelines are indicative and subject to product availability, vendor approvals, licensing activation and other dependencies beyond our reasonable control.",
+  "Software Licensing: All software licenses and subscriptions are subject to the respective manufacturer's licensing terms, conditions, usage policies and End User License Agreement (EULA).",
+  "License Activation & Delivery: Software licenses, activation keys, subscription entitlements and digital products shall be delivered electronically or through the manufacturer's designated portal, wherever applicable. Customers are responsible for providing accurate account, tenant and user details required for activation.",
+  "Cancellation & Refund: Once software licenses, subscriptions, activation keys or digital entitlements have been procured, issued or activated, orders shall be non-cancellable and non-refundable, except where required by applicable law or expressly approved by the manufacturer.",
+  "Subscription & Renewal: Subscription licenses are valid for the period specified in the quotation. Renewal, extension or continuation beyond the subscription period shall be subject to fresh commercial terms and prevailing manufacturer pricing. Auto-renewal shall not be assumed unless expressly agreed.",
+  "Hardware Warranty: Hardware products shall carry the manufacturer's standard warranty, wherever applicable. Warranty claims shall be governed by the respective manufacturer's warranty policies and procedures.",
+  "Technical Support: Installation, configuration, implementation, migration, training and technical support are excluded unless specifically mentioned in the quotation.",
+  "Price Variation: Prices for software licenses, imported products and foreign-currency-denominated subscriptions are subject to manufacturer price revisions, exchange-rate fluctuations and changes in applicable duties and taxes until order confirmation.",
+  "Third-Party Dependencies: We shall not be responsible for delays or disruptions caused by manufacturers, distributors, cloud service providers, licensing portals or other third parties beyond our reasonable control.",
+  "Customer Responsibilities: The customer shall ensure that all information, email IDs, domain details, tenant information, technical specifications and other details provided for order processing are accurate and complete. Any delay arising from incorrect or incomplete information shall be the customer's responsibility.",
+  "Limitation of Liability: To the extent permitted by applicable law, our liability arising from any transaction shall be limited to the amount received against the specific product or service giving rise to the claim. We shall not be liable for indirect, incidental, special or consequential losses.",
+  "Force Majeure: {{company}} shall not be held liable for delays or failure to perform obligations due to circumstances beyond its reasonable control, including natural disasters, government restrictions, strikes, war, internet outages or manufacturer disruptions.",
+  "Confidentiality: The pricing, commercial terms and contents of this quotation are confidential and intended solely for the addressed customer. They shall not be disclosed to third parties without prior written consent.",
+  "Governing Law & Jurisdiction: All transactions shall be governed by the laws of India. Courts at New Delhi shall have jurisdiction over disputes arising out of this quotation and the resulting transaction, subject to applicable law.",
+  "Acceptance of Terms: Placement of a Purchase Order, written acceptance or payment against this quotation shall constitute acceptance of the applicable commercial terms and conditions.",
+  "Important Note: For Government and GeM transactions, the applicable GeM bid conditions, contract terms, SLA and statutory requirements shall prevail over these standard quotation terms wherever there is any inconsistency.",
 ];
 
 /**
