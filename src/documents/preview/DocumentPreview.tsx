@@ -47,7 +47,7 @@ function Clause({ text }: { text: string }) {
  * it, and the merged runs are also what the PDF draws, so the two cannot
  * disagree about a seam.
  */
-function ScanCode({ scan }: { scan: NonNullable<DocumentModel["scan"]> }) {
+function ScanCode({ scan, inHead = false }: { scan: NonNullable<DocumentModel["scan"]>; inHead?: boolean }) {
   const grid = scanMatrix(scan.payload);
   const n = grid.length;
   const runs: string[] = [];
@@ -62,13 +62,19 @@ function ScanCode({ scan }: { scan: NonNullable<DocumentModel["scan"]> }) {
       c += run;
     }
   }
+  const square = (
+    <div className="doc-scan-quiet">
+      <svg className="doc-scan-img" viewBox={`0 0 ${n} ${n}`} role="img" aria-label={`Scan code for ${scan.payload}`}>
+        <path d={runs.join("")} fill="#181818" />
+      </svg>
+    </div>
+  );
+  /* In the header it stands alone: the number plaque is beside it, and
+     the words would not fit the height the header already has. */
+  if (inHead) return <div className="doc-scan doc-scan-head">{square}</div>;
   return (
     <div className="doc-scan">
-      <div className="doc-scan-quiet">
-        <svg className="doc-scan-img" viewBox={`0 0 ${n} ${n}`} role="img" aria-label={`Scan code for ${scan.payload}`}>
-          <path d={runs.join("")} fill="#181818" />
-        </svg>
-      </div>
+      {square}
       <div>
         <div className="doc-scan-caption">{scan.caption}</div>
         <div className="doc-scan-number">{scan.payload}</div>
@@ -159,6 +165,14 @@ export function DocumentPreview({ model: m, rows, brandLogos = {}, scale = 1 }: 
               <div className="doc-head-reg">{m.header.registration.join("     ")}</div>
             ) : null}
           </div>
+          {/* Beside the number it carries, which is where somebody looks
+              first and where a phone can reach it without turning the
+              page over. The PDF puts it here too; where the header has no
+              room for it there — a company whose address runs under the
+              square — the PDF drops it to the signature block instead,
+              and this preview lets the flexbox give way rather than
+              moving it. One code either way. */}
+          {m.scan ? <ScanCode scan={m.scan} inHead /> : null}
           <div style={{ width: "74mm", flex: "none" }}>
             <div className="doc-title">{m.title}</div>
             <div className="doc-plaque">{m.number}</div>
@@ -398,7 +412,7 @@ export function DocumentPreview({ model: m, rows, brandLogos = {}, scale = 1 }: 
               ))}
               <div className="doc-acceptance-seal">{m.signature.acceptance.sealLabel}</div>
             </div>
-          ) : m.scan ? <ScanCode scan={m.scan} /> : <div />}
+          ) : <div />}
           <div className="doc-for-company">
             <div className="doc-for-line">{m.signature.forLine}</div>
             <div className="doc-sig-line" />
@@ -408,10 +422,6 @@ export function DocumentPreview({ model: m, rows, brandLogos = {}, scale = 1 }: 
             ) : null}
           </div>
         </section>
-
-        {/* Below the block when the acceptance box has taken the space
-            beside it — the PDF places it the same way. */}
-        {m.scan && m.signature.acceptance ? <ScanCode scan={m.scan} /> : null}
 
         {/* THE SAME ANNEXURE THE PDF PRINTS, from the same model. Shown
             here under a divider rather than as a true second sheet — the

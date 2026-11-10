@@ -292,6 +292,23 @@ describe("the scan code on the page", () => {
    * geometry is self-locating: the module rows are the only rectangles on
    * the page with that height.
    */
+  /** The square's printed size in mm, in its usual place in the header. */
+  const SCAN_MM = 24;
+
+  /** The module rectangles themselves, for a test about where they are. */
+  const moduleRects = (bytes: Uint8Array, size: number) => {
+    const stream = pdfStreams(bytes);
+    const out: Array<{ x: number; y: number; w: number; h: number }> = [];
+    const re = /([-\d.]+) ([-\d.]+) ([-\d.]+) ([-\d.]+) re\s+f/g;
+    const cellPt = (SCAN_MM / size) * (72 / 25.4);
+    for (let m = re.exec(stream); m; m = re.exec(stream)) {
+      const r = { x: +m[1]!, y: +m[2]!, w: +m[3]!, h: +m[4]! };
+      if (Math.abs(Math.abs(r.h) - cellPt) < cellPt * 0.2) out.push(r);
+    }
+    expect(out.length, "no module rows found in the PDF").toBeGreaterThan(0);
+    return out;
+  };
+
   const modulesFromPdf = (bytes: Uint8Array, size: number): boolean[][] => {
     const stream = pdfStreams(bytes);
     const rects: Array<{ x: number; y: number; w: number; h: number }> = [];
@@ -301,7 +318,7 @@ describe("the scan code on the page", () => {
     }
     /* One cell is 18mm/size; everything else drawn on the page is taller
        than two of them. */
-    const cellPt = (18 / size) * (72 / 25.4);
+    const cellPt = (SCAN_MM / size) * (72 / 25.4);
     const cells = rects.filter((r) => Math.abs(Math.abs(r.h) - cellPt) < cellPt * 0.2);
     expect(cells.length, "no module rows found in the PDF").toBeGreaterThan(0);
 
@@ -329,10 +346,25 @@ describe("the scan code on the page", () => {
     expect(modulesFromPdf(bytes, want.length)).toEqual(want);
   });
 
-  it("prints the number beside it, for anyone without a camera", () => {
+  it("is in the top right, beside the number it carries", () => {
+    /* Where somebody looks first, and where a phone can reach it without
+       turning the page over. Pinned because a layout change could move
+       it back to the foot of the page without anything else noticing.
+       PDF coordinates run up from the bottom-left, so the top right is a
+       large y and a large x. */
+    const { model, rows } = modelFor("quotation");
+    const bytes = new Uint8Array(renderDocumentPdf({ model, rows }).output("arraybuffer"));
+    const cells = moduleRects(bytes, scanMatrix(model.scan!.payload).length);
+    const A4_W = 595.28, A4_H = 841.89;
+    expect(Math.max(...cells.map((r) => r.y))).toBeGreaterThan(A4_H * 0.85);
+    expect(Math.min(...cells.map((r) => r.x))).toBeGreaterThan(A4_W * 0.4);
+  });
+
+  it("prints the number too, for anyone without a camera", () => {
+    /* No caption under the square in the header: the number plaque is
+       two centimetres away, and the words would not fit the height the
+       header already has. */
     expect(render("quotation")).toContain("TZ/PI/2026-27/0007");
-    expect(pdfRuns(new Uint8Array(renderDocumentPdf(modelFor("quotation")).output("arraybuffer"))))
-      .toContain("Scan in the CRM");
   });
 
   it("is on every kind of document", () => {
@@ -357,8 +389,19 @@ describe("the scan code on the page", () => {
   });
 
   it("is left off when the section is switched off", () => {
+    /* Counted, not looked for by its caption: there is no caption under
+       the square in the header, so asking for one would pass whether the
+       code was there or not. */
     const { model, rows } = modelFor("quotation");
-    const bytes = new Uint8Array(renderDocumentPdf({ model: { ...model, scan: null }, rows }).output("arraybuffer"));
-    expect(pdfRuns(bytes)).not.toContain("Scan in the CRM");
+    const off = new Uint8Array(renderDocumentPdf({ model: { ...model, scan: null }, rows }).output("arraybuffer"));
+    const size = scanMatrix(model.scan!.payload).length;
+    const cellPt = (SCAN_MM / size) * (72 / 25.4);
+    const stream = pdfStreams(off);
+    const re = /([-\d.]+) ([-\d.]+) ([-\d.]+) ([-\d.]+) re\s+f/g;
+    let cells = 0;
+    for (let m = re.exec(stream); m; m = re.exec(stream)) {
+      if (Math.abs(Math.abs(+m[4]!) - cellPt) < cellPt * 0.2) cells += 1;
+    }
+    expect(cells).toBe(0);
   });
 });

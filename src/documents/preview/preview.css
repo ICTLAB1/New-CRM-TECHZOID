@@ -29,6 +29,7 @@
 
 /* ── header ── */
 .doc-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 6mm; }
+.doc-head > :first-child { flex: 1; min-width: 0; }
 /* No logo uploaded: the legal name stands in as the mark, set larger and
    without the top margin it carries when a logo sits above it. */
 .doc-legal-lead { font-size: 4.4mm; margin-top: 0; }
@@ -209,6 +210,10 @@
 /* The scan code, beside the signature. Matches the PDF: an 18mm square
    with a 2mm white quiet zone, the caption and the number to its right. */
 .doc-scan { display: flex; gap: 2.5mm; align-items: flex-start; margin-top: 2mm; }
+/* In the header: level with the number plaque, between the company's
+   own details and the meta column. The same 24mm square the PDF draws. */
+.doc-scan-head { flex: none; margin-top: 10mm; margin-right: 4mm; }
+.doc-scan-head .doc-scan-img { width: 24mm; height: 24mm; }
 .doc-scan-quiet { flex: none; background: #fff; padding: 2mm; }
 .doc-scan-img { display: block; width: 18mm; height: 18mm; shape-rendering: crispEdges; }
 .doc-scan-caption { font-size: 2.2mm; color: #6B6B68; }

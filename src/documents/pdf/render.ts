@@ -186,25 +186,44 @@ export function renderDocumentPdf(opts: RenderOptions): jsPDF {
        "TECHZOID" wordmark here above it, which printed the company's name
        twice and printed the WRONG name for anyone who changes it in
        Settings. */
+    /* How far right the left column actually reaches, measured line by
+       line as it is drawn — the scan code needs to know, and guessing
+       from the longest string is not the same question as measuring the
+       font it is set in. */
+    /* THE SQUARE HAS A COLUMN, IT IS NOT SQUEEZED IN.
+       Measured on this company's real header, the contact line reaches
+       104mm and the registration line 102mm — both well past where the
+       square starts. A version of this that measured the lines and stood
+       down when they were in the way put the code back at the foot of
+       the page on every document TechZoid prints, which is the opposite
+       of what was asked for. So the space is reserved first and the
+       left column wraps into what is left.
+       The company name and the tagline are NOT wrapped: they sit above
+       the square and never meet it, and wrapping a 14pt company name
+       onto two lines changes the whole head of the page. */
+    const scanBox = m.scan ? SCAN_SIZE + SCAN_QUIET * 2 : 0;
+    const scanX = m.scan ? rightX - 4 - scanBox : rightX;
+    const leftW = scanX - 3 - M;
+
     pdf.setFont("helvetica", "bold").setFontSize(logo ? 11 : 14).setTextColor(...BRAND);
     pdf.text(m.header.companyName.toUpperCase(), M, y + (logo ? 1 : 2));
     pdf.setFont("helvetica", "normal").setFontSize(7.4).setTextColor(...MUTED);
     pdf.text(m.header.tagline, M, y + (logo ? 6 : 7.5));
     let ly = y + (logo ? 11 : 12.5);
 
+    const wrapped = (text: string, lead: number): void => {
+      for (const out of pdf.splitTextToSize(text, leftW) as string[]) {
+        pdf.text(out, M, ly);
+        ly += lead;
+      }
+    };
+
     pdf.setFont("helvetica", "normal").setFontSize(6.8).setTextColor(...MUTED);
-    for (const line of m.header.addressLines) {
-      pdf.text(line, M, ly);
-      ly += 3.1;
-    }
-    if (m.header.contactLine) {
-      pdf.text(m.header.contactLine, M, ly);
-      ly += 3.4;
-    }
+    for (const line of m.header.addressLines) wrapped(line, 3.1);
+    if (m.header.contactLine) wrapped(m.header.contactLine, 3.4);
     if (m.header.registration.length) {
       pdf.setFont("helvetica", "bold").setFontSize(6.6).setTextColor(...INK);
-      pdf.text(m.header.registration.join("     "), M, ly);
-      ly += 3.4;
+      wrapped(m.header.registration.join("     "), 3.4);
     }
     const leftBottom = ly;
 
@@ -220,7 +239,11 @@ export function renderDocumentPdf(opts: RenderOptions): jsPDF {
     const metaTop = top + 20;
     const metaEnd = colonRows(m.header.meta, rightX, rightW, metaTop, 24, 7.4);
 
-    y = Math.max(leftBottom, metaEnd) + 3;
+    /* Last, so it is measured against a left column that has finished
+       being drawn. The header is as tall as the tallest of the three. */
+    const scanEnd = drawHeaderScan(top, scanX);
+
+    y = Math.max(leftBottom, metaEnd, scanEnd) + 3;
     rule(y, M, M + CW, BRAND, 0.7);
     y += 4;
 
@@ -859,28 +882,35 @@ export function renderDocumentPdf(opts: RenderOptions): jsPDF {
    * zone to be found at all, and a code butted against the page's own
    * content is a code that reads only sometimes.
    */
-  let scanDrawn = false;
+  const SCAN_QUIET = 2;
+  /* How far below the header's top the square starts: level with the
+     number plaque, clear of the title and tagline above it. */
+  const SCAN_TOP = 10;
+  /* 24mm. THE HEADER'S HEIGHT IS THE BUDGET: it is as tall as its meta
+     rows — date, validity, revision, currency — which reach about 39mm
+     below the top. 10 + 24 + two 2mm quiet margins is 38. A first
+     attempt at 26mm with "Scan in the CRM" underneath came to 44mm and
+     pushed the signature block onto a page of its own. */
+  const SCAN_SIZE = 24;
 
-  /** @param atTop draw it in a band somebody else measured, at this y, and
-   *  leave y alone. Omitted, it flows like everything else. */
-  function drawScanCode(atTop?: number): void {
-    if (!m.scan || scanDrawn) return;
-    scanDrawn = true;
-    const SIZE = 18;
-    const QUIET = 2;
-    const box = SIZE + QUIET * 2;
-    const flowing = atTop === undefined;
-    if (flowing) need(box + 2);
-    const top = atTop ?? y;
-
-    const modules = scanMatrix(m.scan.payload);
+  /**
+   * The square itself, white field and all. Returns the size of the whole
+   * box so a caller can lay out around it.
+   *
+   * The quiet zone is not decoration: a QR needs white around it to be
+   * found at all, and one butted against the page's own content reads
+   * only sometimes.
+   */
+  const paintScanSquare = (payload: string, x: number, yTop: number, size: number): number => {
+    const box = size + SCAN_QUIET * 2;
+    const modules = scanMatrix(payload);
     const n = modules.length;
-    const cell = SIZE / n;
-    const x0 = M + QUIET;
-    const y0 = top + QUIET;
+    const cell = size / n;
+    const x0 = x + SCAN_QUIET;
+    const y0 = yTop + SCAN_QUIET;
 
     pdf.setFillColor(255, 255, 255);
-    pdf.rect(M, top, box, box, "F");
+    pdf.rect(x, yTop, box, box, "F");
     pdf.setFillColor(...INK);
     for (let r = 0; r < n; r++) {
       const row = modules[r]!;
@@ -893,14 +923,41 @@ export function renderDocumentPdf(opts: RenderOptions): jsPDF {
         c += run;
       }
     }
+    return box;
+  };
 
-    const tx = M + box + 2.5;
-    pdf.setFont("helvetica", "normal").setFontSize(6.2).setTextColor(...MUTED);
-    pdf.text(m.scan.caption, tx, top + QUIET + 4);
-    pdf.setFont("helvetica", "bold").setFontSize(7.4).setTextColor(...INK);
-    pdf.text(m.scan.payload, tx, top + QUIET + 9);
-
-    if (flowing) y = top + box + 2;
+  /**
+   * THE USUAL PLACE: the top right, beside the number it carries.
+   *
+   * Big enough to read off a phone held at arm's length, and where
+   * somebody looks first. It sits in the gap between the company's own
+   * details and the number plaque, so it costs the page no height in the
+   * ordinary case — the header is already as tall as its meta rows.
+   *
+   * IT MEASURES BEFORE IT DRAWS. That gap belongs to the left column: a
+   * company with a long address or a second registration number can fill
+   * it, and a QR laid over the company's own GSTIN is worse than a QR
+   * somewhere less convenient. `leftRight` is how far the left column
+   * actually reached, measured as it was drawn. With no room the square
+   * is not drawn here at all and falls through to the signature band.
+   *
+   * @returns how far down the page it reached, for the header's own height
+   */
+  function drawHeaderScan(top: number, x: number): number {
+    if (!m.scan) return top;
+    /* 24mm, and no caption under it.
+       THE HEADER'S HEIGHT IS THE BUDGET. It is as tall as its meta rows
+       — date, validity, revision, currency — which reach about 39mm
+       below the top, and the page beneath it is full: a first attempt at
+       26mm with "Scan in the CRM" underneath came to 44mm and pushed the
+       signature block onto a page of its own. So the square is sized to
+       the space that already exists rather than taking more, and the
+       words go without. The number plaque is two centimetres away and a
+       square beside a document number is not cryptic. */
+    const box = SCAN_SIZE + SCAN_QUIET * 2;
+    const yTop = top + SCAN_TOP;
+    paintScanSquare(m.scan.payload, x, yTop, SCAN_SIZE);
+    return yTop + box;
   }
 
   /* ─────────────────────── signature block ─────────────────────── */
@@ -913,14 +970,6 @@ export function renderDocumentPdf(opts: RenderOptions): jsPDF {
     const boxH = m.signature.acceptance ? 8 + fieldCount * 7 + 5 : 26;
     need(boxH);
     const top = y;
-
-    /* The scan code goes in this band's left half when nothing else is
-       using it — which is the usual case, and costs the document no
-       height at all. Given its own flow it took a page of its own on a
-       full quotation, which is a page the customer has to print to get a
-       square they can already see on page one. When there IS an
-       acceptance box here, it falls through to flowing below instead. */
-    if (!m.signature.acceptance) drawScanCode(top);
 
     if (m.signature.acceptance) {
       const accW = CW * 0.55;
@@ -1105,8 +1154,6 @@ export function renderDocumentPdf(opts: RenderOptions): jsPDF {
   /* Under the signature, where there is room on every kind of document.
      Above it would mean finding a gap that the acceptance box, the bank
      details or a long address might already have taken. */
-  /* A no-op when the signature block already placed it beside itself. */
-  drawScanCode();
   /* LAST, and on a page of its own. */
   drawTermsPage();
 
