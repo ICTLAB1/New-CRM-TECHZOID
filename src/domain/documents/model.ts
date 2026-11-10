@@ -132,6 +132,20 @@ export interface DocumentModel {
     amountInWords: string | null;
     terms: string[];
     bank: { heading: string; rows: Pair[]; upiQr: string | null } | null;
+    /**
+     * WHERE THE BANK BLOCK GOES, decided once, here.
+     *
+     * False: it sits in the money block's left column, which is free
+     * because the terms are not there — a proforma's are under the
+     * totals, a quotation's are on its own annexure page.
+     * True: the column is taken by the terms, so it prints below.
+     *
+     * This is in the model because both renderers used to work it out
+     * for themselves from different conditions, and drifted: the PDF
+     * printed it once and the on-screen preview printed it twice on
+     * every quotation, which is what a customer's preview showed.
+     */
+    bankBelow: boolean;
   };
 
   /**
@@ -813,6 +827,7 @@ export function buildDocumentModel(input: BuildModelInput): DocumentModel {
       amountInWords: isOn(SEC.amountInWords) ? amountInWordsForCurrency(t.grand, currency) : null,
       terms,
       bank: bankBlock,
+      bankBelow: terms.length > 0,
     },
     termsPage,
     /* On every kind of document, not only the ones that are signed: the

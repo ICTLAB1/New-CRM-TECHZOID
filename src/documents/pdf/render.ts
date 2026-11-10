@@ -601,7 +601,7 @@ export function renderDocumentPdf(opts: RenderOptions): jsPDF {
    * a proforma's always was. Keyed off isProforma, this printed them twice
    * the moment that changed. */
   function drawBankDetails(): void {
-    if (!m.money.terms.length || !m.money.bank) return;
+    if (!m.money.bankBelow || !m.money.bank) return;
     const bank = m.money.bank;
     need(10 + bank.rows.length * 5);
     pdf.setFont("helvetica", "bold").setFontSize(7.6).setTextColor(...BRAND);

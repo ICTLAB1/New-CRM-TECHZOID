@@ -48,7 +48,9 @@ const DOC = {
   ],
 };
 
-function build(docOverrides = {}, docType: "quotation" | "proforma" = "quotation") {
+type Kind = "quotation" | "proforma" | "invoice" | "purchase_order";
+
+function build(docOverrides = {}, docType: Kind = "quotation") {
   const doc = { ...DOC, ...docOverrides };
   const totals = computeDocument(doc, "Delhi");
   const model = buildDocumentModel({
@@ -220,6 +222,39 @@ describe("document variants", () => {
     const html = renderToStaticMarkup(<DocumentPreview model={model} rows={totals.rows} />);
     expect(html).not.toContain("undefined");
     expect(html).not.toContain("NaN");
+  });
+});
+
+describe("the bank details, printed once", () => {
+  /**
+   * THE BUG THIS EXISTS FOR, and the drift guard above did not catch it:
+   * the PDF and the preview each decided for themselves where the bank
+   * block goes, from different conditions. When a quotation's terms moved
+   * to their own annexure page, the PDF printed the bank details once and
+   * the preview printed them twice — on every quotation anybody looked at
+   * before sending it.
+   *
+   * The decision is now one field on the model, model.money.bankBelow,
+   * and this counts what a reader actually sees.
+   */
+  const headings = (text: string, heading: string) => text.split(heading).length - 1;
+
+  for (const kind of ["quotation", "proforma", "invoice", "purchase_order"] as const) {
+    it(`prints one bank block on a ${kind.replace("_", " ")}`, () => {
+      const { model, text } = build({}, kind);
+      if (!model.money.bank) return;
+      expect(headings(text, model.money.bank.heading), kind).toBe(1);
+      expect(headings(text, "50200045678901"), kind).toBe(1);
+    });
+  }
+
+  it("puts it in the column when the terms are elsewhere, and below when they are not", () => {
+    /* A quotation's terms are on the annexure page and a proforma's are
+       under the totals, so both leave the column free. An invoice keeps
+       its terms there, so its bank block goes below. */
+    expect(build({}, "quotation").model.money.bankBelow).toBe(false);
+    expect(build({}, "proforma").model.money.bankBelow).toBe(false);
+    expect(build({}, "invoice").model.money.bankBelow).toBe(true);
   });
 });
 

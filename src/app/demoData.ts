@@ -44,7 +44,7 @@ export const WORKSPACE: Workspace = {
 import { DEFAULT_CERTIFICATIONS, DEFAULT_PARTNER_DESIGNATIONS, DEFAULT_TECHNOLOGY_PARTNERS } from "../domain/documents/brandDefaults";
 import { BRAND_ASSETS } from "../assets/brandAssets";
 import type { DocImages } from "../documents/pdf/render";
-import { DOMESTIC_TERMS, PURCHASE_ORDER_TERMS } from "../domain/documents/terms";
+import { DOMESTIC_TERMS, PURCHASE_ORDER_TERMS, forCompany } from "../domain/documents/terms";
 import type { SalesDocument } from "../domain/documents/create";
 import type { CatalogProduct } from "../domain/catalog/types";
 
@@ -155,7 +155,11 @@ const baseDoc = (over: Partial<SalesDocument>): SalesDocument => ({
     { id: "i1", desc: "Microsoft 365 Business Premium", subDesc: "Annual Subscription\nFor 25 Users", brand: "Microsoft", sku: "CFQ7TTC0LH1Y", hsn: "997331", qty: 25, unit: "User", rate: 18900, disc: 5, gst: 18 },
     { id: "i2", desc: "HP EliteBook 840 G11", subDesc: "14\" WUXGA, Core Ultra 7, 16GB, 512GB SSD", brand: "HP", sku: "9G0K8PT", hsn: "84713010", qty: 10, unit: "Nos.", rate: 112500, disc: 8, gst: 18 },
   ],
-  terms: [...DOMESTIC_TERMS],
+  /* Filled in, as a real document's are: the sets carry {{company}} and a
+     document stores the text with the name already in it. Left raw, the
+     demo showed a prospective customer "{{company}} shall not be held
+     liable" in the force majeure clause. */
+  terms: forCompany(DOMESTIC_TERMS, "TechZoid Technologies Private Limited"),
   intro: "", footer: "", notes: "", roundOff: true,
   preparedBy: "Priyanshi Sharma", createdAt: Date.now(), updatedAt: Date.now(),
   ...over,

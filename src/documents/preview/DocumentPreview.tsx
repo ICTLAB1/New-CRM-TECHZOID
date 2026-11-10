@@ -281,7 +281,7 @@ export function DocumentPreview({ model: m, rows, brandLogos = {}, scale = 1 }: 
                 <div className="doc-block-title">TERMS &amp; CONDITIONS</div>
                 <ol>{m.money.terms.map((t, i) => <li key={i}>{t}</li>)}</ol>
               </>
-            ) : m.money.bank ? (
+            ) : m.money.bank && !m.money.bankBelow ? (
               <>
                 <div className="doc-block-title">{m.money.bank.heading}</div>
                 <Rows pairs={m.money.bank.rows} />
@@ -347,7 +347,10 @@ export function DocumentPreview({ model: m, rows, brandLogos = {}, scale = 1 }: 
           </section>
         ) : null}
 
-        {!m.isProforma && m.money.bank ? (
+        {/* Below the totals only when the column is taken by the terms —
+            the same one field the PDF reads, so the two cannot disagree
+            about it again. */}
+        {m.money.bankBelow && m.money.bank ? (
           <section className="doc-bank">
             <div className="doc-block-title">{m.money.bank.heading}</div>
             <Rows pairs={m.money.bank.rows} />

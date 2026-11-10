@@ -180,9 +180,13 @@ describe("the quotation's terms and acceptance page", () => {
 
   it("does not print the bank details twice either", () => {
     /* The column the terms left is where the bank details go now, and
-       drawBankDetails draws them below. Only one of the two may. */
-    const text = render("quotation");
-    expect(text.split("50200045678901").length - 1).toBe(1);
+       drawBankDetails draws them below. Only one of the two may — on
+       every kind of document, not just the one that moved. The preview
+       got this wrong for quotations while the PDF had it right, which is
+       why the decision now lives on the model as money.bankBelow. */
+    for (const kind of ["quotation", "proforma", "invoice"] as const) {
+      expect(render(kind).split("50200045678901").length - 1, kind).toBe(1);
+    }
   });
 
   it("belongs to a quotation and nothing else", () => {
