@@ -12,7 +12,7 @@ import { CURRENCIES } from "../../domain/currency/currencies";
 import { STATE_NAMES } from "../../domain/geo/states";
 import { normalizeDocTemplate, SECTION_ORDER_META, type DocTemplate, type SectionKey } from "../../domain/documents/template";
 import { DEFAULT_VALIDITY_DAYS } from "../../domain/documents/create";
-import { DOMESTIC_TERMS } from "../../domain/documents/terms";
+import { DOMESTIC_TERMS, SELLER_TOKEN } from "../../domain/documents/terms";
 import { DEFAULT_REVENUE_BASIS, REVENUE_BASES, type IncentiveScheme, type IncentiveSlab } from "../../domain/incentives/incentives";
 import { DEFAULT_PREFIX, buildDocNumber } from "../../domain/numbering/docNumber";
 import { localISO } from "../../domain/dates";
@@ -624,6 +624,19 @@ function TermsPanel({ settings, canEdit, onChange }: { settings: Record<string, 
         Copied onto every new quotation, where they can still be edited per document. Changing them here does
         not touch documents already saved — a quotation's terms are part of what was agreed.
       </p>
+      {/* The token is stored, not the name: this CRM raises documents for
+          more than one company, and a clause naming the wrong business
+          excuses the wrong one. Shown rather than hidden because it is
+          sitting there in the text and otherwise reads as a mistake. */}
+      <p className="muted" style={{ marginTop: 6 }}>
+        <code>{SELLER_TOKEN}</code> is replaced with the company the document belongs to when it is created,
+        so the same set reads correctly for each of your businesses.
+      </p>
+      {settings["defaultTermsBefore053"] ? (
+        <p className="muted" style={{ marginTop: 6 }}>
+          The set these replaced is still stored and can be put back — ask and it takes a minute.
+        </p>
+      ) : null}
 
       <div className="stack" style={{ marginTop: 14, gap: 8 }}>
         {draft.map((clause, i) => (

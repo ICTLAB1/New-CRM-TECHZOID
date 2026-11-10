@@ -4,6 +4,8 @@ import {
   INVOICE_TERMS_SETS, SELLER_TOKEN, forCompany, suggestTermsSet, termsSetsFor, TERMS_SETS,
 } from "./terms";
 import { partitionClauses } from "./clauses";
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 
 describe("default terms", () => {
   it("carries the twenty supplied domestic clauses and the GeM note", () => {
@@ -198,5 +200,62 @@ describe("the seller's own name", () => {
       expect(out.join(" ")).toContain("the Company");
       expect(out.join(" ")).not.toContain(SELLER_TOKEN);
     }
+  });
+});
+
+describe("the migration that puts these terms where documents read them", () => {
+  /**
+   * DOMESTIC_TERMS is the LAST of three places a new quotation looks for
+   * its terms: a quotation template's own terms, then
+   * settings.defaultTerms, then this. The first two are stored per
+   * workspace, so changing the code alone changes what a brand-new
+   * workspace would get and nothing about what a running one prints —
+   * which is exactly what happened, and what the latest terms migration
+   * is for.
+   *
+   * IF THIS FAILS, the clauses above were edited and the stored copies
+   * were not. The fix is a NEW migration, written by
+   * `npx tsx scripts/terms-migration.ts <next number>` — never an edit to
+   * one that has already been applied, because the ledger will not run it
+   * again and the edit would reach no database at all.
+   */
+  const latestTermsMigration = (): { name: string; arrays: string[][] } => {
+    const dir = "supabase";
+    const files = readdirSync(dir)
+      .filter((f) => /^\d{3}_.*\.sql$/.test(f))
+      .sort()
+      .reverse();
+    for (const name of files) {
+      const text = readFileSync(join(dir, name), "utf8");
+      const arrays: string[][] = [];
+      const re = /\$json\$([\s\S]*?)\$json\$/g;
+      for (let m = re.exec(text); m; m = re.exec(text)) arrays.push(JSON.parse(m[1]!) as string[]);
+      if (arrays.length) return { name, arrays };
+    }
+    throw new Error("no migration carries a terms array");
+  };
+
+  const latest = latestTermsMigration();
+
+  it("writes exactly these clauses, to both stores", () => {
+    /* One array for settings.defaultTerms, one for the quotation
+       templates. Both must be this file's set, character for character. */
+    expect(latest.arrays, latest.name).toHaveLength(2);
+    for (const arr of latest.arrays) expect(arr, latest.name).toEqual([...DOMESTIC_TERMS]);
+  });
+
+  it("keeps the token rather than a company name", () => {
+    /* The stored set is filled in per document by create.ts. A name baked
+       in here would be the wrong company's on the other company's
+       quotations. */
+    const text = readFileSync(join("supabase", latest.name), "utf8");
+    expect(text).toContain(SELLER_TOKEN);
+    expect(text).not.toMatch(/TechZoid/i);
+  });
+
+  it("keeps what it replaces", () => {
+    const text = readFileSync(join("supabase", latest.name), "utf8");
+    expect(text).toMatch(/defaultTermsBefore\d{3}/);
+    expect(text).toMatch(/termsBefore\d{3}/);
   });
 });
