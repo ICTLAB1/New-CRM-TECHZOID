@@ -178,7 +178,7 @@ export function renderDocumentPdf(opts: RenderOptions): jsPDF {
     if (logo) {
       const box = fitBox(logo, 46, 12);
       pdf.addImage(logo.src, "PNG", M, y, box.w, box.h, undefined, "FAST");
-      y += box.h + 3;
+      y += box.h + 2;
     }
 
     /* With no logo uploaded, the legal name IS the mark — set larger to
@@ -205,27 +205,52 @@ export function renderDocumentPdf(opts: RenderOptions): jsPDF {
     const scanX = m.scan ? rightX - 4 - scanBox : rightX;
     const leftW = scanX - 3 - M;
 
-    pdf.setFont("helvetica", "bold").setFontSize(logo ? 11 : 14).setTextColor(...BRAND);
-    pdf.text(m.header.companyName.toUpperCase(), M, y + (logo ? 1 : 2));
-    pdf.setFont("helvetica", "normal").setFontSize(7.4).setTextColor(...MUTED);
-    pdf.text(m.header.tagline, M, y + (logo ? 6 : 7.5));
-    let ly = y + (logo ? 11 : 12.5);
+    /* A line is wrapped if it runs alongside the square, and left at full
+       width if it is clear of it.
+       THE RULE IS THE LINE'S OWN POSITION, not which line it is. An
+       earlier version exempted the company name and the tagline on the
+       reasoning that they sit above the square — which is true only
+       with no logo uploaded. With one, the logo pushes both DOWN into
+       the square's band, and the name was drawn at full width and then
+       painted over by the square's white field: TechZoid's own
+       quotations went out reading "TECHZOID TECHNOLOGIES PRIVATE LIM".
+       Nothing here knows which line it is any more. */
+    /* From the header's own top, NOT from y: y has already been advanced
+       past the logo by this point, which put the band 15mm too low and
+       made this whole check pass over the very line it was written for. */
+    const scanTop = top + SCAN_TOP;
+    const inScanBand = (at: number): boolean =>
+      !!m.scan && at > scanTop - 1 && at < scanTop + scanBox + 1;
 
-    const wrapped = (text: string, lead: number): void => {
-      for (const out of pdf.splitTextToSize(text, leftW) as string[]) {
+    let ly = y + (logo ? 1 : 2);
+    /* The last line's leading is the gap BELOW it, which the header does
+       not owe: measuring the block to that point left six millimetres of
+       air under the registration line and cost a full page on a document
+       that ended one line short. The block ends a descender below its
+       last baseline instead. */
+    let lastLead = 0;
+    const say = (text: string, lead: number): void => {
+      const width = inScanBand(ly) ? leftW : CW;
+      for (const out of pdf.splitTextToSize(text, width) as string[]) {
         pdf.text(out, M, ly);
         ly += lead;
+        lastLead = lead;
       }
     };
 
+    pdf.setFont("helvetica", "bold").setFontSize(logo ? 11 : 14).setTextColor(...BRAND);
+    say(m.header.companyName.toUpperCase(), logo ? 4.6 : 5.5);
+    pdf.setFont("helvetica", "normal").setFontSize(7.4).setTextColor(...MUTED);
+    say(m.header.tagline, logo ? 5 : 5);
+
     pdf.setFont("helvetica", "normal").setFontSize(6.8).setTextColor(...MUTED);
-    for (const line of m.header.addressLines) wrapped(line, 3.1);
-    if (m.header.contactLine) wrapped(m.header.contactLine, 3.4);
+    for (const line of m.header.addressLines) say(line, 3.1);
+    if (m.header.contactLine) say(m.header.contactLine, 3.4);
     if (m.header.registration.length) {
       pdf.setFont("helvetica", "bold").setFontSize(6.6).setTextColor(...INK);
-      wrapped(m.header.registration.join("     "), 3.4);
+      say(m.header.registration.join("     "), 3.4);
     }
-    const leftBottom = ly;
+    const leftBottom = ly - lastLead + 1.6;
 
     /* Title, number plaque, then the date/validity/revision/currency rows. */
     pdf.setFont("helvetica", "bold").setFontSize(19).setTextColor(...BRAND);
@@ -243,7 +268,12 @@ export function renderDocumentPdf(opts: RenderOptions): jsPDF {
        being drawn. The header is as tall as the tallest of the three. */
     const scanEnd = drawHeaderScan(top, scanX);
 
-    y = Math.max(leftBottom, metaEnd, scanEnd) + 3;
+    /* 2mm, not 3. The block already ends a descender below its last
+       baseline, so the rule still sits comfortably clear of it — and the
+       millimetre matters: with a logo uploaded this document finished
+       0.6mm over the page and put the signature block on a sheet of its
+       own. A millimetre of air nobody can see is not worth a page. */
+    y = Math.max(leftBottom, metaEnd, scanEnd) + 2;
     rule(y, M, M + CW, BRAND, 0.7);
     y += 4;
 

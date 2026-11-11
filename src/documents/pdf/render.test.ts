@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { inflateSync } from "node:zlib";
+import { jsPDF } from "jspdf";
 import { renderDocumentPdf } from "./render";
 import { buildDocumentModel } from "../../domain/documents/model";
 import { DEFAULT_DOC_TEMPLATE } from "../../domain/documents/template";
@@ -403,5 +404,109 @@ describe("the scan code on the page", () => {
       if (Math.abs(Math.abs(+m[4]!) - cellPt) < cellPt * 0.2) cells += 1;
     }
     expect(cells).toBe(0);
+  });
+});
+
+describe("the header beside the scan code", () => {
+  /**
+   * THE BUG THIS EXISTS FOR, and why it is geometry and not text.
+   *
+   * With a logo uploaded, the logo pushes the company name down into the
+   * square's band. The name was drawn at full width and the square's
+   * white field was painted over it afterwards, so TechZoid's own
+   * quotations went out reading "TECHZOID TECHNOLOGIES PRIVATE LIM".
+   *
+   * Every character was in the file. pdfText finds the whole name, and
+   * every text assertion in this suite passed throughout. Only where the
+   * ink lands says anything, so this measures it.
+   *
+   * A 4x1 pixel PNG stands in for the logo: fitBox sizes the box from
+   * the w/h on the model, not from the image, so the picture only has to
+   * be a picture.
+   */
+  const LOGO = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAABCAIAAAB2XpiaAAAADUlEQVR4nGMQ0YiCIwAOMQJZ3alrTwAAAABJRU5ErkJggg==";
+  const MM = 72 / 25.4;
+  const A4_H = 841.89;
+  /* The renderer's own constants: 13mm margin, the square 10mm below the
+     header's top, 24mm plus two 2mm quiet margins, 4mm clear of the
+     74mm meta column. */
+  const M = 13, SCAN_TOP = 10, SCAN_BOX = 28, RIGHT_W = 74, CW = 210 - M * 2;
+  const SCAN_X = M + CW - RIGHT_W - 4 - SCAN_BOX;
+
+  /**
+   * Which face each /Fn resource is, read out of the file itself.
+   * The resources dictionary maps "/F2 10 0 R" and object 10 carries
+   * "/BaseFont /Helvetica-Bold". Without this the runs can only be
+   * measured in a guessed weight, and bold is about 4% wider than
+   * regular — enough to report an overlap that is not there.
+   */
+  const fontMap = (bytes: Uint8Array): Record<string, "normal" | "bold" | "italic" | "bolditalic"> => {
+    const raw = Buffer.from(bytes).toString("latin1");
+    const byObject: Record<string, string> = {};
+    const objRe = /(\d+) 0 obj\s*<<[^>]*?\/BaseFont \/([A-Za-z-]+)/g;
+    for (let m = objRe.exec(raw); m; m = objRe.exec(raw)) byObject[m[1]!] = m[2]!;
+    const out: Record<string, "normal" | "bold" | "italic" | "bolditalic"> = {};
+    const resRe = /\/(F\d+) (\d+) 0 R/g;
+    for (let m = resRe.exec(raw); m; m = resRe.exec(raw)) {
+      const base = byObject[m[2]!] ?? "Helvetica";
+      const bold = /Bold/.test(base);
+      const italic = /Oblique|Italic/.test(base);
+      out[m[1]!] = bold && italic ? "bolditalic" : bold ? "bold" : italic ? "italic" : "normal";
+    }
+    return out;
+  };
+
+  /** Every drawn run with its position, size and face. */
+  const runs = (bytes: Uint8Array) => {
+    const stream = pdfStreams(bytes);
+    const faces = fontMap(bytes);
+    const out: Array<{ x: number; y: number; size: number; style: string; text: string }> = [];
+    let size = 0, x = 0, y = 0, style = "normal";
+    const re = /\/(F\d+) ([\d.]+) Tf|([-\d.]+) ([-\d.]+) Td|\(((?:[^()\\]|\\.)*)\)\s*Tj/g;
+    for (let m = re.exec(stream); m; m = re.exec(stream)) {
+      if (m[1]) { style = faces[m[1]] ?? "normal"; size = +m[2]!; }
+      else if (m[3] !== undefined) { x = +m[3]!; y = +m[4]!; }
+      else out.push({ x, y, size, style, text: m[5]! });
+    }
+    return out;
+  };
+
+  const withLogo = () => {
+    const { model, rows } = modelFor("quotation");
+    const m = {
+      ...model,
+      header: { ...model.header, logo: { src: LOGO, w: 420, h: 110 } },
+    };
+    return new Uint8Array(renderDocumentPdf({ model: m, rows }).output("arraybuffer"));
+  };
+
+  it("keeps every line clear of the square, logo or no logo", () => {
+    for (const [what, bytes] of [
+      ["no logo", new Uint8Array(renderDocumentPdf(modelFor("quotation")).output("arraybuffer"))],
+      ["with a logo", withLogo()],
+    ] as const) {
+      /* The square's band, in PDF coordinates, which run up from the
+         bottom-left. */
+      const bandTop = A4_H - (M + SCAN_TOP) * MM;
+      const bandBottom = A4_H - (M + SCAN_TOP + SCAN_BOX) * MM;
+      const beside = runs(bytes).filter((r) =>
+        Math.abs(r.x - M * MM) < 1 && r.y < bandTop && r.y > bandBottom);
+      expect(beside.length, `${what}: nothing drawn beside the square at all`).toBeGreaterThan(0);
+
+      const ruler = new jsPDF({ unit: "mm", format: "a4" });
+      for (const r of beside) {
+        ruler.setFont("helvetica", r.style).setFontSize(r.size);
+        const right = M + ruler.getTextWidth(r.text);
+        expect(right, `${what}: "${r.text}" reaches ${right.toFixed(1)}mm, square starts at ${SCAN_X}mm`)
+          .toBeLessThanOrEqual(SCAN_X);
+      }
+    }
+  });
+
+  it("still prints the whole company name when a logo pushes it down", () => {
+    /* Wrapped onto two lines rather than cut off — joining the runs back
+       up has to give the name entire. */
+    const joined = runs(withLogo()).map((r) => r.text).join(" ").replace(/\s+/g, " ");
+    expect(joined).toContain("TECHZOID TECHNOLOGIES PRIVATE LIMITED");
   });
 });
