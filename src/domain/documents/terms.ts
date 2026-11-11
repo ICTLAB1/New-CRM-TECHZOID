@@ -25,6 +25,8 @@
  * a document already saved keeps the text it was saved with, and for
  * TechZoid the result is character-for-character what it was before.
  */
+import { partitionClauses } from "./clauses";
+
 export const SELLER_TOKEN = "{{company}}";
 
 /** A set with the seller's name filled in. Falls back to a neutral phrase
@@ -114,6 +116,80 @@ export const INTERNATIONAL_TERMS: readonly string[] = [
   "Any dispute shall be finally resolved by arbitration seated in New Delhi, India, under the Arbitration and Conciliation Act, 1996, in the English language.",
   "Acceptance of this quotation constitutes acceptance of the terms stated herein, unless otherwise agreed in writing.",
 ];
+
+/**
+ * Proforma invoice — the same terms, speaking as a proforma.
+ *
+ * WHY THIS SET EXISTS. A proforma was being given the quotation's terms,
+ * so a proforma invoice went out saying "This quotation is valid for 7
+ * days", "unless specifically included in the quotation" and "payment
+ * against this quotation shall constitute acceptance". It is the same
+ * fault the tax invoice had and that INVOICE_TERMS fixed; the proforma
+ * was simply missed, because it sits between the two and nothing made
+ * it choose.
+ *
+ * DERIVED, NOT RETYPED. The company supplied one set of commercial
+ * terms and these are those terms — the same TDS clause, the same
+ * cancellation clause, the same force majeure clause — with the words
+ * that name the document changed and the two clauses that only make
+ * sense on an offer rewritten. Deriving rather than copying is what
+ * keeps the two in step: a clause edited in DOMESTIC_TERMS appears here
+ * next time this module is loaded, and only the differences below are
+ * maintained by hand.
+ *
+ * WHAT A PROFORMA ADDS. It is not a tax invoice and no input tax credit
+ * can be claimed against it — stated in the terms as well as the footer,
+ * because the footer is the line a busy accounts department skips.
+ */
+
+/** The clauses a proforma says differently, longest match first. */
+const PROFORMA_REWRITES: ReadonlyArray<readonly [string, string]> = [
+  [
+    "Quotation Validity: This quotation is valid for",
+    "Validity: This proforma invoice is valid for",
+  ],
+  [
+    "Acceptance of Terms: Placement of a Purchase Order, written acceptance or payment against this quotation shall constitute",
+    "Acceptance of Terms: Payment against this proforma invoice, or a Purchase Order referring to it, shall constitute",
+  ],
+  [
+    "Acceptance of this quotation constitutes acceptance",
+    "Payment against this proforma invoice constitutes acceptance",
+  ],
+  /* The GeM note says the bid conditions prevail over "these standard
+     quotation terms". On a proforma they are simply these terms. */
+  ["these standard quotation terms", "these standard terms"],
+];
+
+/** "the quotation" and "this quotation" name the document, and on a
+ *  proforma the document is a proforma invoice. Everything else — the
+ *  quoted currency, quoted prices — is left alone. */
+export function asProformaWording(clause: string): string {
+  let out = clause;
+  for (const [from, to] of PROFORMA_REWRITES) out = out.split(from).join(to);
+  return out
+    .split("the date of quotation").join("the date of this proforma invoice")
+    .split("this quotation").join("this proforma invoice")
+    .split("the quotation").join("this proforma invoice");
+}
+
+const NOT_A_TAX_INVOICE =
+  "This Document: This is a proforma invoice issued for payment purposes. It is not a tax invoice, and no "
+  + "input tax credit may be claimed against it. A GST tax invoice will be issued on realisation of payment.";
+
+/** The supplied set as a proforma says it, with the proforma's own
+ *  clause last and any note after that — see partitionClauses. */
+function asProformaSet(terms: readonly string[]): readonly string[] {
+  const { numbered, notes } = partitionClauses(terms.map(asProformaWording));
+  return [...numbered, NOT_A_TAX_INVOICE, ...notes];
+}
+
+export const PROFORMA_TERMS: readonly string[] = asProformaSet(DOMESTIC_TERMS);
+
+/** The export set the same way. A proforma raised on a customer outside
+ *  India still needs Incoterms, the importer of record and arbitration;
+ *  it just is not a quotation. */
+export const PROFORMA_EXPORT_TERMS: readonly string[] = asProformaSet(INTERNATIONAL_TERMS);
 
 /**
  * Purchase order — the terms WE impose on a SUPPLIER.
@@ -244,6 +320,11 @@ export const TERMS_SETS: readonly TermsSet[] = [
   { id: "international", label: "International / Export", hint: "Incoterms, customs, arbitration, export control", terms: INTERNATIONAL_TERMS },
 ];
 
+export const PROFORMA_TERMS_SETS: readonly TermsSet[] = [
+  { id: "domestic", label: "Domestic (India)", hint: "GST, advance payment, Delhi courts", terms: PROFORMA_TERMS },
+  { id: "international", label: "International / Export", hint: "Incoterms, customs, arbitration, export control", terms: PROFORMA_EXPORT_TERMS },
+];
+
 export const INVOICE_TERMS_SETS: readonly TermsSet[] = [
   { id: "domestic", label: "Domestic (India)", hint: "GST charged, payment and interest, Delhi courts", terms: INVOICE_TERMS },
   { id: "international", label: "International / Export", hint: "Zero-rated export, wire transfer, Incoterms, arbitration", terms: INVOICE_EXPORT_TERMS },
@@ -259,7 +340,9 @@ export const INVOICE_TERMS_SETS: readonly TermsSet[] = [
  * sets could not express.
  */
 export function termsSetsFor(docType: string): readonly TermsSet[] {
-  return docType === "invoice" ? INVOICE_TERMS_SETS : TERMS_SETS;
+  if (docType === "invoice") return INVOICE_TERMS_SETS;
+  if (docType === "proforma") return PROFORMA_TERMS_SETS;
+  return TERMS_SETS;
 }
 
 /** Suggested from the customer's country, out of the pair that fits this

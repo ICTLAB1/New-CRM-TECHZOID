@@ -2,10 +2,11 @@ import { OBJ_TYPE } from "./objType";
 import { describe, expect, it } from "vitest";
 import {
   applyCustomer, CARRIED_FIELDS, CUSTOMER_DERIVED_FIELDS, documentFieldsFrom,
-  duplicateQuotation, effectiveStatus, invoiceFrom, newQuotation,
+  duplicateQuotation, effectiveStatus, invoiceFrom, newProforma, newQuotation,
   proformaFromQuotation, shippingFieldsFrom, taxTypeFor,
   type DocSettings, type SalesDocument,
 } from "./create";
+import { SELLER_TOKEN } from "./terms";
 import { blankCustomer, type Customer } from "../customers/customer";
 
 const SETTINGS: DocSettings = {
@@ -179,6 +180,17 @@ describe("proforma from a quotation", () => {
     expect(pf.shipState).toBe("Ajman");
     expect(pf.shipEmail).toBe("omar@gulf.ae");
     expect(pf.shipSameAsBilling).toBe(false);
+  });
+
+  it("does NOT inherit the quotation's terms", () => {
+    /* THE REPORT: a proforma invoice printed "Quotation Validity: This
+       quotation is valid for 7 days" and asked for acceptance of an
+       offer it was no longer making. It takes the proforma set, and
+       this one is a UAE customer so it takes the export one. */
+    const joined = pf.terms.join(" ");
+    expect(joined.toLowerCase()).not.toContain("quotation");
+    expect(joined).toContain("Incoterms 2020");
+    expect(joined).toContain("It is not a tax invoice");
   });
 
   it("takes a fresh proforma number and keeps the link back", () => {
@@ -419,5 +431,33 @@ describe("duplicating a document of any kind", () => {
   it("comes back as a draft, whatever the original was", () => {
     const sent = { ...base, status: "Sent" as const };
     expect(duplicateQuotation(sent, SETTINGS, TODAY, "invoice").status).toBe("Draft");
+  });
+});
+
+describe("new proforma", () => {
+  it("asks for proforma terms, not a quotation's", () => {
+    /* newProforma called termsFor() without saying what it was making,
+       so it got the default — "quotation" — and with it the workspace's
+       quotation terms. */
+    const pf = newProforma({ settings: SETTINGS, user: USER, customer: domestic(), today: TODAY });
+    const joined = pf.terms.join(" ");
+    expect(joined.toLowerCase()).not.toContain("quotation");
+    expect(joined).toContain("This proforma invoice is valid for 7 days");
+    expect(joined).toContain("It is not a tax invoice");
+  });
+
+  it("ignores the workspace's quotation default, which is a quotation's", () => {
+    /* The default under Settings → "Default terms and conditions" is
+       copied onto every new QUOTATION. A proforma taking it is how the
+       wording came to be wrong in the first place. */
+    const withDefault = { ...SETTINGS, defaultTerms: ["Quotation is valid for 30 days.", "Pay us."] };
+    const pf = newProforma({ settings: withDefault, user: USER, customer: domestic(), today: TODAY });
+    expect(pf.terms.join(" ")).not.toContain("Pay us.");
+    expect(pf.terms.length).toBeGreaterThan(10);
+  });
+
+  it("fills the company's name in, as every other set does", () => {
+    const pf = newProforma({ settings: SETTINGS, user: USER, customer: domestic(), today: TODAY });
+    expect(pf.terms.join(" ")).not.toContain(SELLER_TOKEN);
   });
 });

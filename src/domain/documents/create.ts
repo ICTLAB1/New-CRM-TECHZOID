@@ -319,10 +319,15 @@ function termsFor(
 ): string[] {
   const company = settings.company?.name;
   const set = suggestTermsSet(customer?.country, docType);
-  /* An export set and an invoice set both REPLACE the workspace default,
-     which is written for a domestic quotation: GST clauses on an export,
-     or a validity window on an invoice, are not cosmetic. */
-  if (set.id === "international" || docType === "invoice") return forCompany(set.terms, company);
+  /* An export set, an invoice set and a proforma set all REPLACE the
+     workspace default, which is a QUOTATION default — it is edited under
+     "Default terms and conditions" and copied onto every new quotation.
+     GST clauses on an export, a validity window on an invoice, or a
+     proforma saying "payment against this quotation shall constitute
+     acceptance" are not cosmetic. */
+  if (set.id === "international" || docType === "invoice" || docType === "proforma") {
+    return forCompany(set.terms, company);
+  }
   if (templateTerms?.length) return [...templateTerms];
   return forCompany(settings.defaultTerms ?? DOMESTIC_TERMS, company);
 }
@@ -389,7 +394,9 @@ export function newProforma({ settings, user, customer = null, today = TODAY() }
     validUntil: addDays(today, settings.defaultValidityDays ?? DEFAULT_VALIDITY_DAYS),
     status: "Draft",
     items: [blankItem(settings.defaultGst)],
-    terms: termsFor(customer, settings),
+    /* "proforma", not the default: without it this asked for a
+       quotation's terms and got them. */
+    terms: termsFor(customer, settings, undefined, "proforma"),
     advancePercent: 100,
     notes: "",
     roundOff: true,
@@ -527,7 +534,16 @@ export function proformaFromQuotation(
     status: "Draft",
     revisionNo: 0,
     items: quote.items.map((it) => ({ ...it, id: uid() })),
-    terms: [...(quote.terms ?? [])],
+    /* NOT the quotation's terms, for the same reason a tax invoice does
+       not take them: the first of those reads "This quotation is valid
+       for 7 days from the date of issue", and the last asks for
+       acceptance of an offer this document is no longer making. What was
+       agreed for the deal travels on Payment Terms and Delivery Terms,
+       which ARE carried across. */
+    terms: termsFor(
+      { country: quote.billCountry } as Parameters<typeof termsFor>[0],
+      settings, undefined, "proforma",
+    ),
     advancePercent: 100,
     notes: "",
     paymentHistory: [],

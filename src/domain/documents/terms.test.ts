@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   DOMESTIC_TERMS, INTERNATIONAL_TERMS, INVOICE_EXPORT_TERMS, INVOICE_TERMS,
-  INVOICE_TERMS_SETS, SELLER_TOKEN, forCompany, suggestTermsSet, termsSetsFor, TERMS_SETS,
+  INVOICE_TERMS_SETS, PROFORMA_TERMS, PROFORMA_EXPORT_TERMS, PROFORMA_TERMS_SETS,
+  SELLER_TOKEN, forCompany, suggestTermsSet, termsSetsFor, TERMS_SETS,
 } from "./terms";
 import { partitionClauses } from "./clauses";
 import { readdirSync, readFileSync } from "node:fs";
@@ -152,7 +153,9 @@ describe("tax invoice terms", () => {
   it("is what an invoice chooses between", () => {
     expect(termsSetsFor("invoice")).toBe(INVOICE_TERMS_SETS);
     expect(termsSetsFor("quotation")).toBe(TERMS_SETS);
-    expect(termsSetsFor("proforma")).toBe(TERMS_SETS);
+    /* A proforma used to land here, which is how it came to print "This
+       quotation is valid for 7 days" on a proforma invoice. */
+    expect(termsSetsFor("proforma")).toBe(PROFORMA_TERMS_SETS);
   });
 
   it("suggests by country within the invoice pair", () => {
@@ -238,13 +241,21 @@ describe("the migration that puts these terms where documents read them", () => 
   const latest = latestTermsMigration();
 
   it("writes exactly these clauses, wherever it writes them", () => {
-    /* Every clause list the latest terms migration carries must be this
-       file's set, character for character. Earlier migrations are left
-       alone on purpose: each is a record of what was applied at the
-       time, and rewriting one would be rewriting history that has
-       already run. */
+    /* Every clause list the latest terms migration carries must be one
+       of this file's sets, character for character — which one depends
+       on what that migration is for: the quotation default, the
+       proforma sets, the export ones. A clause edited here and not
+       there matches none of them and fails.
+       Earlier migrations are left alone on purpose: each is a record of
+       what was applied at the time, and rewriting one would be
+       rewriting history that has already run. */
+    const current = [DOMESTIC_TERMS, INTERNATIONAL_TERMS, PROFORMA_TERMS, PROFORMA_EXPORT_TERMS,
+      INVOICE_TERMS, INVOICE_EXPORT_TERMS];
     expect(latest.arrays.length, latest.name).toBeGreaterThan(0);
-    for (const arr of latest.arrays) expect(arr, latest.name).toEqual([...DOMESTIC_TERMS]);
+    for (const arr of latest.arrays) {
+      const matched = current.some((set) => set.length === arr.length && set.every((t, i) => t === arr[i]));
+      expect(matched, `${latest.name}: a clause list in it matches no current set — write a new migration`).toBe(true);
+    }
   });
 
   it("keeps the token rather than a company name", () => {
@@ -262,5 +273,59 @@ describe("the migration that puts these terms where documents read them", () => 
        Before<nnn> key, so every one of these is reversible. */
     const text = readFileSync(join("supabase", latest.name), "utf8");
     expect(text).toMatch(/Before\d{3}/);
+  });
+});
+
+describe("proforma invoice terms", () => {
+  /* THE REPORT: a proforma invoice printed "Quotation Validity: This
+     quotation is valid for 7 days", "unless specifically included in
+     the quotation" and "payment against this quotation shall constitute
+     acceptance". It is the same fault the tax invoice had; the proforma
+     sits between a quotation and an invoice and nothing made it
+     choose. */
+
+  it("never calls itself a quotation", () => {
+    for (const set of [PROFORMA_TERMS, PROFORMA_EXPORT_TERMS]) {
+      for (const t of set) expect(t.toLowerCase(), t).not.toContain("quotation");
+    }
+  });
+
+  it("is the company's own clauses, not a different set of terms", () => {
+    /* Derived from the supplied set rather than retyped, so a clause
+       edited there appears here too. Everything that does not name the
+       document is identical, word for word. */
+    const unchanged = DOMESTIC_TERMS.filter((t) => !/quotation/i.test(t));
+    expect(unchanged.length).toBeGreaterThan(10);
+    for (const t of unchanged) expect(PROFORMA_TERMS).toContain(t);
+  });
+
+  it("says what a proforma has to say about itself", () => {
+    const joined = PROFORMA_TERMS.join(" ");
+    expect(joined).toContain("This proforma invoice is valid for 7 days");
+    expect(joined).toContain("Payment against this proforma invoice");
+    expect(joined).toContain("It is not a tax invoice");
+    expect(joined).toContain("no input tax credit may be claimed against it");
+  });
+
+  it("keeps the export set's own law, and only changes what the document is called", () => {
+    const joined = PROFORMA_EXPORT_TERMS.join(" ");
+    for (const kept of ["Incoterms 2020", "importer of record", "zero-rated", "export control", "CISG", "arbitration"]) {
+      expect(joined, kept).toContain(kept);
+    }
+  });
+
+  it("keeps the GeM note a note, and stops it calling them quotation terms", () => {
+    const { numbered, notes } = partitionClauses(PROFORMA_TERMS);
+    expect(notes).toHaveLength(1);
+    expect(notes[0]).toContain("GeM bid conditions");
+    expect(notes[0]).toContain("these standard terms");
+    expect(numbered.at(-1)).toContain("It is not a tax invoice");
+  });
+
+  it("names no company of its own", () => {
+    for (const set of [PROFORMA_TERMS, PROFORMA_EXPORT_TERMS]) {
+      expect(set.join(" ")).not.toMatch(/TechZoid/i);
+    }
+    expect(PROFORMA_TERMS.join(" ")).toContain(SELLER_TOKEN);
   });
 });
