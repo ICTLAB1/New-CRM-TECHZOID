@@ -9,7 +9,8 @@ import { moneyList } from "../../domain/currency/format";
 import { PAYMENT_METHODS } from "../../domain/payments/ledger";
 import { sendThanksFor, thanksNote } from "../../data/paymentThanks";
 import {
-  daysBetween, dueDateFor, upcomingReminder, outstandingOf, standingOf, stepDueToday, stepKey, toneFor,
+  daysBetween, dueDateFor, upcomingReminder, outstandingOf, standingOf, statusAfterPayments,
+  stepDueToday, stepKey, toneFor,
 } from "../../domain/paymentTracker/schedule";
 import {
   deleteBill, newPaymentId, previewEmail, sendNow, trackerLive,
@@ -49,7 +50,17 @@ export function BillPanel({
     ? Math.max(0, Math.min(100, (bill.amountPaid / bill.amount) * 100))
     : (balance <= 0 ? 100 : 0);
 
-  const [paying, setPaying] = useState(false);
+  /**
+   * null when no payment form is open, "new" when recording one, and a
+   * payment's id when correcting that one.
+   *
+   * CORRECTING ONE MATTERS MORE THAN RECORDING ONE. A bill was reported
+   * showing 198% settled — the same payment entered twice, against an
+   * invoice of ₹3,17,520 — and the only way out of it was to delete the
+   * whole bill and retype it, losing its reminder history with it.
+   */
+  const [editing, setEditing] = useState<string | null>(null);
+  const [removing, setRemoving] = useState<string | null>(null);
   const [amount, setAmount] = useState(String(balance));
   const [date, setDate] = useState(today);
   const [method, setMethod] = useState<string>(PAYMENT_METHODS[0]);
@@ -60,38 +71,81 @@ export function BillPanel({
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [recording, setRecording] = useState(false);
 
-  const recordPayment = async () => {
+  const startNew = () => {
+    setEditing("new");
+    setAmount(String(balance));
+    setDate(today);
+    setMethod(PAYMENT_METHODS[0]);
+    setReference("");
+  };
+
+  const startEdit = (p: { id: string; amount: number; date: string; method: string; reference: string }) => {
+    setEditing(p.id);
+    setAmount(String(p.amount));
+    setDate(p.date);
+    setMethod(p.method || PAYMENT_METHODS[0]);
+    setReference(p.reference ?? "");
+  };
+
+  const savePayment = async () => {
     const value = Number(amount.replace(/,/g, "")) || 0;
-    if (value <= 0) return;
+    if (value <= 0 || !editing) return;
     /* Recording a payment is a write to the server, and the button said
        nothing about it — so a slow connection looked like a dead click,
        and a second click filed the payment twice. */
     if (recording) return;
     setRecording(true);
     try {
-      const paymentId = newPaymentId();
-      const payments = [...bill.payments, { id: paymentId, amount: value, date, method, reference: reference.trim() }];
+      const isNew = editing === "new";
+      const paymentId = isNew ? newPaymentId() : editing;
+      const entry = { id: paymentId, amount: value, date, method, reference: reference.trim() };
+      const payments = isNew
+        ? [...bill.payments, entry]
+        : bill.payments.map((p) => (p.id === editing ? entry : p));
       const paidNow = payments.reduce((a, p) => a + (Number(p.amount) || 0), 0);
-      const fully = paidNow >= bill.amount - 0.005;
+      const status = statusAfterPayments(bill.status, bill.amount, paidNow);
       await onSave(
-        { ...bill, payments, status: fully ? "paid" : bill.status },
-        fully
-          ? `${bill.invoiceNo} fully paid — reminders stopped`
-          : `${moneyList(value, bill.currency)} recorded against ${bill.invoiceNo}`,
+        { ...bill, payments, status },
+        isNew
+          ? (status === "paid"
+              ? `${bill.invoiceNo} fully paid — reminders stopped`
+              : `${moneyList(value, bill.currency)} recorded against ${bill.invoiceNo}`)
+          : `Payment corrected — ${moneyList(paidNow, bill.currency)} received against ${bill.invoiceNo}`,
       );
-      setPaying(false);
+      setEditing(null);
       setReference("");
 
-      /* The customer is thanked for it, after the save rather than as
-         part of it: this bill has just stopped being chased, and the
-         acknowledgement is the other half of that. It is not awaited —
-         a slow mailbox must not make recording a payment feel slow —
-         and the server sends one per payment however many times this
-         button is pressed. */
+      /* ONLY A NEW PAYMENT IS ACKNOWLEDGED. The customer is thanked for
+         it, after the save rather than as part of it: this bill has just
+         stopped being chased, and the acknowledgement is the other half
+         of that. It is not awaited — a slow mailbox must not make
+         recording a payment feel slow — and the server sends one per
+         payment however many times this button is pressed.
+         A CORRECTION SENDS NOTHING. The customer was thanked when the
+         payment was first entered; thanking them again because somebody
+         fixed a typo in the UTR reads as a second receipt. */
+      if (!isNew) return;
       void sendThanksFor({ source: "bill", refId: bill.id, paymentId }).then((outcome) => {
         const note = thanksNote(outcome, bill.email || bill.customerName);
         if (note) toast(note, outcome.state === "failed" ? "warn" : "good");
       });
+    } finally {
+      setRecording(false);
+    }
+  };
+
+  const removePayment = async (id: string) => {
+    if (recording) return;
+    setRecording(true);
+    try {
+      const payments = bill.payments.filter((p) => p.id !== id);
+      const paidNow = payments.reduce((a, p) => a + (Number(p.amount) || 0), 0);
+      await onSave(
+        { ...bill, payments, status: statusAfterPayments(bill.status, bill.amount, paidNow) },
+        `Payment removed — ${moneyList(paidNow, bill.currency)} received against ${bill.invoiceNo}`,
+      );
+      setRemoving(null);
+      if (editing === id) setEditing(null);
     } finally {
       setRecording(false);
     }
@@ -187,7 +241,7 @@ export function BillPanel({
               <Button tone="quiet" onClick={() => setConfirmDelete(true)}>Delete</Button>
               <span className="grow" />
               <Button onClick={onEdit}><Pencil size={14} /> Edit</Button>
-              {!closed ? <Button tone="primary" onClick={() => setPaying(true)}>Record payment</Button> : null}
+              {!closed ? <Button tone="primary" onClick={startNew}>Record payment</Button> : null}
             </>
           )}
         </>
@@ -229,7 +283,7 @@ export function BillPanel({
           <dt>WhatsApp</dt><dd>{bill.phone || <span style={{ color: "var(--warn)" }}>none</span>}</dd>
         </dl>
 
-        {paying ? (
+        {editing ? (
           <div className="stack" style={{ border: "1px solid var(--accent-rule)", background: "var(--accent-weak)", borderRadius: "var(--radius)", padding: "var(--gap-wide)" }}>
             <div className="grid grid-2">
               <Field label="Amount received" hint={(Number(amount) || 0) > balance ? "More than the balance." : undefined}>
@@ -250,15 +304,15 @@ export function BillPanel({
               </Field>
             </div>
             <div className="row-tight" style={{ justifyContent: "flex-end", gap: 8 }}>
-              <Button tone="quiet" onClick={() => setPaying(false)}>Cancel</Button>
+              <Button tone="quiet" onClick={() => setEditing(null)}>Cancel</Button>
               <Button
                 tone="primary"
                 loading={recording}
-                loadingLabel="Recording…"
+                loadingLabel={editing === "new" ? "Recording…" : "Saving…"}
                 disabled={recording || (Number(amount) || 0) <= 0}
-                onClick={() => void recordPayment()}
+                onClick={() => void savePayment()}
               >
-                Save payment
+                {editing === "new" ? "Save payment" : "Save correction"}
               </Button>
             </div>
           </div>
@@ -267,11 +321,44 @@ export function BillPanel({
         {bill.payments.length ? (
           <>
             <div className="pt-section-title">Payments received</div>
-            <dl className="pt-kv">
+            {/* A LIST YOU CAN CORRECT. It was read-only, so the same
+                payment entered twice could only be undone by deleting
+                the bill and retyping it — which takes its reminder
+                history with it. Available even on a settled bill,
+                because a bill settled by a payment entered twice is
+                exactly the one that needs correcting. */}
+            <ul className="pt-payments">
               {bill.payments.map((p) => (
-                <FragmentRow key={p.id} k={`${fmtDate(p.date)} · ${p.method}${p.reference ? ` · ${p.reference}` : ""}`} v={moneyList(p.amount, bill.currency)} />
+                <li key={p.id}>
+                  <span className="pt-payment-when">
+                    {fmtDate(p.date)} · {p.method}{p.reference ? ` · ${p.reference}` : ""}
+                  </span>
+                  <span className="pt-payment-sum">{moneyList(p.amount, bill.currency)}</span>
+                  {removing === p.id ? (
+                    <span className="row-tight" style={{ gap: 6 }}>
+                      <span className="field-hint">Remove it?</span>
+                      <Button size="sm" tone="danger" loading={recording} onClick={() => void removePayment(p.id)}>Remove</Button>
+                      <Button size="sm" tone="quiet" onClick={() => setRemoving(null)}>Keep</Button>
+                    </span>
+                  ) : (
+                    <span className="row-tight" style={{ gap: 6 }}>
+                      <Button size="sm" tone="quiet" onClick={() => startEdit(p)}>Edit</Button>
+                      <Button size="sm" tone="quiet" onClick={() => setRemoving(p.id)}>Remove</Button>
+                    </span>
+                  )}
+                </li>
               ))}
-            </dl>
+            </ul>
+            {bill.amountPaid > bill.amount + 0.005 ? (
+              <p className="field-hint" style={{ color: "var(--warn)" }}>
+                {moneyList(bill.amountPaid - bill.amount, bill.currency)} more than the invoice — check for a
+                payment entered twice.
+              </p>
+            ) : null}
+            <p className="field-hint">
+              Correcting a payment does not email the customer again; they were thanked when it was first
+              entered.
+            </p>
           </>
         ) : null}
 
@@ -387,6 +474,3 @@ export function BillPanel({
   );
 }
 
-function FragmentRow({ k, v }: { k: string; v: string }) {
-  return (<><dt>{k}</dt><dd>{v}</dd></>);
-}

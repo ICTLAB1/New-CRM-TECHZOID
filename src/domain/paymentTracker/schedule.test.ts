@@ -114,3 +114,40 @@ describe("what the screen shows as the next reminder", () => {
     expect(ts.upcomingReminder(bill(due, { pausedUntil: day(20) }), day(16), new Set(["d+15"]))).toBe(day(30));
   });
 });
+
+describe("what a bill's status becomes when its payments change", () => {
+  /* THE REPORT THIS COMES FROM: a bill showing 198% settled — the same
+     payment entered twice against an invoice of 3,17,520 — and no way
+     to correct it. Correcting one has to be able to reopen the bill,
+     or the correction quietly writes off the balance and the customer
+     is never asked for it. */
+
+  it("is paid once the payments reach the invoice", () => {
+    expect(ts.statusAfterPayments("open", 100000, 100000)).toBe("paid");
+    expect(ts.statusAfterPayments("open", 100000, 120000)).toBe("paid");
+  });
+
+  it("GOES BACK TO OPEN when a correction takes it below", () => {
+    /* The duplicate removed: a bill that was marked paid has to start
+       being chased again. */
+    expect(ts.statusAfterPayments("paid", 317520, 317520)).toBe("paid");
+    expect(ts.statusAfterPayments("paid", 317520, 311640)).toBe("open");
+    expect(ts.statusAfterPayments("paid", 317520, 0)).toBe("open");
+  });
+
+  it("counts a hundredth short as paid, and a paisa short as not", () => {
+    expect(ts.statusAfterPayments("open", 100000, 99999.996)).toBe("paid");
+    expect(ts.statusAfterPayments("open", 100000, 99999.98)).toBe("open");
+  });
+
+  it("leaves a written-off bill written off", () => {
+    /* Somebody decided to write that debt off. Money arriving against
+       it does not undo the decision, and nor does a correction. */
+    expect(ts.statusAfterPayments("written_off", 100000, 100000)).toBe("written_off");
+    expect(ts.statusAfterPayments("written_off", 100000, 0)).toBe("written_off");
+  });
+
+  it("treats a zero-value bill as paid, rather than chasing nothing", () => {
+    expect(ts.statusAfterPayments("open", 0, 0)).toBe("paid");
+  });
+});

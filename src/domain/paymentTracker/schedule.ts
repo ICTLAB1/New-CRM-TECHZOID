@@ -69,6 +69,32 @@ export function outstandingOf(bill: Pick<BillForReminder, "amount" | "amountPaid
 }
 
 /**
+ * What a bill's status becomes once its payments add up to `paidNow`.
+ *
+ * IT HAS TO BE ABLE TO GO BACKWARDS, and that is the whole reason this
+ * is a function rather than a line of the UI. Marking a bill paid when
+ * the money arrives is the easy half. A bill marked paid by a payment
+ * that was entered twice, then corrected, has to start being chased
+ * again — otherwise the correction has quietly written off the balance
+ * and the customer is never asked for it.
+ *
+ * A BILL WRITTEN OFF STAYS WRITTEN OFF. That is a decision somebody
+ * made about a debt, not a consequence of arithmetic, and a payment
+ * arriving against it does not undo it.
+ *
+ * The half-paisa tolerance is the same one outstandingOf uses: money
+ * that adds up to a hundredth short of the invoice is paid.
+ */
+export function statusAfterPayments(
+  status: string,
+  amount: number,
+  paidNow: number,
+): "open" | "paid" | "written_off" {
+  if (status === "written_off") return "written_off";
+  return paidNow >= (Number(amount) || 0) - 0.005 ? "paid" : "open";
+}
+
+/**
  * The step owed today, or null.
  *
  * It is the LATEST step whose day has arrived — never a backlog. A bill
