@@ -1204,3 +1204,271 @@ drop trigger if exists trg_enforce_discount_approval on public.quotes;
 create trigger trg_enforce_discount_approval
   before update on public.quotes
   for each row execute function public.enforce_discount_approval();
+
+/* ── which month a quotation was priced from ────────────────────────────
+   The document carries it in its own jsonb, because that is where a
+   document's facts live and what the editor reads. The column exists so
+   that "which quotations are still priced off October" is a query rather
+   than a scan of every document's jsonb — and the two are kept level by a
+   trigger rather than by hoping every write path remembers. */
+
+create or replace function public.sync_quote_price_period()
+returns trigger language plpgsql as $$
+begin
+  NEW.price_list_period := nullif(btrim(coalesce(NEW.data->>'priceListPeriod', '')), '');
+  return NEW;
+end $$;
+
+drop trigger if exists trg_sync_quote_price_period on public.quotes;
+create trigger trg_sync_quote_price_period
+  before insert or update on public.quotes
+  for each row execute function public.sync_quote_price_period();
+
+/* Quotations still priced from a month that has ended, which is what
+   "reprice before resending" is asked of. Members: it names documents and
+   months, and carries no cost. */
+create or replace function public.quotes_needing_reprice(p_company uuid, p_today date)
+returns table (quote_id text, quote_number text, owner_id uuid, period text, status text, priced_until date)
+language plpgsql stable security definer set search_path = public as $$
+begin
+  if auth.uid() is null then raise exception 'not authenticated'; end if;
+  if not public.is_member(p_company) then raise exception 'not a member of that company'; end if;
+
+  return query
+    select q.id,
+           q.data->>'number',
+           q.owner_id,
+           q.price_list_period,
+           q.data->>'status',
+           (date_trunc('month', to_date(q.price_list_period || '-01', 'YYYY-MM-DD'))
+             + interval '1 month - 1 day')::date
+      from public.quotes q
+     where q.company_id = p_company
+       and q.price_list_period is not null
+       and q.price_list_period ~ '^[0-9]{4}-[0-9]{2}$'
+       and coalesce(q.data->>'status', '') in ('Draft', 'Sent')
+       and (date_trunc('month', to_date(q.price_list_period || '-01', 'YYYY-MM-DD'))
+             + interval '1 month - 1 day')::date < coalesce(p_today, current_date)
+     order by q.price_list_period, q.id;
+end $$;
+
+grant execute on function public.quotes_needing_reprice(uuid, date) to authenticated;
+revoke execute on function public.quotes_needing_reprice(uuid, date) from anon;
+
+/* ── the reports ────────────────────────────────────────────────────────
+   All four are Admin and Manager only. Three of them state a margin, which
+   is a statement about the cost; the fourth counts a salesperson's
+   approvals, which is a statement about them. Neither belongs to the
+   people being counted. */
+
+/**
+ * What each salesperson quoted, and how often they asked to go below the
+ * floor.
+ *
+ * APPROVALS REQUESTED AGAINST APPROVED, per person, because the ratio is
+ * the thing worth looking at: somebody who asks twice a month and is
+ * always granted it is pricing well, and somebody who asks on every
+ * quotation is either working a hard patch or not reading the price book.
+ */
+create or replace function public.report_quotes_by_seller(p_company uuid, p_from date, p_to date)
+returns table (
+  owner_id uuid, seller text, quotes int, quoted_value numeric,
+  approvals_requested int, approvals_approved int, approvals_rejected int
+) language plpgsql stable security definer set search_path = public as $$
+/* A column wins over a parameter of the same name. These return a column
+   called `oem` and read one called `oem`, and without this the body reads
+   its own OUT parameter and Postgres refuses it as ambiguous. */
+#variable_conflict use_column
+begin
+  if auth.uid() is null then raise exception 'not authenticated'; end if;
+  if not public.is_privileged_in(p_company) then
+    raise exception 'that report is for Admin and Manager only';
+  end if;
+
+  return query
+  with q as (
+    select qt.owner_id,
+           qt.id,
+           coalesce((
+             select sum(coalesce(nullif(it->>'qty', '')::numeric, 0)
+                      * coalesce(nullif(it->>'rate', '')::numeric, 0)
+                      * (1 - coalesce(nullif(it->>'disc', '')::numeric, 0) / 100.0))
+               from jsonb_array_elements(case when jsonb_typeof(qt.data->'items') = 'array'
+                                              then qt.data->'items' else '[]'::jsonb end) as it
+           ), 0) as value
+      from public.quotes qt
+     where qt.company_id = p_company
+       and qt.created_at::date between coalesce(p_from, '2000-01-01'::date) and coalesce(p_to, current_date)
+  ),
+  a as (
+    select requested_by,
+           count(*) filter (where true) as asked,
+           count(*) filter (where state = 'approved') as granted,
+           count(*) filter (where state = 'rejected') as refused
+      from public.discount_approvals
+     where company_id = p_company
+       and created_at::date between coalesce(p_from, '2000-01-01'::date) and coalesce(p_to, current_date)
+     group by requested_by
+  )
+  select q.owner_id,
+         coalesce(p.name, p.email, 'Unknown'),
+         count(q.id)::int,
+         round(sum(q.value), 2),
+         coalesce(max(a.asked), 0)::int,
+         coalesce(max(a.granted), 0)::int,
+         coalesce(max(a.refused), 0)::int
+    from q
+    left join public.profiles p on p.id = q.owner_id
+    left join a on a.requested_by = q.owner_id
+   group by q.owner_id, p.name, p.email
+   order by 4 desc nulls last;
+end $$;
+
+/**
+ * Average margin by OEM, over the lines that came from the price book.
+ *
+ * ONLY THOSE LINES, and that is a real limitation rather than a rounding:
+ * a line typed by hand has no cost in the price book to compare against,
+ * and averaging it in at zero cost would report a margin of 100% on work
+ * nobody has costed. The count of lines is returned beside the margin so
+ * the figure can be read for what it covers.
+ */
+create or replace function public.report_margin_by_oem(
+  p_company uuid, p_from date, p_to date, p_distributor_pct numeric
+) returns table (
+  oem text, lines int, quotes int, revenue numeric, cost numeric,
+  margin_pct numeric, markup_pct numeric
+) language plpgsql stable security definer set search_path = public as $$
+/* A column wins over a parameter of the same name. These return a column
+   called `oem` and read one called `oem`, and without this the body reads
+   its own OUT parameter and Postgres refuses it as ambiguous. */
+#variable_conflict use_column
+begin
+  if auth.uid() is null then raise exception 'not authenticated'; end if;
+  if not public.is_privileged_in(p_company) then
+    raise exception 'that report is for Admin and Manager only';
+  end if;
+
+  return query
+  with line as (
+    select l.oem,
+           qt.id as quote_id,
+           coalesce(nullif(it->>'qty', '')::numeric, 0) as qty,
+           coalesce(nullif(it->>'rate', '')::numeric, 0) as rate,
+           coalesce(nullif(it->>'disc', '')::numeric, 0) as disc,
+           i.reseller_price
+      from public.quotes qt
+      cross join lateral jsonb_array_elements(
+        case when jsonb_typeof(qt.data->'items') = 'array' then qt.data->'items' else '[]'::jsonb end) as it
+      join public.price_list_items i on i.id = nullif(it->>'priceBookItemId', '')::uuid
+      join public.price_lists l on l.id = i.price_list_id
+     where qt.company_id = p_company
+       and qt.created_at::date between coalesce(p_from, '2000-01-01'::date) and coalesce(p_to, current_date)
+  ),
+  summed as (
+    select oem,
+           count(*)::int as lines,
+           count(distinct quote_id)::int as quotes,
+           round(sum(qty * rate * (1 - disc / 100.0)), 2) as revenue,
+           round(sum(qty * round(reseller_price * (1 - coalesce(p_distributor_pct, 0) / 100.0), 2)), 2) as cost
+      from line
+     group by oem
+  )
+  select s.oem, s.lines, s.quotes, s.revenue, s.cost,
+         case when s.revenue > 0 then round((s.revenue - s.cost) / s.revenue * 100, 2) end,
+         case when s.cost > 0 then round((s.revenue - s.cost) / s.cost * 100, 2) end
+    from summed s
+   order by s.revenue desc nulls last;
+end $$;
+
+/** The thinnest deals in the window — the ones worth a conversation. */
+create or replace function public.report_thinnest_deals(
+  p_company uuid, p_from date, p_to date, p_distributor_pct numeric, p_limit int
+) returns table (
+  quote_id text, quote_number text, customer text, seller text,
+  revenue numeric, cost numeric, margin_pct numeric, status text
+) language plpgsql stable security definer set search_path = public as $$
+/* A column wins over a parameter of the same name. These return a column
+   called `oem` and read one called `oem`, and without this the body reads
+   its own OUT parameter and Postgres refuses it as ambiguous. */
+#variable_conflict use_column
+begin
+  if auth.uid() is null then raise exception 'not authenticated'; end if;
+  if not public.is_privileged_in(p_company) then
+    raise exception 'that report is for Admin and Manager only';
+  end if;
+
+  return query
+  with line as (
+    select qt.id,
+           qt.data->>'number' as number,
+           coalesce(qt.data->>'billName', qt.data->>'customerName') as customer,
+           qt.owner_id,
+           qt.data->>'status' as status,
+           coalesce(nullif(it->>'qty', '')::numeric, 0) as qty,
+           coalesce(nullif(it->>'rate', '')::numeric, 0) as rate,
+           coalesce(nullif(it->>'disc', '')::numeric, 0) as disc,
+           i.reseller_price
+      from public.quotes qt
+      cross join lateral jsonb_array_elements(
+        case when jsonb_typeof(qt.data->'items') = 'array' then qt.data->'items' else '[]'::jsonb end) as it
+      join public.price_list_items i on i.id = nullif(it->>'priceBookItemId', '')::uuid
+     where qt.company_id = p_company
+       and qt.created_at::date between coalesce(p_from, '2000-01-01'::date) and coalesce(p_to, current_date)
+  ),
+  summed as (
+    /* Grouped by all of them rather than aggregated: every line of one
+       quotation carries the same number, customer, owner and status, and
+       Postgres has no max() for a uuid anyway. */
+    select id, number, customer, owner_id, status,
+           round(sum(qty * rate * (1 - disc / 100.0)), 2) as revenue,
+           round(sum(qty * round(reseller_price * (1 - coalesce(p_distributor_pct, 0) / 100.0), 2)), 2) as cost
+      from line
+     group by id, number, customer, owner_id, status
+  )
+  select s.id, s.number, s.customer,
+         coalesce(p.name, p.email, 'Unknown'),
+         s.revenue, s.cost,
+         case when s.revenue > 0 then round((s.revenue - s.cost) / s.revenue * 100, 2) end,
+         s.status
+    from summed s
+    left join public.profiles p on p.id = s.owner_id
+   where s.revenue > 0
+   order by (s.revenue - s.cost) / s.revenue
+   limit greatest(1, least(coalesce(p_limit, 20), 200));
+end $$;
+
+grant execute on function public.report_quotes_by_seller(uuid, date, date) to authenticated;
+grant execute on function public.report_margin_by_oem(uuid, date, date, numeric) to authenticated;
+grant execute on function public.report_thinnest_deals(uuid, date, date, numeric, int) to authenticated;
+revoke execute on function public.report_quotes_by_seller(uuid, date, date) from anon;
+revoke execute on function public.report_margin_by_oem(uuid, date, date, numeric) from anon;
+revoke execute on function public.report_thinnest_deals(uuid, date, date, numeric, int) from anon;
+
+/* ── Accounts: the quotations that became business ──────────────────────
+   The specification asks for "a read-only view of approved quotes" for
+   Accounts, and today there is none: quotes_select admits the owner and
+   the privileged, so an Accounts user — who raises no quotations — sees an
+   empty list.
+
+   ADDED AS A SECOND POLICY RATHER THAN BY CHANGING THE FIRST. Permissive
+   policies are OR'd, so this can only widen, and only for the role named.
+   Editing quotes_select to carry another clause would put every existing
+   quotation's visibility through a rewritten expression, which is a much
+   larger thing to get wrong.
+
+   READ ONLY, because there is no matching update or delete policy: the
+   existing ones still admit the owner and the privileged and nobody else.
+
+   ACCEPTED AND PAID, not every quotation. Accounts needs what the customer
+   agreed to, to raise the invoice and chase the money. A draft at a price
+   still being negotiated is not that, and a quotation that was rejected is
+   nobody's receivable. */
+do $$
+begin
+  execute 'drop policy if exists quotes_select_accounts on public.quotes';
+  execute 'create policy quotes_select_accounts on public.quotes for select
+    using (public.is_member(company_id)
+           and public.role_in(company_id) = ''Accounts''
+           and coalesce(data->>''status'', '''') in (''Accepted'', ''Paid''))';
+end $$;

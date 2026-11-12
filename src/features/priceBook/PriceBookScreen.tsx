@@ -18,6 +18,7 @@ import {
 } from "../../data/priceBook";
 import { marginReadings, minSellingPrice } from "../../domain/priceBook/pricing";
 import { UploadDialog } from "./UploadDialog";
+import { MarginReports } from "./MarginReports";
 
 /**
  * The price book: what may be quoted, and the lowest it may be quoted at.
@@ -38,7 +39,7 @@ import { UploadDialog } from "./UploadDialog";
 /** The five TechZoid resells, with room for the sixth. */
 export const PRICE_BOOK_OEMS = ["Microsoft", "Adobe", "Autodesk", "Kaspersky", "Other"] as const;
 
-type Tab = "browse" | "lists" | "margins";
+type Tab = "browse" | "lists" | "margins" | "earning";
 
 export function PriceBookScreen({
   company,
@@ -55,6 +56,7 @@ export function PriceBookScreen({
       { id: "browse" as Tab, label: "Browse" },
       ...(privileged ? [{ id: "lists" as Tab, label: "Monthly lists" }] : []),
       ...(privileged ? [{ id: "margins" as Tab, label: "Minimum margins" }] : []),
+      ...(privileged ? [{ id: "earning" as Tab, label: "What it earns" }] : []),
     ],
     [privileged],
   );
@@ -76,6 +78,8 @@ export function PriceBookScreen({
         <BrowseTab company={company} />
       ) : tab === "lists" ? (
         <ListsTab company={company} isAdmin={isAdmin} />
+      ) : tab === "earning" ? (
+        <MarginReports company={company} />
       ) : (
         <MarginsTab company={company} isAdmin={isAdmin} />
       )}

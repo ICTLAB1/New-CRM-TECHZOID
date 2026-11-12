@@ -144,6 +144,13 @@ export interface SalesDocument {
   subject: string;
   date: string;
   validUntil: string;
+  /** Which month's OEM price list this document's price book lines came
+   *  from, as 'YYYY-MM'. Set when the first such line is added.
+   *  WHY IT IS KEPT: the prices are only true for that month's list, so a
+   *  quotation still open in the next month has to be repriced before it
+   *  is sent again. A trigger copies it onto quotes.price_list_period, so
+   *  "which quotations are priced off October" is a query. */
+  priceListPeriod?: string;
   status: string;
   items: LineItem[];
   terms: string[];

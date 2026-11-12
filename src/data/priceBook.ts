@@ -572,6 +572,7 @@ export function toApprovalLine(row: Record<string, unknown>): ApprovalLine {
  * salesperson who asked, which is the point.
  */
 export async function approvalLines(id: string, distributorPct: number): Promise<ApprovalLine[]> {
+  if (!hasBackend()) return [];
   const { data, error } = await getDb().rpc("approval_lines", {
     p_approval: id,
     p_distributor_pct: Number.isFinite(distributorPct) ? distributorPct : 0,
@@ -625,4 +626,134 @@ export async function notifyApproval(approvalId: string): Promise<{ sent: number
   } catch (e) {
     return { sent: 0, reason: (e as Error)?.message || "the notification could not be sent" };
   }
+}
+
+/* ── the reports ─────────────────────────────────────────────────────────
+   All three refuse anybody but Admin and Manager, in the function. Three
+   of their four columns are statements about the cost. */
+
+export interface SellerRow {
+  ownerId: string;
+  seller: string;
+  quotes: number;
+  quotedValue: number;
+  approvalsRequested: number;
+  approvalsApproved: number;
+  approvalsRejected: number;
+}
+
+export interface OemMarginRow {
+  oem: string;
+  lines: number;
+  quotes: number;
+  revenue: number;
+  cost: number;
+  /** Of the sale — what the CRM's other margin figures mean. */
+  marginPct: number | null;
+  /** Over the cost — what the minimum margin means. */
+  markupPct: number | null;
+}
+
+export interface ThinDealRow {
+  quoteId: string;
+  quoteNumber: string | null;
+  customer: string | null;
+  seller: string;
+  revenue: number;
+  cost: number;
+  marginPct: number | null;
+  status: string | null;
+}
+
+export interface RepriceRow {
+  quoteId: string;
+  quoteNumber: string | null;
+  ownerId: string;
+  period: string;
+  status: string | null;
+  pricedUntil: string | null;
+}
+
+const maybeNum = (v: unknown): number | null => (v === null || v === undefined ? null : num(v));
+
+export async function sellerReport(company: string, from?: string | null, to?: string | null): Promise<SellerRow[]> {
+  if (!hasBackend() || !company) return [];
+  const { data, error } = await getDb().rpc("report_quotes_by_seller", {
+    p_company: company, p_from: from ?? null, p_to: to ?? null,
+  });
+  if (error) throw new Error(error.message ?? "That report could not be read.");
+  return rows(data).map((r) => ({
+    ownerId: text(r.owner_id),
+    seller: text(r.seller),
+    quotes: num(r.quotes),
+    quotedValue: num(r.quoted_value),
+    approvalsRequested: num(r.approvals_requested),
+    approvalsApproved: num(r.approvals_approved),
+    approvalsRejected: num(r.approvals_rejected),
+  }));
+}
+
+export async function oemMarginReport(
+  company: string, distributorPct: number, from?: string | null, to?: string | null,
+): Promise<OemMarginRow[]> {
+  if (!hasBackend() || !company) return [];
+  const { data, error } = await getDb().rpc("report_margin_by_oem", {
+    p_company: company, p_from: from ?? null, p_to: to ?? null,
+    p_distributor_pct: Number.isFinite(distributorPct) ? distributorPct : 0,
+  });
+  if (error) throw new Error(error.message ?? "That report could not be read.");
+  return rows(data).map((r) => ({
+    oem: text(r.oem),
+    lines: num(r.lines),
+    quotes: num(r.quotes),
+    revenue: num(r.revenue),
+    cost: num(r.cost),
+    marginPct: maybeNum(r.margin_pct),
+    markupPct: maybeNum(r.markup_pct),
+  }));
+}
+
+export async function thinnestDeals(
+  company: string, distributorPct: number, from?: string | null, to?: string | null, limit = 20,
+): Promise<ThinDealRow[]> {
+  if (!hasBackend() || !company) return [];
+  const { data, error } = await getDb().rpc("report_thinnest_deals", {
+    p_company: company, p_from: from ?? null, p_to: to ?? null,
+    p_distributor_pct: Number.isFinite(distributorPct) ? distributorPct : 0,
+    p_limit: limit,
+  });
+  if (error) throw new Error(error.message ?? "That report could not be read.");
+  return rows(data).map((r) => ({
+    quoteId: text(r.quote_id),
+    quoteNumber: orNull(r.quote_number),
+    customer: orNull(r.customer),
+    seller: text(r.seller),
+    revenue: num(r.revenue),
+    cost: num(r.cost),
+    marginPct: maybeNum(r.margin_pct),
+    status: orNull(r.status),
+  }));
+}
+
+/**
+ * Quotations still priced from a month that has ended.
+ *
+ * Members, not just the privileged: it names documents and months and
+ * carries no cost, and the person who has to reprice one is the
+ * salesperson who raised it.
+ */
+export async function quotesNeedingReprice(company: string, today: string): Promise<RepriceRow[]> {
+  if (!hasBackend() || !company) return [];
+  const { data, error } = await getDb().rpc("quotes_needing_reprice", {
+    p_company: company, p_today: today,
+  });
+  if (error) throw new Error(error.message ?? "That could not be read.");
+  return rows(data).map((r) => ({
+    quoteId: text(r.quote_id),
+    quoteNumber: orNull(r.quote_number),
+    ownerId: text(r.owner_id),
+    period: text(r.period),
+    status: orNull(r.status),
+    pricedUntil: orNull(r.priced_until),
+  }));
 }

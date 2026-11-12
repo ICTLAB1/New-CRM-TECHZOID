@@ -1067,6 +1067,220 @@ begin;
   end $$;
 rollback;
 
+/* ── 11. the reports, and the month a quotation was priced from ─────── */
+
+/* Sections 9 and 10 are done with their quotation, and it carries a price
+   book line of its own — leaving it in would fold ₹10,500 of it into every
+   figure below, which is how the first version of this section came to
+   assert ₹12,000 against a report that correctly said ₹22,500. */
+set request.jwt.claim.role = 'service_role';
+delete from public.quotes where id = 'quote_pb_approval';
+insert into public.quotes(id, owner_id, company_id, data)
+values ('quote_pb_report', 'a0000000-0000-0000-0000-000000000003',
+        'c0000000-0000-0000-0000-00000000000a',
+        jsonb_build_object(
+          'status', 'Draft', 'number', 'TZ/Q/26-27/0010', 'billName', 'Acme Ltd',
+          'priceListPeriod', '2026-10',
+          'items', jsonb_build_array(
+            jsonb_build_object(
+              'id', 'r1', 'sku', 'M365-E3', 'qty', 10, 'rate', 1200, 'disc', 0,
+              'priceBookItemId', (select i.id from public.price_list_items i
+                                   join public.price_lists l on l.id = i.price_list_id
+                                  where i.sku = 'M365-E3' and l.status = 'active'
+                                    and i.company_id = 'c0000000-0000-0000-0000-00000000000a')),
+            /* A LINE NOBODY HAS COSTED, on the same quotation: two days of
+               installation, typed by hand. Every figure below must leave it
+               out — counting it at zero cost would report a 100% margin on
+               work nobody has priced. */
+            jsonb_build_object('id', 'r2', 'desc', 'Installation', 'qty', 2, 'rate', 5000, 'disc', 0))))
+on conflict (id) do update set data = excluded.data;
+reset request.jwt.claim.role;
+
+/* THE COLUMN IS KEPT LEVEL WITH THE DOCUMENT by the trigger, so "which
+   quotations are still priced off October" is a query and not a scan. */
+do $$
+declare
+  v text;
+begin
+  select price_list_period into v from public.quotes where id = 'quote_pb_report';
+  if coalesce(v, '') <> '2026-10' then
+    raise exception 'the price list month was not carried onto the row: %', v;
+  end if;
+end $$;
+
+begin;
+  set local role authenticated;
+  set local "request.jwt.claim.sub"  = 'a0000000-0000-0000-0000-000000000003';
+  set local "request.jwt.claim.role" = 'authenticated';
+
+  /* A salesperson sees none of the three reports. */
+  do $$
+  begin
+    perform * from public.report_quotes_by_seller('c0000000-0000-0000-0000-00000000000a', null, null);
+    raise exception 'SALES READ THE SELLER REPORT';
+  exception when others then
+    if sqlerrm <> 'that report is for Admin and Manager only' then raise; end if;
+  end $$;
+  do $$
+  begin
+    perform * from public.report_margin_by_oem('c0000000-0000-0000-0000-00000000000a', null, null, 3.5);
+    raise exception 'SALES READ THE MARGIN REPORT';
+  exception when others then
+    if sqlerrm <> 'that report is for Admin and Manager only' then raise; end if;
+  end $$;
+  do $$
+  begin
+    perform * from public.report_thinnest_deals('c0000000-0000-0000-0000-00000000000a', null, null, 3.5, 10);
+    raise exception 'SALES READ THE THINNEST DEALS';
+  exception when others then
+    if sqlerrm <> 'that report is for Admin and Manager only' then raise; end if;
+  end $$;
+
+  /* But they MAY be told their own quotation needs repricing: it names a
+     document and a month and carries no cost. */
+  do $$
+  declare
+    r record;
+  begin
+    select * into r from public.quotes_needing_reprice(
+      'c0000000-0000-0000-0000-00000000000a', date '2026-11-12');
+    if not found then raise exception 'a quotation priced off October was not flagged in November'; end if;
+    if r.quote_id <> 'quote_pb_report' then raise exception 'wrong quotation flagged: %', r.quote_id; end if;
+    if r.priced_until <> date '2026-10-31' then raise exception 'October was said to run to %', r.priced_until; end if;
+  end $$;
+
+  /* And inside that month it is not flagged. */
+  do $$
+  declare
+    n int;
+  begin
+    select count(*) into n from public.quotes_needing_reprice(
+      'c0000000-0000-0000-0000-00000000000a', date '2026-10-20');
+    if n <> 0 then raise exception '% quotations flagged inside their own month', n; end if;
+  end $$;
+rollback;
+
+/* The Manager reads them, and the arithmetic is the arithmetic. */
+begin;
+  set local role authenticated;
+  set local "request.jwt.claim.sub"  = 'a0000000-0000-0000-0000-000000000002';
+  set local "request.jwt.claim.role" = 'authenticated';
+
+  do $$
+  declare
+    r record;
+  begin
+    /* Ten at ₹1,200 off a ₹1,000 reseller price, with 3.5% from the
+       distributor: ₹12,000 sold, ₹9,650 bought, ₹2,350 earned — 19.58% of
+       the sale and 24.35% over the cost. */
+    select * into r from public.report_margin_by_oem(
+      'c0000000-0000-0000-0000-00000000000a', null, null, 3.5) where oem = 'Microsoft';
+    if not found then raise exception 'no Microsoft line in the margin report'; end if;
+    if r.revenue <> 12000.00 then raise exception 'revenue read as %', r.revenue; end if;
+    if r.cost <> 9650.00 then raise exception 'cost read as %', r.cost; end if;
+    if r.margin_pct <> 19.58 then raise exception 'margin of the sale read as %', r.margin_pct; end if;
+    if r.markup_pct <> 24.35 then raise exception 'markup over cost read as %', r.markup_pct; end if;
+    if r.lines <> 1 then raise exception '% lines counted', r.lines; end if;
+  end $$;
+
+  do $$
+  declare
+    r record;
+  begin
+    select * into r from public.report_thinnest_deals(
+      'c0000000-0000-0000-0000-00000000000a', null, null, 3.5, 10);
+    if not found then raise exception 'the thinnest-deals report found nothing'; end if;
+    if r.quote_number <> 'TZ/Q/26-27/0010' then raise exception 'wrong quotation: %', r.quote_number; end if;
+    if r.customer <> 'Acme Ltd' then raise exception 'customer read as %', r.customer; end if;
+    if r.margin_pct <> 19.58 then raise exception 'deal margin read as %', r.margin_pct; end if;
+  end $$;
+
+  /* A LINE WITH NO PRICE BOOK ITEM IS LEFT OUT rather than counted as
+     free. Averaging an uncosted line in at zero cost would report a 100%
+     margin on work nobody has costed. */
+  do $$
+  declare
+    r record;
+    n int;
+  begin
+    /* THE WHOLE REPORT, not just the Microsoft row. An uncosted line must
+       produce NO row at all — an earlier version of this check only looked
+       at Microsoft, so a version of the report that let the installation
+       line through as its own OEM-less row passed it. */
+    select count(*) into n from public.report_margin_by_oem(
+      'c0000000-0000-0000-0000-00000000000a', null, null, 0);
+    if n <> 1 then raise exception 'the margin report has % rows; a line nobody costed is in it', n; end if;
+
+    select count(*) into n from public.report_margin_by_oem(
+      'c0000000-0000-0000-0000-00000000000a', null, null, 0) where oem is null;
+    if n <> 0 then raise exception 'the margin report has a row with no OEM'; end if;
+
+    select * into r from public.report_margin_by_oem(
+      'c0000000-0000-0000-0000-00000000000a', null, null, 0) where oem = 'Microsoft';
+    if r.lines <> 1 then raise exception 'a hand-typed line was counted into the margin'; end if;
+    if r.revenue <> 12000.00 then raise exception 'the installation line was counted as revenue: %', r.revenue; end if;
+    /* At no distributor discount the cost is the reseller price. */
+    if r.cost <> 10000.00 then raise exception 'cost at 0%% discount read as %', r.cost; end if;
+  end $$;
+rollback;
+
+/* ── 12. Accounts sees what was agreed, and only that ───────────────── */
+
+set request.jwt.claim.role = 'service_role';
+insert into public.quotes(id, owner_id, company_id, data) values
+  ('quote_pb_won',   'a0000000-0000-0000-0000-000000000003', 'c0000000-0000-0000-0000-00000000000a',
+   '{"status":"Accepted","number":"TZ/Q/26-27/0011","items":[]}'::jsonb),
+  ('quote_pb_draft', 'a0000000-0000-0000-0000-000000000003', 'c0000000-0000-0000-0000-00000000000a',
+   '{"status":"Draft","number":"TZ/Q/26-27/0012","items":[]}'::jsonb)
+on conflict (id) do update set data = excluded.data;
+reset request.jwt.claim.role;
+
+begin;
+  set local role authenticated;
+  set local "request.jwt.claim.sub"  = 'a0000000-0000-0000-0000-000000000004';   /* Accounts */
+  set local "request.jwt.claim.role" = 'authenticated';
+
+  do $$
+  declare
+    n int;
+  begin
+    /* The accepted one, which they need to raise the invoice against. */
+    select count(*) into n from public.quotes where id = 'quote_pb_won';
+    if n <> 1 then raise exception 'Accounts cannot see an accepted quotation'; end if;
+
+    /* NOT the draft: a price still being negotiated is not theirs to read. */
+    select count(*) into n from public.quotes where id = 'quote_pb_draft';
+    if n <> 0 then raise exception 'ACCOUNTS READ A DRAFT QUOTATION'; end if;
+  end $$;
+
+  /* AND READ ONLY. There is no update policy for them. */
+  do $$
+  declare
+    n int;
+  begin
+    update public.quotes set data = jsonb_set(data, '{status}', '"Paid"') where id = 'quote_pb_won';
+    get diagnostics n = row_count;
+    if n <> 0 then raise exception 'ACCOUNTS CHANGED A QUOTATION'; end if;
+  exception when insufficient_privilege then
+    null;
+  end $$;
+rollback;
+
+/* A salesperson's own drafts are still their own — the new policy widened
+   nothing for anybody else. */
+begin;
+  set local role authenticated;
+  set local "request.jwt.claim.sub"  = 'a0000000-0000-0000-0000-000000000003';
+  set local "request.jwt.claim.role" = 'authenticated';
+  do $$
+  declare
+    n int;
+  begin
+    select count(*) into n from public.quotes where id = 'quote_pb_draft';
+    if n <> 1 then raise exception 'the owner lost sight of their own draft'; end if;
+  end $$;
+rollback;
+
 /* ── clean up, so the proof can be run again ─────────────────────────── */
 
 delete from public.discount_approvals where company_id in
@@ -1075,7 +1289,7 @@ delete from public.price_lists where company_id in
   ('c0000000-0000-0000-0000-00000000000a', 'c0000000-0000-0000-0000-00000000000b');
 delete from public.oem_margin_rules where company_id in
   ('c0000000-0000-0000-0000-00000000000a', 'c0000000-0000-0000-0000-00000000000b');
-delete from public.quotes where id = 'quote_pb_approval';
+delete from public.quotes where id in ('quote_pb_approval', 'quote_pb_report', 'quote_pb_won', 'quote_pb_draft');
 
 reset request.jwt.claim.role;
 

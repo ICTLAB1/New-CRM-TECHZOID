@@ -259,6 +259,13 @@ export function DocumentEditor({
   const addFromPriceBook = (hit: PriceBookHit) => {
     setDoc((d) => ({
       ...d,
+      /* The month this document is priced from. Set once, by the first
+         price book line: a quotation mixing two months is already a
+         quotation to reprice, and the earlier month is the one that
+         expires first. */
+      priceListPeriod: d.priceListPeriod && d.priceListPeriod <= hit.period
+        ? d.priceListPeriod
+        : hit.period,
       items: [...d.items, {
         id: Math.random().toString(36).slice(2, 10),
         desc: hit.productName, subDesc: "", brand: hit.oem || "",
@@ -637,6 +644,7 @@ export function DocumentEditor({
                       company={priceBookCompany}
                       docId={doc.id}
                       docNumber={doc.number}
+                      pricedFrom={doc.priceListPeriod}
                       items={doc.items}
                       onApplyApproved={(byLine) =>
                         setDoc((d) => ({

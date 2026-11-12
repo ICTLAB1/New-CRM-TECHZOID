@@ -4,7 +4,13 @@ import { Modal } from "../../components/Modal";
 import { useToast } from "../../components/Toast";
 import { inr } from "../../domain/currency/format";
 import type { LineItem } from "../../domain/tax/types";
-import { linesNeedingApproval, type QuoteLineForApproval } from "../../domain/priceBook/pricing";
+import {
+  isQuoteExpired,
+  linesNeedingApproval,
+  periodEnd,
+  type QuoteLineForApproval,
+} from "../../domain/priceBook/pricing";
+import { localISO } from "../../domain/dates";
 import {
   minimumsFor,
   myApprovals,
@@ -41,12 +47,15 @@ export function ApprovalStrip({
   company,
   docId,
   docNumber,
+  pricedFrom,
   items,
   onApplyApproved,
 }: {
   company: string;
   docId: string;
   docNumber?: string;
+  /** 'YYYY-MM' — which month's list this document was priced from. */
+  pricedFrom?: string;
   items: readonly LineItem[];
   /** An approved price becomes that line's floor; the editor records it. */
   onApplyApproved: (byLineId: Record<string, number>) => void;
@@ -165,12 +174,35 @@ export function ApprovalStrip({
     }
   };
 
-  /* Nothing to say: no price book lines, or none of them below its floor,
-     and nothing outstanding. */
-  if (!needed.length && !pending && !decided) return null;
+  /* The month this document was priced from, and whether it has run out.
+     A quotation built on November's list and sent in December quotes
+     prices the distributor has already replaced. */
+  const pricedUntil = pricedFrom ? periodEnd(pricedFrom) : "";
+  const stale = isQuoteExpired(pricedUntil, localISO(new Date()));
+
+  /* Nothing to say: no price book lines, nothing below a floor, nothing
+     outstanding, and the month it was priced in has not run out. */
+  if (!needed.length && !pending && !decided && !stale) return null;
 
   return (
     <>
+      {stale ? (
+        <div className="notice notice-warn">
+          <div className="stack">
+            <div className="row-tight wrap">
+              <Chip tone="warn">Priced from an old list</Chip>
+              <span>
+                These prices came from the {pricedFrom} list, which ran to{" "}
+                {new Date(pricedUntil).toLocaleDateString()}. Reprice against the current list before
+                sending this again — the distributor's prices have moved on.
+              </span>
+            </div>
+            <div className="row-tight">
+              <Button tone="default" onClick={() => void load()}>Check against today's prices</Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
       {needed.length && !pending ? (
         <div className="notice notice-warn">
           <div className="stack">
