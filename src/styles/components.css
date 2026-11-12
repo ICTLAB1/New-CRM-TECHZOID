@@ -1232,3 +1232,19 @@ button.path-hit { cursor: pointer; }
 }
 .row-open:hover { text-decoration: underline; text-underline-offset: 2px; }
 .row-open:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ── payments received ──────────────────────────────────────────────
+   A list you can correct, not a read-only table: when the money
+   arrived, how much, and what you can do to the entry. Shared by the
+   Payment Tracker's bill panel and Receivables, because a payment
+   recorded in one place and a payment recorded in the other are the
+   same thing to the person looking at them. */
+.pay-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--gap-tight); }
+.pay-list li {
+  display: flex; align-items: center; gap: var(--gap); flex-wrap: wrap;
+  padding: var(--gap-tight) 0; border-bottom: 1px solid var(--rule);
+}
+.pay-list li:last-child { border-bottom: 0; }
+.pay-list li.is-editing { background: var(--accent-weak); }
+.pay-when { flex: 1 1 14rem; min-width: 0; font-size: var(--t-small); color: var(--neutral); }
+.pay-sum { font-weight: 700; font-variant-numeric: tabular-nums; }

@@ -103,14 +103,3 @@
 .pt-preview-wrap { border: 1px solid var(--accent-rule); border-radius: var(--radius); overflow: hidden; scroll-margin-top: 12px; animation: mo-rise-sm 360ms var(--ease-expo, ease-out) backwards; }
 .pt-preview-subject { display: grid; gap: 2px; padding: var(--gap) var(--gap-wide); background: var(--accent-weak); border-bottom: 1px solid var(--accent-rule); font-size: var(--t-body); color: var(--ink); }
 .pt-preview-wrap .pt-preview { display: block; border: 0; border-radius: 0; height: 640px; }
-
-/* Payments received — a list you can correct, not a read-only table.
-   Three columns: when it arrived, how much, and what you can do to it. */
-.pt-payments { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--gap-tight); }
-.pt-payments li {
-  display: flex; align-items: center; gap: var(--gap); flex-wrap: wrap;
-  padding: var(--gap-tight) 0; border-bottom: 1px solid var(--rule);
-}
-.pt-payments li:last-child { border-bottom: 0; }
-.pt-payment-when { flex: 1 1 14rem; min-width: 0; font-size: var(--t-small); color: var(--neutral); }
-.pt-payment-sum { font-weight: 700; font-variant-numeric: tabular-nums; }

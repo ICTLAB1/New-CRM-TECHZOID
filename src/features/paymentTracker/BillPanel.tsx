@@ -327,13 +327,13 @@ export function BillPanel({
                 history with it. Available even on a settled bill,
                 because a bill settled by a payment entered twice is
                 exactly the one that needs correcting. */}
-            <ul className="pt-payments">
+            <ul className="pay-list">
               {bill.payments.map((p) => (
                 <li key={p.id}>
-                  <span className="pt-payment-when">
+                  <span className="pay-when">
                     {fmtDate(p.date)} · {p.method}{p.reference ? ` · ${p.reference}` : ""}
                   </span>
-                  <span className="pt-payment-sum">{moneyList(p.amount, bill.currency)}</span>
+                  <span className="pay-sum">{moneyList(p.amount, bill.currency)}</span>
                   {removing === p.id ? (
                     <span className="row-tight" style={{ gap: 6 }}>
                       <span className="field-hint">Remove it?</span>

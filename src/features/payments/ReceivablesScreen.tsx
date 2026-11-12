@@ -6,7 +6,7 @@ import { Modal } from "../../components/Modal";
 import { useToast } from "../../components/Toast";
 import { computeDocument } from "../../domain/tax/compute";
 import { sendThanksFor, thanksNote } from "../../data/paymentThanks";
-import { computePaymentInfo, PAYMENT_METHODS } from "../../domain/payments/ledger";
+import { computePaymentInfo, PAYMENT_METHODS, type PaymentEntry } from "../../domain/payments/ledger";
 import { AGE_BUCKETS, buildReceivables, type AgeBucketId } from "../../domain/payments/receivables";
 import { formatTotals, isMixed, moneyList, totalsByCurrency } from "../../domain/currency/format";
 import { fmtDate, TODAY } from "../../domain/dates";
@@ -43,10 +43,20 @@ const TILE_TONE: Partial<Record<AgeBucketId, "good" | "warn" | "bad">> = {
 };
 
 export function ReceivablesScreen({ invoices, users, currentUser, settings, onChange }: ReceivablesScreenProps) {
-  const [bucket, setBucket] = useState<AgeBucketId | "all">("all");
+  const [bucket, setBucket] = useState<AgeBucketId | "all" | "settled">("all");
   const [owner, setOwner] = useState("all");
   const [query, setQuery] = useState("");
-  const [paying, setPaying] = useState<SalesDocument | null>(null);
+  /**
+   * The invoice whose payments are open, BY ID rather than by value.
+   *
+   * The panel stays open while payments are corrected and removed, so
+   * it has to be looking at the invoice as it is now. Held as a copy it
+   * showed the ledger as it was when the panel opened, which on a panel
+   * whose whole job is correcting that ledger is the one thing it must
+   * not do.
+   */
+  const [payingId, setPayingId] = useState<string | null>(null);
+  const payingDoc = payingId ? invoices.find((i) => i.id === payingId) ?? null : null;
   const toast = useToast();
 
   const sellerState = ((settings["company"] as { state?: string })?.state) ?? "Delhi";
@@ -62,15 +72,42 @@ export function ReceivablesScreen({ invoices, users, currentUser, settings, onCh
 
   const nameOf = useMemo(() => new Map(users.map((u) => [u.id, u.name])), [users]);
 
+  /**
+   * INVOICES THAT OWE NOTHING, which this screen could not reach at all.
+   *
+   * buildReceivables answers "who owes us money", so an invoice with no
+   * balance left drops out of it — correctly. But a payment entered
+   * twice SETTLES an invoice, and the invoice then vanished from the one
+   * screen where its payments can be corrected. The mistake that most
+   * needs fixing was the one that hid the invoice.
+   *
+   * Over-payments come first: an invoice showing more received than
+   * invoiced is not a tidy record, it is an error waiting to be found.
+   */
+  const settled = useMemo(() => {
+    const out = invoices
+      .filter((i) => i.status !== "Cancelled" && i.status !== "Draft")
+      .map((invoice) => {
+        const grand = computeDocument(invoice as never, sellerState).grand;
+        const info = computePaymentInfo(invoice, grand, today);
+        return { invoice, grand, ...info, daysOverdue: 0, bucket: "current" as AgeBucketId };
+      })
+      .filter((row) => row.outstanding <= 0 && (row.invoice.paymentHistory?.length ?? 0) > 0);
+    return out.sort((a, b) => (b.amountPaid - b.grand) - (a.amountPaid - a.grand));
+  }, [invoices, sellerState, today]);
+
+  const overpaid = settled.filter((r) => r.amountPaid > r.grand + 0.005);
+
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return report.open.filter((row) => {
-      if (bucket !== "all" && row.bucket !== bucket) return false;
+    const rows = bucket === "settled" ? settled : report.open;
+    return rows.filter((row) => {
+      if (bucket !== "all" && bucket !== "settled" && row.bucket !== bucket) return false;
       if (owner !== "all" && row.invoice.ownerId !== owner) return false;
       if (!q) return true;
       return [row.invoice.number, row.invoice.billName].some((v) => (v ?? "").toLowerCase().includes(q));
     });
-  }, [report, bucket, owner, query]);
+  }, [report, settled, bucket, owner, query]);
 
   /* PER CURRENCY, NOT ONE FIGURE. An outstanding balance in dollars and one
      in rupees are two different debts; adding them produced a total that
@@ -87,19 +124,25 @@ export function ReceivablesScreen({ invoices, users, currentUser, settings, onCh
   const overdueTotals = totalsOf(report.open.filter((r) => r.daysOverdue > 0));
   const bucketTotals = (bucket: string) => totalsOf(report.open.filter((r) => r.bucket === bucket));
 
-  const recordPayment = (invoice: SalesDocument, entry: { amount: number; date: string; method: string; reference: string }) => {
+  /** Every write to one invoice's ledger goes through here. */
+  const putPayments = (invoice: SalesDocument, history: PaymentEntry[]) => {
+    onChange(invoices.map((i) =>
+      i.id === invoice.id ? { ...i, paymentHistory: history, updatedAt: Date.now() } : i));
+  };
+
+  const updatePayment = (invoice: SalesDocument, id: string, entry: PaymentFields) => {
+    putPayments(invoice, (invoice.paymentHistory ?? []).map((p) => (p.id === id ? { id, ...entry } : p)));
+    toast(`Payment corrected on ${invoice.number}`, "good");
+  };
+
+  const removePayment = (invoice: SalesDocument, id: string) => {
+    putPayments(invoice, (invoice.paymentHistory ?? []).filter((p) => p.id !== id));
+    toast(`Payment removed from ${invoice.number}`, "good");
+  };
+
+  const recordPayment = (invoice: SalesDocument, entry: PaymentFields) => {
     const paymentId = Math.random().toString(36).slice(2, 10);
-    const next = invoices.map((i) =>
-      i.id === invoice.id
-        ? {
-            ...i,
-            paymentHistory: [...(i.paymentHistory ?? []), { id: paymentId, ...entry }],
-            updatedAt: Date.now(),
-          }
-        : i,
-    );
-    onChange(next);
-    setPaying(null);
+    putPayments(invoice, [...(invoice.paymentHistory ?? []), { id: paymentId, ...entry }]);
 
     /* THE CUSTOMER IS THANKED, and the save does not wait for it. The
        payment is the thing being recorded; the email is a consequence.
@@ -142,6 +185,20 @@ export function ReceivablesScreen({ invoices, users, currentUser, settings, onCh
         ))}
       </SummaryBar>
 
+      {/* AN ERROR, NOT A TIDY RECORD. More received than invoiced is
+          almost always the same payment entered twice — and because the
+          invoice then owes nothing, it leaves this list and takes the
+          mistake with it. Said out loud, with the way to it. */}
+      {overpaid.length && bucket !== "settled" ? (
+        <p className="field-hint" style={{ color: "var(--warn)", margin: "0 0 var(--gap)" }}>
+          {overpaid.length === 1
+            ? `${overpaid[0]!.invoice.number} shows more received than invoiced.`
+            : `${overpaid.length} invoices show more received than invoiced.`}
+          {" "}
+          <Button size="sm" tone="quiet" onClick={() => setBucket("settled")}>Show settled</Button>
+        </p>
+      ) : null}
+
       <Card padded={false} className="stack" >
         <div className="row wrap" style={{ padding: "var(--gap) var(--gap-wide)" }}>
           <Input
@@ -150,9 +207,12 @@ export function ReceivablesScreen({ invoices, users, currentUser, settings, onCh
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
-          <Select style={{ maxWidth: 180 }} value={bucket} onChange={(e) => setBucket(e.target.value as AgeBucketId | "all")}>
+          <Select style={{ maxWidth: 180 }} value={bucket} onChange={(e) => setBucket(e.target.value as AgeBucketId | "all" | "settled")}>
             <option value="all">Any age</option>
             {AGE_BUCKETS.map((b) => <option key={b.id} value={b.id}>{b.label}</option>)}
+            {/* The way back to an invoice that owes nothing — which is
+                where a payment entered twice puts it. */}
+            <option value="settled">Settled ({settled.length})</option>
           </Select>
           <Select style={{ maxWidth: 180 }} value={owner} onChange={(e) => setOwner(e.target.value)}>
             <option value="all">Anyone's</option>
@@ -167,11 +227,13 @@ export function ReceivablesScreen({ invoices, users, currentUser, settings, onCh
 
         {shown.length === 0 ? (
           <Empty
-            title={report.open.length === 0 ? "Nothing outstanding" : "Nothing matches"}
+            title={bucket === "settled" ? "Nothing settled yet" : report.open.length === 0 ? "Nothing outstanding" : "Nothing matches"}
             body={
-              report.open.length === 0
-                ? "Every issued invoice has been paid in full."
-                : "No invoice matches those filters."
+              bucket === "settled"
+                ? "An invoice appears here once its payments cover it in full."
+                : report.open.length === 0
+                  ? "Every issued invoice has been paid in full."
+                  : "No invoice matches those filters."
             }
           />
         ) : (
@@ -212,8 +274,8 @@ export function ReceivablesScreen({ invoices, users, currentUser, settings, onCh
                       <td data-label="Outstanding" className="num strong">{moneyList(row.outstanding, row.invoice.currency)}</td>
                       <td data-label="Owner" className="muted">{nameOf.get(row.invoice.ownerId ?? "") ?? "—"}</td>
                       <td data-actions>
-                        <Button size="sm" tone="primary" onClick={() => setPaying(row.invoice as SalesDocument)}>
-                          Record payment
+                        <Button size="sm" tone="primary" onClick={() => setPayingId(row.invoice.id)}>
+                          {(row.invoice.paymentHistory?.length ?? 0) > 0 ? "Payments" : "Record payment"}
                         </Button>
                       </td>
                     </tr>
@@ -225,16 +287,17 @@ export function ReceivablesScreen({ invoices, users, currentUser, settings, onCh
         )}
       </Card>
 
-      <Presence value={paying}>
+      <Presence value={payingDoc}>
         {(invoice, open) => (
-          <RecordPayment
+          <PaymentsPanel
             open={open}
             invoice={invoice}
-            outstanding={
-              computePaymentInfo(invoice, computeDocument(invoice as never, sellerState).grand, today).outstanding
-            }
-            onSave={(entry) => recordPayment(invoice, entry)}
-            onClose={() => setPaying(null)}
+            total={computeDocument(invoice as never, sellerState).grand}
+            today={today}
+            onAdd={(entry) => recordPayment(invoice, entry)}
+            onUpdate={(id, entry) => updatePayment(invoice, id, entry)}
+            onRemove={(id) => removePayment(invoice, id)}
+            onClose={() => setPayingId(null)}
           />
         )}
       </Presence>
@@ -248,18 +311,45 @@ export function ReceivablesScreen({ invoices, users, currentUser, settings, onCh
   );
 }
 
-/* ── recording a payment ───────────────────────────────────────────── */
+/** What the form collects; the id is this screen's to give. */
+type PaymentFields = { amount: number; date: string; method: string; reference: string };
 
-function RecordPayment({
-  invoice, outstanding, open = true, onSave, onClose,
+/* ── the payments on one invoice ───────────────────────────────────── */
+
+/**
+ * Everything recorded against one invoice, and the form that changes it.
+ *
+ * IT WAS A FORM AND NOTHING ELSE. You could add a payment to an invoice
+ * and never see what was already there — so a payment entered twice, or
+ * entered for the wrong amount, could not be found, let alone fixed.
+ * The Payment Tracker had the same gap on its bills; this is the same
+ * list, from the same stylesheet, so the two read alike.
+ *
+ * NOTHING HERE WRITES A STATUS. An invoice's paid-or-not is derived
+ * from this ledger every time it is asked for, never stored, which is
+ * what stops a flag somebody set by hand disagreeing with the money.
+ * Correcting an entry simply changes what the derivation sees.
+ */
+function PaymentsPanel({
+  invoice, total, today, open = true, onAdd, onUpdate, onRemove, onClose,
 }: {
   invoice: SalesDocument;
+  total: number;
+  today: string;
   open?: boolean;
-  outstanding: number;
-  onSave: (entry: { amount: number; date: string; method: string; reference: string }) => void;
+  onAdd: (entry: PaymentFields) => void;
+  onUpdate: (id: string, entry: PaymentFields) => void;
+  onRemove: (id: string) => void;
   onClose: () => void;
 }) {
-  const toast = useToast();
+  const history = invoice.paymentHistory ?? [];
+  const info = computePaymentInfo(invoice, total, today);
+  const outstanding = info.outstanding;
+
+  /* null while adding — which is what this panel opens for — or the id
+     of the entry being corrected. */
+  const [editing, setEditing] = useState<string | null>(null);
+  const [removing, setRemoving] = useState<string | null>(null);
   /* Prefilled with what is actually left, because settling the balance is
      the common case and typing it again is a chance to fat-finger it. */
   const [amount, setAmount] = useState(String(outstanding));
@@ -268,35 +358,116 @@ function RecordPayment({
   const [reference, setReference] = useState("");
 
   const value = Number(amount) || 0;
-  const over = value > outstanding;
+  /* Against the balance when adding; against the balance this entry is
+     not already part of when correcting one. */
+  const room = editing
+    ? outstanding + (Number(history.find((p) => p.id === editing)?.amount) || 0)
+    : outstanding;
+  const over = value > room;
+
+  const startEdit = (p: PaymentEntry) => {
+    setEditing(String(p.id));
+    setRemoving(null);
+    setAmount(String(p.amount ?? 0));
+    setDate(String(p.date ?? TODAY()));
+    setMethod(String(p.method || PAYMENT_METHODS[0]));
+    setReference(String(p.reference ?? ""));
+  };
+
+  const startAdd = () => {
+    setEditing(null);
+    setAmount(String(outstanding));
+    setDate(TODAY());
+    setMethod(PAYMENT_METHODS[0]);
+    setReference("");
+  };
 
   const save = () => {
-    onSave({ amount: value, date, method, reference: reference.trim() });
-    toast(`Payment of ${moneyList(value, invoice.currency)} recorded against ${invoice.number}`, "good");
+    const entry = { amount: value, date, method, reference: reference.trim() };
+    if (editing) {
+      onUpdate(editing, entry);
+      startAdd();
+      return;
+    }
+    onAdd(entry);
+    onClose();
   };
+
+  const received = info.amountPaid;
+  const overpaid = received > total + 0.005;
 
   return (
     <Modal
       open={open}
-      title={`Record a payment — ${invoice.number}`}
-      description={`${invoice.billName || "This customer"} owes ${moneyList(outstanding, invoice.currency)} on this invoice.`}
+      title={`Payments — ${invoice.number}`}
+      description={
+        outstanding > 0
+          ? `${invoice.billName || "This customer"} owes ${moneyList(outstanding, invoice.currency)} on this invoice.`
+          : `Settled — ${moneyList(received, invoice.currency)} received against ${moneyList(total, invoice.currency)}.`
+      }
       unsavedChanges={value > 0}
       onClose={onClose}
       footer={
         <>
-          <Button tone="quiet" onClick={onClose}>Cancel</Button>
-          <Button tone="primary" disabled={value <= 0} onClick={save}>Record payment</Button>
+          <Button tone="quiet" onClick={onClose}>Close</Button>
+          <Button tone="primary" disabled={value <= 0} onClick={save}>
+            {editing ? "Save correction" : "Record payment"}
+          </Button>
         </>
       }
     >
       <div className="stack">
+        {history.length ? (
+          <>
+            <div className="field-label">Recorded against this invoice</div>
+            <ul className="pay-list">
+              {history.map((p) => (
+                <li key={String(p.id)} className={editing === p.id ? "is-editing" : undefined}>
+                  <span className="pay-when">
+                    {fmtDate(String(p.date ?? ""))} · {String(p.method ?? "")}
+                    {p.reference ? ` · ${String(p.reference)}` : ""}
+                  </span>
+                  <span className="pay-sum">{moneyList(Number(p.amount) || 0, invoice.currency)}</span>
+                  {removing === p.id ? (
+                    <span className="row-tight" style={{ gap: 6 }}>
+                      <span className="field-hint">Remove it?</span>
+                      <Button size="sm" tone="danger" onClick={() => { onRemove(String(p.id)); setRemoving(null); }}>
+                        Remove
+                      </Button>
+                      <Button size="sm" tone="quiet" onClick={() => setRemoving(null)}>Keep</Button>
+                    </span>
+                  ) : (
+                    <span className="row-tight" style={{ gap: 6 }}>
+                      <Button size="sm" tone="quiet" onClick={() => startEdit(p)}>Edit</Button>
+                      <Button size="sm" tone="quiet" onClick={() => setRemoving(String(p.id))}>Remove</Button>
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+            {overpaid ? (
+              <p className="field-hint" style={{ color: "var(--warn)" }}>
+                {moneyList(received - total, invoice.currency)} more than the invoice — check for a payment
+                entered twice.
+              </p>
+            ) : null}
+            <p className="field-hint">
+              Correcting a payment does not email the customer again; they were thanked when it was first
+              entered.
+            </p>
+          </>
+        ) : null}
+
+        <div className="field-label">
+          {editing ? "Correct this payment" : history.length ? "Record another payment" : "Record a payment"}
+        </div>
         <div className="grid grid-2">
           <Field
             label="Amount received"
             /* A warning, not a block: an overpayment is a real thing that
                happens, and refusing to record it would leave the ledger
                disagreeing with the bank. */
-            hint={over ? `That is more than the ${moneyList(outstanding, invoice.currency)} outstanding.` : undefined}
+            hint={over ? `That is more than the ${moneyList(room, invoice.currency)} outstanding.` : undefined}
           >
             <Input numeric value={amount} invalid={over} onChange={(e) => setAmount(e.target.value)} />
           </Field>
@@ -312,6 +483,11 @@ function RecordPayment({
         <Field label="Reference" hint="UTR, cheque number, or however you will find this again on a statement.">
           <Input value={reference} onChange={(e) => setReference(e.target.value)} />
         </Field>
+        {editing ? (
+          <div className="row-tight">
+            <Button size="sm" tone="quiet" onClick={startAdd}>Cancel the correction</Button>
+          </div>
+        ) : null}
       </div>
     </Modal>
   );
