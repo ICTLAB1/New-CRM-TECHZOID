@@ -519,6 +519,7 @@ button.tile:hover { background: var(--surface-2); }
    one screen is three things to learn instead of one. */
 .notice-bad  { border-left-color: var(--bad);  background: var(--bad-weak); }
 .notice-good { border-left-color: var(--good); background: var(--good-weak); }
+.notice-warn { border-left-color: var(--warn); background: var(--warn-weak); }
 .notice-flat { border-left-color: var(--rule); background: var(--surface-2); }
 
 /* ── setup steps ───────────────────────────────────────────────────────

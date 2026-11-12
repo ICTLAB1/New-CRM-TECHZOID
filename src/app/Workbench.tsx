@@ -41,6 +41,7 @@ import { AssistantScreen } from "../features/assistant/AssistantScreen";
 import { ProspectsScreen } from "../features/outreach/ProspectsScreen";
 import { CampaignScreen } from "../features/outreach/CampaignScreen";
 import { PaymentTrackerScreen } from "../features/paymentTracker/PaymentTrackerScreen";
+import { PriceBookScreen } from "../features/priceBook/PriceBookScreen";
 import { addAccount, readAccounts, type BankAccount } from "../domain/banking/accounts";
 import { integrations } from "../integrations";
 import { BRAND_LOGOS, DOC_IMAGES } from "./demoData";
@@ -51,7 +52,8 @@ import type { Customer } from "../domain/customers/customer";
 import type { Workspace as OwnershipWorkspace } from "../domain/customers/cascade";
 import { detectCustomerEvents } from "../domain/integrations/webhooks";
 import { CompaniesPanel } from "../features/companies/CompaniesPanel";
-import type { Company } from "../data/companies";
+import { roleIn, type Company } from "../data/companies";
+import type { Role } from "../domain/analytics/scope";
 
 /**
  * Every screen, and the routing between them.
@@ -445,6 +447,21 @@ export function Workbench({
         <IntegrationsScreen api={integrations} user={user} users={team} settings={settings} onSettingsChange={onSettingsChange} />
       ) : view === "payment-tracker" ? (
         <PaymentTrackerScreen currentUser={user} users={team} customers={customers} companyId={activeCompanyId} />
+      ) : view === "price-book" ? (
+        /* THE ROLE HERE IS THE ONE IN THIS COMPANY, not the one on the
+           profile. They differ: profiles.role is a single value for the
+           person, and company_members.role is their authority in the
+           business on screen — somebody can be Sales in one and Admin in
+           another, and profiles.role has no 'Accounts' value at all. The
+           price book's own checks are all against company_members, so the
+           tabs have to be too, or a company's Admin would be shown a
+           salesperson's screen. Which tabs appear is a courtesy either
+           way: the data behind them is refused by the database, not by
+           this line. */
+        <PriceBookScreen
+          company={activeCompanyId ?? ""}
+          role={(roleIn(companies, activeCompanyId) as Role) || "Sales"}
+        />
       ) : view === "prospects" ? (
         <ProspectsScreen
           currentUser={user}

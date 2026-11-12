@@ -85,6 +85,14 @@ export const NAV: NavSection[] = [
     label: "Administer",
     items: [
       { id: "catalog", label: "Product catalog" },
+      /* Next to the catalog and not in "Sell", although a BDE reads it
+         every day: the way they read it is the price book picker inside the
+         quotation editor, not by coming here. Visiting this screen is
+         mostly an administrative act — loading the month's OEM list and
+         setting the minimum margins — so it sits with the other ones.
+         A BDE who does come here gets the search and the minimum selling
+         price, and no tab that would show them a cost. */
+      { id: "price-book", label: "Price book" },
       { id: "team", label: "Team" },
       /* Team is who can sign in; Companies is which business each of them
          works in, and with what authority there. Neighbours because that is
