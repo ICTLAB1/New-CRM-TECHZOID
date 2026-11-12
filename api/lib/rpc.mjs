@@ -7,7 +7,7 @@
  * request and call it" would be a remote code execution hole with a public
  * door on it: `pg_read_file`, `pg_sleep`, every `SECURITY DEFINER` helper
  * the CRM has, and anything a future migration adds without anyone thinking
- * about it. The endpoint can call these eight and no others.
+ * about it. The endpoint can call the ones listed here and no others.
  *
  * AND WHY THE ARGUMENTS ARE WHITELISTED TOO. Each entry lists the exact
  * argument names the CRM actually sends. Argument names go into the SQL as
@@ -60,6 +60,13 @@ export const CALLABLE = {
      only a reason and a name — never the other owner's records. */
   find_duplicate_customer: [{ args: ["p_company", "p_phone", "p_gstin"], returns: "rows" }],
 
+  /* A salesperson's own discount approval requests, with the columns they
+     are entitled to. NOT a select on discount_approvals: that table's
+     policy admits only Admin and Manager, because the row carries the
+     distributor discount and `/rest` lets a caller pick its own columns.
+     The function picks them instead. */
+  my_discount_approvals: [{ args: ["p_company"], returns: "rows" }],
+
   /* The caller's own referral code. */
   my_lead_code: [{ args: [], returns: "scalar" }],
 
@@ -87,6 +94,28 @@ export const CALLABLE = {
 
   /* The next number in a named series — invoices, quotations, and so on. */
   next_doc_seq: [{ args: ["p_kind"], returns: "scalar" }],
+
+  /* The minimum selling price of named price-book items, which is what a
+     quotation checks a typed price against. Returns the minimum and no
+     cost, for every role. */
+  price_book_minimums: [{ args: ["p_company", "p_item_ids"], returns: "rows" }],
+
+  /* The price book as a salesperson may see it: product, SKU, licence
+     term, and the MINIMUM SELLING PRICE. There is no cost column in the
+     result because there is no cost column in the function's select — the
+     reseller price is read inside it, used to derive the minimum, and
+     never returned. */
+  price_book_search: [{ args: ["p_company", "p_query", "p_oem", "p_limit"], returns: "rows" }],
+
+  /* The same search WITH the cost picture — reseller price, buying price
+     at a given distributor discount, and the margin. It raises unless the
+     caller is Admin or Manager in that company, so it is safe to expose
+     here: the refusal is the function's, not this file's. A Sales user
+     reaching it gets an error in the log rather than an empty list that
+     reads like "no products matched". */
+  price_book_search_costed: [
+    { args: ["p_company", "p_query", "p_oem", "p_limit", "p_distributor_pct"], returns: "rows" },
+  ],
 
   /* Rotates a webhook's signing secret and returns the new one.
      THE ONLY TIME THE SECRET IS EVER READABLE: it is stored hashed, so a

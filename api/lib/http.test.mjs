@@ -457,6 +457,12 @@ describe("the whitelist itself", () => {
     expect(Object.keys(CALLABLE).sort()).toEqual([
       "create_company",
       "find_duplicate_customer",
+      /* Added for the price book. A salesperson's own approval requests
+         CANNOT be a select on discount_approvals: that row carries the
+         distributor discount, and /rest lets a caller pick its own
+         columns, so the table's policy admits Admin and Manager only and
+         this function picks the columns a requester may see. */
+      "my_discount_approvals",
       "my_lead_code",
       /* Added for Entra: the browser cannot work out which CRM user a B2B
          guest is, because the object id it can see is the one from the
@@ -467,6 +473,14 @@ describe("the whitelist itself", () => {
       "next_customer_code",
       "next_doc_number",
       "next_doc_seq",
+      /* The price book, in the two shapes it is allowed to take. The plain
+         search has NO cost column in its return type, so there is nothing
+         to forget to redact; the costed one raises unless the caller is
+         Admin or Manager in that company, which is why it is safe to have
+         a door on at all. 056_price_book_proof.sql holds both to it. */
+      "price_book_minimums",
+      "price_book_search",
+      "price_book_search_costed",
       "regenerate_webhook_secret",
     ]);
   });
