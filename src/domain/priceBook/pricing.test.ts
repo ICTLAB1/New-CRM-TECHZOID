@@ -4,7 +4,6 @@ import {
   COMPANY_DEFAULT_OEM,
   ORDINARY_DISTRIBUTOR_DISCOUNT_MAX,
   buyingPrice,
-  compareLists,
   isBelowMinimum,
   isQuoteExpired,
   isUnusualDistributorDiscount,
@@ -211,57 +210,6 @@ describe("how long a quotation's prices stay quotable", () => {
   it("refuses to guess at a malformed period", () => {
     expect(periodEnd("rubbish")).toBe("");
     expect(periodEnd("2026-13")).toBe("");
-  });
-});
-
-describe("this month's list against last month's", () => {
-  const last = [
-    { sku: "M365-E3", productName: "Microsoft 365 E3", resellerPrice: 1000 },
-    { sku: "M365-E5", productName: "Microsoft 365 E5", resellerPrice: 2000 },
-    { sku: "VISIO-P2", productName: "Visio Plan 2", resellerPrice: 500 },
-  ];
-  const now = [
-    { sku: "m365-e3 ", productName: "Microsoft 365 E3", resellerPrice: 1100 },
-    { sku: "M365-E5", productName: "Microsoft 365 E5", resellerPrice: 2000 },
-    { sku: "TEAMS-EEA", productName: "Teams EEA", resellerPrice: 300 },
-  ];
-
-  it("names what is new, what is gone and what moved", () => {
-    const diff = compareLists(last, now);
-    expect(diff.added.map((r) => r.sku)).toEqual(["TEAMS-EEA"]);
-    expect(diff.removed.map((r) => r.sku)).toEqual(["VISIO-P2"]);
-    expect(diff.unchanged).toBe(1);
-    expect(diff.changed).toEqual([
-      { sku: "m365-e3 ", productName: "Microsoft 365 E3", from: 1000, to: 1100, changePct: 10 },
-    ]);
-  });
-
-  it("matches a SKU across a change of case or spacing", () => {
-    // "m365-e3 " and "M365-E3" are the same part number, and counting the
-    // first as new and the second as removed would make every month's
-    // report useless.
-    const diff = compareLists(last, now);
-    expect(diff.added.some((r) => r.sku.trim().toLowerCase() === "m365-e3")).toBe(false);
-  });
-
-  it("reports a fall as a negative, and rounds the percentage", () => {
-    const diff = compareLists(
-      [{ sku: "X", resellerPrice: 1000 }],
-      [{ sku: "X", resellerPrice: 666.67 }],
-    );
-    expect(diff.changed[0]).toMatchObject({ from: 1000, to: 666.67, changePct: -33.33 });
-  });
-
-  it("gives no percentage where there was no price to rise from", () => {
-    const diff = compareLists([{ sku: "X", resellerPrice: 0 }], [{ sku: "X", resellerPrice: 100 }]);
-    expect(diff.changed).toHaveLength(1);
-    expect(diff.changed[0]?.changePct).toBeNull();
-  });
-
-  it("does not report a paisa of rounding as a price change", () => {
-    const diff = compareLists([{ sku: "X", resellerPrice: 100 }], [{ sku: "X", resellerPrice: 100.004 }]);
-    expect(diff.changed).toEqual([]);
-    expect(diff.unchanged).toBe(1);
   });
 });
 

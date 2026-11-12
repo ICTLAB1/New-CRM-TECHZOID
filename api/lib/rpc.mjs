@@ -117,6 +117,18 @@ export const CALLABLE = {
     { args: ["p_company", "p_query", "p_oem", "p_limit", "p_distributor_pct"], returns: "rows" },
   ],
 
+  /* Make one uploaded month THE list for its OEM, archiving the one it
+     replaces. Admin-checked inside, and the unique index on (company, oem)
+     where status = 'active' means one active list per OEM whatever any
+     caller does. */
+  price_list_activate: [{ args: ["p_list"], returns: "scalar" }],
+
+  /* Which months are on file for an OEM, how many rows each has, and which
+     is live. No cost in any column of it — a BDE seeing that November's
+     Microsoft list is the one in force is how they know what they are
+     quoting from. */
+  price_list_history: [{ args: ["p_company", "p_oem"], returns: "rows" }],
+
   /* Rotates a webhook's signing secret and returns the new one.
      THE ONLY TIME THE SECRET IS EVER READABLE: it is stored hashed, so a
      caller that loses this response cannot ask for it again, only rotate
@@ -141,6 +153,38 @@ export const SERVER_CALLABLE = {
      is a permission decision, and a client that asks for one is a client
      that intends to act on it itself. */
   may_manage_email_account: [{ args: ["p_account_id"], returns: "scalar" }],
+
+  /* LOADING A PRICE LIST IS NOT SOMETHING A BROWSER DOES. The rules about
+     what a price list row is — a SKU, a name, a price that is a number and
+     not zero, no duplicate part numbers — live in
+     api/lib/priceListSheet.mjs, and the upload endpoint is the only thing
+     that applies them. A browser able to call this could hand the database
+     any rows it liked and go round the parser, so it is in here and not in
+     CALLABLE. The function still checks for itself that the caller is an
+     Admin, because this list is not an authorisation. */
+  price_list_commit: [{
+    args: [
+      "p_company", "p_oem", "p_year", "p_month", "p_items",
+      "p_sheet", "p_header_row", "p_map", "p_source_name", "p_sha", "p_activate",
+    ],
+    returns: "rows",
+  }],
+
+  /* What a month's prices do to the list in force: new SKUs, SKUs that have
+     gone, and the ones that moved. Takes the rows the endpoint has just
+     parsed, so the answer is in front of the Admin BEFORE anything is
+     loaded. Reseller prices and percentages, so Admin and Manager only —
+     checked in the function. */
+  price_list_changes: [{ args: ["p_company", "p_oem", "p_items"], returns: "rows" }],
+
+  /* The column mapping used for this OEM last month, which is what makes
+     next month's upload one click. */
+  price_list_last_mapping: [{ args: ["p_company", "p_oem"], returns: "rows" }],
+
+  /* The caller's own role in one company, so the upload endpoint can refuse
+     a BDE with a sentence instead of letting them meet a policy error. The
+     browser has no need of it: it already knows whose session it is. */
+  role_in: [{ args: ["p_company"], returns: "scalar" }],
 };
 
 const IDENTIFIER = /^[a-z_][a-z0-9_]*$/;

@@ -41,6 +41,12 @@ export const LIMITS = {
   /* Each one is a billed call to a government register. A salesperson
      checks a handful of GSTINs a day; a loop checks a thousand. */
   "verify-tax-id": { limit: 40, windowSeconds: 3600 },
+  /* Each call parses a workbook, which costs real memory in the function
+     host. Generous because the mapping screen previews again every time an
+     Admin corrects a column, and five OEM lists a month is five uploads
+     with a few passes each — but not so generous that a stuck page can
+     spend the host on one file. */
+  "price-list-upload": { limit: 120, windowSeconds: 3600 },
 };
 
 /**

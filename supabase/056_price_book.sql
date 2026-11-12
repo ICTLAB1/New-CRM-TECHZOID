@@ -69,6 +69,18 @@ create table if not exists public.price_lists (
      be traced back to the file it came from. */
   source_file text,
   source_name text,
+  /* A hash of the uploaded workbook, so "this is the file we loaded" can be
+     answered without keeping every workbook for ever. */
+  source_sha256 text,
+  /* WHICH SHEET, WHICH ROW WAS THE HEADER, AND WHICH COLUMN WAS WHAT. Kept
+     per upload rather than in a templates table, because "the template for
+     Microsoft" is exactly "what we did for Microsoft last month" — so next
+     month's upload offers this back and is one click, and a row that turns
+     out to have been read out of the wrong column can be traced to the
+     mapping that read it. */
+  sheet_name text,
+  header_row int,
+  column_map jsonb not null default '{}'::jsonb,
   uploaded_by uuid references public.profiles(id),
   row_count int not null default 0,
   error_count int not null default 0,
@@ -543,3 +555,252 @@ end $$;
 
 grant execute on function public.my_discount_approvals(uuid) to authenticated;
 revoke execute on function public.my_discount_approvals(uuid) from anon;
+
+/* ── loading a month's list ─────────────────────────────────────────────
+   The upload endpoint parses the workbook (api/lib/priceListSheet.mjs) and
+   hands the rows here as one jsonb array. One statement, one transaction:
+   either the month is loaded or nothing changed. Doing it as five thousand
+   inserts from the function host would leave a half-loaded list behind on
+   any failure, and a half-loaded price list is worse than none — every SKU
+   that did not make it becomes a product with no floor. */
+
+/**
+ * Load a month's price list, and optionally make it the active one.
+ *
+ * ADMIN ONLY, CHECKED HERE. The endpoint checks too, so that a BDE gets a
+ * sentence rather than an exception, but this is the check that counts.
+ *
+ * RE-UPLOADING A MONTH REPLACES IT. The second upload of November is
+ * somebody fixing the first, not a second November — and the unique index
+ * on (company, oem, year, month) would refuse it anyway. The old rows go
+ * with the old list row; quotations keep their own copy of what they were
+ * priced at, so nothing already quoted changes.
+ */
+create or replace function public.price_list_commit(
+  p_company uuid,
+  p_oem text,
+  p_year int,
+  p_month int,
+  p_items jsonb,
+  p_sheet text,
+  p_header_row int,
+  p_map jsonb,
+  p_source_name text,
+  p_sha text,
+  p_activate boolean
+) returns table (list_id uuid, items_loaded int, replaced boolean, activated boolean)
+language plpgsql security definer set search_path = public as $$
+declare
+  v_list uuid;
+  v_old uuid;
+  v_count int;
+  v_replaced boolean := false;
+begin
+  if auth.uid() is null then raise exception 'not authenticated'; end if;
+  if not public.is_admin_in(p_company) then
+    raise exception 'only an Admin can load a price list';
+  end if;
+  if coalesce(btrim(p_oem), '') = '' then raise exception 'which OEM is this list for?'; end if;
+  if p_year is null or p_year < 2000 or p_year > 2100 then raise exception 'that is not a year'; end if;
+  if p_month is null or p_month < 1 or p_month > 12 then raise exception 'that is not a month'; end if;
+  if jsonb_typeof(p_items) <> 'array' then raise exception 'no rows to load'; end if;
+  if jsonb_array_length(p_items) = 0 then raise exception 'that list has no usable rows in it'; end if;
+
+  select id into v_old
+    from public.price_lists
+   where company_id = p_company and lower(oem) = lower(p_oem)
+     and period_year = p_year and period_month = p_month;
+
+  if v_old is not null then
+    delete from public.price_lists where id = v_old;
+    v_replaced := true;
+  end if;
+
+  insert into public.price_lists(
+    company_id, oem, period_year, period_month, status, source_name, source_sha256,
+    sheet_name, header_row, column_map, uploaded_by, row_count)
+  values (
+    p_company, btrim(p_oem), p_year, p_month, 'draft', p_source_name, p_sha,
+    p_sheet, p_header_row, coalesce(p_map, '{}'::jsonb), auth.uid(), jsonb_array_length(p_items))
+  returning id into v_list;
+
+  insert into public.price_list_items(
+    price_list_id, company_id, sku, product_name, category, licence_type, unit,
+    reseller_price, currency)
+  select v_list, p_company,
+         btrim(r->>'sku'),
+         btrim(r->>'productName'),
+         nullif(btrim(coalesce(r->>'category', '')), ''),
+         nullif(btrim(coalesce(r->>'licenceType', '')), ''),
+         nullif(btrim(coalesce(r->>'unit', '')), ''),
+         (r->>'resellerPrice')::numeric,
+         coalesce(nullif(btrim(coalesce(r->>'currency', '')), ''), 'INR')
+    from jsonb_array_elements(p_items) as r;
+
+  select count(*) into v_count from public.price_list_items where price_list_id = v_list;
+  update public.price_lists set row_count = v_count where id = v_list;
+
+  if coalesce(p_activate, false) then
+    perform public.price_list_activate(v_list);
+  end if;
+
+  return query select v_list, v_count, v_replaced, coalesce(p_activate, false);
+end $$;
+
+/**
+ * Make one list THE list for its OEM, and archive the one it replaces.
+ *
+ * Separate from loading so that a list can be checked before it goes live:
+ * upload, read the preview and the changes against last month, then
+ * activate. The unique index enforces one active list per OEM whatever
+ * happens here, so the archive and the activate have to be one statement —
+ * which they are, inside this one transaction.
+ */
+create or replace function public.price_list_activate(p_list uuid)
+returns void language plpgsql security definer set search_path = public as $$
+declare
+  v_company uuid;
+  v_oem text;
+begin
+  if auth.uid() is null then raise exception 'not authenticated'; end if;
+
+  select company_id, oem into v_company, v_oem from public.price_lists where id = p_list;
+  if v_company is null then raise exception 'no such price list'; end if;
+  if not public.is_admin_in(v_company) then
+    raise exception 'only an Admin can activate a price list';
+  end if;
+
+  update public.price_lists
+     set status = 'archived', updated_at = now()
+   where company_id = v_company and lower(oem) = lower(v_oem)
+     and status = 'active' and id <> p_list;
+
+  update public.price_lists
+     set status = 'active', activated_at = now(), updated_at = now()
+   where id = p_list;
+end $$;
+
+/**
+ * What this month's rows do to last month's: new SKUs, SKUs that have gone,
+ * and the ones whose price moved.
+ *
+ * TAKES THE NEW ROWS AS jsonb so that the same function answers before the
+ * list is loaded — which is when the answer is actually useful, because a
+ * list where every price has jumped 400% is a list with the wrong column
+ * mapped, and finding that out after loading it means every quotation
+ * raised in between was priced off nonsense.
+ *
+ * PRIVILEGED ONLY. A price rise of 8% is a statement about the cost.
+ */
+create or replace function public.price_list_changes(p_company uuid, p_oem text, p_items jsonb)
+returns table (
+  change text,
+  sku text,
+  product_name text,
+  was numeric,
+  now_is numeric,
+  change_pct numeric
+) language plpgsql stable security definer set search_path = public as $$
+begin
+  if auth.uid() is null then raise exception 'not authenticated'; end if;
+  if not public.is_privileged_in(p_company) then
+    raise exception 'a price comparison is for Admin and Manager only';
+  end if;
+
+  return query
+  with incoming as (
+    select lower(btrim(r->>'sku')) as key,
+           btrim(r->>'sku') as sku,
+           btrim(r->>'productName') as product_name,
+           round((r->>'resellerPrice')::numeric, 2) as price
+      from jsonb_array_elements(coalesce(p_items, '[]'::jsonb)) as r
+     where coalesce(btrim(r->>'sku'), '') <> ''
+  ),
+  current_list as (
+    select lower(i.sku) as key, i.sku, i.product_name, i.reseller_price as price
+      from public.price_list_items i
+      join public.price_lists l on l.id = i.price_list_id
+     where i.company_id = p_company
+       and lower(l.oem) = lower(p_oem)
+       and l.status = 'active'
+  )
+  select 'added', n.sku, n.product_name, null::numeric, n.price, null::numeric
+    from incoming n left join current_list c on c.key = n.key
+   where c.key is null
+  union all
+  select 'removed', c.sku, c.product_name, c.price, null::numeric, null::numeric
+    from current_list c left join incoming n on n.key = c.key
+   where n.key is null
+  union all
+  select 'changed', n.sku, coalesce(nullif(n.product_name, ''), c.product_name), c.price, n.price,
+         case when c.price > 0 then round((n.price - c.price) / c.price * 100, 2) else null end
+    from incoming n join current_list c on c.key = n.key
+   where abs(n.price - c.price) > 0.005
+   order by 1, 2;
+end $$;
+
+/**
+ * The mapping used for this OEM last time, so next month is one click.
+ *
+ * The most recent list by period, not by upload time: a correction uploaded
+ * for September after October has gone live should not become the template.
+ */
+create or replace function public.price_list_last_mapping(p_company uuid, p_oem text)
+returns table (sheet_name text, header_row int, column_map jsonb, period text)
+language plpgsql stable security definer set search_path = public as $$
+begin
+  if auth.uid() is null then raise exception 'not authenticated'; end if;
+  if not public.is_admin_in(p_company) then
+    raise exception 'only an Admin loads price lists';
+  end if;
+
+  return query
+    select l.sheet_name, l.header_row, l.column_map,
+           to_char(make_date(l.period_year, l.period_month, 1), 'YYYY-MM')
+      from public.price_lists l
+     where l.company_id = p_company and lower(l.oem) = lower(p_oem)
+       and l.column_map <> '{}'::jsonb
+     order by l.period_year desc, l.period_month desc
+     limit 1;
+end $$;
+
+/**
+ * Every month on file for an OEM, with how many rows and which is live.
+ *
+ * MEMBERS, not just the privileged: a row count and a month carry no cost,
+ * and a BDE being able to see that November's Microsoft list is the one in
+ * force is how they know what they are quoting from.
+ */
+create or replace function public.price_list_history(p_company uuid, p_oem text)
+returns table (
+  id uuid, oem text, period text, status text, row_count int,
+  source_name text, activated_at timestamptz, created_at timestamptz
+) language plpgsql stable security definer set search_path = public as $$
+begin
+  if auth.uid() is null then raise exception 'not authenticated'; end if;
+  if not public.is_member(p_company) then raise exception 'not a member of that company'; end if;
+
+  return query
+    select l.id, l.oem,
+           to_char(make_date(l.period_year, l.period_month, 1), 'YYYY-MM'),
+           l.status, l.row_count, l.source_name, l.activated_at, l.created_at
+      from public.price_lists l
+     where l.company_id = p_company
+       and (p_oem is null or lower(l.oem) = lower(p_oem))
+     order by l.period_year desc, l.period_month desc, l.oem;
+end $$;
+
+/* The upload endpoint calls commit, activate, changes and last_mapping as
+   the signed-in Admin, so the checks inside them are the ones that decide.
+   History is the only one a browser needs directly. */
+grant execute on function public.price_list_commit(uuid, text, int, int, jsonb, text, int, jsonb, text, text, boolean) to authenticated;
+grant execute on function public.price_list_activate(uuid) to authenticated;
+grant execute on function public.price_list_changes(uuid, text, jsonb) to authenticated;
+grant execute on function public.price_list_last_mapping(uuid, text) to authenticated;
+grant execute on function public.price_list_history(uuid, text) to authenticated;
+
+revoke execute on function public.price_list_commit(uuid, text, int, int, jsonb, text, int, jsonb, text, text, boolean) from anon;
+revoke execute on function public.price_list_activate(uuid) from anon;
+revoke execute on function public.price_list_changes(uuid, text, jsonb) from anon;
+revoke execute on function public.price_list_last_mapping(uuid, text) from anon;
+revoke execute on function public.price_list_history(uuid, text) from anon;

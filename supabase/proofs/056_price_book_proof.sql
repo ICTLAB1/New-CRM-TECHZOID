@@ -22,6 +22,14 @@
  */
 \set ON_ERROR_STOP on
 
+/* WHY THESE COMPARE THE WHOLE MESSAGE. An earlier version of this file
+   matched sqlerrm against '%only an Admin%', and a mutation that let a
+   Manager load a price list still passed: the load went through, and the
+   ACTIVATE step a moment later refused with "only an Admin can activate a
+   price list" — a different wall, saying something that matched. A refusal
+   is only evidence when it is the refusal being tested, so each of these
+   names the exact sentence it expects. */
+
 /* ── the fixture ────────────────────────────────────────────────────── */
 
 /* Written as the service role, which is how the CRM's own server-side jobs
@@ -190,7 +198,7 @@ begin;
       'c0000000-0000-0000-0000-00000000000a', null, null, 100, 0);
     raise exception 'SALES CALLED THE COSTED SEARCH AND GOT % ROWS', n;
   exception when others then
-    if sqlerrm not like '%Admin and Manager only%' then raise; end if;
+    if sqlerrm <> 'cost prices are for Admin and Manager only' then raise; end if;
   end $$;
 
   /* e. Their own approval row, which holds the distributor discount. */
@@ -227,19 +235,23 @@ begin;
 
     select * into r from public.price_book_search(
       'c0000000-0000-0000-0000-00000000000a', 'M365-E3', null, 10);
+    if not found then raise exception 'NO ROW CAME BACK: price_book_search for M365-E3'; end if;
     if r.min_price <> 1150.00 then raise exception 'M365-E3 minimum was %, wanted 1150.00', r.min_price; end if;
     if r.period <> '2026-11' then raise exception 'M365-E3 came from period %, wanted 2026-11', r.period; end if;
 
     select * into r from public.price_book_search(
       'c0000000-0000-0000-0000-00000000000a', 'M365-E5', null, 10);
+    if not found then raise exception 'NO ROW CAME BACK: price_book_search for M365-E5'; end if;
     if r.min_price <> 2400.00 then raise exception 'M365-E5 minimum was %, wanted 2400.00 (SKU rule, 20%%)', r.min_price; end if;
 
     select * into r from public.price_book_search(
       'c0000000-0000-0000-0000-00000000000a', 'VISIO', null, 10);
+    if not found then raise exception 'NO ROW CAME BACK: price_book_search for Visio'; end if;
     if r.min_price <> 550.00 then raise exception 'Visio minimum was %, wanted 550.00 (OEM rule, 10%%)', r.min_price; end if;
 
     select * into r from public.price_book_search(
       'c0000000-0000-0000-0000-00000000000a', 'ACROBAT', null, 10);
+    if not found then raise exception 'NO ROW CAME BACK: price_book_search for Acrobat'; end if;
     if r.min_price <> 840.00 then raise exception 'Acrobat minimum was %, wanted 840.00 (company default, 5%%)', r.min_price; end if;
   end $$;
 
@@ -250,6 +262,7 @@ begin;
     r record;
   begin
     select * into r from public.my_discount_approvals('c0000000-0000-0000-0000-00000000000a');
+    if not found then raise exception 'NO ROW CAME BACK: my_discount_approvals'; end if;
     if r.state <> 'approved' then raise exception 'own approval read back as %', r.state; end if;
     if r.approved_lines->0->>'approvedPrice' <> '1080' then
       raise exception 'approved price came back as %', r.approved_lines->0->>'approvedPrice';
@@ -287,7 +300,7 @@ begin;
     perform * from public.price_book_search_costed('c0000000-0000-0000-0000-00000000000a', null, null, 100, 0);
     raise exception 'ACCOUNTS CALLED THE COSTED SEARCH';
   exception when others then
-    if sqlerrm not like '%Admin and Manager only%' then raise; end if;
+    if sqlerrm <> 'cost prices are for Admin and Manager only' then raise; end if;
   end $$;
 rollback;
 
@@ -308,6 +321,7 @@ begin;
 
     select * into r from public.price_book_search_costed(
       'c0000000-0000-0000-0000-00000000000a', 'M365-E3', null, 10, 3.5);
+    if not found then raise exception 'NO ROW CAME BACK: the costed search for M365-E3'; end if;
     if r.reseller_price <> 1000.00 then raise exception 'manager got reseller price %', r.reseller_price; end if;
     /* 1000 less 3.5% distributor discount. */
     if r.buying_price <> 965.00 then raise exception 'buying price came out at %, wanted 965.00', r.buying_price; end if;
@@ -360,6 +374,7 @@ begin;
   begin
     select * into r from public.price_book_search_costed(
       'c0000000-0000-0000-0000-00000000000a', 'M365-E5', null, 10, 0);
+    if not found then raise exception 'NO ROW CAME BACK: the costed search for M365-E5'; end if;
     if r.reseller_price <> 2000.00 then raise exception 'admin got reseller price %', r.reseller_price; end if;
     /* No distributor discount obtained: buying price is the reseller price. */
     if r.buying_price <> 2000.00 then raise exception 'admin buying price at 0%% discount was %', r.buying_price; end if;
@@ -404,14 +419,14 @@ begin;
     perform * from public.price_book_search('c0000000-0000-0000-0000-00000000000a', null, null, 100);
     raise exception 'ANOTHER COMPANY SEARCHED OUR PRICE BOOK';
   exception when others then
-    if sqlerrm not like '%not a member%' then raise; end if;
+    if sqlerrm <> 'not a member of that company' then raise; end if;
   end $$;
   do $$
   begin
     perform * from public.my_discount_approvals('c0000000-0000-0000-0000-00000000000a');
     raise exception 'ANOTHER COMPANY READ OUR APPROVALS';
   exception when others then
-    if sqlerrm not like '%not a member%' then raise; end if;
+    if sqlerrm <> 'not a member of that company' then raise; end if;
   end $$;
 rollback;
 
@@ -438,6 +453,223 @@ begin
 exception when unique_violation then
   null;
 end $$;
+
+/* ── 8. loading next month's list ───────────────────────────────────── */
+
+/* The incoming rows, as api/lib/priceListSheet.mjs hands them over: one
+   price risen, one SKU new, two gone. */
+\set incoming '[{"sku":"M365-E3","productName":"Microsoft 365 E3","category":"Cloud","licenceType":"1 Year","unit":"User","resellerPrice":1100,"currency":"INR"},{"sku":"TEAMS-EEA","productName":"Teams EEA","category":"Cloud","licenceType":"1 Year","unit":"User","resellerPrice":300,"currency":"INR"}]'
+
+/* a. THE CHANGES REPORT, ASKED BEFORE THE LIST IS LOADED, which is when it
+      is useful: a list where every price has jumped is a list with the
+      wrong column mapped, and finding that out afterwards means every
+      quotation raised in between was priced off nonsense. */
+begin;
+  set local role authenticated;
+  set local "request.jwt.claim.sub"  = 'a0000000-0000-0000-0000-000000000001';
+  set local "request.jwt.claim.role" = 'authenticated';
+  do $$
+  declare
+    r record;
+    added int := 0; removed int := 0; changed int := 0;
+  begin
+    for r in select * from public.price_list_changes(
+      'c0000000-0000-0000-0000-00000000000a', 'Microsoft',
+      $items$[{"sku":"M365-E3","productName":"Microsoft 365 E3","resellerPrice":1100},{"sku":"TEAMS-EEA","productName":"Teams EEA","resellerPrice":300}]$items$::jsonb)
+    loop
+      if r.change = 'added' then
+        added := added + 1;
+        if r.sku <> 'TEAMS-EEA' then raise exception 'wrong SKU reported as new: %', r.sku; end if;
+      elsif r.change = 'removed' then
+        removed := removed + 1;
+      else
+        changed := changed + 1;
+        if r.sku <> 'M365-E3' then raise exception 'wrong SKU reported as changed: %', r.sku; end if;
+        if r.was <> 1000.00 or r.now_is <> 1100.00 then
+          raise exception 'change read as % -> %', r.was, r.now_is;
+        end if;
+        if r.change_pct <> 10.00 then raise exception 'rise reported as %%%, wanted 10', r.change_pct; end if;
+      end if;
+    end loop;
+    if added <> 1 then raise exception '% new SKUs, wanted 1', added; end if;
+    /* M365-E5 and VISIO-P2 are in the active list and not in the new one. */
+    if removed <> 2 then raise exception '% removed SKUs, wanted 2', removed; end if;
+    if changed <> 1 then raise exception '% changed SKUs, wanted 1', changed; end if;
+  end $$;
+commit;
+
+/* b. A SALESPERSON MAY NOT SEE IT. "Microsoft put E3 up 10%" is a
+      statement about the cost. */
+begin;
+  set local role authenticated;
+  set local "request.jwt.claim.sub"  = 'a0000000-0000-0000-0000-000000000003';
+  set local "request.jwt.claim.role" = 'authenticated';
+  do $$
+  begin
+    perform * from public.price_list_changes('c0000000-0000-0000-0000-00000000000a', 'Microsoft', '[]'::jsonb);
+    raise exception 'SALES READ THE PRICE CHANGES REPORT';
+  exception when others then
+    if sqlerrm <> 'a price comparison is for Admin and Manager only' then raise; end if;
+  end $$;
+  /* Nor may they load a list, nor read the column mapping. */
+  do $$
+  begin
+    perform * from public.price_list_commit('c0000000-0000-0000-0000-00000000000a', 'Microsoft', 2026, 12,
+      '[{"sku":"X","productName":"X","resellerPrice":1}]'::jsonb, 'Sheet1', 0, '{}'::jsonb, 'f.xlsx', null, false);
+    raise exception 'SALES LOADED A PRICE LIST';
+  exception when others then
+    if sqlerrm <> 'only an Admin can load a price list' then raise; end if;
+  end $$;
+  do $$
+  begin
+    perform * from public.price_list_last_mapping('c0000000-0000-0000-0000-00000000000a', 'Microsoft');
+    raise exception 'SALES READ THE COLUMN MAPPING';
+  exception when others then
+    if sqlerrm <> 'only an Admin loads price lists' then raise; end if;
+  end $$;
+  /* But they MAY see which month is in force, which carries no cost. */
+  do $$
+  declare
+    n int;
+  begin
+    select count(*) into n from public.price_list_history('c0000000-0000-0000-0000-00000000000a', 'Microsoft');
+    if n <> 2 then raise exception 'a salesperson saw % Microsoft months, wanted 2', n; end if;
+  end $$;
+rollback;
+
+/* c. NOR MAY A MANAGER LOAD ONE. They see the cost; they do not set it. */
+begin;
+  set local role authenticated;
+  set local "request.jwt.claim.sub"  = 'a0000000-0000-0000-0000-000000000002';
+  set local "request.jwt.claim.role" = 'authenticated';
+  /* ASKED WITH p_activate => FALSE ON PURPOSE. With true, a Manager who
+     got past the load check would be stopped a step later by the one
+     inside price_list_activate, and the proof would pass without ever
+     testing the check it names. Loading a DRAFT list exercises the load
+     check alone. */
+  do $$
+  begin
+    perform * from public.price_list_commit('c0000000-0000-0000-0000-00000000000a', 'Microsoft', 2026, 12,
+      '[{"sku":"X","productName":"X","resellerPrice":1}]'::jsonb, 'Sheet1', 0, '{}'::jsonb, 'f.xlsx', null, false);
+    raise exception 'A MANAGER LOADED A PRICE LIST';
+  exception when others then
+    if sqlerrm <> 'only an Admin can load a price list' then raise; end if;
+  end $$;
+  /* And may not activate one either, which is its own check. */
+  do $$
+  begin
+    perform public.price_list_activate(
+      (select id from public.price_lists
+        where company_id = 'c0000000-0000-0000-0000-00000000000a'
+          and lower(oem) = 'microsoft' and status = 'archived' limit 1));
+    raise exception 'A MANAGER ACTIVATED A PRICE LIST';
+  exception when others then
+    if sqlerrm <> 'only an Admin can activate a price list' then raise; end if;
+  end $$;
+  /* A Manager MAY read the changes report. */
+  do $$
+  declare
+    n int;
+  begin
+    select count(*) into n from public.price_list_changes('c0000000-0000-0000-0000-00000000000a', 'Microsoft',
+      $items$[{"sku":"M365-E3","productName":"Microsoft 365 E3","resellerPrice":1100}]$items$::jsonb);
+    if n < 1 then raise exception 'a Manager could not read the changes report'; end if;
+  end $$;
+rollback;
+
+/* d. THE ADMIN LOADS IT, and the month it replaces steps aside. */
+begin;
+  set local role authenticated;
+  set local "request.jwt.claim.sub"  = 'a0000000-0000-0000-0000-000000000001';
+  set local "request.jwt.claim.role" = 'authenticated';
+
+  do $$
+  declare
+    r record;
+    n int;
+  begin
+    select * into r from public.price_list_commit(
+      'c0000000-0000-0000-0000-00000000000a', 'Microsoft', 2026, 12,
+      $items$[{"sku":"M365-E3","productName":"Microsoft 365 E3","category":"Cloud","licenceType":"1 Year","unit":"User","resellerPrice":1100,"currency":"INR"},{"sku":"TEAMS-EEA","productName":"Teams EEA","category":"Cloud","licenceType":"1 Year","unit":"User","resellerPrice":300,"currency":"INR"}]$items$::jsonb,
+      'Nov 2026', 3, '{"sku":0,"productName":1,"resellerPrice":5}'::jsonb, 'microsoft-dec.xlsx', 'abc123', true);
+
+    if r.items_loaded <> 2 then raise exception '% rows loaded, wanted 2', r.items_loaded; end if;
+    if r.replaced then raise exception 'reported as replacing a December list that did not exist'; end if;
+    if not r.activated then raise exception 'the list was not activated'; end if;
+
+    /* ONE ACTIVE LIST PER OEM, and it is the new one. */
+    select count(*) into n from public.price_lists
+     where company_id = 'c0000000-0000-0000-0000-00000000000a' and lower(oem) = 'microsoft' and status = 'active';
+    if n <> 1 then raise exception '% active Microsoft lists', n; end if;
+
+    select count(*) into n from public.price_lists
+     where company_id = 'c0000000-0000-0000-0000-00000000000a' and lower(oem) = 'microsoft'
+       and period_month = 11 and status = 'archived';
+    if n <> 1 then raise exception 'November was not archived'; end if;
+
+    /* And the price book now quotes from December. */
+    select count(*) into n from public.price_book_search(
+      'c0000000-0000-0000-0000-00000000000a', null, 'Microsoft', 100);
+    if n <> 2 then raise exception 'the price book offers % Microsoft products, wanted 2', n; end if;
+
+    select min_price into n from public.price_book_search(
+      'c0000000-0000-0000-0000-00000000000a', 'M365-E3', 'Microsoft', 10);
+    if not found then raise exception 'E3 is not in the new list at all'; end if;
+    /* 1100 at the Cloud rule's 15%. */
+    if n <> 1265 then raise exception 'the new floor for E3 is %, wanted 1265', n; end if;
+  end $$;
+
+  /* e. RE-UPLOADING A MONTH REPLACES IT rather than making a second one. */
+  do $$
+  declare
+    r record;
+    n int;
+  begin
+    select * into r from public.price_list_commit(
+      'c0000000-0000-0000-0000-00000000000a', 'Microsoft', 2026, 12,
+      $items$[{"sku":"M365-E3","productName":"Microsoft 365 E3","resellerPrice":1150},{"sku":"TEAMS-EEA","productName":"Teams EEA","resellerPrice":300},{"sku":"VISIO-P2","productName":"Visio Plan 2","resellerPrice":520}]$items$::jsonb,
+      'Nov 2026', 3, '{"sku":0,"productName":1,"resellerPrice":5}'::jsonb, 'microsoft-dec-fixed.xlsx', 'def456', true);
+
+    if not r.replaced then raise exception 'the corrected upload did not replace the first'; end if;
+    if r.items_loaded <> 3 then raise exception '% rows after the correction, wanted 3', r.items_loaded; end if;
+
+    select count(*) into n from public.price_lists
+     where company_id = 'c0000000-0000-0000-0000-00000000000a' and lower(oem) = 'microsoft' and period_month = 12;
+    if n <> 1 then raise exception '% December lists exist', n; end if;
+
+    select count(*) into n from public.price_lists
+     where company_id = 'c0000000-0000-0000-0000-00000000000a' and lower(oem) = 'microsoft' and status = 'active';
+    if n <> 1 then raise exception '% active Microsoft lists after the correction', n; end if;
+  end $$;
+
+  /* f. AND NEXT MONTH IS ONE CLICK: the mapping comes back. */
+  do $$
+  declare
+    r record;
+  begin
+    select * into r from public.price_list_last_mapping('c0000000-0000-0000-0000-00000000000a', 'Microsoft');
+    if not found then raise exception 'NO ROW CAME BACK: price_list_last_mapping'; end if;
+    if coalesce(r.period, '') <> '2026-12' then
+      raise exception 'the template came from %, wanted 2026-12', r.period;
+    end if;
+    if coalesce(r.column_map->>'resellerPrice', '') <> '5' then
+      raise exception 'the column mapping was not kept: %', r.column_map;
+    end if;
+    if coalesce(r.sheet_name, '') <> 'Nov 2026' then
+      raise exception 'the sheet name was not kept: %', r.sheet_name;
+    end if;
+  end $$;
+
+  /* g. A LIST WITH NOTHING IN IT IS NOT A LIST. */
+  do $$
+  begin
+    perform * from public.price_list_commit('c0000000-0000-0000-0000-00000000000a', 'Adobe', 2026, 12,
+      '[]'::jsonb, 'Sheet1', 0, '{}'::jsonb, 'empty.xlsx', null, true);
+    raise exception 'AN EMPTY PRICE LIST WAS LOADED';
+  exception when others then
+    if sqlerrm <> 'that list has no usable rows in it' then raise; end if;
+  end $$;
+rollback;
 
 /* ── clean up, so the proof can be run again ─────────────────────────── */
 

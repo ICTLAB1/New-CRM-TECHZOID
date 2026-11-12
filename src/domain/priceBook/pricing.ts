@@ -283,67 +283,10 @@ export function isQuoteExpired(expiry: string | null | undefined, today: string)
   return !!on && on < today;
 }
 
-/* ── what changed since last month ───────────────────────────────────── */
-
-export interface PriceRow {
-  sku: string;
-  productName?: string;
-  resellerPrice: number;
-}
-
-export interface PriceChange {
-  sku: string;
-  productName: string;
-  from: number;
-  to: number;
-  /** null when the old price was zero: a rise from nothing has no percentage. */
-  changePct: number | null;
-}
-
-export interface ListComparison {
-  added: PriceRow[];
-  removed: PriceRow[];
-  changed: PriceChange[];
-  unchanged: number;
-}
-
-/**
- * This month's list against last month's: what is new, what is gone, and
- * what moved.
- *
- * Matched on SKU, case and surrounding space ignored, because that is what
- * a distributor's spreadsheet varies between months while meaning the same
- * part number.
- */
-export function compareLists(previous: readonly PriceRow[], current: readonly PriceRow[]): ListComparison {
-  const key = (sku: string): string => (sku ?? "").trim().toLowerCase();
-  const before = new Map(previous.map((r) => [key(r.sku), r]));
-  const after = new Map(current.map((r) => [key(r.sku), r]));
-
-  const added: PriceRow[] = [];
-  const changed: PriceChange[] = [];
-  let unchanged = 0;
-
-  for (const [k, row] of after) {
-    const was = before.get(k);
-    if (!was) {
-      added.push(row);
-      continue;
-    }
-    const from = round2(was.resellerPrice);
-    const to = round2(row.resellerPrice);
-    if (Math.abs(to - from) <= PRICE_EPSILON) {
-      unchanged += 1;
-      continue;
-    }
-    changed.push({
-      sku: row.sku,
-      productName: row.productName ?? was.productName ?? "",
-      from, to,
-      changePct: from > 0 ? round2(((to - from) / from) * 100) : null,
-    });
-  }
-
-  const removed = previous.filter((r) => !after.has(key(r.sku)));
-  return { added, removed, changed, unchanged };
-}
+/* WHAT CHANGED SINCE LAST MONTH IS NOT IN THIS FILE, and that is on
+   purpose. The comparison needs last month's reseller prices, and this file
+   runs in the browser. It lives in price_list_changes() in migration 056,
+   behind is_privileged_in, and the upload endpoint asks for it and sends
+   the answer down already compared. A copy here would be an invitation to
+   wire up a client-side comparison, which means shipping the cost to do
+   it. */

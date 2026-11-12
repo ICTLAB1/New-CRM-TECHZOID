@@ -6,9 +6,10 @@
   "main": "src/functions/index.mjs",
   "dependencies": {
     "@azure/functions": "^4.5.0",
-    "pg": "^8.13.1",
-    "@azure/storage-blob": "^12.26.0",
     "@azure/identity": "^4.5.0",
-    "bcryptjs": "^2.4.3"
+    "@azure/storage-blob": "^12.26.0",
+    "bcryptjs": "^2.4.3",
+    "pg": "^8.13.1",
+    "read-excel-file": "9.3.15"
   }
 }

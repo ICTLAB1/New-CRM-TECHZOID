@@ -481,15 +481,30 @@ describe("the whitelist itself", () => {
       "price_book_minimums",
       "price_book_search",
       "price_book_search_costed",
+      /* Activating a month and listing the months on file. Loading one is
+         NOT here: those rows must come through the parser, so
+         price_list_commit is in SERVER_CALLABLE. */
+      "price_list_activate",
+      "price_list_history",
       "regenerate_webhook_secret",
     ]);
   });
 
-  it("does not expose the functions the server jobs use", () => {
+  it("does not expose the functions the server jobs use", async () => {
     /* Those run as service_role, which bypasses RLS entirely. A browser
        must not be able to reach them however valid its token. */
     expect(CALLABLE.consume_rate_limit).toBeUndefined();
     expect(CALLABLE.may_manage_email_account).toBeUndefined();
+    /* A browser that could call these could hand the database price rows
+       that never went through the parser, read the cost comparison, or ask
+       the database what somebody's role is. */
+    expect(CALLABLE.price_list_commit).toBeUndefined();
+    expect(CALLABLE.price_list_changes).toBeUndefined();
+    expect(CALLABLE.price_list_last_mapping).toBeUndefined();
+    expect(CALLABLE.role_in).toBeUndefined();
+    const { SERVER_CALLABLE } = await import("./rpc.mjs");
+    expect(SERVER_CALLABLE.price_list_commit).toBeDefined();
+    expect(SERVER_CALLABLE.price_list_changes).toBeDefined();
   });
 
   it("keeps the two whitelists disjoint", async () => {
