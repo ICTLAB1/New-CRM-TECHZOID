@@ -34,6 +34,10 @@ import { CURRENCIES } from "../../domain/currency/currencies";
 import { TAX_TYPES } from "../../domain/tax/types";
 import { STATE_NAMES } from "../../domain/geo/states";
 import type { CatalogProduct } from "../../domain/catalog/types";
+import { readActiveCompany } from "../../data/companies";
+import { ApprovalStrip } from "../priceBook/ApprovalStrip";
+import { PriceBookPicker } from "../priceBook/PriceBookPicker";
+import type { PriceBookHit } from "../../data/priceBook";
 import { moneyList } from "../../domain/currency/format";
 import { localISO } from "../../domain/dates";
 
@@ -104,6 +108,10 @@ export interface DocumentEditorProps {
   onCreateBankAccount?: (account: BankAccount) => void;
   /** Whose name and address a sent quotation carries. */
   currentUser: { id: string; name: string; email?: string; role?: string };
+  /** Which business this document belongs to, for the price book. Falls
+   *  back to the company remembered in this browser; the price book is
+   *  per-company, so searching the wrong one would offer the wrong floors. */
+  companyId?: string | null;
   /** Whether this document already exists in the workspace. A file attached
    *  to a document that is then cancelled would have nothing pointing at it,
    *  so attaching waits until there is a record to attach to. */
@@ -115,12 +123,17 @@ export interface DocumentEditorProps {
 type Tab = "document" | "items" | "terms" | "files";
 
 export function DocumentEditor({
-  doc: initial, docType, customers, catalog, settings, brandLogos, docImages, api, currentUser,
+  doc: initial, docType, customers, catalog, settings, brandLogos, docImages, api, currentUser, companyId,
   team = [], customFields = [], onCreateCustomer, onCreateBankAccount, saved = false, onSave, onClose,
 }: DocumentEditorProps) {
   const [doc, setDoc] = useState<SalesDocument>(initial);
   const [tab, setTab] = useState<Tab>("document");
   const [showCatalog, setShowCatalog] = useState(false);
+  const [showPriceBook, setShowPriceBook] = useState(false);
+  /* The company this document belongs to. Given by the screen; falls back
+     to the one this browser last had open, because the price book is
+     per-company and the wrong one would offer the wrong floors. */
+  const priceBookCompany = companyId ?? readActiveCompany();
   const { paneRef, pageRef, scale, height } = useFitScale();
   const { totals, model } = useDocumentModel(doc, settings, docType);
 
@@ -235,6 +248,32 @@ export function DocumentEditor({
        list is a step that exists only because of how this was built. */
     setDoc((d) => applyCustomer(d, c, settings as DocSettings, docType));
     setNewCustomer(null);
+  };
+
+  /* The price book's own picker. Separate from the catalog on purpose:
+     the catalog is this company's own product list with its costs on it,
+     and the price book is the OEM's monthly list with a floor and no cost
+     at all. A line from here carries the id of the price book row, which
+     is what makes the floor apply to it — and what the database's
+     send-lock reads. */
+  const addFromPriceBook = (hit: PriceBookHit) => {
+    setDoc((d) => ({
+      ...d,
+      items: [...d.items, {
+        id: Math.random().toString(36).slice(2, 10),
+        desc: hit.productName, subDesc: "", brand: hit.oem || "",
+        sku: hit.sku || "", hsn: "997331",
+        qty: 1, unit: hit.unit || "License",
+        /* THE MINIMUM, as the opening price. It is a floor and not a
+           target, and the strip above the lines says so — but a blank rate
+           would be worse, and this is the only price this person has. */
+        rate: hit.minPrice,
+        disc: 0, gst: (settings["defaultGst"] as number) ?? 18,
+        priceBookItemId: hit.itemId,
+        minPrice: hit.minPrice,
+      }],
+    }));
+    setShowPriceBook(false);
   };
 
   const addFromCatalog = (product: CatalogProduct) => {
@@ -592,14 +631,34 @@ export function DocumentEditor({
                   </div>
                 </div>
               ) : tab === "items" ? (
-                <LineItemsEditor
-                  items={doc.items}
-                  rows={totals.rows}
-                  currency={doc.currency}
-                  showTax={showTax}
-                  onChange={(items) => setDoc((d) => ({ ...d, items }))}
-                  onPickFromCatalog={() => setShowCatalog(true)}
-                />
+                <div className="stack">
+                  {priceBookCompany && (docType === "quotation" || docType === "proforma") ? (
+                    <ApprovalStrip
+                      company={priceBookCompany}
+                      docId={doc.id}
+                      docNumber={doc.number}
+                      items={doc.items}
+                      onApplyApproved={(byLine) =>
+                        setDoc((d) => ({
+                          ...d,
+                          items: d.items.map((it) =>
+                            byLine[it.id] === undefined || it.approvedPrice === byLine[it.id]
+                              ? it
+                              : { ...it, approvedPrice: byLine[it.id] }),
+                        }))
+                      }
+                    />
+                  ) : null}
+                  <LineItemsEditor
+                    items={doc.items}
+                    rows={totals.rows}
+                    currency={doc.currency}
+                    showTax={showTax}
+                    onChange={(items) => setDoc((d) => ({ ...d, items }))}
+                    onPickFromCatalog={() => setShowCatalog(true)}
+                    onPickFromPriceBook={priceBookCompany ? () => setShowPriceBook(true) : undefined}
+                  />
+                </div>
               ) : tab === "terms" ? (
                 <div className="stack-wide">
                   <div className="stack">
@@ -764,6 +823,15 @@ export function DocumentEditor({
           </div>
         </div>
       </div>
+
+      {showPriceBook && priceBookCompany ? (
+        <PriceBookPicker
+          company={priceBookCompany}
+          currency={doc.currency}
+          onAdd={addFromPriceBook}
+          onClose={() => setShowPriceBook(false)}
+        />
+      ) : null}
 
       <Modal
         open={showCatalog}

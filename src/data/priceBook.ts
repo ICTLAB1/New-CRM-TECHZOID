@@ -396,3 +396,233 @@ export async function deleteMarginRule(id: string): Promise<void> {
   const { error } = await getDb().from("oem_margin_rules").delete().eq("id", id);
   if (error) throw new Error(error.message ?? "That rule could not be removed.");
 }
+
+/* ── asking for a discount ───────────────────────────────────────────── */
+
+export interface ApprovalLineAsk {
+  lineId: string;
+  itemId: string;
+  qty: number;
+  requestedPrice: number;
+}
+
+export interface MyApproval {
+  id: string;
+  quoteId: string;
+  quoteNumber: string | null;
+  reason: string;
+  note: string | null;
+  state: "pending" | "approved" | "rejected" | "withdrawn";
+  lines: Array<{ lineId: string; sku: string; qty: number; minPrice: number; requestedPrice: number }>;
+  approvedLines: Array<{ lineId: string; approvedPrice: number }>;
+  decisionNote: string | null;
+  decidedAt: string | null;
+  createdAt: string | null;
+}
+
+export function toMyApproval(row: Record<string, unknown>): MyApproval {
+  const state = text(row.state);
+  return {
+    id: text(row.id),
+    quoteId: text(row.quote_id),
+    quoteNumber: orNull(row.quote_number),
+    reason: text(row.reason),
+    note: orNull(row.note),
+    state: state === "approved" || state === "rejected" || state === "withdrawn" ? state : "pending",
+    lines: Array.isArray(row.lines) ? (row.lines as MyApproval["lines"]) : [],
+    approvedLines: Array.isArray(row.approved_lines) ? (row.approved_lines as MyApproval["approvedLines"]) : [],
+    decisionNote: orNull(row.decision_note),
+    decidedAt: orNull(row.decided_at),
+    createdAt: orNull(row.created_at),
+  };
+}
+
+/**
+ * Ask an Admin to approve a price below the floor.
+ *
+ * THE FLOOR IS NOT SENT. The lines carry which price book item, how many,
+ * and what the salesperson wants to charge — the minimum is read from the
+ * price book by the function itself. If the browser supplied it, a request
+ * could be dressed up as a ₹10 discount on a product whose floor is ₹400
+ * away, and the Admin would approve what they were shown.
+ */
+export async function requestApproval(req: {
+  company: string;
+  quoteId: string;
+  quoteNumber?: string | null;
+  reason: string;
+  note?: string | null;
+  lines: readonly ApprovalLineAsk[];
+}): Promise<string> {
+  const { data, error } = await getDb().rpc("request_discount_approval", {
+    p_company: req.company,
+    p_quote_id: req.quoteId,
+    p_quote_number: req.quoteNumber ?? null,
+    p_reason: req.reason,
+    p_note: req.note ?? null,
+    p_lines: req.lines.map((l) => ({
+      lineId: l.lineId,
+      itemId: l.itemId,
+      qty: l.qty,
+      requestedPrice: l.requestedPrice,
+    })),
+  });
+  if (error) throw new Error(error.message ?? "That request could not be sent.");
+  return text(data);
+}
+
+/** This salesperson's own requests, with the columns they may see. */
+export async function myApprovals(company: string): Promise<MyApproval[]> {
+  if (!hasBackend() || !company) return [];
+  const { data, error } = await getDb().rpc("my_discount_approvals", { p_company: company });
+  if (error) throw new Error(error.message ?? "Your approval requests could not be read.");
+  return rows(data).map(toMyApproval);
+}
+
+export async function withdrawApproval(id: string): Promise<void> {
+  const { error } = await getDb().rpc("withdraw_discount_approval", { p_approval: id });
+  if (error) throw new Error(error.message ?? "That request could not be withdrawn.");
+}
+
+/* ── the approvals inbox ─────────────────────────────────────────────────
+   Admin and Manager read discount_approvals directly: the policy admits
+   them and nobody else, including the salesperson who raised the request,
+   because the row carries the distributor discount. */
+
+export interface ApprovalRow extends MyApproval {
+  requestedBy: string;
+  companyId: string;
+  distributorDiscountPct: number | null;
+  decidedBy: string | null;
+}
+
+export function toApprovalRow(row: Record<string, unknown>): ApprovalRow {
+  return {
+    ...toMyApproval(row),
+    requestedBy: text(row.requested_by),
+    companyId: text(row.company_id),
+    distributorDiscountPct: row.distributor_discount_pct === null || row.distributor_discount_pct === undefined
+      ? null
+      : num(row.distributor_discount_pct),
+    decidedBy: orNull(row.decided_by),
+  };
+}
+
+const APPROVAL_COLUMNS =
+  "id, company_id, quote_id, quote_number, requested_by, reason, note, state, lines, "
+  + "approved_lines, decided_by, decided_at, decision_note, distributor_discount_pct, created_at";
+
+/** Every request in a company, newest first. Empty for anyone not privileged. */
+export async function approvalQueue(company: string, state?: "pending" | "all"): Promise<ApprovalRow[]> {
+  if (!hasBackend() || !company) return [];
+  let q = getDb().from("discount_approvals").select(APPROVAL_COLUMNS).eq("company_id", company);
+  if (state !== "all") q = q.eq("state", "pending");
+  const { data, error } = await q;
+  if (error) throw new Error(error.message ?? "The approvals could not be read.");
+  return rows(data)
+    .map(toApprovalRow)
+    .sort((a, b) => String(b.createdAt ?? "").localeCompare(String(a.createdAt ?? "")));
+}
+
+/** How many are waiting. For the badge; 0 for anyone who may not see them. */
+export async function pendingApprovalCount(company: string): Promise<number> {
+  try {
+    return (await approvalQueue(company, "pending")).length;
+  } catch {
+    return 0;
+  }
+}
+
+export interface ApprovalLine {
+  lineId: string;
+  sku: string;
+  productName: string;
+  qty: number;
+  minPrice: number;
+  requestedPrice: number;
+  approvedPrice: number | null;
+  resellerPrice: number | null;
+  buyingPrice: number | null;
+  /** Of the sale, which is what the CRM's other margin figures mean. */
+  marginAtRequested: number | null;
+  /** Over the buying price, which is what the minimum margin means. */
+  markupAtRequested: number | null;
+}
+
+export function toApprovalLine(row: Record<string, unknown>): ApprovalLine {
+  const maybe = (v: unknown): number | null => (v === null || v === undefined ? null : num(v));
+  return {
+    lineId: text(row.line_id),
+    sku: text(row.sku),
+    productName: text(row.product_name),
+    qty: num(row.qty),
+    minPrice: num(row.min_price),
+    requestedPrice: num(row.requested_price),
+    approvedPrice: maybe(row.approved_price),
+    resellerPrice: maybe(row.reseller_price),
+    buyingPrice: maybe(row.buying_price),
+    marginAtRequested: maybe(row.margin_at_requested),
+    markupAtRequested: maybe(row.markup_at_requested),
+  };
+}
+
+/**
+ * One request's lines with the cost behind them, at a given distributor
+ * discount. Raises for anybody but Admin and Manager — including the
+ * salesperson who asked, which is the point.
+ */
+export async function approvalLines(id: string, distributorPct: number): Promise<ApprovalLine[]> {
+  const { data, error } = await getDb().rpc("approval_lines", {
+    p_approval: id,
+    p_distributor_pct: Number.isFinite(distributorPct) ? distributorPct : 0,
+  });
+  if (error) throw new Error(error.message ?? "The cost picture could not be read.");
+  return rows(data).map(toApprovalLine);
+}
+
+/** Approve, counter or reject. Admin only, in the database. */
+export async function decideApproval(req: {
+  id: string;
+  decision: "approved" | "rejected";
+  lines?: Array<{ lineId: string; approvedPrice: number }>;
+  distributorDiscountPct?: number | null;
+  note?: string | null;
+}): Promise<void> {
+  const { error } = await getDb().rpc("decide_discount_approval", {
+    p_approval: req.id,
+    p_decision: req.decision,
+    p_lines: req.lines ?? [],
+    p_distributor_pct: req.distributorDiscountPct ?? null,
+    p_note: req.note ?? null,
+  });
+  if (error) throw new Error(error.message ?? "That decision could not be saved.");
+}
+
+/**
+ * Tell whoever should hear that a discount was asked for, or decided.
+ *
+ * THE BROWSER NAMES NOBODY. It sends the approval's id; the server works
+ * out that a request goes to the company's Admins and a decision goes back
+ * to the salesperson who asked. A browser that could name recipients could
+ * email anyone from the company's mailbox.
+ *
+ * Returns how many went out. Never throws: the approval is recorded
+ * whatever the mail does, and a company with no mailbox connected gets
+ * zero and carries on.
+ */
+export async function notifyApproval(approvalId: string): Promise<{ sent: number; reason?: string }> {
+  if (!hasBackend()) return { sent: 0, reason: "no backend" };
+  try {
+    const token = await fnToken();
+    const resp = await fetch(fnPath("discount-approval-notify"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      body: JSON.stringify({ approvalId }),
+    });
+    const body = (await resp.json().catch(() => ({}))) as { sent?: number; reason?: string; error?: string };
+    if (!resp.ok) return { sent: 0, reason: body?.error || `the server said ${resp.status}` };
+    return { sent: Number(body?.sent ?? 0), reason: body?.reason };
+  } catch (e) {
+    return { sent: 0, reason: (e as Error)?.message || "the notification could not be sent" };
+  }
+}

@@ -455,7 +455,13 @@ describe("the whitelist itself", () => {
        into the database, and it should take a deliberate edit to this list
        and a reader noticing it in review. */
     expect(Object.keys(CALLABLE).sort()).toEqual([
+      /* The price book's approvals. Each checks its own authority — a
+         salesperson may ask, only an Admin may decide, and the cost
+         picture raises for anybody else — so a door on them is safe;
+         supabase/proofs/056_price_book_proof.sql is what says so. */
+      "approval_lines",
       "create_company",
+      "decide_discount_approval",
       "find_duplicate_customer",
       /* Added for the price book. A salesperson's own approval requests
          CANNOT be a select on discount_approvals: that row carries the
@@ -487,6 +493,8 @@ describe("the whitelist itself", () => {
       "price_list_activate",
       "price_list_history",
       "regenerate_webhook_secret",
+      "request_discount_approval",
+      "withdraw_discount_approval",
     ]);
   });
 

@@ -58,6 +58,8 @@ export interface QuotationsScreenProps {
   docImages?: DocImages;
   api: IntegrationsApi;
   currentUser: { id: string; name: string; email?: string; role?: string };
+  /** Which business these documents belong to, for the price book. */
+  companyId?: string | null;
   onChange: (documents: SalesDocument[], settings: Record<string, unknown>) => void;
   /** Moves the customer along the pipeline board when a quotation reaches
    *  them. Absent on the screens where that would make no sense. */
@@ -95,7 +97,7 @@ export interface QuotationsScreenProps {
 }
 
 export function QuotationsScreen({
-  docType, documents, customers, catalog, settings, brandLogos, docImages, api, currentUser,
+  docType, documents, customers, catalog, settings, brandLogos, docImages, api, currentUser, companyId,
   onChange, onCustomerStage, onSettingsNote, onCreateBankAccount, onCreateProforma, onCreateInvoice, onCreateOrder,
   onCreateCustomer, team = [], customFields = [], related, intent,
 }: QuotationsScreenProps) {
@@ -401,6 +403,7 @@ export function QuotationsScreen({
           docImages={docImages}
           api={api}
           currentUser={currentUser}
+          companyId={companyId}
           team={team}
           customFields={customFields}
           onCreateCustomer={onCreateCustomer}

@@ -29,9 +29,9 @@ describe("the functions directory", () => {
     expect(existsSync(FUNCTIONS_DIR)).toBe(true);
   });
 
-  it("finds all thirty-three handlers", () => {
+  it("finds all thirty-four handlers", () => {
     const names = functionNames();
-    expect(names).toHaveLength(33);
+    expect(names).toHaveLength(34);
     expect(names).toContain("submit-lead");
     expect(names).toContain("portal");
     expect(names).toContain("followups-run");
@@ -43,6 +43,9 @@ describe("the functions directory", () => {
     /* The price book's monthly upload: it parses the .xlsx server-side and
        writes the rows as the signed-in Admin. */
     expect(names).toContain("price-list-upload");
+    /* Tells the Admins a discount was asked for, and the salesperson what
+       was decided. The browser names no recipients. */
+    expect(names).toContain("discount-approval-notify");
   });
 
   it("names the scheduled ones, and they exist", () => {
@@ -139,9 +142,9 @@ describe("registration", () => {
     const { app, http, timer } = fakeApp();
     const names = registerNetlifyFunctions(app);
 
-    expect(names).toHaveLength(33);
+    expect(names).toHaveLength(34);
     expect([...timer.keys()].sort()).toEqual(Object.keys(SCHEDULED).sort());
-    expect(http.size).toBe(33 - Object.keys(SCHEDULED).length);
+    expect(http.size).toBe(34 - Object.keys(SCHEDULED).length);
     /* A scheduled one must not ALSO be an HTTP route: on Netlify these were
        endpoints anyone could hit, and a public URL that sends a campaign is
        not something to carry across by accident. */

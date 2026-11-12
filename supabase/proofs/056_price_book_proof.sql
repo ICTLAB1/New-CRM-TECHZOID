@@ -671,6 +671,402 @@ begin;
   end $$;
 rollback;
 
+/* ── 9. asking for a discount, and deciding it ──────────────────────── */
+
+/* A quotation to hang the requests on. The December list from section 8
+   was rolled back with its transaction, so November is live again: E3 is
+   ₹1,000 at a 15% minimum, a floor of ₹1,150. */
+set request.jwt.claim.role = 'service_role';
+insert into public.quotes(id, owner_id, company_id, data)
+values ('quote_pb_approval', 'a0000000-0000-0000-0000-000000000003',
+        'c0000000-0000-0000-0000-00000000000a',
+        jsonb_build_object(
+          'status', 'Draft',
+          'items', jsonb_build_array(jsonb_build_object(
+            'id', 'l1', 'sku', 'M365-E3', 'qty', 10, 'rate', 1050,
+            'priceBookItemId', (select i.id from public.price_list_items i
+                                 join public.price_lists l on l.id = i.price_list_id
+                                where i.sku = 'M365-E3' and l.status = 'active'
+                                  and i.company_id = 'c0000000-0000-0000-0000-00000000000a')))))
+on conflict (id) do update set data = excluded.data;
+reset request.jwt.claim.role;
+
+/* a. THE SALESPERSON ASKS — AND THE FLOOR THEY CLAIM IS IGNORED. */
+begin;
+  set local role authenticated;
+  set local "request.jwt.claim.sub"  = 'a0000000-0000-0000-0000-000000000003';
+  set local "request.jwt.claim.role" = 'authenticated';
+
+  do $$
+  declare
+    v_id uuid;
+    v_lines jsonb;
+    v_item uuid;
+  begin
+    /* THROUGH price_book_search, because that is the only way a
+       salesperson can know an item id at all: price_list_items is closed
+       to them, and the search is the door built for them. Reaching into
+       the table here would have tested a path the app cannot take. */
+    select item_id into v_item from public.price_book_search(
+      'c0000000-0000-0000-0000-00000000000a', 'M365-E3', 'Microsoft', 10);
+
+    /* The browser claims the minimum is ₹1,060, so the discount looks like
+       ₹10. It is really ₹1,150. If the claim were believed, the Admin
+       would be approving a ₹100 cut while reading a ₹10 one — the whole
+       approval would be theatre. */
+    v_id := public.request_discount_approval(
+      'c0000000-0000-0000-0000-00000000000a', 'quote_pb_approval', 'TZ/Q/26-27/0009',
+      'Competitor quoted lower', null,
+      jsonb_build_array(jsonb_build_object(
+        'lineId', 'l1', 'itemId', v_item, 'qty', 10,
+        'requestedPrice', 1050, 'minPrice', 1060)));
+
+    /* READ BACK THROUGH my_discount_approvals, not off the table. The
+       table admits Admin and Manager only — including the requester's own
+       rows, because the row carries the distributor discount. A first
+       version of this block selected straight from discount_approvals,
+       got nothing, and every assertion below it passed in silence:
+       `if NULL <> 1150` is not true. */
+    select lines into v_lines from public.my_discount_approvals(
+      'c0000000-0000-0000-0000-00000000000a') where id = v_id;
+    if v_lines is null then raise exception 'the salesperson cannot read back their own request'; end if;
+
+    if (v_lines->0->>'minPrice') is null then raise exception 'no minimum was stored at all'; end if;
+    if (v_lines->0->>'minPrice')::numeric <> 1150.00 then
+      raise exception 'THE CALLER''S CLAIMED MINIMUM WAS BELIEVED: stored %', v_lines->0->>'minPrice';
+    end if;
+    if (v_lines->0->>'requestedPrice')::numeric <> 1050.00 then
+      raise exception 'the requested price was not kept: %', v_lines->0->>'requestedPrice';
+    end if;
+    if coalesce(v_lines->0->>'sku', '') <> 'M365-E3' then
+      raise exception 'the SKU was not resolved from the price book: %', v_lines->0;
+    end if;
+  end $$;
+
+  /* The ask is in the audit log before anybody has decided anything —
+     checked as an Admin, because the log is not a salesperson's to read. */
+  set local "request.jwt.claim.sub" = 'a0000000-0000-0000-0000-000000000001';
+  do $$
+  declare
+    n int;
+  begin
+    select count(*) into n from public.approval_audit_log
+     where quote_id = 'quote_pb_approval' and action = 'requested';
+    if n <> 1 then raise exception 'the request was logged % times, wanted once', n; end if;
+  end $$;
+  set local "request.jwt.claim.sub" = 'a0000000-0000-0000-0000-000000000003';
+
+  /* A SECOND PENDING REQUEST ON THE SAME QUOTATION is the same
+     conversation, not a new one. */
+  do $$
+  declare
+    v_item uuid;
+  begin
+    /* THROUGH price_book_search, because that is the only way a
+       salesperson can know an item id at all: price_list_items is closed
+       to them, and the search is the door built for them. Reaching into
+       the table here would have tested a path the app cannot take. */
+    select item_id into v_item from public.price_book_search(
+      'c0000000-0000-0000-0000-00000000000a', 'M365-E3', 'Microsoft', 10);
+    perform public.request_discount_approval(
+      'c0000000-0000-0000-0000-00000000000a', 'quote_pb_approval', 'TZ/Q/26-27/0009',
+      'asking again', null,
+      jsonb_build_array(jsonb_build_object('lineId', 'l1', 'itemId', v_item, 'qty', 10, 'requestedPrice', 1000)));
+    raise exception 'TWO PENDING REQUESTS ON ONE QUOTATION';
+  exception when unique_violation then
+    null;
+  end $$;
+rollback;
+
+/* b. A LINE THAT IS NOT BELOW ITS FLOOR IS NOT A DISCOUNT TO APPROVE. */
+begin;
+  set local role authenticated;
+  set local "request.jwt.claim.sub"  = 'a0000000-0000-0000-0000-000000000003';
+  set local "request.jwt.claim.role" = 'authenticated';
+  do $$
+  declare
+    v_item uuid;
+  begin
+    /* THROUGH price_book_search, because that is the only way a
+       salesperson can know an item id at all: price_list_items is closed
+       to them, and the search is the door built for them. Reaching into
+       the table here would have tested a path the app cannot take. */
+    select item_id into v_item from public.price_book_search(
+      'c0000000-0000-0000-0000-00000000000a', 'M365-E3', 'Microsoft', 10);
+    perform public.request_discount_approval(
+      'c0000000-0000-0000-0000-00000000000a', 'quote_pb_approval', null, 'just in case', null,
+      jsonb_build_array(jsonb_build_object('lineId', 'l1', 'itemId', v_item, 'qty', 1, 'requestedPrice', 1200)));
+    raise exception 'A REQUEST WAS RAISED FOR A PRICE THAT IS ABOVE THE FLOOR';
+  exception when others then
+    if sqlerrm <> 'none of those lines is below its minimum selling price' then raise; end if;
+  end $$;
+rollback;
+
+/* c. A MANAGER MAY NOT DECIDE, and an Admin may. */
+begin;
+  set local role authenticated;
+  set local "request.jwt.claim.sub"  = 'a0000000-0000-0000-0000-000000000003';
+  set local "request.jwt.claim.role" = 'authenticated';
+  do $$
+  declare
+    v_item uuid;
+  begin
+    /* THROUGH price_book_search, because that is the only way a
+       salesperson can know an item id at all: price_list_items is closed
+       to them, and the search is the door built for them. Reaching into
+       the table here would have tested a path the app cannot take. */
+    select item_id into v_item from public.price_book_search(
+      'c0000000-0000-0000-0000-00000000000a', 'M365-E3', 'Microsoft', 10);
+    perform public.request_discount_approval(
+      'c0000000-0000-0000-0000-00000000000a', 'quote_pb_approval', 'TZ/Q/26-27/0009',
+      'Competitor quoted lower', null,
+      jsonb_build_array(jsonb_build_object('lineId', 'l1', 'itemId', v_item, 'qty', 10, 'requestedPrice', 1050)));
+  end $$;
+  set local "request.jwt.claim.sub" = 'a0000000-0000-0000-0000-000000000002';
+  do $$
+  declare
+    v_id uuid;
+  begin
+    select id into v_id from public.discount_approvals where quote_id = 'quote_pb_approval' and state = 'pending';
+    perform public.decide_discount_approval(v_id, 'approved', '[]'::jsonb, 3.5, null);
+    raise exception 'A MANAGER DECIDED A DISCOUNT';
+  exception when others then
+    if sqlerrm <> 'only an Admin can decide a discount' then raise; end if;
+  end $$;
+
+  /* A Manager MAY read the cost picture behind it. */
+  do $$
+  declare
+    r record;
+    v_id uuid;
+  begin
+    select id into v_id from public.discount_approvals where quote_id = 'quote_pb_approval' and state = 'pending';
+    select * into r from public.approval_lines(v_id, 3.5);
+    if not found then raise exception 'a Manager got no lines back'; end if;
+    if r.reseller_price <> 1000.00 then raise exception 'reseller price read as %', r.reseller_price; end if;
+    if r.buying_price <> 965.00 then raise exception 'buying price at 3.5%% read as %', r.buying_price; end if;
+    if r.min_price <> 1150.00 then raise exception 'floor read as %', r.min_price; end if;
+    /* ₹1,050 sold against ₹965 bought: ₹85, which is 8.1% of the sale and
+       8.81% over the buy. Both, because both get called "margin". */
+    if r.margin_at_requested <> 8.10 then raise exception 'margin of the sale read as %', r.margin_at_requested; end if;
+    if r.markup_at_requested <> 8.81 then raise exception 'markup over cost read as %', r.markup_at_requested; end if;
+  end $$;
+
+  /* AND A SALESPERSON MAY NOT. */
+  set local "request.jwt.claim.sub" = 'a0000000-0000-0000-0000-000000000003';
+  do $$
+  declare
+    v_id uuid;
+  begin
+    /* Their own request, found the only way they can find it. */
+    select id into v_id from public.my_discount_approvals('c0000000-0000-0000-0000-00000000000a')
+     where state = 'pending';
+    if v_id is null then raise exception 'the salesperson cannot see their own pending request'; end if;
+    perform * from public.approval_lines(v_id, 3.5);
+    raise exception 'SALES READ THE COST PICTURE BEHIND THEIR OWN REQUEST';
+  exception when others then
+    if sqlerrm <> 'the cost picture is for Admin and Manager only' then raise; end if;
+  end $$;
+
+  /* d. THE ADMIN COUNTERS ABOVE THE FLOOR, and that is what is recorded.
+        An earlier version clamped the approved price down to the minimum,
+        which would have recorded a bigger discount than the Admin gave. */
+  set local "request.jwt.claim.sub" = 'a0000000-0000-0000-0000-000000000001';
+  do $$
+  declare
+    v_id uuid;
+    v_approved jsonb;
+  begin
+    select id into v_id from public.discount_approvals where quote_id = 'quote_pb_approval' and state = 'pending';
+    perform public.decide_discount_approval(
+      v_id, 'approved',
+      jsonb_build_array(jsonb_build_object('lineId', 'l1', 'approvedPrice', 1200)),
+      3.25, 'Hold the account, but not at 1050');
+
+    select approved_lines into v_approved from public.discount_approvals where id = v_id;
+    if (v_approved->0->>'approvedPrice')::numeric <> 1200.00 then
+      raise exception 'THE COUNTER WAS NOT RECORDED AS GIVEN: %', v_approved->0->>'approvedPrice';
+    end if;
+
+    if (select distributor_discount_pct from public.discount_approvals where id = v_id) <> 3.25 then
+      raise exception 'the distributor discount was not recorded with the decision';
+    end if;
+
+    /* The audit log says it was a counter, not a plain approval, and
+       carries both prices and the discount that made it acceptable. */
+    if (select count(*) from public.approval_audit_log
+         where approval_id = v_id and action = 'countered'
+           and new_price = 1200.00 and distributor_discount_pct = 3.25) <> 1 then
+      raise exception 'the counter was not logged as one';
+    end if;
+
+    /* Deciding twice is not a thing. */
+    begin
+      perform public.decide_discount_approval(v_id, 'rejected', '[]'::jsonb, null, 'changed my mind');
+      raise exception 'AN APPROVAL WAS DECIDED TWICE';
+    exception when others then
+      if sqlerrm <> 'that request was already approved' then raise; end if;
+    end;
+  end $$;
+rollback;
+
+/* e. A REJECTION HAS TO SAY WHY. */
+begin;
+  set local role authenticated;
+  set local "request.jwt.claim.sub"  = 'a0000000-0000-0000-0000-000000000003';
+  set local "request.jwt.claim.role" = 'authenticated';
+  do $$
+  declare
+    v_item uuid;
+  begin
+    /* THROUGH price_book_search, because that is the only way a
+       salesperson can know an item id at all: price_list_items is closed
+       to them, and the search is the door built for them. Reaching into
+       the table here would have tested a path the app cannot take. */
+    select item_id into v_item from public.price_book_search(
+      'c0000000-0000-0000-0000-00000000000a', 'M365-E3', 'Microsoft', 10);
+    perform public.request_discount_approval(
+      'c0000000-0000-0000-0000-00000000000a', 'quote_pb_approval', null, 'Competitor', null,
+      jsonb_build_array(jsonb_build_object('lineId', 'l1', 'itemId', v_item, 'qty', 10, 'requestedPrice', 1050)));
+  end $$;
+  set local "request.jwt.claim.sub" = 'a0000000-0000-0000-0000-000000000001';
+  do $$
+  declare
+    v_id uuid;
+  begin
+    select id into v_id from public.discount_approvals where quote_id = 'quote_pb_approval' and state = 'pending';
+    perform public.decide_discount_approval(v_id, 'rejected', '[]'::jsonb, null, '   ');
+    raise exception 'A DISCOUNT WAS REJECTED WITH NO REASON';
+  exception when others then
+    if sqlerrm not like 'say why it is rejected%' then raise; end if;
+  end $$;
+rollback;
+
+/* ── 10. the lock, as the database enforces it ──────────────────────── */
+
+/* A salesperson cannot send a quotation that is under the floor, and the
+   refusal is the database's, not a disabled button's. */
+begin;
+  set local role authenticated;
+  set local "request.jwt.claim.sub"  = 'a0000000-0000-0000-0000-000000000003';
+  set local "request.jwt.claim.role" = 'authenticated';
+
+  do $$
+  begin
+    update public.quotes set data = jsonb_set(data, '{status}', '"Sent"')
+     where id = 'quote_pb_approval';
+    raise exception 'A QUOTATION UNDER THE FLOOR WAS SENT WITH NO APPROVAL';
+  exception when check_violation then
+    null;
+  end $$;
+
+  /* Saving it as a draft at that price is fine — a draft is where the
+     price is worked out. */
+  do $$
+  declare
+    n int;
+  begin
+    update public.quotes set data = jsonb_set(data, '{customerNote}', '"still negotiating"')
+     where id = 'quote_pb_approval';
+    get diagnostics n = row_count;
+    if n <> 1 then raise exception 'a draft under the floor could not even be saved'; end if;
+  end $$;
+
+  /* AND SO IS PUTTING A REJECTED ONE BACK INTO NEGOTIATION. This is the
+     case that proves the lock is on the way OUT and not on the price:
+     Rejected -> Draft is a status change, at a price under the floor, and
+     it has to go through — otherwise a customer saying no would strand the
+     quotation where nobody could work on it again. */
+  do $$
+  declare
+    n int;
+  begin
+    update public.quotes set data = jsonb_set(data, '{status}', '"Rejected"')
+     where id = 'quote_pb_approval';
+    update public.quotes set data = jsonb_set(data, '{status}', '"Draft"')
+     where id = 'quote_pb_approval';
+    get diagnostics n = row_count;
+    if n <> 1 then raise exception 'a rejected quotation could not be reopened as a draft'; end if;
+  end $$;
+rollback;
+
+/* With an approval that covers the line, it goes. */
+begin;
+  set local role authenticated;
+  set local "request.jwt.claim.sub"  = 'a0000000-0000-0000-0000-000000000003';
+  set local "request.jwt.claim.role" = 'authenticated';
+  do $$
+  declare
+    v_item uuid;
+  begin
+    /* THROUGH price_book_search, because that is the only way a
+       salesperson can know an item id at all: price_list_items is closed
+       to them, and the search is the door built for them. Reaching into
+       the table here would have tested a path the app cannot take. */
+    select item_id into v_item from public.price_book_search(
+      'c0000000-0000-0000-0000-00000000000a', 'M365-E3', 'Microsoft', 10);
+    perform public.request_discount_approval(
+      'c0000000-0000-0000-0000-00000000000a', 'quote_pb_approval', null, 'Competitor', null,
+      jsonb_build_array(jsonb_build_object('lineId', 'l1', 'itemId', v_item, 'qty', 10, 'requestedPrice', 1050)));
+  end $$;
+  set local "request.jwt.claim.sub" = 'a0000000-0000-0000-0000-000000000001';
+  do $$
+  declare
+    v_id uuid;
+  begin
+    select id into v_id from public.discount_approvals where quote_id = 'quote_pb_approval' and state = 'pending';
+    perform public.decide_discount_approval(v_id, 'approved', '[]'::jsonb, 3.0, 'ok');
+  end $$;
+
+  set local "request.jwt.claim.sub" = 'a0000000-0000-0000-0000-000000000003';
+  do $$
+  declare
+    n int;
+  begin
+    update public.quotes set data = jsonb_set(data, '{status}', '"Sent"')
+     where id = 'quote_pb_approval';
+    get diagnostics n = row_count;
+    if n <> 1 then raise exception 'an approved quotation still could not be sent'; end if;
+  end $$;
+
+  /* AND CUTTING IT AGAIN, BELOW WHAT WAS APPROVED, NEEDS ASKING AFRESH.
+     The approved price is a floor of its own from here. */
+  do $$
+  begin
+    update public.quotes
+       set data = jsonb_set(jsonb_set(data, '{status}', '"Draft"'),
+                            '{items,0,rate}', '900')
+     where id = 'quote_pb_approval';
+    update public.quotes set data = jsonb_set(data, '{status}', '"Accepted"')
+     where id = 'quote_pb_approval';
+    raise exception 'A SECOND, DEEPER CUT WENT OUT ON THE FIRST APPROVAL';
+  exception when check_violation then
+    null;
+  end $$;
+rollback;
+
+/* A LINE THAT IS NOT FROM THE PRICE BOOK HAS NO FLOOR, and a quotation of
+   hand-typed lines is not locked by any of this. */
+begin;
+  set local role authenticated;
+  set local "request.jwt.claim.sub"  = 'a0000000-0000-0000-0000-000000000003';
+  set local "request.jwt.claim.role" = 'authenticated';
+  do $$
+  declare
+    n int;
+  begin
+    update public.quotes
+       set data = jsonb_build_object(
+             'status', 'Draft',
+             'items', jsonb_build_array(jsonb_build_object('id', 'l1', 'desc', 'Consulting', 'qty', 1, 'rate', 1)))
+     where id = 'quote_pb_approval';
+    update public.quotes set data = jsonb_set(data, '{status}', '"Sent"')
+     where id = 'quote_pb_approval';
+    get diagnostics n = row_count;
+    if n <> 1 then raise exception 'a hand-typed quotation was locked by the price book'; end if;
+  end $$;
+rollback;
+
 /* ── clean up, so the proof can be run again ─────────────────────────── */
 
 delete from public.discount_approvals where company_id in
@@ -679,6 +1075,7 @@ delete from public.price_lists where company_id in
   ('c0000000-0000-0000-0000-00000000000a', 'c0000000-0000-0000-0000-00000000000b');
 delete from public.oem_margin_rules where company_id in
   ('c0000000-0000-0000-0000-00000000000a', 'c0000000-0000-0000-0000-00000000000b');
+delete from public.quotes where id = 'quote_pb_approval';
 
 reset request.jwt.claim.role;
 

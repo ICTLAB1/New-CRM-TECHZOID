@@ -93,6 +93,11 @@ export const NAV: NavSection[] = [
          A BDE who does come here gets the search and the minimum selling
          price, and no tab that would show them a cost. */
       { id: "price-book", label: "Price book" },
+      /* The approvals queue. Beside the price book because it is the other
+         half of the same rule: the price book sets the floor and this is
+         where going below it is decided. The badge is live — a request
+         waiting is somebody's quotation that cannot be sent. */
+      { id: "discount-approvals", label: "Discount approvals" },
       { id: "team", label: "Team" },
       /* Team is who can sign in; Companies is which business each of them
          works in, and with what authority there. Neighbours because that is

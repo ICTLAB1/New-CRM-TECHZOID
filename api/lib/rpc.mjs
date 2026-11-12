@@ -100,6 +100,10 @@ export const CALLABLE = {
      cost, for every role. */
   price_book_minimums: [{ args: ["p_company", "p_item_ids"], returns: "rows" }],
 
+  /* The salesperson takes their request back, or an Admin clears a stale
+     one. */
+  withdraw_discount_approval: [{ args: ["p_approval"], returns: "scalar" }],
+
   /* The price book as a salesperson may see it: product, SKU, licence
      term, and the MINIMUM SELLING PRICE. There is no cost column in the
      result because there is no cost column in the function's select — the
@@ -117,6 +121,21 @@ export const CALLABLE = {
     { args: ["p_company", "p_query", "p_oem", "p_limit", "p_distributor_pct"], returns: "rows" },
   ],
 
+  /* One approval request with the cost behind it, for the Admin deciding
+     it: reseller price, buying price at whatever distributor discount they
+     have negotiated, and the margin both ways. Raises for anyone but Admin
+     and Manager — including the salesperson who raised the request. */
+  approval_lines: [{ args: ["p_approval", "p_distributor_pct"], returns: "rows" }],
+
+  /* An Admin approves, counters or rejects. Writes the audit log in the
+     same transaction, which is why it is a function and not an update: a
+     client that could update discount_approvals could record an approval
+     that never happened. */
+  decide_discount_approval: [{
+    args: ["p_approval", "p_decision", "p_lines", "p_distributor_pct", "p_note"],
+    returns: "scalar",
+  }],
+
   /* Make one uploaded month THE list for its OEM, archiving the one it
      replaces. Admin-checked inside, and the unique index on (company, oem)
      where status = 'active' means one active list per OEM whatever any
@@ -128,6 +147,15 @@ export const CALLABLE = {
      Microsoft list is the one in force is how they know what they are
      quoting from. */
   price_list_history: [{ args: ["p_company", "p_oem"], returns: "rows" }],
+
+  /* A salesperson asks to go below the floor. THE FLOOR IS NOT AN
+     ARGUMENT: the function reads it from the price book itself and ignores
+     anything the caller claims it is, so a request cannot be dressed up as
+     a smaller discount than it really is. */
+  request_discount_approval: [{
+    args: ["p_company", "p_quote_id", "p_quote_number", "p_reason", "p_note", "p_lines"],
+    returns: "scalar",
+  }],
 
   /* Rotates a webhook's signing secret and returns the new one.
      THE ONLY TIME THE SECRET IS EVER READABLE: it is stored hashed, so a

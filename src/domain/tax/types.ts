@@ -33,6 +33,19 @@ export interface LineItem {
   /** Per-item tax rate percentage. Named `gst` for database compatibility —
    *  it carries the rate for every regime, not only GST. */
   gst?: number | string;
+  /** The price book row this line came from, when it came from one.
+   *  WHAT MAKES THE FLOOR APPLY: a line without it was typed by hand, or
+   *  quoted before the price book existed, and has no minimum to be under.
+   *  The database's send-lock reads this exact field — see
+   *  enforce_discount_approval() in supabase/056_price_book.sql. */
+  priceBookItemId?: string;
+  /** The minimum selling price when this line was added, for showing.
+   *  NEVER the thing that decides: every check recomputes the floor from
+   *  the price book, because this number travels in the browser. */
+  minPrice?: number;
+  /** A price an Admin has approved for this line, which becomes its floor
+   *  from then on. Written by the approvals screen, not by the editor. */
+  approvedPrice?: number;
 }
 
 export interface ComputedRow extends LineItem {

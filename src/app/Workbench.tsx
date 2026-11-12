@@ -42,6 +42,8 @@ import { ProspectsScreen } from "../features/outreach/ProspectsScreen";
 import { CampaignScreen } from "../features/outreach/CampaignScreen";
 import { PaymentTrackerScreen } from "../features/paymentTracker/PaymentTrackerScreen";
 import { PriceBookScreen } from "../features/priceBook/PriceBookScreen";
+import { ApprovalsScreen } from "../features/priceBook/ApprovalsScreen";
+import { usePendingApprovals } from "../features/priceBook/usePendingApprovals";
 import { addAccount, readAccounts, type BankAccount } from "../domain/banking/accounts";
 import { integrations } from "../integrations";
 import { BRAND_LOGOS, DOC_IMAGES } from "./demoData";
@@ -242,7 +244,12 @@ export function Workbench({
      an admin), not totals. */
   const todayIso = TODAY();
   const mine = <T extends { ownerId?: string }>(r: T) => isAdmin || r.ownerId === user.id;
+  /* Asked again on every navigation. The count is a select the database
+     refuses for a salesperson, so it is zero for them without this file
+     knowing anything about roles. */
+  const waitingApprovals = usePendingApprovals(activeCompanyId, view);
   const badges: Record<string, number> = {
+    "discount-approvals": waitingApprovals,
     tasks: customers.filter((c) => mine(c) && c.nextFollowUp && c.nextFollowUp <= todayIso).length,
     renewals: dueForRenewal(subscriptions.filter(mine), 30).filter((s) => (s.expiryDate ?? "") >= todayIso).length,
     receivables: invoices.filter((i) => mine(i) && i.status === "Issued" && i.validUntil && i.validUntil < todayIso
@@ -330,6 +337,7 @@ export function Workbench({
         </main>
       ) : view === "quotations" ? (
         <QuotationsScreen
+          companyId={activeCompanyId}
           related={{ proformas, invoices, orders }}
           docType="quotation"
           intent={intentFor("quotations")}
@@ -353,6 +361,7 @@ export function Workbench({
         />
       ) : view === "proformas" ? (
         <QuotationsScreen
+          companyId={activeCompanyId}
           related={{ proformas, invoices, orders }}
           docType="proforma"
           intent={intentFor("proformas")}
@@ -376,6 +385,7 @@ export function Workbench({
         />
       ) : view === "invoices" ? (
         <QuotationsScreen
+          companyId={activeCompanyId}
           related={{ proformas, invoices, orders }}
           docType="invoice"
           intent={intentFor("invoices")}
@@ -406,6 +416,7 @@ export function Workbench({
         />
       ) : view === "purchase-orders" ? (
         <QuotationsScreen
+          companyId={activeCompanyId}
           related={{ proformas, invoices, orders }}
           docType="purchase_order"
           intent={intentFor("purchase-orders")}
@@ -459,6 +470,11 @@ export function Workbench({
            way: the data behind them is refused by the database, not by
            this line. */
         <PriceBookScreen
+          company={activeCompanyId ?? ""}
+          role={(roleIn(companies, activeCompanyId) as Role) || "Sales"}
+        />
+      ) : view === "discount-approvals" ? (
+        <ApprovalsScreen
           company={activeCompanyId ?? ""}
           role={(roleIn(companies, activeCompanyId) as Role) || "Sales"}
         />

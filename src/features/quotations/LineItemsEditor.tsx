@@ -21,9 +21,12 @@ export interface LineItemsEditorProps {
   showTax: boolean;
   onChange: (items: LineItem[]) => void;
   onPickFromCatalog: () => void;
+  /** Absent where there is no price book to pick from — a purchase order,
+   *  or a workspace with no company context. */
+  onPickFromPriceBook?: () => void;
 }
 
-export function LineItemsEditor({ items, rows, currency, showTax, onChange, onPickFromCatalog }: LineItemsEditorProps) {
+export function LineItemsEditor({ items, rows, currency, showTax, onChange, onPickFromCatalog, onPickFromPriceBook }: LineItemsEditorProps) {
   const set = (id: string, key: keyof LineItem, value: string) =>
     onChange(items.map((it) => (it.id === id ? { ...it, [key]: value } : it)));
 
@@ -142,6 +145,9 @@ export function LineItemsEditor({ items, rows, currency, showTax, onChange, onPi
       <div className="row-tight">
         <Button tone="default" onClick={add}>Add a line</Button>
         <Button tone="default" onClick={onPickFromCatalog}>Add from catalog</Button>
+        {onPickFromPriceBook ? (
+          <Button tone="default" onClick={onPickFromPriceBook}>Add from price book</Button>
+        ) : null}
       </div>
 
       {!showTax ? (

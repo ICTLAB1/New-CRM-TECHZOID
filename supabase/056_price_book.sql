@@ -804,3 +804,403 @@ revoke execute on function public.price_list_activate(uuid) from anon;
 revoke execute on function public.price_list_changes(uuid, text, jsonb) from anon;
 revoke execute on function public.price_list_last_mapping(uuid, text) from anon;
 revoke execute on function public.price_list_history(uuid, text) from anon;
+
+/* ── asking, and deciding ───────────────────────────────────────────────
+   Both are functions rather than table writes, because each one has to put
+   a row in the audit log in the same breath. A client that could insert
+   into discount_approvals directly could record an approval that never
+   happened, or a request at a discount it then quietly changed. Neither
+   table takes a client write at all — see the grants above. */
+
+/**
+ * A salesperson asks for a price below the floor.
+ *
+ * THE MINIMUM IS RECOMPUTED HERE AND THE CALLER'S IS IGNORED. The browser
+ * sends which price book item each line is, how many, and what it wants to
+ * charge — not what the floor is. If the floor came from the browser, a
+ * salesperson could send "minimum ₹1,160, requested ₹1,150" on a product
+ * whose floor is really ₹1,400, and the Admin's screen would show them a
+ * ₹10 discount to approve. The whole approval would be theatre. So the
+ * floor is read from the price book, under this function's own authority,
+ * and what the caller claimed is not read at all.
+ *
+ * A LINE THAT IS NOT BELOW ITS FLOOR IS DROPPED rather than refused: a
+ * quotation often has one line under and five over, and the five are not
+ * what is being asked about.
+ */
+create or replace function public.request_discount_approval(
+  p_company uuid,
+  p_quote_id text,
+  p_quote_number text,
+  p_reason text,
+  p_note text,
+  p_lines jsonb
+) returns uuid language plpgsql security definer set search_path = public as $$
+declare
+  v_id uuid;
+  v_lines jsonb;
+  v_count int;
+begin
+  if auth.uid() is null then raise exception 'not authenticated'; end if;
+  if not public.is_member(p_company) then raise exception 'not a member of that company'; end if;
+  if coalesce(btrim(p_reason), '') = '' then
+    raise exception 'say why the discount is needed';
+  end if;
+
+  /* The floor, from the price book, per line. */
+  with asked as (
+    select r->>'lineId'                        as line_id,
+           nullif(r->>'itemId', '')::uuid      as item_id,
+           coalesce((r->>'qty')::numeric, 1)   as qty,
+           round((r->>'requestedPrice')::numeric, 2) as requested
+      from jsonb_array_elements(coalesce(p_lines, '[]'::jsonb)) as r
+  ),
+  priced as (
+    select a.line_id, a.item_id, a.qty, a.requested,
+           i.sku, i.product_name,
+           public.min_selling_price(
+             i.reseller_price,
+             public.min_margin_pct(i.company_id, l.oem, i.category, i.sku)) as min_price
+      from asked a
+      join public.price_list_items i on i.id = a.item_id
+      join public.price_lists l on l.id = i.price_list_id
+     where i.company_id = p_company and l.status = 'active'
+  )
+  select jsonb_agg(jsonb_build_object(
+           'lineId', line_id, 'itemId', item_id, 'sku', sku, 'productName', product_name,
+           'qty', qty, 'minPrice', min_price, 'requestedPrice', requested)
+         order by line_id)
+    into v_lines
+    from priced
+   where requested < min_price - 0.005;
+
+  if v_lines is null or jsonb_array_length(v_lines) = 0 then
+    raise exception 'none of those lines is below its minimum selling price';
+  end if;
+
+  insert into public.discount_approvals(
+    company_id, quote_id, quote_number, requested_by, reason, note, state, lines)
+  values (p_company, p_quote_id, nullif(btrim(coalesce(p_quote_number, '')), ''),
+          auth.uid(), btrim(p_reason), nullif(btrim(coalesce(p_note, '')), ''), 'pending', v_lines)
+  returning id into v_id;
+
+  insert into public.approval_audit_log(company_id, approval_id, quote_id, line_id, action, actor, old_price, new_price, detail)
+  select p_company, v_id, p_quote_id, r->>'lineId', 'requested', auth.uid(),
+         (r->>'minPrice')::numeric, (r->>'requestedPrice')::numeric,
+         jsonb_build_object('sku', r->>'sku', 'reason', btrim(p_reason))
+    from jsonb_array_elements(v_lines) as r;
+
+  select jsonb_array_length(v_lines) into v_count;
+  return v_id;
+end $$;
+
+/**
+ * An Admin decides.
+ *
+ * APPROVE AT A DIFFERENT PRICE is the same call with prices in p_lines: a
+ * counter-offer is a decision, not a rejection, and it is recorded as the
+ * price that was actually approved rather than the one that was asked for.
+ *
+ * THE DISTRIBUTOR DISCOUNT IS RECORDED WITH THE DECISION because it is
+ * what turns a thin approved margin into a real one, and six months later
+ * "why did we approve that" is answerable only if the number that made it
+ * acceptable is written down next to it.
+ */
+create or replace function public.decide_discount_approval(
+  p_approval uuid,
+  p_decision text,
+  p_lines jsonb,
+  p_distributor_pct numeric,
+  p_note text
+) returns void language plpgsql security definer set search_path = public as $$
+declare
+  v_company uuid;
+  v_quote text;
+  v_state text;
+  v_requested jsonb;
+  v_approved jsonb;
+begin
+  if auth.uid() is null then raise exception 'not authenticated'; end if;
+
+  select company_id, quote_id, state, lines
+    into v_company, v_quote, v_state, v_requested
+    from public.discount_approvals where id = p_approval;
+  if v_company is null then raise exception 'no such approval request'; end if;
+  if not public.is_admin_in(v_company) then
+    raise exception 'only an Admin can decide a discount';
+  end if;
+  if v_state <> 'pending' then
+    raise exception 'that request was already %', v_state;
+  end if;
+  if p_decision not in ('approved', 'rejected') then
+    raise exception 'a decision is approved or rejected';
+  end if;
+  if p_decision = 'rejected' and coalesce(btrim(coalesce(p_note, '')), '') = '' then
+    raise exception 'say why it is rejected, so the salesperson can go back to the customer with something';
+  end if;
+  if p_decision = 'approved' and exists (
+    select 1 from jsonb_array_elements(coalesce(p_lines, '[]'::jsonb)) as c
+     where coalesce((c->>'approvedPrice')::numeric, 0) <= 0
+  ) then
+    raise exception 'an approved price has to be a price';
+  end if;
+
+  /* The approved price per line: what the Admin countered with, else what
+     was asked for, EXACTLY AS GIVEN.
+   *
+   * An earlier version clamped this to the minimum selling price, which
+   * had it backwards. The approved price is the floor for that line from
+   * now on, so an Admin countering at ₹1,200 against a ₹1,150 minimum is
+   * granting less discount than was asked for, not more — and clamping it
+   * to ₹1,150 would have recorded an approval for a bigger discount than
+   * the Admin gave. Countering the other way, below what was asked, is
+   * allowed too: an Admin who says "I will do ₹1,000 to win it" means it.
+   * Both directions are in the audit log with the requested price beside
+   * them, which is the control; a silent clamp is not. */
+  if p_decision = 'approved' then
+    with asked as (
+      select r->>'lineId' as line_id,
+             (r->>'requestedPrice')::numeric as requested,
+             (r->>'minPrice')::numeric as min_price
+        from jsonb_array_elements(coalesce(v_requested, '[]'::jsonb)) as r
+    ),
+    countered as (
+      select c->>'lineId' as line_id, round((c->>'approvedPrice')::numeric, 2) as approved
+        from jsonb_array_elements(coalesce(p_lines, '[]'::jsonb)) as c
+    )
+    select jsonb_agg(jsonb_build_object(
+             'lineId', a.line_id,
+             'approvedPrice', coalesce(c.approved, a.requested))
+           order by a.line_id)
+      into v_approved
+      from asked a left join countered c on c.line_id = a.line_id;
+  else
+    v_approved := '[]'::jsonb;
+  end if;
+
+  update public.discount_approvals
+     set state = p_decision,
+         decided_by = auth.uid(),
+         decided_at = now(),
+         decision_note = nullif(btrim(coalesce(p_note, '')), ''),
+         distributor_discount_pct = p_distributor_pct,
+         approved_lines = coalesce(v_approved, '[]'::jsonb),
+         updated_at = now()
+   where id = p_approval;
+
+  insert into public.approval_audit_log(
+    company_id, approval_id, quote_id, line_id, action, actor,
+    old_price, new_price, distributor_discount_pct, detail)
+  select v_company, p_approval, v_quote, r->>'lineId',
+         case when p_decision = 'rejected' then 'rejected'
+              when (select (c->>'approvedPrice')::numeric
+                      from jsonb_array_elements(coalesce(v_approved, '[]'::jsonb)) c
+                     where c->>'lineId' = r->>'lineId')
+                   is distinct from (r->>'requestedPrice')::numeric
+              then 'countered'
+              else 'approved' end,
+         auth.uid(),
+         (r->>'minPrice')::numeric,
+         (select (c->>'approvedPrice')::numeric
+            from jsonb_array_elements(coalesce(v_approved, '[]'::jsonb)) c
+           where c->>'lineId' = r->>'lineId'),
+         p_distributor_pct,
+         jsonb_build_object('sku', r->>'sku', 'requested', (r->>'requestedPrice')::numeric,
+                            'note', nullif(btrim(coalesce(p_note, '')), ''))
+    from jsonb_array_elements(coalesce(v_requested, '[]'::jsonb)) as r;
+
+  /* The quotation unlocks from here: approved_at is what the trigger below
+     and the editor both read. */
+  if p_decision = 'approved' then
+    update public.quotes set approved_at = now(), updated_at = now() where id = v_quote;
+  end if;
+end $$;
+
+/** A salesperson takes their request back — they renegotiated, or the
+ *  customer went away. An Admin may too, to clear a stale queue. */
+create or replace function public.withdraw_discount_approval(p_approval uuid)
+returns void language plpgsql security definer set search_path = public as $$
+declare
+  v_company uuid;
+  v_by uuid;
+  v_quote text;
+begin
+  if auth.uid() is null then raise exception 'not authenticated'; end if;
+  select company_id, requested_by, quote_id into v_company, v_by, v_quote
+    from public.discount_approvals where id = p_approval and state = 'pending';
+  if v_company is null then raise exception 'no pending request to withdraw'; end if;
+  if v_by <> auth.uid() and not public.is_admin_in(v_company) then
+    raise exception 'that is not your request';
+  end if;
+
+  update public.discount_approvals
+     set state = 'withdrawn', updated_at = now(), decided_at = now()
+   where id = p_approval;
+
+  insert into public.approval_audit_log(company_id, approval_id, quote_id, action, actor)
+  values (v_company, p_approval, v_quote, 'withdrawn', auth.uid());
+end $$;
+
+/**
+ * One request with the cost picture, for the Admin deciding it.
+ *
+ * Reseller price, the buying price at whatever discount the Admin has
+ * negotiated, and the margin both ways. Admin and Manager only — a Manager
+ * may look at the queue and cannot decide it.
+ */
+create or replace function public.approval_lines(p_approval uuid, p_distributor_pct numeric)
+returns table (
+  line_id text,
+  sku text,
+  product_name text,
+  qty numeric,
+  min_price numeric,
+  requested_price numeric,
+  approved_price numeric,
+  reseller_price numeric,
+  buying_price numeric,
+  margin_at_requested numeric,
+  markup_at_requested numeric
+) language plpgsql stable security definer set search_path = public as $$
+declare
+  v_company uuid;
+begin
+  if auth.uid() is null then raise exception 'not authenticated'; end if;
+  select company_id into v_company from public.discount_approvals where id = p_approval;
+  if v_company is null then raise exception 'no such approval request'; end if;
+  if not public.is_privileged_in(v_company) then
+    raise exception 'the cost picture is for Admin and Manager only';
+  end if;
+
+  return query
+  with asked as (
+    select r->>'lineId' as line_id,
+           nullif(r->>'itemId', '')::uuid as item_id,
+           r->>'sku' as sku,
+           r->>'productName' as product_name,
+           (r->>'qty')::numeric as qty,
+           (r->>'minPrice')::numeric as min_price,
+           (r->>'requestedPrice')::numeric as requested
+      from public.discount_approvals a,
+           jsonb_array_elements(coalesce(a.lines, '[]'::jsonb)) as r
+     where a.id = p_approval
+  ),
+  decided as (
+    select c->>'lineId' as line_id, (c->>'approvedPrice')::numeric as approved
+      from public.discount_approvals a,
+           jsonb_array_elements(coalesce(a.approved_lines, '[]'::jsonb)) as c
+     where a.id = p_approval
+  )
+  select a.line_id, a.sku, a.product_name, a.qty, a.min_price, a.requested, d.approved,
+         i.reseller_price,
+         round(i.reseller_price * (1 - coalesce(p_distributor_pct, 0) / 100.0), 2) as buying_price,
+         /* Of the sale, which is what every other margin figure in the CRM
+            means, and over the buying price, which is what the minimum
+            margin means. Both, because they are different numbers and both
+            get called "margin". */
+         case when a.requested > 0 then round(
+           (a.requested - round(i.reseller_price * (1 - coalesce(p_distributor_pct, 0) / 100.0), 2))
+           / a.requested * 100, 2) end,
+         case when i.reseller_price > 0 then round(
+           (a.requested - round(i.reseller_price * (1 - coalesce(p_distributor_pct, 0) / 100.0), 2))
+           / round(i.reseller_price * (1 - coalesce(p_distributor_pct, 0) / 100.0), 2) * 100, 2) end
+    from asked a
+    left join decided d on d.line_id = a.line_id
+    left join public.price_list_items i on i.id = a.item_id
+   order by a.line_id;
+end $$;
+
+grant execute on function public.request_discount_approval(uuid, text, text, text, text, jsonb) to authenticated;
+grant execute on function public.decide_discount_approval(uuid, text, jsonb, numeric, text) to authenticated;
+grant execute on function public.withdraw_discount_approval(uuid) to authenticated;
+grant execute on function public.approval_lines(uuid, numeric) to authenticated;
+
+revoke execute on function public.request_discount_approval(uuid, text, text, text, text, jsonb) from anon;
+revoke execute on function public.decide_discount_approval(uuid, text, jsonb, numeric, text) from anon;
+revoke execute on function public.withdraw_discount_approval(uuid) from anon;
+revoke execute on function public.approval_lines(uuid, numeric) from anon;
+
+/* ── the lock, in the database ──────────────────────────────────────────
+   "The quote is locked from sending" is a sentence about authority, and a
+   disabled button is not one. The editor greys the button because that is
+   kind; this refuses the write because that is the rule. */
+
+/**
+ * A quotation carrying a line below its floor cannot become a sent
+ * quotation without an approval that covers it.
+ *
+ * ONLY ON THE WAY OUT. Draft is where a salesperson works out what to
+ * charge, and a draft at any price is fine — this fires on the move to
+ * Sent, Accepted or Paid. Editing a sent quotation's other fields does not
+ * re-check, because the status is not changing.
+ *
+ * ONLY FOR LINES FROM THE PRICE BOOK. A line typed by hand, a service, or
+ * anything quoted before the price book existed has no floor to be under.
+ * Treating a missing minimum as zero would lock every old quotation for an
+ * approval nobody could grant.
+ *
+ * A PRODUCT THAT HAS LEFT THE ACTIVE LIST HAS NO FLOOR EITHER, and that is
+ * deliberate rather than an oversight: the floor is a statement about this
+ * month's list, and a SKU the distributor has withdrawn is not on it. What
+ * catches a quotation priced off an old list is its expiry, not this.
+ *
+ * service_role passes, as it does in prevent_self_role_escalation: the
+ * server's own jobs are not the thing being guarded against, and a
+ * migration that touched a quotation would otherwise fail the deploy.
+ */
+create or replace function public.enforce_discount_approval()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare
+  v_old text := coalesce(OLD.data->>'status', '');
+  v_new text := coalesce(NEW.data->>'status', '');
+  v_bad record;
+begin
+  if v_new = v_old then return NEW; end if;
+  if v_new not in ('Sent', 'Accepted', 'Paid') then return NEW; end if;
+  if auth.role() = 'service_role' then return NEW; end if;
+  if jsonb_typeof(NEW.data->'items') <> 'array' then return NEW; end if;
+
+  select line.id as line_id, line.sku, line.rate, line.min_price
+    into v_bad
+    from (
+      select it->>'id' as id,
+             coalesce(it->>'sku', '') as sku,
+             coalesce((it->>'rate')::numeric, 0) as rate,
+             public.min_selling_price(
+               i.reseller_price,
+               public.min_margin_pct(i.company_id, l.oem, i.category, i.sku)) as min_price
+        from jsonb_array_elements(NEW.data->'items') as it
+        join public.price_list_items i on i.id = nullif(it->>'priceBookItemId', '')::uuid
+        join public.price_lists l on l.id = i.price_list_id
+       where l.status = 'active'
+         and i.company_id = NEW.company_id
+    ) as line
+   where line.rate < line.min_price - 0.005
+     /* ...and no approval that covers this line at this price. The
+        approved price is a floor of its own: quoting at or above what was
+        approved is allowed, below it is a fresh ask. */
+     and not exists (
+       select 1
+         from public.discount_approvals a,
+              jsonb_array_elements(coalesce(a.approved_lines, '[]'::jsonb)) as c
+        where a.quote_id = NEW.id
+          and a.state = 'approved'
+          and c->>'lineId' = line.id
+          and line.rate >= (c->>'approvedPrice')::numeric - 0.005
+     )
+   limit 1;
+
+  if found then
+    raise exception
+      'Line % (%) is priced at % against a minimum of %. An Admin has to approve that discount before this quotation can be sent.',
+      v_bad.line_id, v_bad.sku, v_bad.rate, v_bad.min_price
+      using errcode = 'check_violation';
+  end if;
+
+  return NEW;
+end $$;
+
+drop trigger if exists trg_enforce_discount_approval on public.quotes;
+create trigger trg_enforce_discount_approval
+  before update on public.quotes
+  for each row execute function public.enforce_discount_approval();
