@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { sortDocuments } from "../../domain/documents/order";
 import type { Intent } from "../../app/intent";
 import { isOffline } from "../../data/offline";
 import { Presence } from "../../components/Presence";
@@ -106,6 +107,7 @@ export function QuotationsScreen({
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("all");
   const [owner, setOwner] = useState("all");
+  const [customer, setCustomer] = useState("all");
   const [confirmDelete, setConfirmDelete] = useState<SalesDocument | null>(null);
   const [receiving, setReceiving] = useState<SalesDocument | null>(null);
   const saving = useRef(false);
@@ -166,13 +168,23 @@ export function QuotationsScreen({
 
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return documents.filter((d) => {
+    const matching = documents.filter((d) => {
       if (status !== "all" && effectiveStatus(d) !== status) return false;
       if (owner !== "all" && d.ownerId !== owner) return false;
+      /* BY CUSTOMER ID, not by the name printed on the document. The name
+         is a copy taken when the document was raised, so a customer since
+         renamed has old documents under the old name — picking them by
+         name would quietly leave those out, which is exactly the history
+         somebody opening a customer's file is looking for. */
+      if (customer !== "all" && (d.customerId || "") !== customer) return false;
       if (!q) return true;
       return [d.number, d.billName, d.vendorName, d.referenceNo, d.subject].some((v) => (v ?? "").toLowerCase().includes(q));
     });
-  }, [documents, query, status, owner]);
+    /* SORTED, which it never was: the list came out in whatever order the
+       store returned, which is neither the order they were raised in nor
+       the order their numbers run in. See domain/documents/order.ts. */
+    return sortDocuments(matching);
+  }, [documents, query, status, owner, customer]);
 
   /* Per currency, never one figure. Adding a dollar proforma to a rupee one
      produces a number that is wrong by the whole of the dollar one, and
@@ -186,6 +198,25 @@ export function QuotationsScreen({
     ),
     [shown, sellerState, settings],
   );
+
+  /* THE CUSTOMERS WHO HAVE DOCUMENTS ON THIS SCREEN, not the whole address
+     book. A quotations list offering six hundred customers, of whom
+     forty have ever been quoted, is a list you scroll rather than use.
+     Named from the customer record where it still exists, and from the
+     document otherwise, so a deleted customer's quotations stay findable.
+     Counted, because "Acme (7)" tells you whether it is worth opening. */
+  const customersWithDocs = useMemo(() => {
+    const names = new Map(customers.map((c) => [c.id, c.company || c.contact || ""]));
+    const seen = new Map<string, { id: string; name: string; count: number }>();
+    for (const d of documents) {
+      const id = d.customerId || "";
+      if (!id) continue;
+      const row = seen.get(id);
+      if (row) row.count += 1;
+      else seen.set(id, { id, name: names.get(id) || d.billName || "Unnamed customer", count: 1 });
+    }
+    return [...seen.values()].sort((a, b) => a.name.localeCompare(b.name));
+  }, [documents, customers]);
 
   /* Owners by NAME. The documents only carry the owner's id; the team list
      turns it into a person. Anyone no longer on the team keeps a readable
@@ -451,11 +482,12 @@ export function QuotationsScreen({
             the tabs because it sets what the tabs are filtering within. */}
         <SavedViews
           screen={docType}
-          current={{ status, owner, query }}
+          current={{ status, owner, query, customer }}
           onApply={(f) => {
             setStatus(f.status ?? "all");
             setOwner(f.owner ?? "all");
             setQuery(f.query ?? "");
+            setCustomer(f.customer ?? "all");
           }}
         />
         <div style={{ padding: "0 var(--gap-wide)" }}>
@@ -477,6 +509,12 @@ export function QuotationsScreen({
 
         <div className="row wrap" style={{ padding: "var(--gap) var(--gap-wide)" }}>
           <Input style={{ maxWidth: 280 }} placeholder="Search number, customer, reference…" value={query} onChange={(e) => setQuery(e.target.value)} />
+          <Select style={{ maxWidth: 220 }} value={customer} onChange={(e) => setCustomer(e.target.value)}>
+            <option value="all">Every customer</option>
+            {customersWithDocs.map((c) => (
+              <option key={c.id} value={c.id}>{c.name} ({c.count})</option>
+            ))}
+          </Select>
           <Select style={{ maxWidth: 170 }} value={owner} onChange={(e) => setOwner(e.target.value)}>
             <option value="all">Any owner</option>
             {owners.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
