@@ -20,10 +20,18 @@ export interface WhatsAppDialogProps {
   api: IntegrationsApi;
   defaultPhone?: string;
   defaultMessage?: string;
+  /** Called once the provider has accepted the message — i.e. it really
+   *  went. The document screen uses it to record the send, so a quotation
+   *  sent on WhatsApp no longer sits at "Draft" waiting to be set by hand. */
+  onSent?: () => void;
+  /** Called when the message was handed to WhatsApp itself rather than sent
+   *  from here. Nothing is known about whether it went, so the caller asks
+   *  rather than records. Absent means there is nothing to ask about. */
+  onHandedOff?: () => void;
   onClose: () => void;
 }
 
-export function WhatsAppDialog({ open, api, defaultPhone = "", defaultMessage = "", onClose }: WhatsAppDialogProps) {
+export function WhatsAppDialog({ open, api, defaultPhone = "", defaultMessage = "", onSent, onHandedOff, onClose }: WhatsAppDialogProps) {
   const toast = useToast();
   const [phone, setPhone] = useState(defaultPhone);
   const [message, setMessage] = useState(defaultMessage);
@@ -37,6 +45,9 @@ export function WhatsAppDialog({ open, api, defaultPhone = "", defaultMessage = 
     try {
       await api.sendWhatsApp(phone, message);
       toast("WhatsApp message sent");
+      /* After the send, never instead of it: a document is only recorded as
+         sent once the provider has taken the message. */
+      onSent?.();
       onClose();
     } catch (err) {
       setError(err instanceof IntegrationError ? err.message : "Couldn't send that message.");
@@ -47,6 +58,10 @@ export function WhatsAppDialog({ open, api, defaultPhone = "", defaultMessage = 
   const openManually = () => {
     window.open(whatsappLink(phone, message), "_blank", "noopener,noreferrer");
     onClose();
+    /* WhatsApp now has the words; the person has still to press send in it.
+       The caller decides what to do with that — it asks, rather than
+       recording a send nobody has made yet. */
+    onHandedOff?.();
   };
 
   return (

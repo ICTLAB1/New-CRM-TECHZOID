@@ -23,8 +23,9 @@ import {
   bannerAllowed, bannerUrlFor, greetingFor, type FestiveGreeting,
 } from "../../domain/greetings/festive";
 import { TONE_LABELS, autoFollowUpsOn, followUpBody, followUpSubject, planFollowUps, stepsFor, stopReason, type FollowUpFacts, type FollowUpTone } from "../../domain/followups/followups";
-import { armFollowUps, followUpsAvailable, type ArmedStep } from "../../data/followups";
-import { mayWhatsApp, splitNumber, templateFor, TEMPLATE_SETTING } from "../../domain/integrations/interakt";
+import { armFollowUps, followUpsAvailable } from "../../data/followups";
+import { buildArmedSteps, type Armable } from "./armedSteps";
+import { mayWhatsApp, splitNumber, TEMPLATE_SETTING } from "../../domain/integrations/interakt";
 import { TODAY } from "../../domain/dates";
 
 /* NO DEFAULT CC ADDRESS HERE. A real address baked into a template is one
@@ -300,9 +301,60 @@ export function DocumentActions({
       }
     : null;
 
+  /* ── recording that the customer has it ───────────────────────────── */
+
+  /* WHY THIS EXISTS. Until now the ONLY route that recorded a send was the
+     email dialog. A salesperson who downloaded the PDF and sent it from
+     Outlook, or sent it on WhatsApp — which is most of them — left the
+     quotation reading "Draft" and the deal sitting in Lead, and then set
+     both by hand afterwards. That hand-work is the thing being removed.
+
+     THREE ROUTES, TWO POSTURES. Where the CRM itself delivered the message
+     (email, or WhatsApp through the connected provider) it records the send
+     without asking anybody, because it knows. Where the message left by
+     somebody's own hand (the downloaded PDF, or wa.me opened in a browser)
+     it asks once, with one button — because marking a quotation Sent also
+     ARMS THE CHASERS, and chasing a customer about a document nobody
+     actually sent them is a worse failure than a status left on Draft. */
+  const [confirmSent, setConfirmSent] = useState<"pdf" | "whatsapp" | null>(null);
+
+  /* Status first, then the sequence. The status is what the rest of the CRM
+     reads — the pipeline board moves off it — so it is never left waiting on
+     a follow-up write that might fail. */
+  const recordSent = async () => {
+    onSent?.();
+    if (!armable) return;
+    const channels = { email: !!toAddress, whatsapp: !!armable.whatsapp.to };
+    if (!channels.email && !channels.whatsapp) return;
+    try {
+      const steps = buildArmedSteps({
+        armable, sender: emailSender, company: emailBrand, quotation: emailQuotation, channels,
+      });
+      if (!steps.length) return;
+      await armFollowUps({
+        ownerId: armable.ownerId,
+        docType: armable.docType,
+        docId: armable.docId,
+        docNumber: armable.docNumber,
+        customerId: armable.customerId,
+        customerName: armable.customerName,
+        to: toAddress || "",
+        cc: autoCc,
+        replyTo: emailSender.email || undefined,
+        steps,
+      });
+      toast(`${steps.length} follow-up${steps.length === 1 ? "" : "s"} scheduled.`, "good");
+    } catch {
+      toast("Marked as sent — but the follow-ups could not be scheduled. Arm them from the Send dialog.", "warn");
+    }
+  };
+
   const download = () => {
     try {
       toast("Saved " + downloadPdf(renderOpts), "good");
+      /* Only on a draft. Downloading a copy of something already sent is
+         filing, not sending, and must not ask. */
+      if (doc.status === "Draft") setConfirmSent("pdf");
     } catch {
       toast("Couldn't build that PDF. Check the document for anything unusual in the item descriptions.", "bad");
     }
@@ -381,12 +433,44 @@ export function DocumentActions({
       <WhatsAppDialog
         open={whatsAppOpen}
         api={api}
+        /* A message the provider accepted is a message the customer has. */
+        onSent={() => void recordSent()}
+        /* wa.me only OPENS WhatsApp with the words written; the person still
+           has to press send there, so this asks rather than assumes. */
+        onHandedOff={doc.status === "Draft" ? () => setConfirmSent("whatsapp") : undefined}
         defaultPhone={toPhone}
         /* WhatsApp carries no attachment: the PDF has to be added by hand in
            WhatsApp itself. Saying so here beats a customer being promised an
            attachment that never arrives. */
         defaultMessage={message + "\n\n(Attach the PDF before sending.)"}
         onClose={() => setWhatsAppOpen(false)}
+      />
+
+      <Confirm
+        open={!!confirmSent}
+        title={`Mark this ${label(docType).toLowerCase()} as sent?`}
+        confirmLabel="Yes, the customer has it"
+        body={
+          <div className="stack">
+            <p>
+              {confirmSent === "whatsapp"
+                ? "WhatsApp is open with the message already written. Once you have pressed send there, say so here and the CRM will do the rest."
+                : "The PDF is saved on your computer. If you are sending it from your own mail, say so here and the CRM will do the rest."}
+            </p>
+            <div className="notice notice-flat">
+              <span>
+                It moves to <span className="strong">Sent</span>, and the deal moves to <span className="strong">Quotation Sent</span> on the pipeline board
+                {armable && plannedFollowUps.length
+                  ? `, and ${plannedFollowUps.length} automatic follow-up${plannedFollowUps.length === 1 ? "" : "s"} ${plannedFollowUps.length === 1 ? "is" : "are"} scheduled for ${plannedFollowUps.map((p) => fmtDate(p.dueOn)).join(", ")}`
+                  : ""}
+                .
+              </span>
+            </div>
+            <p className="muted">Not yet? Leave it — nothing is recorded and you can come back to this at any time.</p>
+          </div>
+        }
+        onConfirm={() => { setConfirmSent(null); void recordSent(); }}
+        onCancel={() => setConfirmSent(null)}
       />
     </>
   );
@@ -419,21 +503,7 @@ interface EmailDialogProps {
   /** Present when this send can also arm an automatic sequence. Null when
    *  the workspace has it switched off, when there is nowhere to store one,
    *  or when the quotation's validity leaves no room for a chaser. */
-  armable?: {
-    ownerId: string;
-    docType: "quotation" | "proforma";
-    docId: string;
-    docNumber: string;
-    customerId?: string;
-    customerName: string;
-    facts: FollowUpFacts;
-    plan: Array<{ step: number; tone: FollowUpTone; dueOn: string }>;
-    /** Where a WhatsApp follow-up would go, or why it cannot. */
-    whatsapp: { to: string; why: string };
-    /** The names these templates were approved under in Meta. */
-    templateNames: Partial<Record<FollowUpTone, string>>;
-    company: string;
-  } | null;
+  armable?: Armable | null;
   /** Why no sequence can be armed, when none can. Shown instead of the tick
    *  box, because a control that silently is not there reads as a feature
    *  that was never built. */
@@ -542,58 +612,7 @@ function EmailDialog({
          be stored is worth a warning, not an error on a message that went. */
       if (armable && arm && (channels.email || channels.whatsapp)) {
         try {
-          const steps: ArmedStep[] = armable.plan.flatMap((p) => {
-            const rows: ArmedStep[] = [];
-            const base = { step: p.step, steps: armable.plan.length, tone: p.tone, dueOn: p.dueOn };
-
-            if (channels.email) {
-              /* NO GREETING ON THESE, deliberately. They are rendered now
-                 and sent weeks later, by which time the festival is over —
-                 a chaser arriving in December wishing somebody a happy
-                 Diwali is the exact failure the dated window exists to
-                 prevent. The one typed in the Follow up dialog goes out
-                 today and does carry it. */
-              rows.push({
-                ...base,
-                channel: "email",
-                subject: followUpSubject(p.tone, armable.facts),
-                message: buildEmailText({
-                  body: followUpBody(p.tone, armable.facts),
-                  sender, company, quotation, attachmentName: null,
-                }),
-                /* Rendered NOW, from the same builder the preview uses, and
-                   stored. What goes out weeks later is this exact markup —
-                   not something re-templated by code nobody watched. */
-                html: buildEmailHtml({
-                  body: followUpBody(p.tone, armable.facts),
-                  sender, company, quotation, attachmentName: null,
-                }),
-              });
-            }
-
-            if (channels.whatsapp && armable.whatsapp.to) {
-              /* The template and its placeholder values are decided here and
-                 stored, for the same reason the email markup is: what was
-                 queued is what goes out. The WORDS are Meta's, in the
-                 approved template — nothing here can change them. */
-              const t = templateFor(p.tone, {
-                contact: armable.facts.contact,
-                company: armable.company,
-                number: armable.facts.number,
-                date: armable.facts.date,
-                validUntil: armable.facts.validUntil,
-              }, armable.templateNames);
-              rows.push({
-                ...base,
-                channel: "whatsapp",
-                toPhone: armable.whatsapp.to,
-                templateName: t.templateName,
-                templateValues: [...t.bodyValues],
-              });
-            }
-
-            return rows;
-          });
+          const steps = buildArmedSteps({ armable, sender, company, quotation, channels });
           await armFollowUps({
             ownerId: armable.ownerId,
             docType: armable.docType,

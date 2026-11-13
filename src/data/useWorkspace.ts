@@ -7,6 +7,7 @@ import { store, TABLE_OF, type Profile, type Store, type WorkspaceData } from ".
 import { detectEvents, summarize, type CrmEvent } from "../domain/notifications/events";
 import { getActiveCompanyId } from "./store";
 import { idbGet, idbSet, isNetworkError, isOffline, publishSync } from "./offline";
+import { saveRefusal } from "./refusal";
 
 /** What is kept on the device between sessions. */
 interface Snapshot {
@@ -325,7 +326,9 @@ export function useWorkspace(enabled: boolean, meId = "", db: Store = store()): 
           return;
         }
         console.error("save failed:", err);
-        setSaveError("That change couldn't be saved. Your workspace has been reloaded — please try again.");
+        /* A rule the database states in words reaches the person who hit
+           it; anything else gets the plain sentence. See data/refusal.ts. */
+        setSaveError(saveRefusal(err));
         void reload();
       })
       .finally(() => {
