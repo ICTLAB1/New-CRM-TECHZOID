@@ -48,6 +48,30 @@ export const PADDING_MM: Record<PadClass, { top: number; bottom: number; left: n
 /** Body font size when a column does not override it. */
 export const BASE_FONT_PT = 6.6;
 
+/**
+ * The money columns, which are set apart from the rest of the row.
+ *
+ * BOLD, AND IN THE BODY FACE RATHER THAN COURIER, BECAUSE OF PAPER. These
+ * figures were 5.9pt regular Courier — a typewriter face whose strokes are
+ * thin by design — and a laser printer rendered them grey. The numbers a
+ * customer checks first came out the faintest thing on the page, under a
+ * product name set in bold.
+ *
+ * COURIER WAS THERE TO LINE THE DIGITS UP, and nothing is lost by dropping
+ * it: the cells are right-aligned and every amount carries two decimals, so
+ * the decimal points land in the same place whatever the face. Helvetica's
+ * digits are all one width, so the figures above and below each other line
+ * up as well.
+ *
+ * MEASURED, NOT CHOSEN. At 7.4pt bold the longest figure these columns can
+ * meet — "12,34,56,789.00", twelve crore and fifteen characters — measures
+ * 18.7mm against the 19.0mm a 21mm column leaves inside its padding, and
+ * 20.9mm against the 22.0mm of the taxable value column. The face it
+ * replaced held fourteen characters at 5.9pt, so this is both larger and
+ * roomier. Re-measure in a rendered PDF before changing any of it.
+ */
+export const MONEY_FONT_PT = 7.4;
+
 export interface ItemColumn {
   key: ColumnKey;
   /** Header text. May contain a newline — the unit sits on its own line. */
@@ -101,19 +125,27 @@ const SPECS: ColumnSpec[] = [
     get: (r) => [r.desc || "—", (r.subDesc ?? "").trim()].filter(Boolean).join("\n") },
   /* Rendered as a logo where the brand has an approved asset configured, and
      as its name where it does not. Never a fabricated badge. */
-  { key: "brand", head: "BRAND", w: 17, align: "center", mono: false, bold: false, fontSize: 6.3, pad: "tight", muted: false, always: true,
+  { key: "brand", head: "BRAND", w: 16, align: "center", mono: false, bold: false, fontSize: 6.3, pad: "tight", muted: false, always: true,
     get: (r) => r.brand || "" },
-  { key: "sku", head: "PART / SKU", w: 22, align: "center", mono: true, bold: false, fontSize: 5.4, pad: "tight", muted: false, always: true,
+  { key: "sku", head: "PART / SKU", w: 20, align: "center", mono: true, bold: false, fontSize: 5.4, pad: "tight", muted: false, always: true,
     get: (r) => r.sku || "" },
   { key: "qty", head: "QTY", w: 12, align: "center", mono: false, bold: false, fontSize: BASE_FONT_PT, pad: "tight", muted: false, always: true,
     get: (r) => String(r.qty ?? "") },
-  { key: "unit", head: "UNIT", w: 12, align: "center", mono: false, bold: false, fontSize: 6.2, pad: "tight", muted: false, always: true,
+  { key: "unit", head: "UNIT", w: 11, align: "center", mono: false, bold: false, fontSize: 6.2, pad: "tight", muted: false, always: true,
     get: (r) => r.unit || "" },
-  { key: "rate", head: "", w: 20, align: "right", mono: true, bold: false, fontSize: 5.9, pad: "money", muted: false, always: true,
+  /* THE MONEY COLUMNS ARE BOLD AND A FULL SIZE LARGER than the rest of
+     the row, and that is about PAPER rather than screens. Courier at 5.9pt
+     has strokes thin enough that a laser printer renders them grey — the
+     figures a customer checks first came out the faintest thing on the
+     page, under a product name set in bold. The width for it comes from
+     brand, part number and unit, which were each measured with room to
+     spare; re-measured in a rendered PDF, not adjusted until a test
+     passed. */
+  { key: "rate", head: "", w: 21, align: "right", mono: false, bold: true, fontSize: MONEY_FONT_PT, pad: "money", muted: false, always: true,
     get: () => "" },
-  { key: "disc", head: "", w: 20, align: "right", mono: true, bold: false, fontSize: 5.9, pad: "money", muted: false, always: true,
+  { key: "disc", head: "", w: 21, align: "right", mono: false, bold: true, fontSize: MONEY_FONT_PT, pad: "money", muted: false, always: true,
     get: () => "" },
-  { key: "taxable", head: "", w: 22, align: "right", mono: true, bold: true, fontSize: 5.9, pad: "money", muted: false, always: true,
+  { key: "taxable", head: "", w: 24, align: "right", mono: false, bold: true, fontSize: MONEY_FONT_PT, pad: "money", muted: false, always: true,
     get: () => "" },
 ];
 

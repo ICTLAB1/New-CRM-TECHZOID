@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { buildItemColumns, CONTENT_WIDTH_MM, MEASURED_TABLE_WIDTH_MM, naturalWidth, splitDescription } from "./columns";
+import {
+  BASE_FONT_PT, buildItemColumns, CONTENT_WIDTH_MM, MEASURED_TABLE_WIDTH_MM, naturalWidth, splitDescription,
+} from "./columns";
 import { computeDocument } from "../tax/compute";
 import type { ComputedRow } from "../tax/types";
 
@@ -44,13 +46,15 @@ describe("measured metrics (golden)", () => {
   const GOLDEN: Record<string, { w: number; fontSize: number; pad: string; mono: boolean }> = {
     num:     { w: 11, fontSize: 6.6, pad: "default", mono: false },
     desc:    { w: 48, fontSize: 6.6, pad: "default", mono: false },
-    brand:   { w: 17, fontSize: 6.3, pad: "tight",   mono: false },
-    sku:     { w: 22, fontSize: 5.4, pad: "tight",   mono: true },
+    brand:   { w: 16, fontSize: 6.3, pad: "tight",   mono: false },
+    sku:     { w: 20, fontSize: 5.4, pad: "tight",   mono: true },
     qty:     { w: 12, fontSize: 6.6, pad: "tight",   mono: false },
-    unit:    { w: 12, fontSize: 6.2, pad: "tight",   mono: false },
-    rate:    { w: 20, fontSize: 5.9, pad: "money",   mono: true },
-    disc:    { w: 20, fontSize: 5.9, pad: "money",   mono: true },
-    taxable: { w: 22, fontSize: 5.9, pad: "money",   mono: true },
+    unit:    { w: 11, fontSize: 6.2, pad: "tight",   mono: false },
+    /* The figures a customer checks first: bold, in the body face, and the
+       largest thing in the row. See MONEY_FONT_PT for the measurement. */
+    rate:    { w: 21, fontSize: 7.4, pad: "money",   mono: false },
+    disc:    { w: 21, fontSize: 7.4, pad: "money",   mono: false },
+    taxable: { w: 24, fontSize: 7.4, pad: "money",   mono: false },
   };
 
   it("matches the measured values for every column", () => {
@@ -65,6 +69,33 @@ describe("measured metrics (golden)", () => {
   it("gives money columns money padding, never default", () => {
     for (const key of ["rate", "disc", "taxable"] as const) {
       expect(natural().find((c) => c.key === key)!.pad, key).toBe("money");
+    }
+  });
+
+  it("sets every money column bold, and larger than the row around it", () => {
+    /* PAPER, not screens. These were 5.9pt regular Courier — a typewriter
+       face with strokes thin enough that a laser printer renders them grey,
+       under a product name set in bold. */
+    for (const key of ["rate", "disc", "taxable"] as const) {
+      const col = natural().find((c) => c.key === key)!;
+      expect(col.bold, key).toBe(true);
+      expect(col.fontSize, key).toBeGreaterThan(BASE_FONT_PT);
+    }
+  });
+
+  it("leaves room for twelve crore on a line, which is what the size was measured against", () => {
+    /* Helvetica bold digits are 0.556em and its comma and full stop 0.278,
+       so "12,34,56,789.00" is 11 x 0.556 + 4 x 0.278 = 7.23em. At 7.4pt
+       that is 18.9mm, inside the 19.0mm a 21mm column leaves. A column
+       narrowed or a size raised past this wraps a figure mid-number —
+       re-measure in a rendered PDF rather than trusting this sum. */
+    const em = (text: string) =>
+      [...text].reduce((w, ch) => w + (/[0-9]/.test(ch) ? 0.556 : 0.278), 0);
+    const mm = (pt: number) => pt * 0.352778;
+    for (const [key, widest] of [["rate", "12,34,56,789.00"], ["disc", "12,34,56,789.00"], ["taxable", "1,23,45,67,890.12"]] as const) {
+      const col = natural().find((c) => c.key === key)!;
+      const inside = col.w - 2;
+      expect(mm(em(widest) * col.fontSize), key).toBeLessThan(inside);
     }
   });
 });

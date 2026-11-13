@@ -81,7 +81,10 @@
 .doc-items tbody tr:nth-child(odd) td { background: #FAFBFC; }
 .doc-items .a-left { text-align: left; }
 .doc-items .a-center { text-align: center; }
-.doc-items .a-right { text-align: right; }
+/* Money cells carry no mono class any more — see MONEY_FONT_PT in
+   domain/documents/columns.ts. Tabular figures keep the digits in a column
+   without it, which is all Courier was there for. */
+.doc-items .a-right { text-align: right; font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1; }
 .doc-items .mono { font-family: var(--mono); }
 .doc-items .bold { font-weight: 700; }
 .doc-items .muted { color: #6B6B68; }

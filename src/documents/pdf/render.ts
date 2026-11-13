@@ -550,7 +550,12 @@ export function renderDocumentPdf(opts: RenderOptions): jsPDF {
       const tone = bold ? INK : MUTED;
       pdf.setFont("helvetica", bold ? "bold" : "normal").setFontSize(7.4).setTextColor(...tone);
       pdf.text(label, sumX + 3, sy + 3.9);
-      pdf.setFont("courier", bold ? "bold" : "normal").setFontSize(7.4).setTextColor(...INK);
+      /* EVERY FIGURE IN THIS BLOCK IS BOLD, including the ones whose label
+         is not. The label is a word somebody skims; the figure is the thing
+         they check against their own sheet, and regular Courier at this
+         size prints grey. Only the label's weight still says which row is
+         the important one. */
+      pdf.setFont("helvetica", "bold").setFontSize(7.4).setTextColor(...INK);
       pdf.text(value, sumX + sumW - 3, sy + 3.9, { align: "right" });
       sy += rowH;
       rule(sy, sumX, sumX + sumW);
@@ -564,7 +569,7 @@ export function renderDocumentPdf(opts: RenderOptions): jsPDF {
     pdf.rect(sumX, sy, sumW, 9, "F");
     pdf.setFont("helvetica", "bold").setFontSize(8.4).setTextColor(255, 255, 255);
     pdf.text(m.money.grandLabel.toUpperCase(), sumX + 3, sy + 5.9);
-    pdf.setFont("courier", "bold").setFontSize(9);
+    pdf.setFont("helvetica", "bold").setFontSize(9);
     pdf.text(m.money.grandValue, sumX + sumW - 3, sy + 5.9, { align: "right" });
     sy += 9;
 

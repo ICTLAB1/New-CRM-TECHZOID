@@ -88,6 +88,16 @@ function render(name: string, overrides: Record<string, unknown> = {}, docType: 
   console.log(`tmp/${name}.pdf — ${totals.rows.length} rows, ${model.money.grandValue}, ${pdf.getNumberOfPages()} page(s)`);
 }
 
+/* THE WIDEST FIGURES ANYBODY WILL EVER SEE. A rack of servers at a crore
+   each, against a discount and a taxable value in the same row: the case
+   that decides whether the money columns are wide enough for the size they
+   are set in. Nothing here is a realistic quotation; it is a ruler. */
+const BIG = [
+  { desc: "Data centre refresh — 40 node cluster", brand: "Dell", sku: "PER760-2X6430", qty: 9, unit: "Nos.", rate: 12345678.9, disc: 12.5, gst: 18, id: "b1" },
+  { desc: "Enterprise agreement, three years", brand: "Microsoft", sku: "CFQ7TTC0LH1Y", qty: 1, unit: "Project", rate: 98765432.1, disc: 0, gst: 18, id: "b2" },
+];
+render("big-numbers", { items: BIG });
+
 for (const n of [1, 5, 10, 20, 50]) render(`items-${n}`, { items: items(n) });
 render("interstate-igst", { billState: "Maharashtra" });
 render("zero-tax", { taxType: "none" });
