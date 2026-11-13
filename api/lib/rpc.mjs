@@ -100,6 +100,22 @@ export const CALLABLE = {
      cost, for every role. */
   price_book_minimums: [{ args: ["p_company", "p_item_ids"], returns: "rows" }],
 
+  /* Quotations still priced from a month that has ended, so they can be
+     repriced before they are sent again. Members: it names documents and
+     months and carries no cost. */
+  quotes_needing_reprice: [{ args: ["p_company", "p_today"], returns: "rows" }],
+
+  /* The three Admin reports. Each raises for anybody but Admin and
+     Manager: three of them state a margin, which is a statement about the
+     cost, and the fourth counts a salesperson's approvals, which is a
+     statement about them. */
+  report_margin_by_oem: [{ args: ["p_company", "p_from", "p_to", "p_distributor_pct"], returns: "rows" }],
+  report_quotes_by_seller: [{ args: ["p_company", "p_from", "p_to"], returns: "rows" }],
+  report_thinnest_deals: [{
+    args: ["p_company", "p_from", "p_to", "p_distributor_pct", "p_limit"],
+    returns: "rows",
+  }],
+
   /* The salesperson takes their request back, or an Admin clears a stale
      one. */
   withdraw_discount_approval: [{ args: ["p_approval"], returns: "scalar" }],

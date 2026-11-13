@@ -172,8 +172,13 @@ function DecideDialog({
   onDecided: () => void;
 }) {
   const toast = useToast();
+  /* ZERO, NOT BLANK WITH A "3.5" PLACEHOLDER. A grey 3.5 sitting in an
+     empty right-aligned box reads as a value, and the figures beside it
+     were being worked out at 0% — so "We pay" showed the reseller price
+     while the screen appeared to say a discount had been applied. The
+     number shown is now always the number used. */
   const [pct, setPct] = useState<string>(
-    approval.distributorDiscountPct === null ? "" : String(approval.distributorDiscountPct),
+    approval.distributorDiscountPct === null ? "0" : String(approval.distributorDiscountPct),
   );
   const [lines, setLines] = useState<ApprovalLine[]>([]);
   const [counters, setCounters] = useState<Record<string, string>>({});
@@ -259,7 +264,7 @@ function DecideDialog({
           label="Distributor discount obtained for this deal (%)"
           hint="Usually 0 to 3.5, sometimes more. Every margin below is worked out at this figure, and it is recorded with the decision."
         >
-          <Input numeric value={pct} onChange={(e) => setPct(e.target.value)} placeholder="3.5" />
+          <Input numeric value={pct} onChange={(e) => setPct(e.target.value)} />
         </Field>
         {unusual ? (
           <div className="notice notice-warn">
@@ -272,57 +277,50 @@ function DecideDialog({
 
         {error ? <div className="notice notice-bad"><span>{error}</span></div> : null}
 
-        <div className="table-wrap">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Product</th>
-                <th className="num">Qty</th>
-                <th className="num">Reseller</th>
-                <th className="num">We pay</th>
-                <th className="num">Minimum</th>
-                <th className="num">Asked</th>
-                <th className="num">Margin</th>
-                {canDecide ? <th className="num">Approve at</th> : null}
-              </tr>
-            </thead>
-            <tbody>
-              {lines.map((l) => (
-                <tr key={l.lineId}>
-                  <td data-label="Product">
-                    <div className="strong">{l.productName || l.sku}</div>
-                    <div className="muted mono">{l.sku}</div>
-                  </td>
-                  <td data-label="Qty" className="num">{l.qty}</td>
-                  <td data-label="Reseller" className="num">{l.resellerPrice === null ? "—" : inr(l.resellerPrice)}</td>
-                  <td data-label="We pay" className="num">{l.buyingPrice === null ? "—" : inr(l.buyingPrice)}</td>
-                  <td data-label="Minimum" className="num">{inr(l.minPrice)}</td>
-                  <td data-label="Asked" className="num strong">{inr(l.requestedPrice)}</td>
-                  <td data-label="Margin" className="num">
-                    {l.marginAtRequested === null ? "—" : (
-                      <>
-                        <Chip tone={l.marginAtRequested < 5 ? "bad" : l.marginAtRequested < 10 ? "warn" : "good"}>
-                          {l.marginAtRequested}%
-                        </Chip>
-                        <div className="muted">{l.markupAtRequested}% over cost</div>
-                      </>
-                    )}
-                  </td>
-                  {canDecide ? (
-                    <td data-label="Approve at" className="num">
-                      <Input
-                        numeric
-                        value={counters[l.lineId] ?? ""}
-                        onChange={(e) => setCounters({ ...counters, [l.lineId]: e.target.value })}
-                        placeholder={String(l.requestedPrice)}
-                        style={{ maxWidth: 110 }}
-                      />
-                    </td>
-                  ) : null}
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        {/* A CARD PER LINE, not a table. Eight columns do not fit a 560px
+            modal: the margin was clipped and the "Approve at" box was off
+            the right-hand edge, which made countering an offer impossible
+            without scrolling sideways inside a dialog. Seen in a
+            screenshot, not in the code. */}
+        <div className="stack">
+          {lines.map((l) => (
+            <div key={l.lineId} className="card card-pad" style={{ background: "var(--surface-2)" }}>
+              <div className="row wrap" style={{ justifyContent: "space-between", alignItems: "baseline" }}>
+                <div>
+                  <div className="strong">{l.productName || l.sku}</div>
+                  <div className="muted mono">{l.sku} · {l.qty} ×</div>
+                </div>
+                {l.marginAtRequested === null ? null : (
+                  <div style={{ textAlign: "right" }}>
+                    <Chip tone={l.marginAtRequested < 5 ? "bad" : l.marginAtRequested < 10 ? "warn" : "good"}>
+                      {l.marginAtRequested}% of the sale
+                    </Chip>
+                    <div className="muted">{l.markupAtRequested}% over cost</div>
+                  </div>
+                )}
+              </div>
+
+              <dl className="grid grid-2" style={{ marginTop: "var(--gap)" }}>
+                <div><dt className="field-label">Reseller price</dt><dd className="num">{l.resellerPrice === null ? "—" : inr(l.resellerPrice)}</dd></div>
+                <div><dt className="field-label">We pay at {discount}%</dt><dd className="num">{l.buyingPrice === null ? "—" : inr(l.buyingPrice)}</dd></div>
+                <div><dt className="field-label">Minimum</dt><dd className="num">{inr(l.minPrice)}</dd></div>
+                <div><dt className="field-label">Asked for</dt><dd className="num strong">{inr(l.requestedPrice)}</dd></div>
+              </dl>
+
+              {canDecide ? (
+                <Field label="Approve at" hint={`Blank approves the ${inr(l.requestedPrice)} asked for.`}>
+                  <Input
+                    numeric
+                    value={counters[l.lineId] ?? ""}
+                    onChange={(e) => setCounters({ ...counters, [l.lineId]: e.target.value })}
+                    placeholder={String(l.requestedPrice)}
+                  />
+                </Field>
+              ) : l.approvedPrice !== null ? (
+                <p className="field-hint">Approved at {inr(l.approvedPrice)}.</p>
+              ) : null}
+            </div>
+          ))}
         </div>
 
         <p className="field-hint">

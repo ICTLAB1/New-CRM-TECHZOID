@@ -492,7 +492,11 @@ describe("the whitelist itself", () => {
          price_list_commit is in SERVER_CALLABLE. */
       "price_list_activate",
       "price_list_history",
+      "quotes_needing_reprice",
       "regenerate_webhook_secret",
+      "report_margin_by_oem",
+      "report_quotes_by_seller",
+      "report_thinnest_deals",
       "request_discount_approval",
       "withdraw_discount_approval",
     ]);
