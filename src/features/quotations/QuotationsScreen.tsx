@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { sortDocuments } from "../../domain/documents/order";
+import { useDismissOnBack } from "../../app/useDismissOnBack";
 import type { Intent } from "../../app/intent";
 import { isOffline } from "../../data/offline";
 import { Presence } from "../../components/Presence";
@@ -128,6 +129,11 @@ export function QuotationsScreen({
      recording it here rather than in a dropdown. */
   const [wonNext, setWonNext] = useState<SalesDocument | null>(null);
   const saving = useRef(false);
+
+  /* The document editor fills the screen, so Back has to mean "close it"
+     rather than "leave the CRM" — the same thing Cancel does, and the same
+     thing the gesture means everywhere else on a phone. */
+  useDismissOnBack(!!editing, () => { setEditing(null); });
 
   const isPo = docType === "purchase_order";
   const isInvoice = docType === "invoice";

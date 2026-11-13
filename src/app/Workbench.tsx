@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useViewHistory } from "./useViewHistory";
 import { useAutomations } from "./useAutomations";
 import { GlobalSearch, type SearchHit } from "./GlobalSearch";
 import { ScanScreen } from "../features/scan/ScanScreen";
@@ -114,7 +115,10 @@ export function Workbench({
   data, settings, team, user, onChange, onSettingsChange, onSettingsNote, onTeamChange, onRestore, onSignOut, banner,
   events = [], onEventsSeen, companyPicker, companies = [], activeCompanyId = null, onCompaniesChanged,
 }: WorkbenchProps) {
-  const [view, setView] = useState("dashboard");
+  /* The Back button walks these, and every screen has an address — see
+     useViewHistory. `setView` keeps its name everywhere else because every
+     call site means the same thing it always did: go to that screen. */
+  const [view, setView] = useViewHistory();
   /* Prospects handed from the Prospects screen to the composer. */
   const [composeFor, setComposeFor] = useState<string[] | undefined>(undefined);
   const [editing, setEditing] = useState<Customer | null>(null);

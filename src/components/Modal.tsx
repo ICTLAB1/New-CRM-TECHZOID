@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useDismissOnBack } from "../app/useDismissOnBack";
 import { createPortal } from "react-dom";
 import { lockBodyScroll } from "./scrollLock";
 import { isMod } from "./hotkeys";
@@ -95,6 +96,16 @@ export function Modal({ open, title, description, onClose, footer, side, unsaved
 
   /* A dialog reopened after being dismissed must not still be asking. */
   useEffect(() => { if (!open) setConfirming(false); }, [open]);
+
+  /* Back closes the dialog rather than the screen behind it — the same
+     gate Escape and the ✕ go through, so unsaved changes are still asked
+     about whichever way somebody leaves. Declared here, above the early
+     return below, because it is a hook. */
+  useDismissOnBack(open, () => {
+    if (dirty.current) { setConfirming(true); return false; }
+    onClose();
+    return true;
+  });
 
   if (!mounted) return null;
 
