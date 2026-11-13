@@ -55,6 +55,9 @@ export function CustomersScreen({
   const [stageFilter, setStageFilter] = useState<string>("all");
   const [owner, setOwner] = useState<string>("all");
   const [editing, setEditing] = useState<Customer | null>(null);
+  /* Which part of the sheet the next open should land on. Cleared when the
+     sheet closes, so opening a record normally afterwards shows the form. */
+  const [focusFiles, setFocusFiles] = useState(false);
   /* Contacts, activities, deals and bills are not in the workspace — loading
      them globally would fetch every one of them on every screen to serve a
      panel that opens for one customer at a time. */
@@ -228,6 +231,7 @@ export function CustomersScreen({
                   <th>Owner</th>
                   <th>Follow-up</th>
                   <th className="num">Value</th>
+                  <th />
                 </tr>
               </thead>
               <tbody>
@@ -250,12 +254,12 @@ export function CustomersScreen({
                       layout="position"
                       transition={layoutSpring}
                       className={overdue ? "needs-warn" : undefined}
-                      onClick={() => { setIsNew(false); setEditing(c); }}
+                      onClick={() => { setIsNew(false); setFocusFiles(false); setEditing(c); }}
                       style={{ cursor: "pointer" }}
                     >
                       <td className="edge-cell" />
                       <td data-head className="strong">
-                        <button type="button" className="row-open" onClick={(e) => { e.stopPropagation(); setIsNew(false); setEditing(c); }}>
+                        <button type="button" className="row-open" onClick={(e) => { e.stopPropagation(); setIsNew(false); setFocusFiles(false); setEditing(c); }}>
                           {customerLabel(c)}
                         </button>
                       </td>
@@ -267,6 +271,20 @@ export function CustomersScreen({
                         {fmtDate(c.nextFollowUp)}
                       </td>
                       <td data-label="Value" className="num strong">{Number(c.value) > 0 ? moneyList(c.value, c.currency) : "—"}</td>
+                      {/* STRAIGHT TO THE PAPERWORK. Files have always been
+                          attachable to a customer, at the bottom of a long
+                          sheet nobody scrolled to — which is the same thing
+                          as not having the feature. This opens the record
+                          with the documents in view. */}
+                      <td data-actions>
+                        <Button
+                          size="sm"
+                          tone="quiet"
+                          onClick={(e) => { e.stopPropagation(); setIsNew(false); setFocusFiles(true); setEditing(c); }}
+                        >
+                          Documents
+                        </Button>
+                      </td>
                     </motion.tr>
                   );
                 })}
@@ -281,6 +299,7 @@ export function CustomersScreen({
         <CustomerSheet
           open={open}
           customer={record}
+          focus={focusFiles ? "files" : undefined}
           /* The whole record: documents, people, licences, renewals, what
              is owed, open opportunities. Assembled in domain/customers
              /profile from what the workspace already holds plus the four
@@ -302,7 +321,7 @@ export function CustomersScreen({
           currentUser={currentUser}
           settings={settings}
           onSave={save}
-          onClose={() => setEditing(null)}
+          onClose={() => { setEditing(null); setFocusFiles(false); }}
         />
         )}
       </Presence>

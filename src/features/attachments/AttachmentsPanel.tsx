@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Presence } from "../../components/Presence";
-import { Button, Card, Empty } from "../../components/primitives";
+import { Button, Card, Chip, Empty, Field, Input, Select } from "../../components/primitives";
 import { useToast } from "../../components/Toast";
 import { Confirm, Modal } from "../../components/Modal";
 import { fmtDate } from "../../domain/dates";
 import {
-  allowedExtensionList, canRemove, formatBytes, isPreviewable, sortAttachments, totalBytes,
+  allowedExtensionList, canRemove, formatBytes, isPreviewable, kindLabel, kindsFor,
+  kindsPresent, ofKind, sortAttachments, totalBytes,
   type Attachment, type AttachableType,
 } from "../../domain/attachments/files";
 import {
@@ -56,9 +57,22 @@ export function AttachmentsPanel({
   const [dragging, setDragging] = useState(false);
   const [error, setError] = useState("");
   const [confirmDelete, setConfirmDelete] = useState<Attachment | null>(null);
+  /* Picked, but not yet uploaded: the person is being asked what the
+     document IS before it goes anywhere. */
+  const [staged, setStaged] = useState<File[]>([]);
+  const [kind, setKind] = useState("");
+  const [note, setNote] = useState("");
+  /* Which kind the list is filtered to, "" for everything. */
+  const [showing, setShowing] = useState("");
   const [previewing, setPreviewing] = useState<Attachment | null>(null);
 
   const available = attachmentsAvailable();
+
+  /* What is filed here, and what the list is showing. Derived rather than
+     stored: a filter held in state alongside the rows goes stale the moment
+     a file is added or removed. */
+  const present = kindsPresent(rows, recordType);
+  const listed = showing ? ofKind(rows, showing) : rows;
 
   const refresh = useCallback(async () => {
     if (!available || !recordId) return;
@@ -74,7 +88,20 @@ export function AttachmentsPanel({
 
   useEffect(() => { void refresh(); }, [refresh]);
 
-  const upload = async (files: FileList | File[]) => {
+  /* ASKED BEFORE THE UPLOAD, not after. A label added afterwards needs an
+     update policy on a table that has deliberately never had one — and a
+     dialog that appears once the bytes are already up is one people learn
+     to dismiss. */
+  const stage = (files: FileList | File[]) => {
+    const picked = Array.from(files);
+    if (!picked.length) return;
+    setError("");
+    setKind(kindsFor(recordType)[0] ?? "");
+    setNote("");
+    setStaged(picked);
+  };
+
+  const upload = async (files: FileList | File[], asKind: string, withNote: string) => {
     if (!recordId) return;
     setBusy(true);
     setError("");
@@ -87,6 +114,8 @@ export function AttachmentsPanel({
           file, recordType, recordId, ownerId,
           uploaderId: currentUser.id,
           uploadedBy: currentUser.name,
+          kind: asKind,
+          note: withNote,
         });
         toast(`${file.name} attached.`, "good");
       } catch (err) {
@@ -175,7 +204,7 @@ export function AttachmentsPanel({
         type="file"
         multiple
         hidden
-        onChange={(e) => { if (e.target.files?.length) void upload(e.target.files); }}
+        onChange={(e) => { if (e.target.files?.length) stage(e.target.files); }}
       />
 
       <div
@@ -184,7 +213,7 @@ export function AttachmentsPanel({
         onDrop={(e) => {
           e.preventDefault();
           setDragging(false);
-          if (e.dataTransfer.files?.length) void upload(e.dataTransfer.files);
+          if (e.dataTransfer.files?.length) stage(e.dataTransfer.files);
         }}
         style={{
           border: `1px dashed ${dragging ? "var(--accent)" : "var(--rule)"}`,
@@ -207,13 +236,31 @@ export function AttachmentsPanel({
 
       {loading ? <p className="field-hint">Loading…</p> : null}
 
-      {rows.length > 0 ? (
+      {/* FILTER CHIPS, and only once there is something to filter. The
+          question this answers is "where is their purchase order", and on a
+          record with four files a filter nobody needs is just more to
+          read. */}
+      {present.length > 1 ? (
+        <div className="row-tight wrap" style={{ marginTop: 12 }}>
+          <button type="button" className="link-btn" onClick={() => setShowing("")}>
+            <Chip tone={showing === "" ? "accent" : "neutral"}>All {rows.length}</Chip>
+          </button>
+          {present.map((k) => (
+            <button type="button" key={k} className="link-btn" onClick={() => setShowing(showing === k ? "" : k)}>
+              <Chip tone={showing === k ? "accent" : "neutral"}>{k} {ofKind(rows, k).length}</Chip>
+            </button>
+          ))}
+        </div>
+      ) : null}
+
+      {listed.length > 0 ? (
         <>
           <div className="table-wrap" style={{ marginTop: 12 }}>
             <table className="table">
               <thead>
                 <tr>
                   <th>File</th>
+                  <th>What it is</th>
                   <th className="num">Size</th>
                   <th>Added</th>
                   <th>By</th>
@@ -221,11 +268,16 @@ export function AttachmentsPanel({
                 </tr>
               </thead>
               <tbody>
-                {rows.map((row) => (
+                {listed.map((row) => (
                   <tr key={row.id}>
-                    <td>
+                    <td data-label="File">
                       <div className="strong">{row.name}</div>
                       {row.note ? <div className="field-hint">{row.note}</div> : null}
+                    </td>
+                    <td data-label="What it is">
+                      {row.kind
+                        ? <Chip tone={row.kind.toLowerCase().includes("purchase order") ? "good" : "neutral"}>{row.kind}</Chip>
+                        : <span className="muted">{kindLabel(row.kind)}</span>}
                     </td>
                     <td className="num muted">{formatBytes(row.size)}</td>
                     <td className="muted">{fmtDate(row.createdAt.slice(0, 10))}</td>
@@ -254,7 +306,8 @@ export function AttachmentsPanel({
             </table>
           </div>
           <p className="field-hint" style={{ marginBottom: 0 }}>
-            {rows.length} file{rows.length === 1 ? "" : "s"} · {formatBytes(totalBytes(rows))}
+            {listed.length} file{listed.length === 1 ? "" : "s"}
+            {showing ? ` labelled ${showing}` : ""} · {formatBytes(totalBytes(listed))}
           </p>
         </>
       ) : null}
@@ -270,6 +323,57 @@ export function AttachmentsPanel({
         onConfirm={() => { if (confirmDelete) void remove(confirmDelete); }}
         onCancel={() => setConfirmDelete(null)}
       />
+
+      {/* WHAT IS THIS? — asked once, for the files just picked. A scanner
+          names a purchase order "SKM_C250i 26110312450.pdf", and three
+          months later that is not a purchase order to anybody reading the
+          list. One dropdown at the moment of attaching is the only point
+          where somebody both knows the answer and is already here. */}
+      <Modal
+        open={staged.length > 0}
+        title={staged.length === 1 ? "What is this document?" : `What are these ${staged.length} documents?`}
+        description="The label is how anybody finds it later. It is applied to everything in this batch."
+        onClose={() => setStaged([])}
+        footer={
+          <>
+            <Button tone="quiet" onClick={() => setStaged([])}>Cancel</Button>
+            <Button
+              tone="primary"
+              loading={busy}
+              loadingLabel="Uploading…"
+              disabled={busy}
+              onClick={() => {
+                const files = staged;
+                const asKind = kind;
+                const withNote = note;
+                setStaged([]);
+                void upload(files, asKind, withNote);
+              }}
+            >
+              Attach {staged.length === 1 ? "it" : `all ${staged.length}`}
+            </Button>
+          </>
+        }
+      >
+        <div className="stack">
+          <ul className="stack" style={{ margin: 0, paddingLeft: 18 }}>
+            {staged.map((f) => (
+              <li key={f.name + f.size} className="field-hint">{f.name} · {formatBytes(f.size)}</li>
+            ))}
+          </ul>
+          <Field label="What it is">
+            <Select value={kind} onChange={(e) => setKind(e.target.value)}>
+              {kindsFor(recordType).map((k) => <option key={k}>{k}</option>)}
+            </Select>
+          </Field>
+          <Field
+            label="Reference"
+            hint="Optional — their PO number, the date on it, anything you would search for."
+          >
+            <Input value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. PO 4471 dated 3 Nov 2026" />
+          </Field>
+        </div>
+      </Modal>
 
       <Presence value={previewing}>
         {(file, open) => (

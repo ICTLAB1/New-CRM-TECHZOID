@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Modal } from "../../components/Modal";
 import { AttachmentsPanel } from "../attachments/AttachmentsPanel";
 import { NotesPanel } from "./NotesPanel";
@@ -57,17 +57,33 @@ export interface CustomerSheetProps {
   /** Read for `confirmBeforeSave`. Optional so the sheet still renders
    *  without a settings row — it simply asks, which is the default. */
   settings?: Record<string, unknown>;
+  /** Open with the paperwork in view rather than the form. Set by the
+   *  Documents button on the customers list — the panel sits below a long
+   *  form, and "it is in there somewhere, scroll" is how a feature stays
+   *  unused. */
+  focus?: "files";
   onSave: (customer: Customer) => void;
   onClose: () => void;
 }
 
 export function CustomerSheet({
-  profile, unavailable = [], open = true, customer, isNew = false, users, customFields, canReassign, currentUser, settings = {}, onSave, onClose }: CustomerSheetProps) {
+  profile, unavailable = [], open = true, customer, isNew = false, users, customFields, canReassign, currentUser, settings = {}, focus, onSave, onClose }: CustomerSheetProps) {
   const [f, setF] = useState<Customer>({ ...customer, notes: customer.notes ?? [], customFields: customer.customFields ?? {} });
   const set = <K extends keyof Customer>(k: K) => (e: { target: { value: string } }) =>
     setF((cur) => ({ ...cur, [k]: e.target.value }));
 
   const isIndia = !f.country || f.country === "India";
+
+  /* Opened from the Documents button: scroll the paperwork into view once
+     the sheet is on screen. After a frame, because the modal animates in
+     and a scroll issued against a panel that is still moving lands
+     nowhere. */
+  const filesRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (focus !== "files" || !open) return;
+    const t = setTimeout(() => filesRef.current?.scrollIntoView({ block: "center", behavior: "smooth" }), 220);
+    return () => clearTimeout(t);
+  }, [focus, open]);
 
 
   /* LIVE DUPLICATE CHECK, on leaving a field rather than at save.
@@ -356,12 +372,15 @@ export function CustomerSheet({
             a customer record acquires. Kept outside the form's own state:
             files are stored the moment they are dropped, so they survive
             closing this sheet without saving. */}
+        <div ref={filesRef}>
         <AttachmentsPanel
           recordType="customer"
           recordId={customer.id}
           ownerId={f.ownerId}
           currentUser={{ id: currentUser?.id ?? "", name: currentUser?.name ?? "", role: currentUser?.role }}
+          title="Documents"
         />
+        </div>
 
         {f.stage === "lost" && f.lostReason ? (
           <div className="row-tight">

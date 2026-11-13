@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   ALLOWED_TYPES, MAX_ATTACHMENT_BYTES, canRemove, checkFile, extensionOf, formatBytes,
-  isPreviewable, mimeFor, safeName, sortAttachments, storagePath, totalBytes, type Attachment,
+  isPreviewable, kindLabel, kindsFor, kindsPresent, mimeFor, ofKind, safeName, sortAttachments,
+  storagePath, totalBytes, type Attachment,
 } from "./files";
 
 /**
@@ -258,5 +259,62 @@ describe("who may remove a file", () => {
     const legacy = file({ uploadedById: "" });
     expect(canRemove(legacy, { id: "owner", role: "Sales" })).toBe(true);
     expect(canRemove(legacy, { id: "someone-else", role: "Sales" })).toBe(false);
+  });
+});
+
+/* ── what a document IS, as opposed to what it is called ───────────── */
+
+describe("labelling an attached document", () => {
+  const file = (kind?: string): Attachment => ({
+    id: "a1", ownerId: "o", recordType: "customer", recordId: "c1",
+    path: "p", name: "SKM_C250i 26110312450.pdf", mime: "application/pdf",
+    size: 1024, uploadedBy: "Rahul", kind, createdAt: "2026-11-13T00:00:00Z",
+  });
+
+  it("offers a customer their purchase order first", () => {
+    /* It is the document this company waits for and the one somebody comes
+       looking for three months later. */
+    expect(kindsFor("customer")[0]).toBe("Purchase order");
+    expect(kindsFor("quotation")[0]).toBe("Customer purchase order");
+  });
+
+  it("always ends with Other, on every kind of record", () => {
+    /* A list that cannot describe the document in somebody's hand is a list
+       that gets a wrong answer picked from it. */
+    for (const t of ["customer", "order", "quotation", "proforma", "purchase_order", "invoice"] as const) {
+      expect(kindsFor(t)[kindsFor(t).length - 1]).toBe("Other");
+    }
+  });
+
+  it("says so when nobody labelled it, rather than showing a blank", () => {
+    expect(kindLabel(undefined)).toBe("Not labelled");
+    expect(kindLabel("   ")).toBe("Not labelled");
+    expect(kindLabel("Purchase order")).toBe("Purchase order");
+  });
+
+  it("finds the purchase orders, which is the question the label exists for", () => {
+    const rows = [file("Purchase order"), file("GST certificate"), file(), file("purchase order")];
+    /* Case and spacing are how the same label arrives from two different
+       browsers; a filter that misses one of them is a filter that hides a
+       customer's purchase order. */
+    expect(ofKind(rows, "Purchase order")).toHaveLength(2);
+    expect(ofKind(rows, "GST certificate")).toHaveLength(1);
+    expect(ofKind(rows, "Agreement or contract")).toHaveLength(0);
+  });
+
+  it("lists the kinds present in the order the list offers them", () => {
+    const rows = [file("GST certificate"), file("Purchase order"), file()];
+    expect(kindsPresent(rows, "customer")).toEqual(["Purchase order", "GST certificate"]);
+  });
+
+  it("keeps a label the list no longer offers rather than hiding those files", () => {
+    /* The vocabulary belongs to the people filing the paperwork and will
+       change. Files labelled under the old wording are still filed. */
+    const rows = [file("Purchase order"), file("Tender covering letter")];
+    expect(kindsPresent(rows, "customer")).toEqual(["Purchase order", "Tender covering letter"]);
+  });
+
+  it("offers nothing to filter by on an unlabelled record", () => {
+    expect(kindsPresent([file(), file("")], "customer")).toEqual([]);
   });
 });

@@ -39,6 +39,7 @@ interface AttachmentRow {
   mime: string;
   size: number;
   uploaded_by: string;
+  kind: string;
   note: string;
   created_at: string;
 }
@@ -54,6 +55,7 @@ const rowToAttachment = (r: AttachmentRow): Attachment => ({
   mime: r.mime ?? "",
   size: Number(r.size) || 0,
   uploadedBy: r.uploaded_by ?? "",
+  kind: r.kind ?? "",
   note: r.note ?? "",
   createdAt: r.created_at,
 });
@@ -99,9 +101,13 @@ export async function uploadAttachment(opts: {
    *  anyone's record, but always as themselves. */
   uploaderId: string;
   uploadedBy: string;
+  /** What the document is — see kindsFor() in domain/attachments/files.ts.
+   *  Empty where nobody said, which is how every file was filed before the
+   *  label existed. */
+  kind?: string;
   note?: string;
 }): Promise<Attachment> {
-  const { file, recordType, recordId, ownerId, uploaderId, uploadedBy, note = "" } = opts;
+  const { file, recordType, recordId, ownerId, uploaderId, uploadedBy, kind = "", note = "" } = opts;
 
   const verdict = checkFile(file);
   if (!verdict.ok) throw new AttachmentError(verdict.reason ?? "That file can't be attached.");
@@ -130,6 +136,7 @@ export async function uploadAttachment(opts: {
     mime,
     size: file.size,
     uploaded_by: uploadedBy,
+    kind,
     note,
     created_at: new Date().toISOString(),
   };

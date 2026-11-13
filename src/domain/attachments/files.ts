@@ -59,8 +59,76 @@ export interface Attachment {
   mime: string;
   size: number;
   uploadedBy: string;
+  /** What this document IS — "Purchase order", "GST certificate". Chosen
+   *  when the file is attached; empty on everything filed before there was
+   *  anywhere to say. */
+  kind?: string;
   note?: string;
   createdAt: string;
+}
+
+/**
+ * The paperwork a record actually collects, in the order it turns up.
+ *
+ * A CUSTOMER'S FIRST ENTRY IS THEIR PURCHASE ORDER, because that is the
+ * document this company waits for and the one somebody comes looking for
+ * three months later. The rest are the things that arrive once per
+ * customer and get asked for at audit.
+ *
+ * PLAIN STRINGS, stored as typed. The vocabulary belongs to the people
+ * filing the paperwork, not to the schema: see 057_attachment_kind.sql for
+ * why this is not an enum. "Other" is last and always present, because a
+ * list that cannot describe the document in somebody's hand is a list that
+ * gets a wrong answer picked from it.
+ */
+const CUSTOMER_KINDS = [
+  "Purchase order",
+  "Signed quotation",
+  "GST certificate",
+  "PAN card",
+  "Agreement or contract",
+  "Payment proof",
+  "Email approval",
+  "Other",
+] as const;
+
+const DOCUMENT_KINDS = [
+  "Customer purchase order",
+  "Signed copy",
+  "Payment proof",
+  "Delivery proof",
+  "Email approval",
+  "Supporting document",
+  "Other",
+] as const;
+
+/** What a file against this kind of record is likely to be. */
+export function kindsFor(recordType: AttachableType): readonly string[] {
+  return recordType === "customer" ? CUSTOMER_KINDS : DOCUMENT_KINDS;
+}
+
+/**
+ * The label to show for a file whose kind nobody chose.
+ *
+ * Shown rather than left blank: a column that is sometimes empty reads as a
+ * bug, and "Not labelled" is also a prompt to start labelling.
+ */
+export const kindLabel = (kind?: string): string => (kind ?? "").trim() || "Not labelled";
+
+/** The files of one kind, for "show me their purchase orders". */
+export const ofKind = (rows: readonly Attachment[], kind: string): Attachment[] =>
+  rows.filter((r) => (r.kind ?? "").trim().toLowerCase() === kind.trim().toLowerCase());
+
+/** Every kind present against a record, in the order the list offers them,
+ *  with anything unlabelled last. Drives the filter chips. */
+export function kindsPresent(
+  rows: readonly Attachment[],
+  recordType: AttachableType,
+): readonly string[] {
+  const present = new Set(rows.map((r) => (r.kind ?? "").trim()).filter(Boolean));
+  const known = kindsFor(recordType).filter((k) => present.has(k));
+  const extra = [...present].filter((k) => !known.includes(k)).sort();
+  return [...known, ...extra];
 }
 
 /** Lower-case extension without the dot, or "" when there isn't one. */
