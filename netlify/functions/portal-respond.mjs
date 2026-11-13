@@ -3,6 +3,7 @@ import { adminClient } from "../lib/auth.mjs";
 import { consume, tooManyMessage } from "../lib/ratelimit.mjs";
 import { str } from "../lib/validate.mjs";
 import { resolveToken } from "../lib/portalToken.mjs";
+import { stageAfterPortalAnswer } from "../lib/portalStage.mjs";
 
 /**
  * A customer accepting or declining a quotation.
@@ -21,7 +22,7 @@ import { resolveToken } from "../lib/portalToken.mjs";
  * not — reversing an acceptance is a conversation, not a click.
  */
 
-const ANSWERS = {
+export const ANSWERS = {
   accept: { status: "Accepted", verb: "accepted" },
   decline: { status: "Rejected", verb: "declined" },
 };
@@ -121,10 +122,17 @@ export async function handler(event) {
        they may not open for a week. Best-effort: the answer is recorded
        above, and losing the timeline entry must not fail the response the
        customer just gave. */
-    await appendTimelineNote(admin, found.link.customer_id, {
+    await recordOnCustomer(admin, found.link.customer_id, {
       text: `Quotation ${str(row.data?.number, 80) || row.id} ${answer.verb} through the customer portal${who !== "the customer" ? ` by ${who}` : ""}.${note ? ` They said: ${note}` : ""}`,
       by: who,
       at: now,
+      /* THE DEAL MOVES TOO, not only the document. Until now a customer
+         could accept a quotation and the board would still show them in
+         Quotation Sent, because the only thing that had changed was a
+         status on a row nobody was looking at. The rule is the same one the
+         CRM applies when a salesperson presses Accepted — see
+         netlify/lib/portalStage.mjs. */
+      answer: answer.status,
     });
 
     return json(event, 200, { ok: true, status: answer.status }, "POST, OPTIONS");
@@ -143,7 +151,7 @@ export async function handler(event) {
  * does not have — if portal writes ever become frequent this needs to move
  * into a jsonb append in the database.
  */
-async function appendTimelineNote(admin, customerId, { text, by, at }) {
+async function recordOnCustomer(admin, customerId, { text, by, at, answer }) {
   try {
     const { data: customer } = await admin
       .from("customers").select("data").eq("id", customerId).maybeSingle();
@@ -163,9 +171,19 @@ async function appendTimelineNote(admin, customerId, { text, by, at }) {
       text,
     });
 
+    /* One write, both changes: the note and the stage come out of the same
+       read, so they cannot disagree with each other even if two of these
+       raced. */
+    const stage = stageAfterPortalAnswer(answer, customer.data?.stage);
+    const nextCustomer = {
+      ...customer.data,
+      notes: notes.slice(0, 500),
+      ...(stage ? { stage } : {}),
+    };
+
     await admin
       .from("customers")
-      .update({ data: { ...customer.data, notes: notes.slice(0, 500) }, updated_at: new Date(at).toISOString() })
+      .update({ data: nextCustomer, updated_at: new Date(at).toISOString() })
       .eq("id", customerId);
   } catch (err) {
     console.error("portal timeline note:", err?.message ?? err);

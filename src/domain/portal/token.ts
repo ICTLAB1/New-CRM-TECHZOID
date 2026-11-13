@@ -53,19 +53,45 @@ export async function hashPortalToken(token: string): Promise<string> {
  *
  * So: presence decides the route, and the page decides what to say.
  */
-export const isPortalUrl = (url: { search: string }): boolean =>
-  new URLSearchParams(url.search).has("portal");
+export const isPortalUrl = (url: { pathname?: string; search: string }): boolean =>
+  new URLSearchParams(url.search).has("portal") || PATH_RE.test(url.pathname ?? "");
+
+/** The short shape: /p/<token>. Matched loosely on purpose — the same rule
+ *  as the query form, where PRESENCE decides the route and the page decides
+ *  what to say about a token that is broken. */
+const PATH_RE = /^\/p\/([^/?#]*)\/?$/;
 
 /** The token out of a URL, or "" when there isn't a usable one. A malformed
  *  token never becomes a network request — the page says "ask for a fresh
  *  link" without asking the server about a string that cannot be one. */
-export function readPortalToken(url: { search: string }): string {
-  const value = (new URLSearchParams(url.search).get("portal") ?? "").trim();
-  return looksLikeToken(value) ? value : "";
+export function readPortalToken(url: { pathname?: string; search: string }): string {
+  const query = (new URLSearchParams(url.search).get("portal") ?? "").trim();
+  if (looksLikeToken(query)) return query;
+  const path = decodeURIComponent(PATH_RE.exec(url.pathname ?? "")?.[1] ?? "").trim();
+  return looksLikeToken(path) ? path : "";
 }
 
-export function portalLink(origin: string, token: string): string {
-  return `${origin.replace(/\/+$/, "")}/?portal=${token}`;
+/**
+ * The link to send.
+ *
+ * SHORT SHAPE, and the query form kept for good. Every link already issued
+ * is in a customer's inbox: `?portal=` resolves for ever, and the only thing
+ * that changes is what a new one looks like. The same promise the lead links
+ * made when they shortened — see domain/leads/link.ts.
+ *
+ * `base` is normally the CRM's own origin. It can be a host of the company's
+ * own instead, so the link a customer is sent carries their supplier's
+ * domain rather than wherever the CRM happens to be hosted; that host has to
+ * serve this same app, which is a DNS record and a custom domain on the site,
+ * not a code change.
+ */
+export function portalLink(base: string, token: string): string {
+  const root = String(base ?? "").trim().replace(/\/+$/, "");
+  /* A host typed without a scheme — "portal.example.com" — is a host, not a
+     relative path. Left alone it would produce "portal.example.com/p/..",
+     which a browser resolves against the CRM's own origin. */
+  const origin = root && !/^https?:\/\//i.test(root) ? `https://${root}` : root;
+  return `${origin}/p/${token}`;
 }
 
 /** How long a new link lasts unless somebody chooses otherwise. Thirty days

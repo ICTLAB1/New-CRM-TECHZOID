@@ -35,9 +35,12 @@ export interface PortalPanelProps {
    *  button that fails. */
   saved: boolean;
   currentUserId: string;
+  /** Where links should be built. A domain of the company's own, set in
+   *  Settings → Company; blank is this CRM's own address. */
+  portalHost?: string;
 }
 
-export function PortalPanel({ customerId, saved, currentUserId }: PortalPanelProps) {
+export function PortalPanel({ customerId, saved, currentUserId, portalHost = "" }: PortalPanelProps) {
   const toast = useToast();
   const [links, setLinks] = useState<PortalTokenRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -72,6 +75,7 @@ export function PortalPanel({ customerId, saved, currentUserId }: PortalPanelPro
     try {
       const issued = await issuePortalLink({
         customerId, createdBy: currentUserId, label, days,
+        origin: portalHost.trim() || undefined,
       });
       setFresh(issued.url);
       setLabel("");

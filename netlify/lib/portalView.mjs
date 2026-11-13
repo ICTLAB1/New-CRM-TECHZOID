@@ -168,6 +168,17 @@ export function publicCompany(settingsRow) {
     name: text(company.name, 200),
     tagline: text(company.tagline, 300),
     website: text(company.website, 200),
+    /* HOW TO REACH A HUMAN ABOUT THIS. The switchboard number and the
+       company mailbox, which are printed on the letterhead of every
+       document already sent — the same test as the website, and the same
+       answer. NOT the salesperson's own line: a link forwarded around a
+       customer's office would then be a contact list, which is why
+       `preparedBy` on a document is a name and nothing else.
+
+       A page asking somebody to approve a purchase, with no way to ask a
+       question about it, is the shape of a phishing page. */
+    phone: text(company.phone, 60),
+    email: text(company.email, 200),
     logo: typeof s.logo === "string" ? s.logo : null,
     accentColor: text(template.accentColor, 20) || "#2563EB",
   };

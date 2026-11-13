@@ -280,11 +280,54 @@
 .portal-payment { display: flex; justify-content: space-between; gap: 16px; }
 .portal-terms { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
 
+/* The two questions somebody opens the portal with, answered at the top:
+   is anything waiting on me, and what do I owe. */
+.portal-tiles {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px; margin-top: 14px;
+}
+.portal-tile {
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 12px 14px; border: 1px solid var(--rule); border-radius: 10px;
+  background: var(--surface-2);
+}
+.portal-tile-value { font-size: var(--t-page); font-weight: 700; color: var(--ink); line-height: 1.2; }
+.portal-tile .muted { font-size: var(--t-small); }
+
+/* A quotation running out of time. Said in words on the row, because a
+   date on its own makes the reader do the arithmetic. */
+.portal-urgent { font-size: var(--t-small); color: var(--warn); font-weight: 600; }
+
+/* How to reach a human about what the page is asking them to approve. */
+.portal-foot {
+  margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--rule);
+  display: flex; flex-direction: column; gap: 6px; font-size: var(--t-small);
+}
+.portal-foot-links { display: flex; flex-wrap: wrap; gap: 6px 18px; }
+
 @media (max-width: 560px) {
   /* The amount and the status stop fitting beside a long document number
      before the number does, so they wrap under it rather than squeezing it. */
   .portal-row { flex-direction: column; align-items: flex-start; gap: 8px; }
   .portal-row-side { gap: 10px; }
+}
+
+@media (max-width: 560px) {
+  .portal-tiles { grid-template-columns: 1fr; gap: 8px; }
+}
+
+/* ── printing a document from the portal ───────────────────────────────
+   A customer forwarding a quotation to their accounts department needs a
+   copy on paper or in a PDF, and the browser already makes one. What it
+   must not print is the furniture: buttons that cannot be pressed on
+   paper, and the navigation that got them here. */
+@media print {
+  .no-print { display: none !important; }
+  .public-form { display: block; min-height: 0; padding: 0; background: var(--surface); }
+  .public-panel { max-width: none; }
+  .card { border: 0; box-shadow: none; break-inside: avoid; }
+  .portal-tiles { display: none; }
+  a[href]::after { content: ""; }
 }
 
 /* ── phones ────────────────────────────────────────────────────────────

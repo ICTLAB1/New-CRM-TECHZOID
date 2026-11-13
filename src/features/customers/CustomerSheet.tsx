@@ -366,6 +366,7 @@ export function CustomerSheet({
           customerId={customer.id}
           saved={!isNew}
           currentUserId={currentUser?.id ?? ""}
+          portalHost={String(settings["portalHost"] ?? "")}
         />
 
         {/* Signed POs, credit applications, GST certificates — the paperwork

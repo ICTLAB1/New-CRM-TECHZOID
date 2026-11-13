@@ -162,6 +162,10 @@ describe("what a customer may see about themselves and about us", () => {
       },
     });
     expect(out.name).toBe("TechZoid Technologies");
+    /* The letterhead, and only the letterhead. */
+    expect(Object.keys(out).sort()).toEqual(
+      ["accentColor", "email", "logo", "name", "phone", "tagline", "website"],
+    );
     const json = JSON.stringify(out);
     for (const secret of ["50200012345678", "HDFC0000123", "secret-key-value", "customerSeq"]) {
       expect(json).not.toContain(secret);

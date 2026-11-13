@@ -48,7 +48,7 @@ export interface PortalDocument {
 export interface PortalData {
   valid: boolean;
   customer?: { code: string; company: string; contact: string; email: string; phone: string; gstin: string; state: string };
-  company?: { name: string; tagline: string; website: string; logo: string | null; accentColor: string };
+  company?: { name: string; tagline: string; website: string; phone: string; email: string; logo: string | null; accentColor: string };
   documents?: PortalDocument[];
 }
 
@@ -85,6 +85,31 @@ const readableDate = (value: string): string => {
     ? value
     : d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
 };
+
+/**
+ * How long a quotation has left, in the words somebody reading it uses.
+ *
+ * A date on its own makes the reader do arithmetic, and the whole purpose
+ * of this page is to get an answer before the price lapses.
+ */
+export function daysLeft(validUntil: string, today: Date = new Date()): number | null {
+  if (!validUntil) return null;
+  const end = new Date(validUntil);
+  if (Number.isNaN(end.getTime())) return null;
+  const start = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const to = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+  return Math.round((to.getTime() - start.getTime()) / 86400000);
+}
+
+export function validityNote(validUntil: string, today: Date = new Date()): string {
+  const days = daysLeft(validUntil, today);
+  if (days === null) return "";
+  if (days < 0) return "This price has lapsed — ask us for a fresh quotation.";
+  if (days === 0) return "Today is the last day at this price.";
+  if (days === 1) return "One day left at this price.";
+  if (days <= 7) return `${days} days left at this price.`;
+  return "";
+}
 
 /** Totals from the same module the PDF uses, so the figure on this page and
  *  the figure on the document they were emailed cannot disagree.
@@ -200,6 +225,51 @@ function DocumentList({ data, onOpen }: { data: PortalData | null; onOpen: (id: 
   const customerState = data?.customer?.state ?? "";
   const waiting = documents.filter((d) => d.kind === "quotation" && d.status.toLowerCase() === "sent");
 
+  /* WHAT THEY OWE, worked out here rather than asked for: the server sends
+     what was paid against each document, and a customer looking at four
+     invoices should not have to add them up. Proformas count — an unpaid
+     proforma is the thing holding an order up. */
+  const owed = documents
+    .filter((d) => d.kind !== "quotation")
+    .map((d) => {
+      const total = portalTotals(d, customerState).grand;
+      const paid = d.payments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+      return { currency: d.currency, due: Math.max(0, total - paid), status: d.status.toLowerCase() };
+    })
+    .filter((d) => d.due > 0.5 && d.status !== "cancelled" && d.status !== "paid");
+
+  const dueByCurrency = owed.reduce<Record<string, number>>((acc, d) => {
+    acc[d.currency] = (acc[d.currency] ?? 0) + d.due;
+    return acc;
+  }, {});
+
+  const rest = documents.filter((d) => !waiting.includes(d));
+
+  const Row = ({ doc }: { doc: PortalDocument }) => {
+    const note = doc.kind === "quotation" && doc.status.toLowerCase() === "sent"
+      ? validityNote(doc.validUntil)
+      : "";
+    return (
+      <button type="button" className="portal-row" onClick={() => onOpen(doc.id)}>
+        <span className="portal-row-main">
+          <span className="portal-row-title">
+            {KIND_LABEL[doc.kind] ?? doc.kind} {doc.number}
+          </span>
+          <span className="muted">{doc.subject || readableDate(doc.date)}</span>
+          {note ? <span className="portal-urgent">{note}</span> : null}
+        </span>
+        <span className="portal-row-side">
+          <span className="portal-row-amount num">
+            {money(portalTotals(doc, customerState).grand, doc.currency)}
+          </span>
+          <Chip tone={statusTone(doc.status)}>
+            {STATUS_LABEL[doc.status.toLowerCase()] ?? doc.status}
+          </Chip>
+        </span>
+      </button>
+    );
+  };
+
   return (
     <div className="stack">
       <Card title={data?.customer?.company || "Your documents"}>
@@ -207,46 +277,58 @@ function DocumentList({ data, onOpen }: { data: PortalData | null; onOpen: (id: 
           Everything we've sent you, in one place.
           {data?.customer?.code ? ` Your account number is ${data.customer.code}.` : ""}
         </p>
-        {waiting.length > 0 ? (
-          <p style={{ margin: "10px 0 0" }}>
-            {waiting.length === 1
-              ? "One quotation is waiting for your response."
-              : `${waiting.length} quotations are waiting for your response.`}
-          </p>
-        ) : null}
+
+        {/* THE TWO QUESTIONS SOMEBODY OPENS THIS PAGE WITH, answered before
+            they have scrolled: is anything waiting on me, and what do I
+            owe. */}
+        <div className="portal-tiles">
+          <div className="portal-tile">
+            <span className="portal-tile-value">
+              {waiting.length === 0 ? "Nothing" : waiting.length}
+            </span>
+            <span className="muted">
+              {waiting.length === 0
+                ? "waiting on you right now"
+                : waiting.length === 1 ? "quotation waiting for you" : "quotations waiting for you"}
+            </span>
+          </div>
+          <div className="portal-tile">
+            <span className="portal-tile-value num">
+              {Object.keys(dueByCurrency).length === 0
+                ? "Nothing"
+                : Object.entries(dueByCurrency).map(([c, v]) => money(v, c)).join(" + ")}
+            </span>
+            <span className="muted">outstanding with us</span>
+          </div>
+        </div>
       </Card>
 
-      <Card title="Documents" padded={false}>
-        {documents.length === 0 ? (
-          <div style={{ padding: 18 }}>
-            <Empty
-              title="Nothing here yet"
-              body="When we send you a quotation or an invoice, it will appear here."
-            />
-          </div>
-        ) : (
+      {documents.length === 0 ? (
+        <Card title="Documents">
+          <Empty
+            title="Nothing here yet"
+            body="When we send you a quotation or an invoice, it will appear here."
+          />
+        </Card>
+      ) : null}
+
+      {/* SPLIT, not filtered. A tab somebody has to find is a tab nobody
+          presses; what needs an answer belongs at the top of the page. */}
+      {waiting.length > 0 ? (
+        <Card title="Waiting for your response" padded={false}>
           <div className="portal-list">
-            {documents.map((doc) => (
-              <button key={doc.id} type="button" className="portal-row" onClick={() => onOpen(doc.id)}>
-                <span className="portal-row-main">
-                  <span className="portal-row-title">
-                    {KIND_LABEL[doc.kind] ?? doc.kind} {doc.number}
-                  </span>
-                  <span className="muted">{doc.subject || readableDate(doc.date)}</span>
-                </span>
-                <span className="portal-row-side">
-                  <span className="portal-row-amount num">
-                    {money(portalTotals(doc, customerState).grand, doc.currency)}
-                  </span>
-                  <Chip tone={statusTone(doc.status)}>
-                    {STATUS_LABEL[doc.status.toLowerCase()] ?? doc.status}
-                  </Chip>
-                </span>
-              </button>
-            ))}
+            {waiting.map((doc) => <Row key={doc.id} doc={doc} />)}
           </div>
-        )}
-      </Card>
+        </Card>
+      ) : null}
+
+      {rest.length > 0 ? (
+        <Card title={waiting.length > 0 ? "Everything else" : "Documents"} padded={false}>
+          <div className="portal-list">
+            {rest.map((doc) => <Row key={doc.id} doc={doc} />)}
+          </div>
+        </Card>
+      ) : null}
     </div>
   );
 }
@@ -266,10 +348,18 @@ function DocumentView({
   const paid = doc.payments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
   const canAnswer = doc.kind === "quotation" && doc.status.toLowerCase() === "sent";
 
+  const note = canAnswer ? validityNote(doc.validUntil) : "";
+
   return (
     <div className="stack">
-      <div>
+      <div className="row-tight no-print">
         <Button onClick={onBack}>← All documents</Button>
+        {/* SAVE A COPY, without us having to build one. The browser's own
+            print-to-PDF produces a clean page from the print stylesheet,
+            which is what somebody forwarding this to their accounts
+            department actually needs — and it carries exactly what is on
+            screen, so it cannot disagree with the figures above. */}
+        <Button onClick={() => window.print()}>Save or print this</Button>
       </div>
 
       <Card
@@ -277,6 +367,7 @@ function DocumentView({
         actions={<Chip tone={statusTone(doc.status)}>{STATUS_LABEL[doc.status.toLowerCase()] ?? doc.status}</Chip>}
       >
         <div className="stack">
+          {note ? <div className="notice notice-warn"><span>{note}</span></div> : null}
           <div className="portal-meta">
             {doc.date ? <div><span className="muted">Dated</span><div>{readableDate(doc.date)}</div></div> : null}
             {doc.validUntil ? <div><span className="muted">Valid until</span><div>{readableDate(doc.validUntil)}</div></div> : null}
@@ -392,6 +483,11 @@ function TotalRow({ label, value, strong }: { label: string; value: string; stro
 
 function RespondCard({ doc, token, onAnswered }: { doc: PortalDocument; token: string; onAnswered: () => void }) {
   const [answer, setAnswer] = useState<"" | "accept" | "decline">("");
+  /* WHAT HAPPENED, said out loud. The first version sent the answer and
+     bounced straight back to the list, where the only evidence was a chip
+     that had changed colour — so people pressed Accept twice, and then
+     emailed to ask whether it had gone through. */
+  const [done, setDone] = useState<"" | "accept" | "decline">("");
   const [name, setName] = useState("");
   const [note, setNote] = useState("");
   const [sending, setSending] = useState(false);
@@ -412,13 +508,35 @@ function RespondCard({ doc, token, onAnswered }: { doc: PortalDocument; token: s
         setError(body?.error || "We couldn't record that. Please try again.");
         return;
       }
-      onAnswered();
+      setDone(answer);
     } catch {
       setError("We couldn't reach our system. Check your connection and try again.");
     } finally {
       setSending(false);
     }
   };
+
+  if (done) {
+    return (
+      <Card title={done === "accept" ? "Thank you — that's recorded" : "Thank you for letting us know"}>
+        <div className="stack">
+          <p style={{ margin: 0 }}>
+            {done === "accept"
+              ? `We have your acceptance of ${doc.number}${name.trim() ? `, from ${name.trim()}` : ""}. Nothing further is needed from you — we will be in touch with the next step.`
+              : `We have recorded that ${doc.number} is declined. Nothing further will happen on it, and we will not chase you about it.`}
+          </p>
+          <p className="muted" style={{ margin: 0 }}>
+            It is on your account with us already, with the name and the date — the person looking after
+            you can see it without you telling them.
+          </p>
+          <div className="row-tight no-print">
+            <Button tone="primary" onClick={onAnswered}>Back to your documents</Button>
+            <Button onClick={() => window.print()}>Save or print this</Button>
+          </div>
+        </div>
+      </Card>
+    );
+  }
 
   if (!answer) {
     return (
@@ -474,8 +592,25 @@ function RespondCard({ doc, token, onAnswered }: { doc: PortalDocument; token: s
 /* ── chrome ─────────────────────────────────────────────────────────── */
 
 function Frame({ company, children }: { company?: PortalData["company"]; children: ReactNode }) {
+  /* THE TAB SAYS WHOSE DOCUMENTS THESE ARE. A customer with eleven tabs
+     open and one reading "Vite + React" closes the wrong one. */
+  useEffect(() => {
+    if (!company?.name) return;
+    const was = document.title;
+    document.title = `${company.name} — your documents`;
+    return () => { document.title = was; };
+  }, [company?.name]);
+
+  /* The company's own colour, from the same setting the PDF is printed in,
+     so the page a customer lands on looks like the document they were
+     emailed rather than like software. Scoped to this element: nothing
+     here may restyle the CRM, which shares the stylesheet. */
+  const brand = company?.accentColor && /^#[0-9a-f]{3,8}$/i.test(company.accentColor)
+    ? ({ "--accent": company.accentColor } as React.CSSProperties)
+    : undefined;
+
   return (
-    <main className="public-form">
+    <main className="public-form" style={brand}>
       <div className="public-panel">
         <header className="public-head">
           {company?.logo ? <img src={company.logo} alt="" className="public-logo" /> : null}
@@ -485,6 +620,27 @@ function Frame({ company, children }: { company?: PortalData["company"]; childre
           </div>
         </header>
         {children}
+
+        {/* A PAGE ASKING SOMEBODY TO APPROVE A PURCHASE, with no way to ask
+            a question about it, is the shape of the thing they have been
+            trained to be suspicious of. The switchboard and the company
+            mailbox — both printed on the document they already have. */}
+        {company?.name ? (
+          <footer className="portal-foot">
+            <div className="strong">Any questions about this?</div>
+            <div className="portal-foot-links">
+              {company.phone ? <a href={`tel:${company.phone.replace(/[^\d+]/g, "")}`}>{company.phone}</a> : null}
+              {company.email ? <a href={`mailto:${company.email}`}>{company.email}</a> : null}
+              {company.website ? (
+                <a href={/^https?:\/\//i.test(company.website) ? company.website : `https://${company.website}`}
+                   target="_blank" rel="noopener noreferrer">{company.website}</a>
+              ) : null}
+            </div>
+            <div className="muted">
+              This page is for {company.name}'s customers. The link is private — treat it like a password.
+            </div>
+          </footer>
+        ) : null}
       </div>
     </main>
   );

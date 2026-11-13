@@ -53,8 +53,43 @@ describe("reading a portal link", () => {
     expect(looksLikeToken("' or 1=1 --")).toBe(false);
   });
 
-  it("builds a link without doubling the slash", () => {
-    expect(portalLink("https://crm.ttpldelhi.com/", "abc")).toBe("https://crm.ttpldelhi.com/?portal=abc");
+  it("builds the short shape, without doubling the slash", () => {
+    expect(portalLink("https://crm.ttpldelhi.com/", "abc")).toBe("https://crm.ttpldelhi.com/p/abc");
+    expect(portalLink("https://crm.ttpldelhi.com", "abc")).toBe("https://crm.ttpldelhi.com/p/abc");
+  });
+
+  it("treats a bare host as a host, not as a path", () => {
+    /* "quote.techzoidtechnologies.com/p/abc" with no scheme is a relative
+       path to a browser, and resolves against whatever page it was pasted
+       into — which is not the company's domain. */
+    expect(portalLink("quote.techzoidtechnologies.com", "abc"))
+      .toBe("https://quote.techzoidtechnologies.com/p/abc");
+  });
+
+  it("reads back the link it just built", () => {
+    const token = newPortalToken();
+    const url = new URL(portalLink("https://quote.techzoidtechnologies.com", token));
+    expect(isPortalUrl(url)).toBe(true);
+    expect(readPortalToken(url)).toBe(token);
+  });
+
+  /* EVERY LINK ALREADY ISSUED IS IN SOMEBODY'S INBOX. The query shape is not
+     deprecated, it is permanent — the same promise the lead links made. */
+  it("still reads the long shape, which is never going away", () => {
+    const token = newPortalToken();
+    expect(readPortalToken({ pathname: "/", search: `?portal=${token}` })).toBe(token);
+    expect(isPortalUrl({ pathname: "/", search: `?portal=${token}` })).toBe(true);
+  });
+
+  it("refuses rubbish in the short shape too", () => {
+    expect(readPortalToken({ pathname: "/p/short", search: "" })).toBe("");
+    expect(isPortalUrl({ pathname: "/p/short", search: "" })).toBe(true);
+  });
+
+  it("leaves other paths alone", () => {
+    expect(isPortalUrl({ pathname: "/r/K7QM2P", search: "" })).toBe(false);
+    expect(isPortalUrl({ pathname: "/p/a/b", search: "" })).toBe(false);
+    expect(isPortalUrl({ pathname: "/", search: "" })).toBe(false);
   });
 });
 

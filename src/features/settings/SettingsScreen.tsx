@@ -150,6 +150,7 @@ function CompanyPanel({ settings, canEdit, onChange }: { settings: Record<string
       company, uaeOffice,
       signatoryName: String(settings["signatoryName"] ?? ""),
       signatoryDesignation: String(settings["signatoryDesignation"] ?? ""),
+      portalHost: String(settings["portalHost"] ?? ""),
     },
     (next) => onChange({ ...settings, ...next }),
     "Company details saved",
@@ -302,6 +303,24 @@ function CompanyPanel({ settings, canEdit, onChange }: { settings: Record<string
             </Field>
             <Field label="Their designation" hint="Each person's own job title, for the signature on email they send, is set on their profile in Team.">
               <Input value={draft.signatoryDesignation} disabled={!canEdit} onChange={(e) => setDraft((d) => ({ ...d, signatoryDesignation: e.target.value }))} />
+            </Field>
+          </div>
+          <div className="grid grid-2">
+            {/* WHAT THE CUSTOMER SEES IN THEIR ADDRESS BAR. A portal link is
+                sent to people who have never heard of whoever hosts this
+                CRM, and a strange domain in a link asking them to approve a
+                purchase is exactly what they are told to be careful of.
+                Blank means the CRM's own address, which always works. */}
+            <Field
+              label="Customer portal address"
+              hint='Optional. A domain of your own that serves this CRM, e.g. "quote.techzoidtechnologies.com". New portal links are built on it; links already sent keep working. It has to point here first — a CNAME record and a custom domain on the site.'
+            >
+              <Input
+                value={draft.portalHost}
+                disabled={!canEdit}
+                placeholder="quote.techzoidtechnologies.com"
+                onChange={(e) => setDraft((d) => ({ ...d, portalHost: e.target.value }))}
+              />
             </Field>
           </div>
         </div>
