@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Button, Card, Chip, Empty, Field, Input, Textarea } from "../../components/primitives";
 import { computeDocument } from "../../domain/tax/compute";
+import { documentModelFor } from "../quotations/useDocumentModel";
+import { downloadPdf } from "../../documents/pdf/deliver";
+import { DOC_IMAGES } from "../../app/demoData";
+import type { SalesDocument } from "../../domain/documents/create";
 import { money } from "../../domain/currency/format";
 import { readPortalToken } from "../../domain/portal/token";
 import type { LineItem } from "../../domain/tax/types";
@@ -333,6 +337,60 @@ function DocumentList({ data, onOpen }: { data: PortalData | null; onOpen: (id: 
   );
 }
 
+/* ── the document itself ────────────────────────────────────────────── */
+
+/**
+ * Download the PDF — the one the salesperson sent, not a print of this
+ * page.
+ *
+ * BUILT HERE, FROM THE SAME RENDERER THE CRM USES, so the customer's copy
+ * and the company's copy cannot disagree about a figure, a rounding rule or
+ * a line of terms. What this page was given is not enough to draw it: a
+ * printed document carries the letterhead, the registration numbers, the
+ * signature block and the bank details, none of which are on the page. So
+ * it is fetched per document, on this button — see
+ * netlify/functions/portal-document.mjs, which is a second allowlist.
+ */
+function DownloadButton({ doc, token }: { doc: PortalDocument; token: string }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  const download = async () => {
+    setBusy(true);
+    setError("");
+    try {
+      const res = await fetch(
+        `${fnPath("portal-document")}?t=${encodeURIComponent(token)}`
+        + `&id=${encodeURIComponent(doc.id)}&kind=${encodeURIComponent(doc.kind)}`,
+      );
+      const body = await res.json() as {
+        ok?: boolean;
+        doc?: SalesDocument;
+        settings?: Record<string, unknown>;
+      };
+      if (!res.ok || !body.ok || !body.doc || !body.settings) {
+        setError("We couldn't prepare that file. Ask us for a fresh link and try again.");
+        return;
+      }
+      const { totals, model } = documentModelFor(body.doc, body.settings, doc.kind);
+      downloadPdf({ model, rows: totals.rows, images: DOC_IMAGES });
+    } catch {
+      setError("We couldn't reach our system. Check your connection and try again.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <>
+      <Button tone="primary" loading={busy} loadingLabel="Preparing…" disabled={busy} onClick={() => void download()}>
+        Download PDF
+      </Button>
+      {error ? <div className="notice notice-bad"><span>{error}</span></div> : null}
+    </>
+  );
+}
+
 /* ── one document ───────────────────────────────────────────────────── */
 
 function DocumentView({
@@ -352,14 +410,16 @@ function DocumentView({
 
   return (
     <div className="stack">
-      <div className="row-tight no-print">
+      <div className="row-tight no-print wrap">
         <Button onClick={onBack}>← All documents</Button>
+        {/* The document, as a file they can keep or forward. */}
+        <DownloadButton doc={doc} token={token} />
         {/* SAVE A COPY, without us having to build one. The browser's own
             print-to-PDF produces a clean page from the print stylesheet,
             which is what somebody forwarding this to their accounts
             department actually needs — and it carries exactly what is on
             screen, so it cannot disagree with the figures above. */}
-        <Button onClick={() => window.print()}>Save or print this</Button>
+        <Button onClick={() => window.print()}>Print this page</Button>
       </div>
 
       <Card
@@ -531,7 +591,7 @@ function RespondCard({ doc, token, onAnswered }: { doc: PortalDocument; token: s
           </p>
           <div className="row-tight no-print">
             <Button tone="primary" onClick={onAnswered}>Back to your documents</Button>
-            <Button onClick={() => window.print()}>Save or print this</Button>
+            <Button onClick={() => window.print()}>Print this page</Button>
           </div>
         </div>
       </Card>

@@ -34,7 +34,7 @@ const text = (v, max = 2000) => String(v ?? "").slice(0, max);
  * catalog may hang off a line in future: this builds a new object rather than
  * copying one.
  */
-function publicLine(item) {
+export function publicLine(item) {
   return {
     id: text(item?.id, 64),
     desc: text(item?.desc, 500),

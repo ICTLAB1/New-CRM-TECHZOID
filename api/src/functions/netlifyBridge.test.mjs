@@ -29,11 +29,13 @@ describe("the functions directory", () => {
     expect(existsSync(FUNCTIONS_DIR)).toBe(true);
   });
 
-  it("finds all thirty-four handlers", () => {
+  it("finds all thirty-five handlers", () => {
     const names = functionNames();
-    expect(names).toHaveLength(34);
+    expect(names).toHaveLength(35);
     expect(names).toContain("submit-lead");
     expect(names).toContain("portal");
+    /* The customer's own download of the document they were sent. */
+    expect(names).toContain("portal-document");
     expect(names).toContain("followups-run");
     expect(names).toContain("payment-reminders-run");
     expect(names).toContain("payment-reminders-send");
@@ -142,9 +144,9 @@ describe("registration", () => {
     const { app, http, timer } = fakeApp();
     const names = registerNetlifyFunctions(app);
 
-    expect(names).toHaveLength(34);
+    expect(names).toHaveLength(35);
     expect([...timer.keys()].sort()).toEqual(Object.keys(SCHEDULED).sort());
-    expect(http.size).toBe(34 - Object.keys(SCHEDULED).length);
+    expect(http.size).toBe(35 - Object.keys(SCHEDULED).length);
     /* A scheduled one must not ALSO be an HTTP route: on Netlify these were
        endpoints anyone could hit, and a public URL that sends a campaign is
        not something to carry across by accident. */
