@@ -6,7 +6,7 @@ import { isOffline } from "../../data/offline";
 import { Presence } from "../../components/Presence";
 import { PageHead } from "../../app/AppShell";
 import { Button, Card, Chip, Empty, Input, Select, Tabs } from "../../components/primitives";
-import { Confirm } from "../../components/Modal";
+import { Confirm, Modal } from "../../components/Modal";
 import { GoodsReceiptDialog } from "../purchasing/GoodsReceiptDialog";
 import { removeAttachmentsFor } from "../../data/attachments";
 import { useToast } from "../../components/Toast";
@@ -750,39 +750,52 @@ export function QuotationsScreen({
         />
       ) : null}
 
-      {/* The next step, offered rather than taken. A won quotation becomes a
-          proforma for the advance, or goes straight to a tax invoice — and
-          which of the two it is depends on the customer, so it is asked
-          rather than guessed. */}
-      <Confirm
+      {/* The next step, OFFERED RATHER THAN TAKEN, and three ways out
+          rather than two. This was a Confirm, whose second button is
+          always called Cancel — and "Cancel" next to a win somebody has
+          just recorded reads as "undo the win", which is the one thing it
+          never did. The win is already saved by the time this appears;
+          every button here only decides which document gets raised next,
+          including the one that raises none. */}
+      <Modal
         open={!!wonNext}
         title={`${wonNext?.number} won — what next?`}
-        confirmLabel="Raise proforma"
-        body={
-          <div className="stack">
-            <p>
-              {wonNext && customerOf(wonNext) ? customerLabel(customerOf(wonNext)!) : "The customer"} is now marked
-              {" "}<span className="strong">Won</span> on the pipeline board, worth{" "}
-              <span className="strong">{wonNext ? moneyList(computeDocument(wonNext, sellerState).grand, wonNext.currency) : ""}</span>,
-              and the automatic follow-ups have stopped.
-            </p>
-            <p className="muted">
-              Raise the proforma now if they are paying in advance. If they have given you a purchase order and will
-              pay against the bill, raise the tax invoice instead — both carry these lines across.
-            </p>
+        onClose={() => setWonNext(null)}
+        footer={
+          <>
+            <Button tone="quiet" onClick={() => setWonNext(null)}>Skip for now</Button>
             {onCreateInvoice ? (
               <Button
                 tone="default"
                 onClick={() => { const d = wonNext; setWonNext(null); if (d) void raiseInvoice(d); }}
               >
-                Raise tax invoice instead
+                Raise tax invoice
               </Button>
             ) : null}
-          </div>
+            <Button
+              tone="primary"
+              onClick={() => { const d = wonNext; setWonNext(null); if (d) void raiseProforma(d); }}
+            >
+              Raise proforma
+            </Button>
+          </>
         }
-        onConfirm={() => { const d = wonNext; setWonNext(null); if (d) void raiseProforma(d); }}
-        onCancel={() => setWonNext(null)}
-      />
+      >
+        <div className="stack">
+          <p style={{ margin: 0 }}>
+            {wonNext && customerOf(wonNext) ? customerLabel(customerOf(wonNext)!) : "The customer"} is now marked
+            {" "}<span className="strong">Won</span> on the pipeline board, worth{" "}
+            <span className="strong">{wonNext ? moneyList(computeDocument(wonNext, sellerState).grand, wonNext.currency) : ""}</span>,
+            and the automatic follow-ups have stopped.
+          </p>
+          <p className="muted" style={{ margin: 0 }}>
+            Raise the proforma now if they are paying in advance. If they have given you a purchase order and will
+            pay against the bill, raise the tax invoice instead — both carry these lines across. Skipping changes
+            nothing: the win is already recorded, and either document can be raised from this row whenever you want
+            it.
+          </p>
+        </div>
+      </Modal>
 
       <Presence value={receiving}>
         {(order, open) => (
