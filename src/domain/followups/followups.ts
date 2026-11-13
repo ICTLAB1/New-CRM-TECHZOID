@@ -127,6 +127,66 @@ export interface FollowUp {
  * that boundary — see stopReason, which does not call a quotation expired
  * until its validity is behind it.
  */
+/**
+ * The shape of the default sequence, as a share of the window it has to
+ * fit in: an early nudge, a check about half way, and a last word just
+ * before the quotation lapses.
+ *
+ * These three fractions are not arbitrary. On the fifteen-day validity
+ * this CRM shipped with they land on days 3, 7 and 14 — which is exactly
+ * DEFAULT_FOLLOWUP_STEPS, the sequence they replace. Nothing changes for
+ * a workspace that never touched either setting; what changes is what
+ * happens when the window is not fifteen days.
+ */
+const DEFAULT_SHAPE = [0.2, 0.47, 0.93] as const;
+
+/**
+ * The default sequence, fitted to the days actually left.
+ *
+ * WHY THIS EXISTS, AND IT IS A FAULT OF MINE. The sequence was three
+ * fixed days — 3, 7 and 14 — and a step falling past the quotation's
+ * validity is dropped. Those two rules never collided while a new
+ * quotation was valid for fifteen days. Then the default validity became
+ * seven, to agree with the first clause of the terms, and they collided
+ * hard: the day-14 step could no longer arm on any quotation at all, and
+ * one sent four days after it was raised armed NOTHING. The reported
+ * symptom was "auto follow-ups neither showing nor going", and this was
+ * most of it.
+ *
+ * Measured, before and after, in followups.test.ts: a seven-day quotation
+ * sent the day it is raised went from two chases to three, and one sent
+ * on day four went from one to three.
+ */
+export function fittedSteps(
+  sentOn: string,
+  validUntil?: string | null,
+  tones: readonly FollowUpTone[] = ["nudge", "check", "final"],
+): FollowUpStep[] {
+  if (!validUntil) return [...DEFAULT_FOLLOWUP_STEPS];
+  const room = daysBetween(sentOn, validUntil);
+  /* Sent on the day it lapses: there is no room, and saying so is the
+     honest answer rather than chasing a dead quotation. */
+  if (room < 1) return [];
+
+  const seen = new Set<number>();
+  const out: FollowUpStep[] = [];
+  tones.forEach((tone, i) => {
+    const day = Math.min(room, Math.max(MIN_STEP_DAYS, Math.round(room * (DEFAULT_SHAPE[i] ?? 0.9))));
+    if (seen.has(day)) return;      // a short window collapses two steps onto one day
+    seen.add(day);
+    out.push({ afterDays: day, tone });
+  });
+  return out;
+}
+
+/** Whole days from one ISO date to another; negative when it is behind. */
+function daysBetween(from: string, to: string): number {
+  const a = Date.parse(`${from}T00:00:00Z`);
+  const b = Date.parse(`${to}T00:00:00Z`);
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return 0;
+  return Math.round((b - a) / 86_400_000);
+}
+
 export function planFollowUps(
   sentOn: string,
   steps: readonly FollowUpStep[] = DEFAULT_FOLLOWUP_STEPS,
@@ -316,6 +376,26 @@ export function readSteps(stored: unknown): readonly FollowUpStep[] {
     .sort((a, b) => a.afterDays - b.afterDays)
     .slice(0, MAX_STEPS);
   return steps.length ? steps : DEFAULT_FOLLOWUP_STEPS;
+}
+
+/**
+ * The cadence to plan with: the workspace's own if it has set one, else
+ * one fitted to the days this document actually has left.
+ *
+ * THE DISTINCTION MATTERS. Days somebody typed into Settings are a
+ * decision, and a step of theirs that falls past the validity is still
+ * dropped with the existing explanation — moving it would make the
+ * sequence say something they did not choose. The DEFAULT is not a
+ * decision anybody made, so it is free to fit the window instead of being
+ * silently cut to pieces by it.
+ */
+export function stepsFor(
+  stored: unknown,
+  sentOn: string,
+  validUntil?: string | null,
+): readonly FollowUpStep[] {
+  const configured = Array.isArray(stored) && stored.length > 0;
+  return configured ? readSteps(stored) : fittedSteps(sentOn, validUntil);
 }
 
 /**

@@ -22,10 +22,7 @@ import {
 import {
   bannerAllowed, bannerUrlFor, greetingFor, type FestiveGreeting,
 } from "../../domain/greetings/festive";
-import {
-  autoFollowUpsOn, followUpBody, followUpSubject, planFollowUps, readSteps, stopReason,
-  TONE_LABELS, type FollowUpFacts, type FollowUpTone,
-} from "../../domain/followups/followups";
+import { TONE_LABELS, autoFollowUpsOn, followUpBody, followUpSubject, planFollowUps, stepsFor, stopReason, type FollowUpFacts, type FollowUpTone } from "../../domain/followups/followups";
 import { armFollowUps, followUpsAvailable, type ArmedStep } from "../../data/followups";
 import { mayWhatsApp, splitNumber, templateFor, TEMPLATE_SETTING } from "../../domain/integrations/interakt";
 import { TODAY } from "../../domain/dates";
@@ -250,7 +247,7 @@ export function DocumentActions({
      the actual dates rather than "we'll follow up" — the person pressing
      Send is the last human who sees these emails before a customer does. */
   const plannedFollowUps = canFollowUp
-    ? planFollowUps(TODAY(), readSteps(settings["followUpSteps"]), doc.validUntil || null)
+    ? planFollowUps(TODAY(), stepsFor(settings["followUpSteps"], TODAY(), doc.validUntil || null), doc.validUntil || null)
     : [];
 
   /* WHY IT CANNOT ARM, IN THE PLACE SOMEBODY WOULD LOOK FOR IT. The first

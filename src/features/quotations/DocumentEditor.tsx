@@ -816,7 +816,13 @@ export function DocumentEditor({
           </div>
 
           {docType === "quotation" || docType === "proforma" ? (
-            <FollowUpStrip docId={doc.id} />
+            <FollowUpStrip
+              docId={doc.id}
+              docType={docType}
+              status={doc.status}
+              validUntil={doc.validUntil}
+              settings={settings}
+            />
           ) : null}
         </div>
 

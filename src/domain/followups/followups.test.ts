@@ -1,8 +1,19 @@
 import { describe, expect, it } from "vitest";
 import {
-  autoFollowUpsOn, DEFAULT_FOLLOWUP_STEPS, describeSchedule, dueFollowUps, followUpBody,
-  followUpSubject, planFollowUps, readSteps, stopReason, type FollowUp,
+  DEFAULT_FOLLOWUP_STEPS,
+  autoFollowUpsOn,
+  describeSchedule,
+  dueFollowUps,
+  fittedSteps,
+  followUpBody,
+  followUpSubject,
+  planFollowUps,
+  readSteps,
+  stepsFor,
+  stopReason,
+  type FollowUp,
 } from "./followups";
+import { addDays } from "../dates";
 
 const SENT = "2026-08-24";
 
@@ -224,5 +235,98 @@ describe("the workspace switch", () => {
     expect(autoFollowUpsOn({})).toBe(true);
     expect(autoFollowUpsOn({ autoFollowUps: true })).toBe(true);
     expect(autoFollowUpsOn({ autoFollowUps: false })).toBe(false);
+  });
+});
+
+
+/* ── the cadence fitted to the window it has to live in ───────────────
+   A fault of mine, measured. The sequence was three fixed days — 3, 7, 14
+   — and a step past the quotation's validity is dropped. Those rules
+   never collided while a new quotation was valid for fifteen days; the
+   default became seven to agree with the terms, and they collided. */
+
+describe("a default sequence that fits the days actually left", () => {
+  const SENT = "2026-11-01";
+
+  it("lands on 3, 7 and 14 for the fifteen-day validity this CRM shipped with", () => {
+    // Which is DEFAULT_FOLLOWUP_STEPS exactly. A workspace that never
+    // touched either setting sees no change at all.
+    expect(fittedSteps(SENT, "2026-11-16").map((s) => s.afterDays)).toEqual([3, 7, 14]);
+    expect(fittedSteps(SENT, "2026-11-16").map((s) => s.tone)).toEqual(["nudge", "check", "final"]);
+  });
+
+  it("fits a seven-day quotation instead of being cut to pieces by it", () => {
+    // Before: the day-14 step could never arm on ANY seven-day quotation.
+    const before = planFollowUps(SENT, DEFAULT_FOLLOWUP_STEPS, "2026-11-08");
+    expect(before).toHaveLength(2);
+
+    const after = planFollowUps(SENT, fittedSteps(SENT, "2026-11-08"), "2026-11-08");
+    expect(after).toHaveLength(3);
+    expect(after.map((s) => s.dueOn)).toEqual(["2026-11-02", "2026-11-04", "2026-11-08"]);
+  });
+
+  it("still arms a sequence on a quotation sent four days after it was raised", () => {
+    // THE REPORTED CASE. Raised on the 1st, valid to the 8th, sent on the
+    // 5th: the fixed sequence put every step past the 8th and armed
+    // nothing, which is "auto follow-ups neither showing nor going".
+    const sent = "2026-11-05";
+    expect(planFollowUps(sent, DEFAULT_FOLLOWUP_STEPS, "2026-11-08")).toHaveLength(1);
+
+    const fitted = planFollowUps(sent, fittedSteps(sent, "2026-11-08"), "2026-11-08");
+    expect(fitted.length).toBeGreaterThanOrEqual(2);
+    for (const step of fitted) expect(step.dueOn <= "2026-11-08").toBe(true);
+  });
+
+  it("never plans a chase after the quotation lapses", () => {
+    for (const days of [1, 2, 3, 5, 7, 10, 15, 30, 45]) {
+      const until = addDays(SENT, days);
+      for (const step of planFollowUps(SENT, fittedSteps(SENT, until), until)) {
+        expect(step.dueOn <= until, `${days}-day window planned ${step.dueOn} past ${until}`).toBe(true);
+      }
+    }
+  });
+
+  it("always plans at least one chase while there is a day left to do it in", () => {
+    for (const days of [1, 2, 3, 5, 7, 10, 15, 30]) {
+      const until = addDays(SENT, days);
+      expect(planFollowUps(SENT, fittedSteps(SENT, until), until).length, `${days}-day window`)
+        .toBeGreaterThanOrEqual(1);
+    }
+  });
+
+  it("says nothing rather than chasing a quotation sent on the day it lapses", () => {
+    expect(fittedSteps(SENT, SENT)).toEqual([]);
+    expect(planFollowUps(SENT, fittedSteps(SENT, SENT), SENT)).toEqual([]);
+  });
+
+  it("collapses two steps that would land on one day", () => {
+    // A two-day window cannot hold three distinct chases, and two emails
+    // in one morning is not a sequence.
+    const until = addDays(SENT, 2);
+    const days = fittedSteps(SENT, until).map((s) => s.afterDays);
+    expect(new Set(days).size).toBe(days.length);
+  });
+
+  it("falls back to the shipped sequence when nothing says when it lapses", () => {
+    expect(fittedSteps(SENT, null)).toEqual([...DEFAULT_FOLLOWUP_STEPS]);
+  });
+});
+
+describe("whose cadence wins", () => {
+  const SENT = "2026-11-01";
+
+  it("keeps days somebody typed into Settings, exactly as typed", () => {
+    // A configured cadence is a decision. A step of theirs past the
+    // validity is still dropped, with the explanation the send dialog
+    // already shows — moving it would make the sequence say something
+    // they did not choose.
+    const configured = [{ afterDays: 5, tone: "check" as const }];
+    expect(stepsFor(configured, SENT, "2026-11-08")).toEqual(configured);
+  });
+
+  it("fits the window only when nobody has chosen a cadence", () => {
+    expect(stepsFor(undefined, SENT, "2026-11-08").map((s) => s.afterDays)).toEqual([1, 3, 7]);
+    expect(stepsFor([], SENT, "2026-11-08").map((s) => s.afterDays)).toEqual([1, 3, 7]);
+    expect(stepsFor("3,7,14", SENT, "2026-11-08").map((s) => s.afterDays)).toEqual([1, 3, 7]);
   });
 });

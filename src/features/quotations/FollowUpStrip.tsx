@@ -3,23 +3,53 @@ import { Button, Chip } from "../../components/primitives";
 import { Confirm } from "../../components/Modal";
 import { useToast } from "../../components/Toast";
 import { fmtDate } from "../../domain/dates";
-import { describeSchedule, TONE_LABELS, type FollowUp } from "../../domain/followups/followups";
+import {
+  autoFollowUpsOn,
+  describeSchedule,
+  planFollowUps,
+  stepsFor,
+  stopReason,
+  TONE_LABELS,
+  type FollowUp,
+} from "../../domain/followups/followups";
+import { fmtDate as formatDate, TODAY } from "../../domain/dates";
 import { cancelFollowUps, followUpsAvailable, listFollowUps } from "../../data/followups";
 
 /**
- * What is queued against this document, and the way to stop it.
+ * What is queued against this document — or, before it is sent, what will
+ * be — and the way to stop it.
  *
- * Shown only when there is something to show. A document with no sequence
- * says nothing here — the send dialog already explains what arming would do,
- * and a permanent "no follow-ups scheduled" line on every quotation is noise
- * that trains people to stop reading this area.
+ * IT USED TO SAY NOTHING AT ALL WHILE A QUOTATION WAS BEING WRITTEN, on
+ * the grounds that a permanent "no follow-ups scheduled" line is noise.
+ * That was right about the noise and wrong about the silence: the only
+ * mention of follow-ups anywhere was inside the send dialog, so from the
+ * editor the feature did not appear to exist. "No options showing for auto
+ * follow-ups" is exactly what that looks like from the other side.
+ *
+ * So a draft now shows the plan: the dates this customer will be chased
+ * on if it is sent today, or the reason there will be none. Still nothing
+ * at all on a document where chasing makes no sense — an invoice, a
+ * purchase order, a quotation already accepted.
  *
  * The Stop button exists because these emails leave without anybody
  * watching. Every automatic message this product can send has to be
  * cancellable from the record it belongs to, by whoever is looking at it —
  * not from a settings screen, and not only by the person who armed it.
  */
-export function FollowUpStrip({ docId }: { docId: string }) {
+export function FollowUpStrip({
+  docId,
+  docType,
+  status,
+  validUntil,
+  settings = {},
+}: {
+  docId: string;
+  /** Chasing only makes sense on something a customer has to answer. */
+  docType?: string;
+  status?: string;
+  validUntil?: string | null;
+  settings?: Record<string, unknown>;
+}) {
   const toast = useToast();
   const [rows, setRows] = useState<FollowUp[]>([]);
   const [asking, setAsking] = useState(false);
@@ -34,7 +64,39 @@ export function FollowUpStrip({ docId }: { docId: string }) {
 
   useEffect(() => { void refresh(); }, [refresh]);
 
-  if (!rows.length) return null;
+  /* ── nothing armed yet: say what sending would do ──────────────────── */
+  if (!rows.length) {
+    const chaseable = docType === "quotation" || docType === "proforma";
+    if (!chaseable) return null;
+    if (!autoFollowUpsOn(settings)) {
+      return (
+        <Planned
+          note="Automatic follow-ups are switched off for this workspace. Settings → Follow-ups turns them back on."
+        />
+      );
+    }
+
+    const stopped = stopReason({ status: status ?? "", validUntil: validUntil ?? undefined });
+    if (stopped) return <Planned note={`No follow-ups: ${stopped}.`} />;
+
+    const today = TODAY();
+    const planned = planFollowUps(today, stepsFor(settings["followUpSteps"], today, validUntil ?? null), validUntil ?? null);
+    if (!planned.length) {
+      return (
+        <Planned
+          note={`There is no room to chase this one — it lapses ${validUntil ? `on ${formatDate(validUntil)}` : "too soon"}. Move Valid until further out to have it followed up.`}
+        />
+      );
+    }
+
+    return (
+      <Planned
+        note={`If you send this today, ${planned.length === 1 ? "one reminder goes" : `${planned.length} reminders go`} automatically — ${planned
+          .map((p) => `${formatDate(p.dueOn)} (${TONE_LABELS[p.tone]?.name ?? p.tone})`)
+          .join(", ")}. You can turn them off on the send dialog.`}
+      />
+    );
+  }
 
   const waiting = rows.filter((r) => r.state === "scheduled");
 
@@ -118,4 +180,16 @@ function stateLabel(r: FollowUp): string {
   if (r.state === "failed") return r.error ? `Failed — ${r.error}` : "Failed";
   if (r.state === "cancelled") return r.error ? `Stopped — ${r.error}` : "Stopped";
   return "Scheduled";
+}
+
+/** The line a draft shows: what will happen, or why nothing will. */
+function Planned({ note }: { note: string }) {
+  return (
+    <div className="stack" style={{ borderTop: "1px solid var(--rule)", paddingTop: 12 }}>
+      <div className="row-tight wrap">
+        <span className="eyebrow">Follow-ups</span>
+      </div>
+      <p className="field-hint" style={{ margin: 0 }}>{note}</p>
+    </div>
+  );
 }
