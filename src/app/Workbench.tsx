@@ -13,7 +13,7 @@ import { computeDocument } from "../domain/tax/compute";
 const sellerStateOf = (settings: Record<string, unknown>): string =>
   ((settings["company"] as { state?: string })?.state) ?? "Delhi";
 import { useToast } from "../components/Toast";
-import { applyStage, type StageId } from "../domain/pipeline/stages";
+import { applyStage, type LostDetail, type StageId } from "../domain/pipeline/stages";
 import { AppShell, PageHead } from "./AppShell";
 import { BroadcastPopup } from "../features/broadcasts/BroadcastPopup";
 import { Card } from "../components/primitives";
@@ -206,6 +206,30 @@ export function Workbench({
     );
   };
 
+  /* WHAT BECAME OF A DEAL, as recorded from a document's own row.
+     Different from advanceCustomer above in two ways that matter: it is a
+     decision rather than a nudge, so it lands on a concluded deal too, and
+     it carries what the deal was worth and why it was lost.
+
+     The value is only ever filled IN, never overwritten: a figure somebody
+     typed about this customer is better information than one quotation's
+     total, and applyStage freezes whichever is there at the moment of the
+     win. Without it a customer created from a quotation — which is most of
+     them — won a deal worth nothing at all. */
+  const recordDealOutcome = (
+    customerId: string,
+    stage: StageId,
+    detail?: { value?: number; lost?: LostDetail },
+  ) => {
+    handleCustomersChange(
+      customers.map((c) => {
+        if (c.id !== customerId) return c;
+        const valued = detail?.value && !(Number(c.value) > 0) ? { ...c, value: detail.value } : c;
+        return { ...applyStage(valued, stage), ...(detail?.lost ?? {}), updatedAt: Date.now() };
+      }),
+    );
+  };
+
   /* Invoices are in here because the incentive calculation is measured on
      them. Leaving them out is why a raised, accepted invoice counted for
      nothing on that screen. */
@@ -356,6 +380,7 @@ export function Workbench({
           onCreateCustomer={(c: Customer) => handleCustomersChange([c, ...customers])}
           onCreateBankAccount={addBankAccount}
           onCustomerStage={advanceCustomer}
+          onDealOutcome={recordDealOutcome}
           onCreateProforma={(pf) => { onChange("proformas", [pf, ...proformas]); setView("proformas"); }}
           onCreateInvoice={(inv) => { onChange("invoices", [inv, ...invoices]); setView("invoices"); }}
         />

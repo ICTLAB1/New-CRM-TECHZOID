@@ -22,7 +22,13 @@ import {
 } from "../../domain/documents/create";
 import type { Customer } from "../../domain/customers/customer";
 import { advancesPipeline, concludedAt, isConcluded, stageAfterQuotation } from "../../domain/pipeline/advance";
-import { stageOf } from "../../domain/pipeline/stages";
+import { stageOf, type LostDetail, type StageId } from "../../domain/pipeline/stages";
+import {
+  OUTCOME_LABEL, outcomesFor, stageAfterOutcome, statusAfterOutcome, wonValueFor, type Outcome,
+} from "../../domain/documents/outcome";
+import { LostReasonModal } from "../pipeline/LostReasonModal";
+import { cancelFollowUps } from "../../data/followups";
+import { customerLabel } from "../../domain/customers/customer";
 import { DEFAULT_PREFIX, buildDocNumber, fyLabel } from "../../domain/numbering/docNumber";
 import { docSeries, nextDocNumber } from "../../data/docNumber";
 import { OBJ_TYPE } from "../../domain/documents/objType";
@@ -65,6 +71,10 @@ export interface QuotationsScreenProps {
   /** Moves the customer along the pipeline board when a quotation reaches
    *  them. Absent on the screens where that would make no sense. */
   onCustomerStage?: (customerId: string, stage: string, requote?: boolean) => void;
+  /** Records what BECAME of a deal — won, lost, or agreed — rather than
+   *  nudging it along as paperwork goes out. Carries what a win was worth
+   *  and why a loss was lost, which `onCustomerStage` has no room for. */
+  onDealOutcome?: (customerId: string, stage: StageId, detail?: { value?: number; lost?: LostDetail }) => void;
   /** Catches this browser up with a counter the database has just advanced.
    *  Local only — it writes nothing back, so it works for a salesperson,
    *  who may not edit settings. */
@@ -99,7 +109,7 @@ export interface QuotationsScreenProps {
 
 export function QuotationsScreen({
   docType, documents, customers, catalog, settings, brandLogos, docImages, api, currentUser, companyId,
-  onChange, onCustomerStage, onSettingsNote, onCreateBankAccount, onCreateProforma, onCreateInvoice, onCreateOrder,
+  onChange, onCustomerStage, onDealOutcome, onSettingsNote, onCreateBankAccount, onCreateProforma, onCreateInvoice, onCreateOrder,
   onCreateCustomer, team = [], customFields = [], related, intent,
 }: QuotationsScreenProps) {
   const toast = useToast();
@@ -110,12 +120,27 @@ export function QuotationsScreen({
   const [customer, setCustomer] = useState("all");
   const [confirmDelete, setConfirmDelete] = useState<SalesDocument | null>(null);
   const [receiving, setReceiving] = useState<SalesDocument | null>(null);
+  /* A loss asks for a reason AFTER it has been recorded, never before —
+     holding the move hostage to the reason is what leaves dead deals
+     sitting in the pipeline. Same rule as the board. */
+  const [pendingLost, setPendingLost] = useState<SalesDocument | null>(null);
+  /* A win earns the obvious next question, which is the whole point of
+     recording it here rather than in a dropdown. */
+  const [wonNext, setWonNext] = useState<SalesDocument | null>(null);
   const saving = useRef(false);
 
   const isPo = docType === "purchase_order";
   const isInvoice = docType === "invoice";
   const label = isPo ? "Purchase order" : isInvoice ? "Tax invoice" : docType === "proforma" ? "Proforma" : "Quotation";
   const sellerState = ((settings["company"] as { state?: string })?.state) ?? "Delhi";
+
+  const customerOf = (doc: SalesDocument): Customer | null =>
+    customers.find((c) => c.id === doc.customerId) ?? null;
+
+  /* Offered on quotations only. A proforma's outcome is whether it was
+     paid, which it already tracks; a purchase order faces a supplier and
+     has no deal behind it at all. */
+  const canRecordOutcome = docType === "quotation" && !!onDealOutcome;
 
   /* Which series each document type draws from — a function of the TYPE,
      because this screen also raises documents of other types. See
@@ -417,6 +442,54 @@ export function QuotationsScreen({
     toast(`Proforma ${pf.number} raised from ${doc.number}.`, "good");
   };
 
+  /* ── what became of the deal ──────────────────────────────────────── */
+
+  /* ONE CLICK, FOUR CONSEQUENCES. Setting the status dropdown to "Accepted"
+     used to tell the quotation and nothing else: the deal stayed in
+     Quotation Sent on the board, the automatic chasers kept going out to a
+     customer who had already said yes, and the win never reached the
+     revenue reports. The rules live in domain/documents/outcome.ts; this
+     applies them.
+
+     The chasers are cancelled here as well as refused by the runner. The
+     runner reads the document's status and stops by itself, so nothing can
+     go out wrongly either way — but a salesperson who has just pressed
+     "Lost" should see the sequence stop NOW, not learn tomorrow that it
+     would have. */
+  const recordOutcome = async (doc: SalesDocument, outcome: Outcome, lost?: LostDetail) => {
+    const customer = customers.find((c) => c.id === doc.customerId) ?? null;
+
+    await save({ ...doc, status: statusAfterOutcome(outcome) });
+
+    const stage = stageAfterOutcome(outcome, customer?.stage);
+    if (stage && doc.customerId) {
+      onDealOutcome?.(doc.customerId, stage, {
+        /* Only a win freezes a figure, and only where the deal has none of
+           its own — see wonValueFor. */
+        value: outcome === "won"
+          ? wonValueFor(customer, computeDocument(doc, sellerState).grand)
+          : undefined,
+        lost,
+      });
+    }
+
+    /* Best effort, and deliberately not awaited into the outcome: the
+       outcome is recorded whether or not the queue could be reached, and a
+       sequence that outlives it is stopped by the runner anyway. */
+    void cancelFollowUps(doc.id).catch(() => {});
+
+    if (outcome === "lost") setPendingLost(doc);
+    if (outcome === "won") setWonNext(doc);
+    if (outcome === "accepted") {
+      toast(`${doc.number} marked accepted. ${customer ? customerLabel(customer) : "The deal"} moves to Negotiation and the follow-ups stop.`, "good");
+    }
+  };
+
+  /** The reason, saved against the customer after the loss is recorded. */
+  const saveLostReason = (doc: SalesDocument, detail: LostDetail) => {
+    if (doc.customerId) onDealOutcome?.(doc.customerId, "lost", { lost: detail });
+  };
+
   if (editing) {
     return (
       <main className="page">
@@ -594,6 +667,23 @@ export function QuotationsScreen({
                       <td data-label="Value" className="num strong">{moneyList(totals.grand, d.currency)}</td>
                       <td data-actions>
                         <span className="row-tight">
+                          {/* WHAT HAPPENED TO IT, on the row, where anybody
+                              can say so without opening the document. One
+                              click records the lot: the quotation, the deal
+                              on the pipeline board, the value in the revenue
+                              reports and the automatic chasers. */}
+                          {canRecordOutcome
+                            ? outcomesFor(d, customerOf(d)?.stage).map((o) => (
+                                <Button
+                                  key={o}
+                                  size="sm"
+                                  tone={o === "won" ? "primary" : o === "lost" ? "quiet" : "default"}
+                                  onClick={() => void recordOutcome(d, o)}
+                                >
+                                  {OUTCOME_LABEL[o]}
+                                </Button>
+                              ))
+                            : null}
                           <Button size="sm" tone="quiet" onClick={() => setEditing(d)}>Edit</Button>
                           {isPo && d.status !== "Cancelled" && d.status !== "Draft" ? (
                             <Button size="sm" tone="default" onClick={() => setReceiving(d)}>Receive</Button>
@@ -644,6 +734,48 @@ export function QuotationsScreen({
           setConfirmDelete(null);
         }}
         onCancel={() => setConfirmDelete(null)}
+      />
+
+      {pendingLost ? (
+        <LostReasonModal
+          company={customerOf(pendingLost) ? customerLabel(customerOf(pendingLost)!) : (pendingLost.billName || "this deal")}
+          onSave={(detail) => { saveLostReason(pendingLost, detail); setPendingLost(null); }}
+          onSkip={() => setPendingLost(null)}
+        />
+      ) : null}
+
+      {/* The next step, offered rather than taken. A won quotation becomes a
+          proforma for the advance, or goes straight to a tax invoice — and
+          which of the two it is depends on the customer, so it is asked
+          rather than guessed. */}
+      <Confirm
+        open={!!wonNext}
+        title={`${wonNext?.number} won — what next?`}
+        confirmLabel="Raise proforma"
+        body={
+          <div className="stack">
+            <p>
+              {wonNext && customerOf(wonNext) ? customerLabel(customerOf(wonNext)!) : "The customer"} is now marked
+              {" "}<span className="strong">Won</span> on the pipeline board, worth{" "}
+              <span className="strong">{wonNext ? moneyList(computeDocument(wonNext, sellerState).grand, wonNext.currency) : ""}</span>,
+              and the automatic follow-ups have stopped.
+            </p>
+            <p className="muted">
+              Raise the proforma now if they are paying in advance. If they have given you a purchase order and will
+              pay against the bill, raise the tax invoice instead — both carry these lines across.
+            </p>
+            {onCreateInvoice ? (
+              <Button
+                tone="default"
+                onClick={() => { const d = wonNext; setWonNext(null); if (d) void raiseInvoice(d); }}
+              >
+                Raise tax invoice instead
+              </Button>
+            ) : null}
+          </div>
+        }
+        onConfirm={() => { const d = wonNext; setWonNext(null); if (d) void raiseProforma(d); }}
+        onCancel={() => setWonNext(null)}
       />
 
       <Presence value={receiving}>
