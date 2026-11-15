@@ -46,6 +46,14 @@ vi.mock("./paymentSender.mjs", () => ({
   sendThanks: vi.fn(async ({ receipt }) => { sent.push(receipt); return { state: "sent" }; }),
 }));
 
+/* The sender itself is proved beside whatsappSender.mjs. Here it stands in,
+   so that what this endpoint ASKS FOR can be checked — and so that a sender
+   that throws can be shown not to take the thank-you down with it. */
+vi.mock("./whatsappSender.mjs", () => ({
+  sendMessage: vi.fn(async () => ({ ok: true, id: "wamid.1" })),
+}));
+const { sendMessage } = await import("./whatsappSender.mjs");
+
 const { handler } = await import("../functions/payment-thanks-send.mjs");
 
 const call = (body) => handler({ httpMethod: "POST", headers: {}, body: JSON.stringify(body) });
@@ -53,6 +61,10 @@ const parse = (res) => JSON.parse(res.body);
 
 beforeEach(() => {
   sent.length = 0;
+  sendMessage.mockReset();
+  sendMessage.mockResolvedValue({ ok: true, id: "wamid.1" });
+  vi.spyOn(console, "log").mockImplementation(() => {});
+  vi.spyOn(console, "error").mockImplementation(() => {});
   who = { user: { id: "u1" }, role: "Sales" };
   DB.company_members = [{ company_id: "c1", user_id: "u1" }];
   DB.payment_tracker_settings = [{ company_id: "c1", data: {} }];
@@ -177,5 +189,69 @@ describe("the company's own switch", () => {
       expect(body.subject).toContain("TZ/26-27/0142");
       expect(sent).toHaveLength(0);
     });
+  });
+});
+
+describe("thanking them on WhatsApp too", () => {
+  const ask = () => sendMessage.mock.calls[0]?.[1] ?? {};
+
+  it("asks for the approved “payment received” message about the bill", async () => {
+    await call({ action: "send", source: "bill", refId: "b1", paymentId: "p1" });
+    expect(ask()).toMatchObject({
+      companyId: "c1",
+      template: "payment_received",
+      recordType: "bill",
+      recordId: "b1",
+      manual: false,
+    });
+  });
+
+  it("thanks them for what they just paid, not for everything paid so far", async () => {
+    /* ₹1,45,000 has been received in all; this payment was ₹1,00,000. */
+    await call({ action: "send", source: "bill", refId: "b1", paymentId: "p1" });
+    expect(ask().extra).toMatchObject({ amount: 100000, against: "invoice TZ/26-27/0142" });
+  });
+
+  it("works from a tax invoice as well, naming that invoice", async () => {
+    await call({ action: "send", source: "invoice", refId: "i1", paymentId: "x2", invoiceAmount: 100000 });
+    expect(ask()).toMatchObject({ recordType: "invoice", recordId: "i1" });
+    expect(ask().extra).toMatchObject({ amount: 60000, against: "invoice TZ/INV/2026-27/0031" });
+  });
+
+  it("never sends it as a manual message, so the switch is always consulted", async () => {
+    await call({ action: "send", source: "bill", refId: "b1", paymentId: "p1" });
+    expect(ask().manual).toBe(false);
+  });
+
+  it("reports whether it went, alongside the email", async () => {
+    await call({ action: "send", source: "bill", refId: "b1", paymentId: "p1" })
+      .then((res) => expect(parse(res).whatsapp).toMatchObject({ ok: true }));
+  });
+
+  it("DOES NOT FAIL THE THANK-YOU when WhatsApp refuses", async () => {
+    sendMessage.mockResolvedValue({ ok: false, reason: "That message is switched off." });
+    const res = await call({ action: "send", source: "bill", refId: "b1", paymentId: "p1" });
+    expect(res.statusCode).toBe(200);
+    expect(parse(res).state).toBe("sent");
+    expect(parse(res).whatsapp.ok).toBe(false);
+  });
+
+  it("DOES NOT FAIL THE THANK-YOU when WhatsApp throws", async () => {
+    sendMessage.mockRejectedValue(new Error("Meta is down"));
+    const res = await call({ action: "send", source: "bill", refId: "b1", paymentId: "p1" });
+    expect(res.statusCode).toBe(200);
+    expect(parse(res).state).toBe("sent");
+    expect(sent).toHaveLength(1);
+  });
+
+  it("sends no WhatsApp message when only a preview was asked for", async () => {
+    await call({ action: "preview", source: "bill", refId: "b1", paymentId: "p1" });
+    expect(sendMessage).not.toHaveBeenCalled();
+  });
+
+  it("sends no WhatsApp message when the record belongs to another company", async () => {
+    DB.company_members = [];
+    await call({ action: "send", source: "bill", refId: "b1", paymentId: "p1" });
+    expect(sendMessage).not.toHaveBeenCalled();
   });
 });

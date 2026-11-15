@@ -229,6 +229,23 @@ export const SERVER_CALLABLE = {
      a BDE with a sentence instead of letting them meet a policy error. The
      browser has no need of it: it already knows whose session it is. */
   role_in: [{ args: ["p_company"], returns: "scalar" }],
+
+  /* WHOSE NUMBER IS THIS. A WhatsApp reply arrives as a bare number and the
+     webhook has to find the customer it belongs to; the function reads
+     customers across the whole company to answer, which is exactly why it
+     is in here and not in CALLABLE. A browser able to call it could ask
+     "who in this company has this number", one number at a time.
+
+     Left out of this list once already, and the cost is worth recording:
+     the webhook's lookup failed, the failure was caught and logged as
+     "could not match", and every reply from a known customer was filed
+     under a bare phone number with nobody attached. The Inbox worked, the
+     emails went out, and nothing looked broken. */
+  whatsapp_customer_for: [{ args: ["p_company", "p_digits"], returns: "scalar" }],
+
+  /* AND WHICH COMPANY, for the same reason and with the same reach: it
+     looks at customers in every company to find the one this number is on. */
+  whatsapp_company_for: [{ args: ["p_digits"], returns: "scalar" }],
 };
 
 const IDENTIFIER = /^[a-z_][a-z0-9_]*$/;

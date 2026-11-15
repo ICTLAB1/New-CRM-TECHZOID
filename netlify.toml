@@ -53,3 +53,14 @@
 # exactly like an IndiaMART account with no enquiries.
 [functions."indiamart-pull"]
   schedule = "*/5 * * * *"
+
+# The four WhatsApp messages that go out on a date rather than on an action:
+# a quotation unanswered for three days, an invoice due in three, one already
+# overdue, and a subscription renewing in thirty. 04:30 UTC is 10:00 in India.
+#
+# Declared here as well as in the function file: the schedule is the whole
+# feature, and a scheduled function that silently is not scheduled looks
+# exactly like one with nothing to send — which is also what most runs of
+# this one correctly look like.
+[functions."whatsapp-reminders-run"]
+  schedule = "30 4 * * *"

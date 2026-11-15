@@ -22,6 +22,7 @@ export const VIEWS: readonly string[] = [
   "components",
   "customers", "discount-approvals", "dispatch", "incentives", "integrations",
   "invoices", "mail", "orders", "payment-tracker", "pipeline", "price-book",
+  "whatsapp",
   "proformas", "prospects", "purchase-orders", "quotations", "receivables",
   "renewals", "reports", "scan", "settings", "subscriptions", "tasks", "team",
 ];

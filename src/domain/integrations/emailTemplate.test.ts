@@ -228,6 +228,76 @@ describe("the signature", () => {
   });
 });
 
+describe("the designed signature strip", () => {
+  const STRIP = {
+    src: "https://crm.ttpldelhi.com/brand/email-signature.png",
+    alt: "TechZoid Technologies — Microsoft Solutions Partner, Adobe Certified Reseller, "
+      + "Autodesk Reseller. ISO 9001:2015, ISO 27001:2022, ISO 20000 certified. GeM registered seller.",
+    width: 600,
+  };
+  const withStrip = (over = {}) => signatureHtml(SENDER, { ...COMPANY, signatureImage: STRIP, ...over });
+
+  it("is added UNDER the written signature, never instead of it", () => {
+    /* Most clients block a remote image until the reader asks for it, and
+       Outlook on Windows blocks by default. An email whose whole signature
+       is one picture arrives, for those readers, as an empty box where the
+       sender's name and number should be. */
+    const html = withStrip();
+    expect(html).toContain("Abhinav Jain");
+    expect(html).toContain("abhinav.jain@techzoidtechnologies.com");
+    expect(html.indexOf("Abhinav Jain")).toBeLessThan(html.indexOf("email-signature.png"));
+  });
+
+  it("says in words what the picture claims, for a reader who never sees it", () => {
+    const html = withStrip();
+    expect(html).toContain("Microsoft Solutions Partner");
+    expect(html).toContain("ISO 27001:2022");
+    expect(html).toContain("GeM registered seller");
+  });
+
+  it("is absent unless one is configured", () => {
+    expect(signatureHtml(SENDER, COMPANY)).not.toContain("email-signature.png");
+  });
+
+  it("cannot force a phone's mail app to scroll sideways", () => {
+    const html = withStrip();
+    expect(html).toMatch(/max-width:600px/);
+    expect(html).toContain("width:100%");
+    expect(html).toContain("height:auto");
+  });
+
+  it("survives a quote mark in the alt text without breaking the markup", () => {
+    const html = withStrip({ signatureImage: { ...STRIP, alt: 'He said "hello" & left' } });
+    expect(html).toContain("&quot;hello&quot;");
+    expect(html).toContain("&amp; left");
+  });
+});
+
+describe("a business that answers in two countries", () => {
+  const TWO = [
+    { label: "India", number: "+91 97114 92098" },
+    { label: "UAE", number: "+971 58 939 7239" },
+  ];
+
+  it("shows each number with the place it rings", () => {
+    const html = signatureHtml(SENDER, { ...COMPANY, phones: TWO });
+    expect(html).toContain("INDIA");
+    expect(html).toContain("UAE");
+    expect(html).toContain("+971 58 939 7239");
+  });
+
+  it("makes both tappable, with the dialling characters stripped", () => {
+    const html = signatureHtml(SENDER, { ...COMPANY, phones: TWO });
+    expect(html).toContain('href="tel:+919711492098"');
+    expect(html).toContain('href="tel:+971589397239"');
+  });
+
+  it("ignores an empty row rather than printing a bare label", () => {
+    const html = signatureHtml(SENDER, { ...COMPANY, phones: [...TWO, { label: "Singapore", number: "  " }] });
+    expect(html).not.toContain("SINGAPORE");
+  });
+});
+
 describe("email-client compatibility", () => {
   it("lays out with tables and inline styles, which Outlook renders", () => {
     const html = buildEmailHtml(content());

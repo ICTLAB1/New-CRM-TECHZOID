@@ -20,8 +20,18 @@ export function fnPath(name: string): string {
 
 /** The same, as a full address — for values pasted into other services. */
 export function fnUrl(name: string): string {
+  const path = fnPath(name);
+  /* ALREADY ABSOLUTE WHEN THE FUNCTIONS LIVE SOMEWHERE ELSE. In production
+     they are served from this same site, so the path is "/api/…" and the
+     origin goes in front of it. In development VITE_API_BASE points at a
+     functions host on another port, and the path is already a whole URL —
+     gluing an origin onto that produced
+     "http://localhost:5173http://localhost:7071/api/whatsapp-webhook",
+     which is what the WhatsApp settings screen told somebody to paste into
+     Meta. */
+  if (/^https?:\/\//i.test(path)) return path;
   const origin = typeof window === "undefined" ? "https://crm.ttpldelhi.com" : window.location.origin;
-  return origin + fnPath(name);
+  return origin + path;
 }
 
 /** The signed-in person's token for a function call, or null. */

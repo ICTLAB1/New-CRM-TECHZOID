@@ -22,6 +22,7 @@
  */
 
 import { askAdminToAdd, whereSettingsLive } from "./whereSettingsLive.mjs";
+import { metaConfigured, sendTemplate as sendViaMeta } from "./whatsappMeta.mjs";
 
 const ENDPOINT = "https://api.interakt.ai/v1/public/message/";
 
@@ -29,6 +30,20 @@ const ENDPOINT = "https://api.interakt.ai/v1/public/message/";
  * @returns {{ok: true, id: string|null} | {ok: false, error: string, retryable?: boolean}}
  */
 export async function sendWhatsAppTemplate({ to, templateName, bodyValues, languageCode = "en", callbackData = "" }) {
+  /* META FIRST, WHEN IT IS SET UP. The company now holds its own WhatsApp
+     Business account rather than renting one through Interakt, and this is
+     the door every automatic message already comes through — the quotation
+     chasers and the payment reminders among them. Routing it here moves all
+     of them onto the company's own number without touching a single caller.
+     Interakt stays behind it so a deployment that still has only the old
+     key keeps working. */
+  if (metaConfigured()) {
+    const out = await sendViaMeta({ to, templateName, values: bodyValues ?? [], languageCode });
+    return out.ok
+      ? { ok: true, id: out.id }
+      : { ok: false, error: out.error, retryable: out.retryable };
+  }
+
   const key = process.env.INTERAKT_API_KEY;
   if (!key) {
     return {

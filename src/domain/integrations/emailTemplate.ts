@@ -43,6 +43,30 @@ export interface EmailCompany {
    *  row of broken boxes for most readers — and a broken certification mark
    *  is worse than none. The words always render. */
   certifications?: string[];
+  /** More than one number, each with the place it rings — "INDIA", "UAE".
+   *  `phone` above is still the company's main line; this is for a business
+   *  that answers in two countries and says so on its signature. */
+  phones?: Array<{ label: string; number: string }>;
+  /**
+   * The designed signature strip, as an image.
+   *
+   * ADDED BENEATH THE WRITTEN SIGNATURE, NEVER INSTEAD OF IT. A designed
+   * strip carries partner badges and certification marks that cannot be set
+   * in type, and it is what the company wants on its mail. But most clients
+   * block a remote image until the reader asks for it, and Outlook on
+   * Windows blocks it by default — so an email whose whole signature is one
+   * image arrives, for a great many readers, as an empty box where the
+   * sender's name and number should be. The text block above it is what
+   * always renders; this is the part that makes it look like the company.
+   *
+   * `src` must be an absolute https URL. A relative path resolves against
+   * nothing inside a mail client, and a `data:` URI is stripped outright by
+   * Gmail — the two ways this silently turns into a broken image.
+   *
+   * `alt` is not decoration: it is what a reader sees when the image is
+   * blocked, so it should say in words what the strip claims in pictures.
+   */
+  signatureImage?: { src: string; alt: string; width?: number } | null;
 }
 
 /** One line on the summary table. Everything is PRE-FORMATTED: the template
@@ -207,7 +231,23 @@ export function signatureHtml(sender: EmailSender, company: EmailCompany): strin
     rows.push(`<div style="font-size:12px;color:${MUTED};margin-top:4px;">${contact.join(" &nbsp;·&nbsp; ")}</div>`);
   }
 
-  if (!rows.length) return "";
+  /* Two countries, each labelled. Written out rather than run together, so
+     a customer in Dubai can see which number rings where. */
+  const places = (company.phones ?? []).filter((p) => p?.number?.trim());
+  if (places.length) {
+    const line = places
+      .map((p) => {
+        const dial = escapeHtml(p.number.replace(/[^0-9+]/g, ""));
+        const label = p.label?.trim()
+          ? `<span style="color:${ACCENT};font-weight:700;">${escapeHtml(p.label.trim().toUpperCase())}</span> `
+          : "";
+        return `${label}<a href="tel:${dial}" style="color:${MUTED};text-decoration:none;">${escapeHtml(p.number)}</a>`;
+      })
+      .join(" &nbsp;·&nbsp; ");
+    rows.push(`<div style="font-size:12px;color:${MUTED};margin-top:4px;">${line}</div>`);
+  }
+
+  if (!rows.length && !company.signatureImage?.src) return "";
 
   /* The logo sits beside the text in a two-cell table rather than a float:
      Outlook ignores float entirely and would stack them. */
@@ -218,12 +258,28 @@ export function signatureHtml(sender: EmailSender, company: EmailCompany): strin
        </td>`
     : "";
 
+  /* THE STRIP GOES UNDER THE WORDS. Its own row, full width, with the
+     alt text carrying the same claims in case the reader's client never
+     fetches it. `max-width:100%` is what stops it forcing a phone's mail
+     app into a sideways scroll. */
+  const strip = company.signatureImage?.src
+    ? `<tr>
+         <td colspan="2" style="padding-top:14px;">
+           <img src="${escapeHtml(company.signatureImage.src)}"
+                alt="${escapeHtml(company.signatureImage.alt ?? company.name ?? "")}"
+                ${company.signatureImage.width ? `width="${Math.round(company.signatureImage.width)}"` : ""}
+                style="display:block;width:100%;max-width:${Math.round(company.signatureImage.width ?? 600)}px;height:auto;border:0;" />
+         </td>
+       </tr>`
+    : "";
+
   return `
   <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-top:22px;border-top:1px solid ${RULE};padding-top:16px;width:100%;">
     <tr>
       ${logoCell}
       <td style="vertical-align:top;">${rows.join("")}</td>
     </tr>
+    ${strip}
   </table>`;
 }
 

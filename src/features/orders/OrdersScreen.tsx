@@ -14,6 +14,8 @@ import { newChallan, suggestedStage, type DeliveryChallan, type SalesOrder } fro
 import { computeDocument } from "../../domain/tax/compute";
 import { moneyList } from "../../domain/currency/format";
 import { fmtDate } from "../../domain/dates";
+import { SendWhatsAppDialog } from "../whatsapp/SendWhatsAppDialog";
+import { WHATSAPP_FOR, notifyWhatsApp } from "../../data/whatsapp";
 
 export interface OrdersScreenProps {
   /** Show one order on arrival (from the header search). */
@@ -27,13 +29,18 @@ export interface OrdersScreenProps {
   /** Catches this browser up with a counter the database has just advanced.
    *  Local only — it writes nothing back. */
   onSettingsNote?: (settings: Record<string, unknown>) => void;
+  /** Which company's WhatsApp account an approved message goes out on. */
+  companyId?: string | null;
 }
 
-export function OrdersScreen({ orders, challans, settings, currentUser, onChange, onSettingsNote, focusNumber }: OrdersScreenProps) {
+export function OrdersScreen({ orders, challans, settings, currentUser, onChange, onSettingsNote, focusNumber, companyId }: OrdersScreenProps) {
   const toast = useToast();
   const [stage, setStage] = useState<string>(focusNumber ? "all" : "open");
   const [query, setQuery] = useState(focusNumber ?? "");
   const [files, setFiles] = useState<SalesOrder | null>(null);
+  /* The order a WhatsApp message is being sent about. Held rather than a
+     flag, because the dialog reads the order it was opened on. */
+  const [waOrder, setWaOrder] = useState<SalesOrder | null>(null);
   const sellerState = ((settings["company"] as { state?: string })?.state) ?? "Delhi";
 
   const shown = useMemo(() => {
@@ -49,6 +56,26 @@ export function OrdersScreen({ orders, challans, settings, currentUser, onChange
   const setStageOf = (order: SalesOrder, next: OrderStageId) => {
     onChange(orders.map((o) => (o.id === order.id ? { ...o, stage: next, updatedAt: Date.now() } : o)), challans, settings);
     toast(`${order.number} moved to ${orderStageOf(next).label}.`, "good");
+
+    /* DELIVERED IS THE MOMENT THE CUSTOMER CARES ABOUT, so it is the one
+       that writes to them — if they have agreed and the company has switched
+       that message on, which it has not until somebody does.
+
+       Not awaited and never able to fail: the stage change is already saved
+       above, and `notifyWhatsApp` does not throw. The server refuses a second
+       copy of the same message about the same order on the same day, so
+       moving an order out of Delivered and back does not message them
+       twice. */
+    if (next === "delivered" && companyId) {
+      void notifyWhatsApp({
+        companyId,
+        template: "order_delivered",
+        recordType: "order",
+        recordId: order.id,
+        customerId: order.customerId || undefined,
+        trigger: "order marked delivered",
+      });
+    }
   };
 
   const raiseChallan = async (order: SalesOrder) => {
@@ -148,6 +175,12 @@ export function OrdersScreen({ orders, challans, settings, currentUser, onChange
                               the site photo — the paperwork an order collects
                               that is not a document this CRM produced. */}
                           <Button size="sm" tone="quiet" onClick={() => setFiles(o)}>Files</Button>
+                          {/* Tells the customer it has been delivered, or
+                              that their licence keys have gone out, in the
+                              approved wording. Shows it first; sends only on
+                              confirming. Needs their permission, which the
+                              dialog says plainly when it is missing. */}
+                          <Button size="sm" tone="quiet" onClick={() => setWaOrder(o)}>WhatsApp</Button>
                         </span>
                       </td>
                     </tr>
@@ -163,6 +196,18 @@ export function OrdersScreen({ orders, challans, settings, currentUser, onChange
         Stage changes are suggested from what has actually shipped, never applied on their own —
         an order can be fully dispatched and still not delivered.
       </p>
+
+      {waOrder ? (
+        <SendWhatsAppDialog
+          open
+          onClose={() => setWaOrder(null)}
+          companyId={companyId ?? null}
+          templates={WHATSAPP_FOR["order"] ?? []}
+          recordType="order"
+          recordId={waOrder.id}
+          customerId={waOrder.customerId || undefined}
+        />
+      ) : null}
 
       <Presence value={files}>
         {(order, open) => (

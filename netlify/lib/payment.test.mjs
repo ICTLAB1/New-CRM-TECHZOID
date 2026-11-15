@@ -2,9 +2,16 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 
 vi.mock("./mailer.mjs", () => ({ sendMail: vi.fn(async () => ({ ok: true, via: "microsoft" })) }));
 vi.mock("./whatsapp.mjs", () => ({ sendWhatsAppTemplate: vi.fn(async () => ({ ok: true, id: "wa-1" })) }));
+/* Reminders go through the one WhatsApp sender, with everything it
+   enforces. Its own tests prove the consent tick, the switches and the
+   log; here it stands in so that what a reminder ASKS FOR can be read. */
+vi.mock("./whatsappSender.mjs", () => ({
+  sendMessage: vi.fn(async () => ({ ok: true, id: "wamid.1" })),
+}));
 
 const { sendMail } = await import("./mailer.mjs");
 const { sendWhatsAppTemplate } = await import("./whatsapp.mjs");
+const { sendMessage } = await import("./whatsappSender.mjs");
 const { sendReminder, splitList } = await import("./paymentSender.mjs");
 const { renderReminderEmail, whatsappFor, renderDigest, money } = await import("./paymentMessages.mjs");
 
@@ -43,7 +50,12 @@ function fakeAdmin() {
   return api;
 }
 
-beforeEach(() => { sendMail.mockClear(); sendWhatsAppTemplate.mockClear(); });
+beforeEach(() => {
+  sendMail.mockClear();
+  sendWhatsAppTemplate.mockClear();
+  sendMessage.mockReset();
+  sendMessage.mockResolvedValue({ ok: true, id: "wamid.1" });
+});
 
 describe("sendReminder", () => {
   it("sends once, and a second attempt for the same step sends nothing", async () => {
@@ -63,10 +75,61 @@ describe("sendReminder", () => {
     const base = { admin, row, step: "d0", tone: "due", today: "2026-10-01", settings: {} };
     expect((await sendReminder({ ...base, channel: "email" })).state).toBe("sent");
     expect((await sendReminder({ ...base, channel: "whatsapp" })).state).toBe("sent");
-    const wa = sendWhatsAppTemplate.mock.calls[0][0];
-    expect(wa.to).toBe("+91 9810012345");
-    expect(wa.templateName).toBe("payment_due_reminder");
-    expect(wa.bodyValues).toEqual(["Rohit Sharma", "TZ/26-27/0142", "₹2,00,000.00", "01 Oct 2026"]);
+    expect(sendMessage.mock.calls[0][1]).toMatchObject({
+      companyId: "c1",
+      template: "payment_due_reminder",
+      recordType: "bill",
+      recordId: "b1",
+      extra: { today: "2026-10-01" },
+    });
+    /* NOT the old path, which asked nobody's permission. */
+    expect(sendWhatsAppTemplate).not.toHaveBeenCalled();
+  });
+
+  it("asks one of the eight approved messages, never a name of its own", async () => {
+    for (const tone of ["upcoming", "due", "overdue", "firm", "final"]) {
+      sendMessage.mockClear();
+      await sendReminder({
+        admin: fakeAdmin(), row, step: `s-${tone}`, tone, channel: "whatsapp",
+        today: "2026-10-08", settings: {},
+      });
+      expect(sendMessage.mock.calls[0][1].template, tone).toMatch(/^payment_(due|overdue)_reminder$/);
+    }
+  });
+
+  it("records a refusal — no consent, switched off — as a failed reminder, not a sent one", async () => {
+    sendMessage.mockResolvedValueOnce({
+      ok: false,
+      reason: "This customer has not agreed to WhatsApp updates.",
+    });
+    const admin = fakeAdmin();
+    const r = await sendReminder({
+      admin, row, step: "d0", tone: "due", channel: "whatsapp", today: "2026-10-01", settings: {},
+    });
+    expect(r.state).toBe("failed");
+    expect(r.error).toContain("not agreed");
+  });
+
+  it("treats a message that had already gone today as sent, not as a failure", async () => {
+    sendMessage.mockResolvedValueOnce({ ok: false, alreadySent: true, reason: "Already gone today." });
+    const admin = fakeAdmin();
+    const r = await sendReminder({
+      admin, row, step: "d0", tone: "due", channel: "whatsapp", today: "2026-10-01", settings: {},
+    });
+    expect(r.state).toBe("sent");
+    expect([...admin.log.values()][0].state).toBe("sent");
+  });
+
+  it("still uses the old path for a template name typed into the tracker's settings", async () => {
+    sendWhatsAppTemplate.mockClear();
+    sendMessage.mockClear();
+    const admin = fakeAdmin();
+    await sendReminder({
+      admin, row, step: "d0", tone: "due", channel: "whatsapp", today: "2026-10-01",
+      settings: { waTemplates: { due: "our_own_thing" } },
+    });
+    expect(sendMessage).not.toHaveBeenCalled();
+    expect(sendWhatsAppTemplate.mock.calls[0][0].templateName).toBe("our_own_thing");
   });
 
   it("records a failure and does not throw", async () => {

@@ -806,6 +806,7 @@ export function DocumentEditor({
               images={docImages}
               currentUser={currentUser}
               customer={customers.find((c) => c.id === doc.customerId) ?? null}
+              companyId={companyId ?? null}
               /* Emailing it IS sending it. Recorded here rather than left to
                  somebody remembering to change a dropdown afterwards —
                  which is why quotations sat at "Draft" and their deals sat

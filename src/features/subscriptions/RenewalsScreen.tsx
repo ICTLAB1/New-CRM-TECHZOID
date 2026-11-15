@@ -11,6 +11,8 @@ import {
 } from "../../domain/subscriptions/expiry";
 import { inrList, inrShort } from "../../domain/currency/format";
 import { fmtDate } from "../../domain/dates";
+import { SendWhatsAppDialog } from "../whatsapp/SendWhatsAppDialog";
+import { WHATSAPP_FOR } from "../../data/whatsapp";
 
 /**
  * Subscriptions and renewals on one screen.
@@ -22,18 +24,22 @@ import { fmtDate } from "../../domain/dates";
  * same thing in a tenth of the space.
  */
 export function RenewalsScreen({
-  subscriptions, customers, onChange, openId,
+  subscriptions, customers, onChange, openId, companyId,
 }: {
   /** Open one subscription on arrival (from the header search). */
   openId?: string;
   subscriptions: Subscription[];
   customers: { id: string; company?: string }[];
+  /** Which company's WhatsApp account a renewal notice goes out on. */
+  companyId?: string | null;
   onChange: (subs: Subscription[]) => void;
 }) {
   const toast = useToast();
   const [window, setWindow] = useState("30");
   const [query, setQuery] = useState("");
   const [editing, setEditing] = useState<Subscription | null>(() => subscriptions.find((s) => s.id === openId) ?? null);
+  /* The subscription a renewal notice is being sent about. */
+  const [waSub, setWaSub] = useState<Subscription | null>(null);
 
   const windows = [7, 30, 90] as const;
 
@@ -138,7 +144,16 @@ export function RenewalsScreen({
                       <td data-label="Status"><Chip tone={tone}>{expiryLabel(s)}</Chip></td>
                       <td data-label="Stage" className="muted">{isPerpetual(s) ? "—" : s.renewalStage || "—"}</td>
                       <td data-label="Value" className="num strong">{s.sellPrice ? inrList(s.sellPrice) : "—"}</td>
-                      <td data-actions><Button size="sm" tone="quiet" onClick={() => setEditing(s)}>Edit</Button></td>
+                      <td data-actions>
+                        <span className="row-tight">
+                          {/* The approved renewal notice, shown before it is
+                              sent. The daily job sends this on its own 30
+                              days out; this is for sending it again, or
+                              earlier, after a conversation. */}
+                          <Button size="sm" tone="quiet" onClick={() => setWaSub(s)}>WhatsApp</Button>
+                          <Button size="sm" tone="quiet" onClick={() => setEditing(s)}>Edit</Button>
+                        </span>
+                      </td>
                     </tr>
                   );
                 })}
@@ -147,6 +162,18 @@ export function RenewalsScreen({
           </div>
         )}
       </Card>
+
+      {waSub ? (
+        <SendWhatsAppDialog
+          open
+          onClose={() => setWaSub(null)}
+          companyId={companyId ?? null}
+          templates={WHATSAPP_FOR["subscription"] ?? []}
+          recordType="subscription"
+          recordId={waSub.id}
+          customerId={waSub.customerId || undefined}
+        />
+      ) : null}
 
       {editing ? (
         <SubscriptionModal

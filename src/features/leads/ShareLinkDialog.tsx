@@ -6,6 +6,7 @@ import { whatsappLink } from "../../domain/integrations/phone";
 import { isLeadCode, leadLink } from "../../domain/leads/link";
 import { myLeadCode } from "../../data/leadCode";
 import { IntegrationError, type IntegrationsApi } from "../../integrations/api";
+import { emailCompanyFrom } from "../../domain/integrations/emailIdentity";
 import {
   buildEmailHtml, buildEmailText,
   type EmailCompany, type EmailSender,
@@ -184,17 +185,7 @@ function SendLinkDialog({
     designation: user.designation ?? "",
   };
 
-  const company: EmailCompany = {
-    name: companyName,
-    tagline: String(companySettings["tagline"] ?? ""),
-    website: String(companySettings["website"] ?? ""),
-    phone: String(companySettings["phone"] ?? ""),
-    email: String(companySettings["email"] ?? ""),
-    addressLines: [],
-    gstin: String(companySettings["gstin"] ?? ""),
-    pan: String(companySettings["pan"] ?? ""),
-    cin: String(companySettings["cin"] ?? ""),
-  };
+  const company: EmailCompany = emailCompanyFrom(settings);
 
   /* Named where we have a name, and no greeting at all where we do not —
      "Dear Sir/Madam" announces that the sender did not know who they were

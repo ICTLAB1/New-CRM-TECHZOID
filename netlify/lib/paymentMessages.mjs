@@ -1,6 +1,7 @@
 import { escapeHtml } from "./html.mjs";
 import { automatedNotice } from "./automatedNotice.mjs";
 import { daysBetween, outstandingOf } from "./paymentRules.mjs";
+import { TEMPLATES, buildParams } from "./whatsappTemplates.mjs";
 
 /**
  * The words of a payment reminder — email and WhatsApp.
@@ -23,7 +24,13 @@ export const DEFAULT_TEMPLATES = {
   due: "payment_due_reminder",
   overdue: "payment_overdue_reminder",
   firm: "payment_overdue_reminder",
-  final: "payment_final_reminder",
+  /* There is no separate "final" template approved in Meta. A template that
+     is not approved is not sent — Meta rejects it outright — so the firmest
+     reminder uses the overdue one, which carries the number of days overdue
+     and so reads more pointedly the longer a bill has been owed. The words
+     cannot be made firmer than the approved wording from here; that is what
+     the approval is. */
+  final: "payment_overdue_reminder",
 };
 
 export function money(amount, currency = "INR") {
@@ -297,14 +304,45 @@ ${contactLine ? `<p style="margin:12px 0 0">${escapeHtml(contactLine)}</p>` : ""
 }
 
 /**
- * WhatsApp: an approved template and its four placeholders.
- *   {{1}} name   {{2}} invoice no.   {{3}} amount outstanding   {{4}} due date
+ * WhatsApp: which approved template this reminder is, and what goes in its
+ * blanks.
+ *
+ * THE BLANKS ARE FILLED BY THE APPROVED DEFINITION, not by a list written
+ * here. Meta counts the placeholders in the wording it approved and refuses
+ * the message when the count does not match — so the overdue reminder, which
+ * has five blanks because it names the number of days, cannot be sent with
+ * the four this used to pass. It was, until this was written: every overdue
+ * reminder would have been refused by Meta with "the number of parameters
+ * does not match". `buildParams` reads the approved definition, so the two
+ * cannot disagree.
+ *
+ * A TEMPLATE NAME SOMEBODY TYPED IN SETTINGS is still honoured, and then the
+ * old four values are used, because nothing here knows what that template's
+ * wording expects.
  */
-export function whatsappFor(row, tone, settings = {}) {
+export function whatsappFor(row, tone, settings = {}, today = "") {
   const names = { ...DEFAULT_TEMPLATES, ...(settings.waTemplates ?? {}) };
+  const templateName = String(names[tone] || DEFAULT_TEMPLATES[tone] || "").trim();
   const outstanding = outstandingOf({ amount: row.amount, amountPaid: row.amount_paid });
+  const dueOn = String(row.due_date ?? "").slice(0, 10);
+
+  if (TEMPLATES[templateName]) {
+    const { values } = buildParams(templateName, {
+      customer: greetingName(row),
+      invoiceNo: String(row.invoice_no ?? ""),
+      /* The number, not a formatted string: the approved definition formats
+         money in the Indian style the templates were approved with. */
+      amount: outstanding,
+      dueOn,
+      /* Nothing when the day is not known, so the template's own fallback is
+         used rather than a confident "0 days overdue". */
+      daysOverdue: today ? Math.max(0, daysBetween(dueOn, String(today).slice(0, 10))) : "",
+    });
+    return { templateName, bodyValues: values };
+  }
+
   return {
-    templateName: String(names[tone] || DEFAULT_TEMPLATES[tone] || "").trim(),
+    templateName,
     bodyValues: [
       greetingName(row),
       String(row.invoice_no),

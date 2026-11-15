@@ -5,6 +5,7 @@ import { NotesPanel } from "./NotesPanel";
 import { VerifyPanel } from "./VerifyPanel";
 import { PortalPanel } from "./PortalPanel";
 import { Customer360Panel } from "./Customer360Panel";
+import { CustomerWhatsApp } from "../whatsapp/CustomerWhatsApp";
 import type { CustomerProfile } from "../../domain/customers/profile";
 import { addNote } from "../../domain/customers/notes";
 import { askBeforeSave, useConfirmedAction } from "../../components/useConfirmedAction";
@@ -57,6 +58,8 @@ export interface CustomerSheetProps {
   /** Read for `confirmBeforeSave`. Optional so the sheet still renders
    *  without a settings row — it simply asks, which is the default. */
   settings?: Record<string, unknown>;
+  /** Which company's WhatsApp log the history is read from. */
+  companyId?: string | null;
   /** Open with the paperwork in view rather than the form. Set by the
    *  Documents button on the customers list — the panel sits below a long
    *  form, and "it is in there somewhere, scroll" is how a feature stays
@@ -67,7 +70,7 @@ export interface CustomerSheetProps {
 }
 
 export function CustomerSheet({
-  profile, unavailable = [], open = true, customer, isNew = false, users, customFields, canReassign, currentUser, settings = {}, focus, onSave, onClose }: CustomerSheetProps) {
+  profile, unavailable = [], open = true, customer, isNew = false, users, customFields, canReassign, currentUser, settings = {}, focus, companyId, onSave, onClose }: CustomerSheetProps) {
   const [f, setF] = useState<Customer>({ ...customer, notes: customer.notes ?? [], customFields: customer.customFields ?? {} });
   const set = <K extends keyof Customer>(k: K) => (e: { target: { value: string } }) =>
     setF((cur) => ({ ...cur, [k]: e.target.value }));
@@ -178,8 +181,27 @@ export function CustomerSheet({
               checked={f.whatsappOptIn === true}
               onChange={(e) => setF((cur) => ({ ...cur, whatsappOptIn: e.target.checked }))}
             />
-            <span>They have agreed to be contacted on WhatsApp</span>
+            <span>WhatsApp updates allowed — they have agreed to be contacted on WhatsApp</span>
           </label>
+
+          {/* Only asked for once the tick is on: a WhatsApp number on a
+              customer nobody may message is a field that means nothing. */}
+          {f.whatsappOptIn === true ? (
+            <Field
+              label="WhatsApp number"
+              hint={
+                (f.whatsappPhone ?? "").trim()
+                  ? "Messages go here."
+                  : `Leave empty to use the phone number above${(f.phone ?? "").trim() ? ` — ${f.phone}` : ""}.`
+              }
+            >
+              <Input
+                value={f.whatsappPhone ?? ""}
+                onChange={set("whatsappPhone")}
+                placeholder="+91 98100 12345"
+              />
+            </Field>
+          ) : null}
         </div>
 
         <div className="stack">
@@ -348,6 +370,12 @@ export function CustomerSheet({
         {/* What this company has been sent, and what came of it. Above the
             notes because it is the thing most often being looked for. */}
         {profile ? <Customer360Panel profile={profile} unavailable={unavailable} /> : null}
+
+        {/* What has been said to them on WhatsApp, and whether it arrived.
+            Nothing is shown when nothing has been sent. */}
+        {!isNew && customer.id ? (
+          <CustomerWhatsApp companyId={companyId ?? null} customerId={customer.id} />
+        ) : null}
 
         {/* Calls, emails and meetings. Folded into the record being edited
             rather than saved on its own, so a note and the follow-up date

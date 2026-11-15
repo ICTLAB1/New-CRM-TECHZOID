@@ -4,6 +4,8 @@ import { useToast } from "../../components/Toast";
 import { Confirm, Modal } from "../../components/Modal";
 import { Field, Input, Textarea } from "../../components/primitives";
 import { WhatsAppDialog } from "../integrations/WhatsAppDialog";
+import { SendWhatsAppDialog } from "../whatsapp/SendWhatsAppDialog";
+import { WHATSAPP_FOR, notifyWhatsApp } from "../../data/whatsapp";
 import { SendForInvoicing } from "../integrations/SendForInvoicing";
 import { downloadPdf, pdfAttachment, previewPdf } from "../../documents/pdf/deliver";
 import { fmtCurrency } from "../../domain/currency/format";
@@ -15,6 +17,7 @@ import type { ComputedRow, DocumentTotals } from "../../domain/tax/types";
 import type { SalesDocument } from "../../domain/documents/create";
 import type { Customer } from "../../domain/customers/customer";
 import { IntegrationError, type IntegrationsApi } from "../../integrations/api";
+import { emailCompanyFrom } from "../../domain/integrations/emailIdentity";
 import {
   buildEmailHtml, buildEmailText,
   type EmailCompany, type EmailQuotation, type EmailSender,
@@ -55,6 +58,8 @@ export interface DocumentActionsProps {
   /** The customer this document is for, where there is one. Read only for
    *  whether they have agreed to be messaged on WhatsApp. */
   customer?: Customer | null;
+  /** Which company's WhatsApp account the approved message goes out on. */
+  companyId?: string | null;
   /** Called once the customer actually has the document. The editor uses it
    *  to record that it was sent — until now nothing did, so a quotation
    *  emailed on Monday still read "Draft" on Friday, and the deal sat in
@@ -114,14 +119,21 @@ function defaultMessage(doc: SalesDocument, docType: DocType): string {
 }
 
 export function DocumentActions({
-  api, doc, docType, model, rows, totals, settings, images, currentUser, customer, onSent,
+  api, doc, docType, model, rows, totals, settings, images, currentUser, customer, companyId, onSent,
 }: DocumentActionsProps) {
   const toast = useToast();
   const [emailOpen, setEmailOpen] = useState(false);
   const [followUpOpen, setFollowUpOpen] = useState(false);
   const [whatsAppOpen, setWhatsAppOpen] = useState(false);
+  const [approvedOpen, setApprovedOpen] = useState(false);
 
   const renderOpts = { model, rows, images };
+
+  /* Only a quotation. A proforma, a purchase order and an invoice have no
+     approved message about the document itself: an invoice's reminders are
+     sent from the Payment tracker, which knows the due date and what has
+     been paid, and a purchase order goes to a vendor, not a customer. */
+  const approvedTemplates = docType === "quotation" ? (WHATSAPP_FOR["quote"] ?? []) : [];
   const message = defaultMessage(doc, docType);
 
   const company = (settings["company"] ?? {}) as Record<string, unknown>;
@@ -132,22 +144,14 @@ export function DocumentActions({
      code change the day it moves. */
   const autoCc = String(settings["quoteCcEmail"] ?? "");
 
-  const emailBrand: EmailCompany = {
-    name: String(company["name"] ?? ""),
-    tagline: String(company["tagline"] ?? ""),
-    website: String(company["website"] ?? ""),
-    phone: String(company["phone"] ?? ""),
-    email: String(company["email"] ?? ""),
-    logo: String(company["logo"] ?? "") || undefined,
+  /* ONE COMPANY BLOCK, shared with every other screen that sends mail —
+     see domain/integrations/emailIdentity.ts. The address and the
+     certification names come from the document model so the email and the
+     printed copy cannot disagree about either. */
+  const emailBrand: EmailCompany = emailCompanyFrom(settings, {
     addressLines: model.header.addressLines,
-    gstin: String(company["gstin"] ?? ""),
-    pan: String(company["pan"] ?? ""),
-    cin: String(company["cin"] ?? ""),
-    /* The certification NAMES, taken from the same strip the document
-       prints, so the two can never disagree about what this company is
-       certified to. Text, not the badges — see EmailCompany. */
     certifications: model.strips.certifications.map((c) => c.text).filter(Boolean),
-  };
+  });
 
   /* The person actually sending, falling back to whoever prepared the
      document — never to the company's own generic details, which would put
@@ -323,6 +327,27 @@ export function DocumentActions({
      a follow-up write that might fail. */
   const recordSent = async () => {
     onSent?.();
+
+    /* AND TELL THE CUSTOMER ON WHATSAPP, if they have agreed and the company
+       has switched that message on — which it has not, until somebody does.
+
+       FIRE AND FORGET, ON PURPOSE. This runs the moment a quotation reaches
+       a customer, by whatever route; `notifyWhatsApp` never throws, and
+       nothing below waits for it. A quotation that has been emailed has been
+       emailed whether or not Meta accepted a message about it.
+
+       Sending it by hand first does not send it twice: the server refuses a
+       second copy of the same message about the same record on the same day. */
+    if (companyId && approvedTemplates.includes("quotation_sent")) {
+      void notifyWhatsApp({
+        companyId,
+        template: "quotation_sent",
+        recordType: "quote",
+        recordId: doc.id,
+        customerId: doc.customerId || undefined,
+        trigger: "quotation shared",
+      });
+    }
     if (!armable) return;
     const channels = { email: !!toAddress, whatsapp: !!armable.whatsapp.to };
     if (!channels.email && !channels.whatsapp) return;
@@ -370,7 +395,22 @@ export function DocumentActions({
       {canFollowUp ? (
         <Button tone="default" onClick={() => setFollowUpOpen(true)}>Follow up</Button>
       ) : null}
-      <Button tone="default" onClick={() => setWhatsAppOpen(true)}>WhatsApp</Button>
+      {/* TWO DIFFERENT THINGS, SO TWO BUTTONS.
+
+          "Send on WhatsApp" sends one of the approved messages from the
+          business's own WhatsApp number, by itself, and logs it. It needs
+          the customer's permission and only exists for a quotation, because
+          that is the only one of the eight approved messages that is about a
+          document on this screen — the money ones are sent from the Payment
+          tracker, where the CRM knows what is still owed.
+
+          "Open in WhatsApp" opens WhatsApp on this computer with the words
+          typed in, for somebody to send themselves. It works for anybody,
+          needs no approved wording, and sends nothing on its own. */}
+      {approvedTemplates.length ? (
+        <Button tone="default" onClick={() => setApprovedOpen(true)}>Send on WhatsApp</Button>
+      ) : null}
+      <Button tone="quiet" onClick={() => setWhatsAppOpen(true)}>Open in WhatsApp</Button>
       {/* "Send for invoicing" asks accounts to raise a tax invoice against a
           sale. A purchase order is a purchase — there is nothing to invoice. */}
       {docType === "purchase_order" || docType === "invoice" ? null : (
@@ -427,6 +467,22 @@ export function DocumentActions({
           title="Follow up"
           description="Pick how this should read, then edit it. It goes out now, from your mailbox."
           getAttachment={async () => pdfAttachment(renderOpts)}
+        />
+      ) : null}
+
+      {approvedTemplates.length ? (
+        <SendWhatsAppDialog
+          open={approvedOpen}
+          onClose={() => setApprovedOpen(false)}
+          companyId={companyId ?? null}
+          templates={approvedTemplates}
+          recordType="quote"
+          recordId={doc.id}
+          customerId={doc.customerId || undefined}
+          /* A message the customer has read is a quotation that was sent.
+             Same as the email: the status follows what happened, rather
+             than waiting for somebody to change a dropdown. */
+          onSent={() => void recordSent()}
         />
       ) : null}
 

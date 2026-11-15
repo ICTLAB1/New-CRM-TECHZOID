@@ -51,6 +51,7 @@ import { integrations } from "../integrations";
 import { BRAND_LOGOS, DOC_IMAGES } from "./demoData";
 import type { CatalogProduct } from "../domain/catalog/types";
 import { MailScreen } from "../features/mail/MailScreen";
+import { InboxScreen } from "../features/whatsapp/InboxScreen";
 import { ProfileMailerScreen } from "../features/profile/ProfileMailerScreen";
 import type { WorkspaceData } from "../data/useWorkspace";
 import type { Customer } from "../domain/customers/customer";
@@ -360,6 +361,15 @@ export function Workbench({
           />
       ) : view === "mail" ? (
         <MailScreen api={integrations} />
+      ) : view === "whatsapp" ? (
+        <InboxScreen
+          companyId={activeCompanyId}
+          customers={customers}
+          /* Straight to the customer the message came from, because the
+             next question after reading a reply is always "who is this and
+             what have we quoted them?". */
+          onOpenCustomer={(id) => request("customers", "open", id)}
+        />
       ) : view === "customers" ? (
         <CustomersScreen
           intent={intentFor("customers")}
@@ -372,6 +382,7 @@ export function Workbench({
           currentUser={user}
           settings={settings}
           api={integrations}
+          companyId={activeCompanyId}
           onChange={(next, ownership) => { handleCustomersChange(next); applyOwnership(ownership); }}
           /* Straight to the company-profile screen with these customers
              already chosen, rather than a second mail composer here. */
@@ -513,6 +524,7 @@ export function Workbench({
           currentUser={user}
           onChange={(o, c, s) => { onChange("orders", o); onChange("challans", c); onSettingsChange(s); }}
           onSettingsNote={onSettingsNote}
+          companyId={activeCompanyId}
         />
       ) : view === "dispatch" ? (
         <DispatchScreen challans={challans} onChange={(next) => onChange("challans", next)} />
@@ -521,6 +533,7 @@ export function Workbench({
           openId={intentFor(view)?.id}
           subscriptions={subscriptions}
           customers={customers}
+          companyId={activeCompanyId}
           onChange={(next) => onChange("subscriptions", next)}
         />
       ) : view === "integrations" ? (
@@ -612,6 +625,7 @@ export function Workbench({
       ) : view === "settings" ? (
         <SettingsScreen
           currentUser={user}
+          companyId={activeCompanyId}
           settings={settings}
           canEdit={canEditSettings}
           onChange={onSettingsChange}

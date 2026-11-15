@@ -3,6 +3,7 @@ import { BrandStripsPanel } from "./BrandStripsPanel";
 import { FollowUpPanel } from "./FollowUpPanel";
 import { BankAccountsPanel } from "./BankAccountsPanel";
 import { SignaturePanel } from "./SignaturePanel";
+import { WhatsAppPanel } from "./WhatsAppPanel";
 import type { IntegrationsApi } from "../../integrations/api";
 import { PageHead } from "../../app/AppShell";
 import { Button, Card, Chip, Empty, Field, Input, Select, Tabs, Textarea } from "../../components/primitives";
@@ -42,13 +43,15 @@ export interface SettingsScreenProps {
   api?: IntegrationsApi;
   /** Whose name and job title the email signature preview shows. */
   currentUser?: { name?: string; email?: string; designation?: string };
+  /** Which company's WhatsApp setup the WhatsApp tab asks about. */
+  companyId?: string | null;
 }
 
-type Tab = "company" | "document" | "numbering" | "terms" | "incentives" | "fields" | "backup" | "brands" | "followups" | "bank" | "signature";
+type Tab = "company" | "document" | "numbering" | "terms" | "incentives" | "fields" | "backup" | "brands" | "followups" | "bank" | "signature" | "whatsapp";
 
 const uid = (): string => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
 
-export function SettingsScreen({ settings, canEdit, workspaceForBackup, api, currentUser, onRestore, onChange }: SettingsScreenProps) {
+export function SettingsScreen({ settings, canEdit, workspaceForBackup, api, currentUser, companyId, onRestore, onChange }: SettingsScreenProps) {
   const [tab, setTab] = useState<Tab>("company");
 
   return (
@@ -68,6 +71,7 @@ export function SettingsScreen({ settings, canEdit, workspaceForBackup, api, cur
           { id: "bank", label: "Bank accounts" },
           { id: "terms", label: "Default terms" },
           { id: "followups", label: "Follow-ups" },
+          { id: "whatsapp", label: "WhatsApp" },
           { id: "incentives", label: "Incentives" },
           { id: "fields", label: "Custom fields" },
           { id: "backup", label: "Backup" },
@@ -85,6 +89,7 @@ export function SettingsScreen({ settings, canEdit, workspaceForBackup, api, cur
         {tab === "bank" ? <BankAccountsPanel settings={settings} canEdit={canEdit} onChange={onChange} /> : null}
         {tab === "terms" ? <TermsPanel settings={settings} canEdit={canEdit} onChange={onChange} /> : null}
         {tab === "followups" ? <FollowUpPanel settings={settings} canEdit={canEdit} api={api} onChange={onChange} /> : null}
+        {tab === "whatsapp" ? <WhatsAppPanel settings={settings} canEdit={canEdit} companyId={companyId ?? null} onChange={onChange} /> : null}
         {tab === "incentives" ? <IncentivesPanel settings={settings} canEdit={canEdit} onChange={onChange} /> : null}
         {tab === "fields" ? <FieldsPanel settings={settings} canEdit={canEdit} onChange={onChange} /> : null}
         {tab === "backup" ? (

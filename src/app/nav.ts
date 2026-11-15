@@ -26,6 +26,11 @@ export const NAV: NavSection[] = [
       { id: "pipeline", label: "Pipeline" },
       { id: "customers", label: "Customers" },
       { id: "mail", label: "Mail" },
+      /* Beside Mail, because it is the same job: somebody has written to the
+         business and is waiting. The business's WhatsApp number has no
+         handset — it exists only through Meta's API — so a customer's reply
+         reaches nobody unless it is read here. */
+      { id: "whatsapp", label: "WhatsApp Inbox" },
       /* In "Sell" and not under "Administer" with the other settings-shaped
          screens: replacing the PDF is an administrative act done once, and
          sending it is what a salesperson does on a Tuesday afternoon after

@@ -511,6 +511,10 @@ button.tile:hover { background: var(--surface-2); }
 }
 
 /* ── inline warning panel ─────────────────────────────────────────────── */
+/* A FLEX ROW, so everything directly inside it becomes a column. A notice
+   whose text contains an element — a <strong>, a <code>, a link — must wrap
+   that text in ONE child, or the sentence is laid out in pieces side by
+   side. It reads as a bug and it has been one more than once. */
 .notice { display: flex; gap: var(--gap); padding: 11px 13px; border: 1px solid var(--rule); border-left: var(--edge) solid var(--warn); border-radius: var(--radius); background: var(--warn-weak); font-size: var(--t-body); color: var(--ink-2); }
 
 /* ── notice variants ───────────────────────────────────────────────────

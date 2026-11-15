@@ -1,5 +1,7 @@
 import { sendMail } from "./mailer.mjs";
 import { sendWhatsAppTemplate } from "./whatsapp.mjs";
+import { sendMessage } from "./whatsappSender.mjs";
+import { TEMPLATES } from "./whatsappTemplates.mjs";
 import { renderReminderEmail, renderThanksEmail, whatsappFor } from "./paymentMessages.mjs";
 
 /**
@@ -43,13 +45,46 @@ export async function sendReminder({ admin, row, step, tone, channel, today, set
 
   let result;
   if (channel === "whatsapp") {
-    const wa = whatsappFor(row, tone, settings);
-    result = await sendWhatsAppTemplate({
-      to: sendTo,
-      templateName: wa.templateName,
-      bodyValues: wa.bodyValues,
-      callbackData: id,
-    });
+    const wa = whatsappFor(row, tone, settings, today);
+
+    if (TEMPLATES[wa.templateName]) {
+      /* ONE GATE FOR EVERY WHATSAPP MESSAGE THIS CRM SENDS. A payment
+         reminder is one of the eight approved messages, so it goes through
+         the same sender as all the others — which means it obeys the
+         customer's "WhatsApp updates allowed" tick, obeys the company's
+         switch for this particular message (off until somebody turns it on),
+         and is written into the message log that the customer record and the
+         Inbox show. Before this, reminders went out on a path of their own:
+         a customer who had never agreed to WhatsApp could be messaged, and
+         nothing they were sent appeared anywhere a person could see it.
+
+         The step claim above still decides whether this reminder is due at
+         all; this decides whether it may be sent to this customer. */
+      const out = await sendMessage(admin, {
+        companyId: row.company_id,
+        template: wa.templateName,
+        recordType: "bill",
+        recordId: row.id,
+        customerId: row.customer_id ?? null,
+        trigger: `reminder ${tone}`,
+        extra: { today },
+      });
+      /* Already gone today is not a failure: the customer has the message.
+         Recording it as failed would show accounts a red reminder against a
+         message the customer is looking at. */
+      result = out.ok || out.alreadySent
+        ? { ok: true, id: out.id ?? null }
+        : { ok: false, error: out.reason };
+    } else {
+      /* A template name somebody typed into the tracker's own settings.
+         Sent as it always was, because nothing here knows its wording. */
+      result = await sendWhatsAppTemplate({
+        to: sendTo,
+        templateName: wa.templateName,
+        bodyValues: wa.bodyValues,
+        callbackData: id,
+      });
+    }
   } else {
     const mail = renderReminderEmail(row, tone, today, settings);
     const cc = [...splitList(settings.ccEmails), ...splitList(row.cc)];

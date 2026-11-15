@@ -25,6 +25,8 @@ import type { IntegrationsApi } from "../../integrations/api";
 const uid = (): string => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
 
 export interface CustomersScreenProps {
+  /** Which company's WhatsApp log the customer record shows. */
+  companyId?: string | null;
   customers: Customer[];
   workspace: Workspace;
   /** The three document tables, for showing one customer's history on their
@@ -59,7 +61,7 @@ type Pending = { customer: Customer; duplicate: ReturnType<typeof findDuplicate<
 
 export function CustomersScreen({
   documents = {}, subscriptions = [], customers, workspace, users, customFields, currentUser, settings = {}, api, onChange, intent,
-  onSendProfile }: CustomersScreenProps) {
+  companyId, onSendProfile }: CustomersScreenProps) {
   const toast = useToast();
   const [query, setQuery] = useState("");
   const [stageFilter, setStageFilter] = useState<string>("all");
@@ -345,6 +347,7 @@ export function CustomersScreen({
             sellerState: String((settings?.["company"] as { state?: string } | undefined)?.state ?? "Delhi"),
           })}
           unavailable={extra.unavailable}
+          companyId={companyId ?? null}
           isNew={isNew}
           users={users}
           customFields={customFields}

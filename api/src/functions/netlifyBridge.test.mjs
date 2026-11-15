@@ -29,11 +29,16 @@ describe("the functions directory", () => {
     expect(existsSync(FUNCTIONS_DIR)).toBe(true);
   });
 
-  it("finds all thirty-six handlers", () => {
+  it("finds all thirty-nine handlers", () => {
     const names = functionNames();
-    expect(names).toHaveLength(36);
+    expect(names).toHaveLength(39);
     /* One message per recipient, with the stored company profile attached. */
     expect(names).toContain("profile-send");
+    /* WhatsApp: the address Meta calls, the one the browser calls, and the
+       daily reminder run. */
+    expect(names).toContain("whatsapp-webhook");
+    expect(names).toContain("whatsapp-notify");
+    expect(names).toContain("whatsapp-reminders-run");
     expect(names).toContain("submit-lead");
     expect(names).toContain("portal");
     /* The customer's own download of the document they were sent. */
@@ -146,9 +151,9 @@ describe("registration", () => {
     const { app, http, timer } = fakeApp();
     const names = registerNetlifyFunctions(app);
 
-    expect(names).toHaveLength(36);
+    expect(names).toHaveLength(39);
     expect([...timer.keys()].sort()).toEqual(Object.keys(SCHEDULED).sort());
-    expect(http.size).toBe(36 - Object.keys(SCHEDULED).length);
+    expect(http.size).toBe(39 - Object.keys(SCHEDULED).length);
     /* A scheduled one must not ALSO be an HTTP route: on Netlify these were
        endpoints anyone could hit, and a public URL that sends a campaign is
        not something to carry across by accident. */

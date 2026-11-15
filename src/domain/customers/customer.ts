@@ -52,6 +52,11 @@ export interface Customer {
    *  channel — an unticked box is not consent, and neither is a legacy
    *  record that predates the question. */
   whatsappOptIn?: boolean;
+  /** Their WhatsApp number, when it is not the one in `phone`. Stored as
+   *  typed; normalised to 91XXXXXXXXXX whenever it is used. Empty means
+   *  "use the phone on file", because the tick is the consent — see
+   *  netlify/lib/whatsappConsent.mjs. */
+  whatsappPhone?: string;
   website?: string;
 
   /* WHERE THE GOODS GO, which is not always where the invoice goes: a head
@@ -120,7 +125,7 @@ export function blankCustomer(ownerId: string, id: string): Customer {
     id, ownerId,
     company: "", contact: "", designation: "", email: "", phone: "",
     gstin: "", pan: "", address: "", city: "", state: "Delhi",
-    country: "India", pincode: "", altPhone: "", website: "", whatsappOptIn: false,
+    country: "India", pincode: "", altPhone: "", website: "", whatsappOptIn: false, whatsappPhone: "",
     shipSame: true, shipAddress: "", shipCity: "", shipState: "",
     shipPincode: "", shipContact: "", shipPhone: "",
     segment: DEFAULT_SEGMENT, source: DEFAULT_SOURCE, stage: "lead",

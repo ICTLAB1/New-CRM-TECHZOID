@@ -3,6 +3,7 @@ import { fail, guard, json, readJson } from "../lib/http.mjs";
 import { adminClient, signedInProfile } from "../lib/auth.mjs";
 import { renderThanksEmail } from "../lib/paymentMessages.mjs";
 import { sendThanks } from "../lib/paymentSender.mjs";
+import { notifyOnWhatsApp } from "../lib/whatsappAuto.mjs";
 
 /**
  * "Thank you for your payment", sent the moment one is recorded.
@@ -77,7 +78,32 @@ export async function handler(event) {
   if (body.action !== "send") return fail(event, 400, "Unknown action.");
 
   const result = await sendThanks({ admin, receipt, settings, today });
-  return json(event, 200, result);
+
+  /* AND ON WHATSAPP, when the customer has agreed and the switch is on.
+     After the email and never instead of it, and its outcome is reported
+     alongside rather than replacing anything: a payment has been banked
+     whether or not Meta accepted a message about it. */
+  const whatsapp = await notifyOnWhatsApp(admin, {
+    companyId: receipt.company_id,
+    template: "payment_received",
+    recordType: receipt.source,
+    recordId: receipt.ref_id,
+    customerId: receipt.customer_id || null,
+    trigger: "payment recorded",
+    sentBy: userId,
+    extra: {
+      /* What they actually just paid, read from the stored payment — not
+         the running total, which would thank somebody for ₹5,00,000 when
+         they have just sent the last ₹50,000 of it. */
+      amount: receipt.paid_now,
+      /* "invoice TZ/INV/0042" — the one phrase the approved wording expects.
+         A Payment-tracker bill is a record OF an invoice and carries its
+         number, so both sources read the same way to the customer. */
+      against: receipt.invoice_no ? `invoice ${receipt.invoice_no}` : "",
+    },
+  });
+
+  return json(event, 200, { ...result, whatsapp: { ok: !!whatsapp.ok, reason: whatsapp.reason ?? "" } });
 }
 
 /* ── a Payment Tracker bill ─────────────────────────────────────────── */
@@ -96,6 +122,7 @@ async function fromBill(admin, billId, paymentId) {
       ref_id: row.id,
       payment_id: paymentId,
       company_id: row.company_id,
+      customer_id: row.customer_id ?? null,
       owner_id: row.owner_id,
       invoice_no: row.invoice_no,
       customer_name: row.customer_name,
@@ -135,6 +162,7 @@ async function fromInvoice(admin, invoiceId, paymentId, body) {
       ref_id: row.id,
       payment_id: paymentId,
       company_id: row.company_id,
+      customer_id: row.customer_id ?? doc.customerId ?? null,
       owner_id: row.owner_id,
       invoice_no: doc.number ?? "",
       customer_name: doc.billName ?? "",

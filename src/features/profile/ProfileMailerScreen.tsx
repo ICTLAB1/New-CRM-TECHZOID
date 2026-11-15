@@ -9,6 +9,7 @@ import {
   type ProfileDraft, type ProfileMessage,
 } from "../../domain/outreach/profileMail";
 import type { EmailCompany, EmailSender } from "../../domain/integrations/emailTemplate";
+import { emailCompanyFrom } from "../../domain/integrations/emailIdentity";
 import {
   MAX_PROFILE_BYTES, ProfileError, loadProfileFile, loadProfileInfo, loadRecentSends,
   saveProfile, type ProfileInfo,
@@ -132,16 +133,7 @@ export function ProfileMailerScreen({
     phone: user.phone ?? "",
   };
 
-  const company: EmailCompany = {
-    name: companyName,
-    tagline: String(companySettings["tagline"] ?? ""),
-    website: String(companySettings["website"] ?? ""),
-    phone: String(companySettings["phone"] ?? ""),
-    email: String(companySettings["email"] ?? ""),
-    gstin: String(companySettings["gstin"] ?? ""),
-    pan: String(companySettings["pan"] ?? ""),
-    cin: String(companySettings["cin"] ?? ""),
-  };
+  const company: EmailCompany = emailCompanyFrom(settings);
 
   const senderFields = {
     name: user.name,

@@ -38,3 +38,25 @@ describe("the whitelist still refuses everything else", () => {
     expect(() => compileRpc("consume_rate_limit", args, SERVER_CALLABLE)).not.toThrow();
   });
 });
+
+describe("the WhatsApp webhook's number lookup", () => {
+  it("is callable by the server", () => {
+    expect(() =>
+      compileRpc("whatsapp_customer_for", { p_company: "c1", p_digits: "919810012345" }, SERVER_CALLABLE),
+    ).not.toThrow();
+  });
+
+  it("is NOT callable by a browser", () => {
+    expect(Object.keys(CALLABLE)).not.toContain("whatsapp_customer_for");
+    expect(() =>
+      compileRpc("whatsapp_customer_for", { p_company: "c1", p_digits: "919810012345" }),
+    ).toThrow();
+  });
+
+  it("takes exactly the two arguments the webhook passes", () => {
+    expect(() => compileRpc("whatsapp_customer_for", { p_digits: "919810012345" }, SERVER_CALLABLE)).toThrow();
+    expect(() =>
+      compileRpc("whatsapp_customer_for", { p_company: "c1", p_digits: "9", p_extra: 1 }, SERVER_CALLABLE),
+    ).toThrow();
+  });
+});

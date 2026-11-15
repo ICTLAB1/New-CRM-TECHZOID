@@ -84,6 +84,10 @@ export const SCHEDULED = {
   /* Five minutes is IndiaMART's floor, not a preference: closer together
      earns 429, and more than five in a minute disables the key for fifteen. */
   "indiamart-pull": "0 */5 * * * *",
+  /* The four WhatsApp messages that go out on a date rather than on an
+     action. 04:30 UTC is 10:00 in India, which is what the business asked
+     for: a reminder about money that lands at 03:12 reads as a machine. */
+  "whatsapp-reminders-run": "0 30 4 * * *",
 };
 
 /** Every function file present, by name. */
