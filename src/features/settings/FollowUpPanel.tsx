@@ -99,6 +99,21 @@ export function FollowUpPanel({
           </span>
         </div>
 
+        {/* THE ONE PLACE THE CRM CANNOT ADD THE LINE ITSELF. Every automatic
+            email it sends says so at the foot — see
+            domain/integrations/automated.ts — but a WhatsApp template's
+            words are Meta's, approved in advance, and nothing in this code
+            can add a sentence to them. So the sentence has to be in the
+            template, and this is where somebody would look for that. */}
+        <div className="notice notice-warn">
+          <span>
+            <strong>Put a line in each template saying it is automatic.</strong> Every automatic email
+            this CRM sends carries one; a WhatsApp template's words are approved by Meta in advance and
+            nothing here can add to them, so it has to be written into the template itself. Wording that
+            works: <em>"This is an automatic reminder — reply and a person will read it."</em>
+          </span>
+        </div>
+
         <div className="stack" style={{ marginTop: 12 }}>
           {(Object.keys(TONE_LABELS) as FollowUpTone[]).map((tone) => (
             <Field

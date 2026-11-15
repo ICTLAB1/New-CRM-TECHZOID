@@ -1,4 +1,5 @@
 import { fail, guard, json, readJson } from "../lib/http.mjs";
+import { automatedNotice } from "../lib/automatedNotice.mjs";
 import { adminClient, signedInUser } from "../lib/auth.mjs";
 import { consume, tooManyMessage } from "../lib/ratelimit.mjs";
 import { sendMail } from "../lib/mailer.mjs";
@@ -107,6 +108,11 @@ export async function handler(event) {
           `Open the quotation in the CRM to reprice it, or ask again with more context.`,
         ].join("\n");
 
+  /* The CRM wrote this, not the salesperson it names. Said on the message
+     because an Admin reading "Your discount was approved" at 2am should
+     not have to work out whether a colleague was up. */
+  const withNotice = `${message}\n\n${automatedNotice("internal")}`;
+
   let sent = 0;
   const failures = [];
   for (const who of list) {
@@ -116,7 +122,7 @@ export async function handler(event) {
         userId: user.id,
         to: who.email,
         subject,
-        message,
+        message: withNotice,
       });
       if (out?.ok) sent += 1;
       else failures.push(out?.error ?? "unknown");

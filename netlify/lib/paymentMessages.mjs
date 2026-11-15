@@ -1,4 +1,5 @@
 import { escapeHtml } from "./html.mjs";
+import { automatedNotice } from "./automatedNotice.mjs";
 import { daysBetween, outstandingOf } from "./paymentRules.mjs";
 
 /**
@@ -102,6 +103,13 @@ export function renderReminderEmail(row, tone, today, settings = {}) {
     outstanding: money(outstanding, currency),
   };
   const words = lines(tone, days, f);
+
+  /* SAYS A MACHINE SENT IT, on a message that chases somebody for money.
+     Without the line a reminder reads as an accusation to a customer whose
+     transfer has not been matched yet — and these go out on a schedule, at
+     an hour when nobody is watching. The second sentence is what actually
+     helps when that happens. */
+  const reminderNotice = automatedNotice("payment-reminder", company);
   const name = greetingName(row);
   const contactLine = String(settings.contactLine || "").trim();
   const signOff = String(settings.signOff || `Accounts Team\n${company}`).trim();
@@ -137,6 +145,8 @@ export function renderReminderEmail(row, tone, today, settings = {}) {
     "",
     "Regards,",
     signOff,
+    "",
+    reminderNotice,
   ].join("\n");
 
   const accent = tone === "final" ? "#b42318" : tone === "firm" ? "#b54708" : "#1f4fd1";
@@ -168,7 +178,7 @@ ${contactLine ? `<p style="margin:0 0 12px">${escapeHtml(contactLine)}</p>` : ""
 <p style="margin:12px 0 0">Regards,<br>${escapeHtml(signOff).replace(/\n/g, "<br>")}</p>
 </td></tr>
 </table>
-<div style="font-size:11px;color:#98a2b3;padding:12px">If you have already made this payment, please ignore this message or reply with the payment reference.</div>
+<div style="font-size:11px;color:#98a2b3;padding:12px;line-height:1.6">${escapeHtml(reminderNotice)}</div>
 </td></tr></table></body></html>`;
 
   return { subject: words.subject, text, html };
@@ -228,8 +238,12 @@ export function renderThanksEmail(r, settings = {}) {
     ...(amount > 0 ? [["Balance", money(balance, currency)]] : []),
   ];
 
-  const NOTE = "This is a computer-generated acknowledgement of payment received. "
-    + "It is not a tax invoice or a receipt voucher under GST.";
+  /* The same line every automatic message carries, then the sentence that
+     is specific to this one: under GST a receipt voucher and a tax invoice
+     are documents with their own rules, and a cheerful email a customer's
+     accounts team files as one is a problem for them at assessment. */
+  const NOTE = automatedNotice("payment-receipt", company)
+    + " It is not a tax invoice or a receipt voucher under GST.";
 
   const subject = settled
     ? `Payment received with thanks — Invoice ${invoice}`
@@ -337,12 +351,17 @@ ${section("Overdue", overdue, "#b42318")}
 ${section("Due today", dueToday, "#b54708")}
 ${section("Due in the next 7 days", dueWeek, "#1f4fd1")}
 ${settings.appUrl ? `<p style="margin:22px 0 0;font-size:13px"><a href="${escapeHtml(settings.appUrl)}" style="color:#1f4fd1">Open the Payment Tracker</a></p>` : ""}
+<p style="margin:18px 0 0;font-size:11px;color:#98a2b3">${escapeHtml(automatedNotice("internal"))}</p>
 </div></div></body></html>`;
   const text = [
     subject, "",
     ...overdue.map((x) => `OVERDUE ${x.days}d — ${x.row.customer_name} — ${x.row.invoice_no} — ${money(x.outstanding, x.row.currency || "INR")}`),
     ...dueToday.map((x) => `DUE TODAY — ${x.row.customer_name} — ${x.row.invoice_no} — ${money(x.outstanding, x.row.currency || "INR")}`),
     ...dueWeek.map((x) => `Due in ${-x.days}d — ${x.row.customer_name} — ${x.row.invoice_no} — ${money(x.outstanding, x.row.currency || "INR")}`),
+    "",
+    /* Internal, but it is still a message nobody typed, and the people who
+       get it every morning should not wonder who sent it. */
+    automatedNotice("internal"),
   ].join("\n");
   return { subject, html, text, count: total };
 }

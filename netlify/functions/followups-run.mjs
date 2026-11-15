@@ -1,4 +1,5 @@
 import { officeToday } from "../lib/today.mjs";
+import { automatedNotice } from "../lib/automatedNotice.mjs";
 import { adminClient } from "../lib/auth.mjs";
 import { sendMail } from "../lib/mailer.mjs";
 import { sendWhatsAppTemplate } from "../lib/whatsapp.mjs";
@@ -44,6 +45,37 @@ import { stopReason, TABLE_FOR } from "../lib/followupRules.mjs";
 /** Enough for any real day's backlog; small enough to finish inside a
  *  function's time budget with room to spare. */
 const BATCH = 100;
+
+/**
+ * The line that says a machine sent this, guaranteed.
+ *
+ * The words of a chaser are rendered when the sequence is ARMED and stored
+ * — see src/features/quotations/armedSteps.ts, which puts the line in. This
+ * is the backstop, and it earns its place twice over: sequences armed
+ * before the line existed are still sitting in the queue with weeks to
+ * run, and the sender is the one place that knows for certain that nobody
+ * is typing this. Added only when it is not already there, so a message
+ * rendered properly does not say it twice.
+ */
+const NOTICE_MARK = "sent automatically by";
+
+export function withNotice(body, isHtml = false) {
+  const text = String(body ?? "");
+  if (!text.trim() || text.toLowerCase().includes(NOTICE_MARK)) return text;
+  const line = automatedNotice("follow-up");
+  return isHtml
+    ? text.replace(
+        /<\/body>/i,
+        `<div style="margin:18px auto 0;max-width:600px;padding:0 18px;font-size:11px;line-height:1.6;color:#8a8577;">${escapeHtml(line)}</div></body>`,
+      )
+    : `${text}\n\n${line}`;
+}
+
+/** The three characters that turn a sentence into markup. */
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
 
 export async function handler() {
   let admin;
@@ -112,8 +144,8 @@ export async function handler() {
           to: row.send_to,
           cc: splitList(row.cc),
           subject: row.subject,
-          message: row.message,
-          html: row.html || null,
+          message: withNotice(row.message),
+          html: row.html ? withNotice(row.html, true) : null,
           replyTo: row.reply_to || "",
         });
 

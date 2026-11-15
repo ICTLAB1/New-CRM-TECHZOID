@@ -71,6 +71,14 @@ export function buildArmedSteps({
             message: buildEmailText({
               body: followUpBody(p.tone, armable.facts),
               sender, company, quotation, attachmentName: null,
+              /* THE LINE THAT SAYS A MACHINE SENT IT, baked in here with
+                 the rest of the words. These go out weeks later with
+                 nobody watching, which is exactly the case the line is
+                 for — and a chaser that claims to be a person waiting is
+                 the thing a customer who already replied finds rude. The
+                 follow-up somebody TYPES in the dialog carries no such
+                 line, because there it would be false. */
+              automated: "follow-up",
             }),
             /* Rendered NOW, from the same builder the preview uses, and
                stored. What goes out weeks later is this exact markup —
@@ -78,6 +86,7 @@ export function buildArmedSteps({
             html: buildEmailHtml({
               body: followUpBody(p.tone, armable.facts),
               sender, company, quotation, attachmentName: null,
+              automated: "follow-up",
             }),
           });
         }

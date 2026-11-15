@@ -65,6 +65,20 @@ describe("the messages a sequence is armed with", () => {
     expect(steps[0]!.subject).toBe(followUpSubject("nudge", armable.facts));
   });
 
+  it("says on every chaser that a machine sent it", () => {
+    /* These go out weeks later with nobody watching. A chaser that reads as
+       a person sitting there waiting is rude to a customer who has already
+       replied — and an accusation to one who has already paid. */
+    for (const s of build({ email: true, whatsapp: false })) {
+      expect(s.message).toContain("sent automatically");
+      expect(s.message).toContain("A Company");
+      expect(s.html).toContain("sent automatically");
+      /* And it never tells them not to reply: these come from a real
+         mailbox and a reply reaches the salesperson. */
+      expect(s.message!.toLowerCase()).not.toContain("do not reply");
+    }
+  });
+
   it("records how many steps the sequence has on every step", () => {
     /* "2 of 3" in the customer's own portal and in the follow-up list reads
        off this, so a row that does not know the total reads "2 of 0". */
@@ -79,11 +93,11 @@ describe("the messages a sequence is armed with", () => {
     const steps = build({ email: true, whatsapp: false });
     expect(steps[0]!.html).toBe(buildEmailHtml({
       body: followUpBody("nudge", armable.facts),
-      sender, company, quotation, attachmentName: null,
+      sender, company, quotation, attachmentName: null, automated: "follow-up",
     }));
     expect(steps[0]!.message).toBe(buildEmailText({
       body: followUpBody("nudge", armable.facts),
-      sender, company, quotation, attachmentName: null,
+      sender, company, quotation, attachmentName: null, automated: "follow-up",
     }));
   });
 

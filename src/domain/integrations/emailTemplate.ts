@@ -1,3 +1,4 @@
+import { automatedNotice, type AutomatedKind } from "./automated";
 /**
  * The HTML a customer actually receives.
  *
@@ -98,6 +99,11 @@ export interface EmailContent {
   /** Absent for a plain covering note; present turns this into the full
    *  document email with a summary, the lines and the next steps. */
   quotation?: EmailQuotation | null;
+  /** Set on a message a MACHINE sends — an armed follow-up, a payment
+   *  reminder. It prints the line that says so. A message somebody typed
+   *  and sent just now leaves it out, because it would be a lie: see
+   *  domain/integrations/automated.ts. */
+  automated?: AutomatedKind;
   /** A festival greeting to open with — see domain/greetings/festive.ts for
    *  when one applies. Absent is the ordinary case, and the sender can
    *  always drop it on the send dialog. */
@@ -476,6 +482,11 @@ export function buildEmailHtml(content: EmailContent): string {
               ${certifications.length
                 ? `<div style="margin-top:6px;">Certified to ${certifications.map(escapeHtml).join(" &middot; ")}</div>`
                 : ""}
+              ${content.automated
+                ? `<div style="margin-top:10px;padding-top:10px;border-top:1px solid ${RULE};font-size:11px;line-height:1.6;">`
+                  + escapeHtml(automatedNotice(content.automated, company.name ?? ""))
+                  + "</div>"
+                : ""}
             </td>
           </tr>
         </table>
@@ -590,6 +601,13 @@ export function buildEmailText(content: EmailContent): string {
     ].filter(Boolean).join(" | "),
   ].filter(Boolean);
   if (footer.length) out.push("", ...footer);
+
+  /* Last, and after the rule that separates the signature: a reader who
+     stops at "Regards" has still read the message, and one who checks why
+     they got it finds the answer where a footer belongs. */
+  if (content.automated) {
+    out.push("", automatedNotice(content.automated, company.name ?? ""));
+  }
 
   return out.join("\n");
 }

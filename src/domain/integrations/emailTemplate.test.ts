@@ -478,3 +478,33 @@ describe("certifications in the email", () => {
     expect(buildEmailHtml(withQuote())).not.toContain("Certified to");
   });
 });
+
+describe("saying a machine sent it", () => {
+  /* The line belongs on messages that go out on a schedule with nobody
+     watching — and on nothing else. A note somebody typed and pressed send
+     on, that tells the customer nobody typed it, is simply false. */
+
+  it("is absent from a message a person is sending", () => {
+    const text = buildEmailText(content());
+    const html = buildEmailHtml(content());
+    expect(text.toLowerCase()).not.toContain("sent automatically");
+    expect(html.toLowerCase()).not.toContain("sent automatically");
+  });
+
+  it("is present, and names the company, when the message is automatic", () => {
+    const text = buildEmailText(content({ automated: "follow-up" }));
+    expect(text).toContain("sent automatically");
+    expect(text).toContain(COMPANY.name);
+  });
+
+  it("sits after the signature, not in the middle of what was written", () => {
+    const text = buildEmailText(content({ automated: "follow-up" }));
+    expect(text.indexOf("sent automatically")).toBeGreaterThan(text.indexOf(SENDER.name));
+  });
+
+  it("reaches the HTML as text, not as markup", () => {
+    const html = buildEmailHtml(content({ automated: "payment-reminder" }));
+    expect(html).toContain("sent automatically");
+    expect(html).not.toContain("%s");
+  });
+});
