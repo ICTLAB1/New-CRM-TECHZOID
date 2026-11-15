@@ -39,10 +39,12 @@
 
 const CATALOG_SQL = `
   select c.relname  as table_name,
-         a.attname  as column_name
+         a.attname  as column_name,
+         t.typname  as type_name
     from pg_class c
     join pg_namespace n on n.oid = c.relnamespace
     join pg_attribute a on a.attrelid = c.oid
+    join pg_type t on t.oid = a.atttypid
    where n.nspname = 'public'
      and c.relkind in ('r','v','m','p')
      and a.attnum > 0
@@ -101,9 +103,21 @@ export async function getCatalog(client) {
     const fks = await client.query(FK_SQL);
 
     const tables = new Map();
+    /* Which columns are json or jsonb, keyed the same way. The driver turns
+       a JS array into a Postgres ARRAY literal -- {...} -- which a jsonb
+       column refuses with "invalid input syntax for type json", so an array
+       bound for one has to be serialised before it goes down. Nothing in
+       this CRM wrote an array into jsonb until the catalog's vendor prices
+       did, which is why it went unnoticed: every other jsonb column holds an
+       object, and the driver serialises those correctly by itself. */
+    const jsonColumns = new Map();
     for (const r of cols.rows) {
       if (!tables.has(r.table_name)) tables.set(r.table_name, new Set());
       tables.get(r.table_name).add(r.column_name);
+      if (r.type_name === "json" || r.type_name === "jsonb") {
+        if (!jsonColumns.has(r.table_name)) jsonColumns.set(r.table_name, new Set());
+        jsonColumns.get(r.table_name).add(r.column_name);
+      }
     }
 
     const primaryKeys = new Map();
@@ -122,7 +136,7 @@ export async function getCatalog(client) {
       else foreignKeys.set(key, { fromCols: r.from_cols, toCols: r.to_cols });
     }
 
-    return { tables, primaryKeys, foreignKeys };
+    return { tables, jsonColumns, primaryKeys, foreignKeys };
   })().catch((err) => {
     catalogPromise = null;
     throw err;
@@ -387,11 +401,30 @@ function columnsOf(catalog, table, rows) {
   return first.map((k) => checkColumn(catalog, table, k));
 }
 
-function buildValues(rows, cols, params) {
+/**
+ * One value, ready for the driver.
+ *
+ * A json or jsonb column is handed a string, because the driver's own
+ * conversion is wrong for arrays: it writes a Postgres array literal, which
+ * the column refuses. Objects it serialises correctly already, so doing it
+ * here changes nothing for them except that this layer no longer depends on
+ * that behaviour.
+ *
+ * A STRING IS PASSED THROUGH UNTOUCHED. A caller who sends `data` as the
+ * text of some JSON has always had it stored as the object that text
+ * describes; serialising it again would store the text itself.
+ */
+function bind(catalog, table, col, value) {
+  if (value === undefined) return null;
+  if (value === null || typeof value !== "object") return value;
+  return catalog?.jsonColumns?.get(table)?.has(col) ? JSON.stringify(value) : value;
+}
+
+function buildValues(catalog, table, rows, cols, params) {
   return rows
     .map((row) => {
       const slots = cols.map((c) => {
-        params.push(row[c] === undefined ? null : row[c]);
+        params.push(bind(catalog, table, c, row[c]));
         return `$${params.length}`;
       });
       return `(${slots.join(", ")})`;
@@ -448,7 +481,7 @@ export function compile(spec, catalog) {
     const cols = columnsOf(catalog, table, rows);
     let text =
       `insert into ${quote(table)} (${cols.map(quote).join(", ")}) ` +
-      `values ${buildValues(rows, cols, params)}`;
+      `values ${buildValues(catalog, table, rows, cols, params)}`;
 
     if (spec.op === "upsert") {
       const conflict = spec.onConflict
@@ -477,7 +510,7 @@ export function compile(spec, catalog) {
     }
     const cols = columnsOf(catalog, table, [patch]);
     const sets = cols.map((c) => {
-      params.push(patch[c] === undefined ? null : patch[c]);
+      params.push(bind(catalog, table, c, patch[c]));
       return `${quote(c)} = $${params.length}`;
     });
     /* An update with no filter rewrites the table. RLS would still limit it

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useViewHistory } from "./useViewHistory";
+import { useCatalogCosts } from "./useCatalogCosts";
 import { useAutomations } from "./useAutomations";
 import { GlobalSearch, type SearchHit } from "./GlobalSearch";
 import { ScanScreen } from "../features/scan/ScanScreen";
@@ -156,8 +157,14 @@ export function Workbench({
 
   /* Both of these live in the settings row, exactly as they did in v1 —
      the catalog and the customer form's extra fields are configuration, not
-     records, and the schema is not being changed to move them. */
-  const catalog = (settings["productCatalog"] as CatalogProduct[] | undefined) ?? [];
+     records, and the schema is not being changed to move them.
+
+     THE BUYING PRICE NO LONGER DOES. Every member of the company may read
+     the settings row, so a cost kept in it was a cost handed to every
+     salesperson's browser on every page load. It lives in `catalog_costs`
+     now and is merged back in below for whoever row-level security gives it
+     to — see src/domain/catalog/costs.ts. */
+  const catalogBase = (settings["productCatalog"] as CatalogProduct[] | undefined) ?? [];
   const customFields = (settings["customFields"] as { id: string; label: string }[] | undefined) ?? [];
 
   /** Reassigning a customer moves their documents too. The cascade returns
@@ -262,6 +269,32 @@ export function Workbench({
   /* The CRM running its own process: stages, the document chain and
      follow-up tasks. See src/domain/automation/flow.ts. */
   const toast = useToast();
+
+  /* The catalog every screen below is handed: the products from settings,
+     the costs from the table that refuses them to Sales. */
+  const { catalog, split: splitCatalog } = useCatalogCosts(activeCompanyId, catalogBase);
+
+  /**
+   * Saving the catalog, in two writes.
+   *
+   * The cost write is reported when it fails and the product write is not
+   * rolled back, deliberately: the products are the catalog, and losing
+   * somebody's import because a cost row would not go in would be the worse
+   * half to lose. The message says which half is missing so it can be done
+   * again.
+   */
+  const saveCatalog = (next: CatalogProduct[]) => {
+    const { products, write } = splitCatalog(next);
+    onSettingsChange({ ...settings, productCatalog: products });
+    void write().catch((err: unknown) => {
+      toast(
+        err instanceof Error && err.message
+          ? `The catalog was saved but the buying prices were not: ${err.message}`
+          : "The catalog was saved but the buying prices were not.",
+        "bad",
+      );
+    });
+  };
   useAutomations({
     data, settings, user, onChange, onSettingsNote,
     onCustomersChange: handleCustomersChange,
@@ -530,7 +563,7 @@ export function Workbench({
         <CatalogScreen
           catalog={catalog}
           canEdit={canEditSettings}
-          onChange={(next) => onSettingsChange({ ...settings, productCatalog: next })}
+          onChange={saveCatalog}
         />
       ) : view === "team" ? (
         <TeamScreen

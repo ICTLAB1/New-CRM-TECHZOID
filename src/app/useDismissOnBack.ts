@@ -12,6 +12,32 @@ import { useEffect, useRef } from "react";
 const stack: symbol[] = [];
 
 /**
+ * How many popstates this hook has caused itself.
+ *
+ * THE BUG THIS EXISTS FOR. Closing a dialog any way other than Back — the
+ * ✕, Escape, or the dialog doing its job and closing itself, which is what
+ * "Add from catalog" does — leaves the entry it pushed in front of the real
+ * history, so the tidy-up below walks it off with history.back(). That
+ * fires a popstate, and by then the dialog has already taken itself off the
+ * stack, so the overlay UNDERNEATH was the innermost and answered it:
+ * picking a product from the catalog closed the quotation editor and lost
+ * the draft.
+ *
+ * A popstate we caused is not somebody pressing Back, so it is swallowed
+ * once and not offered to anyone. Counted rather than flagged because two
+ * overlays can close in the same tick, and cleared on a timer in case a
+ * back() produces no popstate at all — a flag left standing would eat the
+ * next real Back.
+ */
+let selfPops = 0;
+const swallowOne = (): void => {
+  selfPops += 1;
+  window.setTimeout(() => {
+    selfPops = Math.max(0, selfPops - 1);
+  }, 200);
+};
+
+/**
  * Back closes what is open, instead of leaving the screen behind it.
  *
  * A document editor or a customer sheet fills the screen, and on a phone
@@ -64,6 +90,13 @@ export function useDismissOnBack(open: boolean, onDismiss: () => boolean | void)
 
     let byBack = false;
     const onPop = () => {
+      /* Our own tidy-up, not a Back. Swallowed whoever is listening, and
+         before the innermost check, because the overlay that caused it has
+         already gone. */
+      if (selfPops > 0) {
+        selfPops -= 1;
+        return;
+      }
       /* Not the innermost: somebody else's Back. */
       if (stack[stack.length - 1] !== token) return;
       byBack = true;
@@ -90,7 +123,10 @@ export function useDismissOnBack(open: boolean, onDismiss: () => boolean | void)
            dialog closed because the whole SCREEN changed under it — and
            going back there would undo the navigation somebody just made. */
         const state = window.history.state as { crmOverlay?: boolean } | null;
-        if (state?.crmOverlay) window.history.back();
+        if (state?.crmOverlay) {
+          swallowOne();
+          window.history.back();
+        }
       }, 0);
     };
   }, [open]);

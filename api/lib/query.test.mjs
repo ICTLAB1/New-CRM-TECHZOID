@@ -366,6 +366,68 @@ d("the query translator", () => {
       expect(data.data.company).toBe("Changed");
     });
 
+    /* ── json columns ────────────────────────────────────────────────
+       An ARRAY bound for a jsonb column was refused outright: the driver
+       sends a JS array as a Postgres array literal and jsonb answers
+       "invalid input syntax for type json". It went unnoticed for as long
+       as every jsonb column in this CRM held an object — the catalog's
+       vendor prices were the first array, and the save failed in a browser
+       with the row looking saved on screen. */
+
+    it("writes an ARRAY into a jsonb column", async () => {
+      await asUser(RAVI, (c) => runQuery(c, {
+        op: "insert", table: "customers",
+        values: { id: "c-json", owner_id: RAVI, company_id: COMPANY,
+                  data: [{ vendor: "Ingram", cost: 1826.4 }, { vendor: "Redington", cost: 1850 }] },
+      }));
+      const { data } = await asUser(RAVI, (c) => runQuery(c, {
+        op: "select", table: "customers", select: "data",
+        filters: [{ col: "id", op: "eq", value: "c-json" }], single: "one",
+      }));
+      expect(Array.isArray(data.data)).toBe(true);
+      expect(data.data).toEqual([{ vendor: "Ingram", cost: 1826.4 }, { vendor: "Redington", cost: 1850 }]);
+    });
+
+    it("updates a jsonb column to an array too", async () => {
+      await asUser(RAVI, (c) => runQuery(c, {
+        op: "update", table: "customers", values: { data: [1, 2, 3] },
+        filters: [{ col: "id", op: "eq", value: "c-json" }],
+      }));
+      const { data } = await asUser(RAVI, (c) => runQuery(c, {
+        op: "select", table: "customers", select: "data",
+        filters: [{ col: "id", op: "eq", value: "c-json" }], single: "one",
+      }));
+      expect(data.data).toEqual([1, 2, 3]);
+    });
+
+    it("still stores a STRING of json as the thing it describes", async () => {
+      /* Callers have always been able to send `data` as text, and it lands
+         as the object that text spells out rather than as a quoted string.
+         Serialising it a second time would store the text itself. */
+      await asUser(RAVI, (c) => runQuery(c, {
+        op: "update", table: "customers", values: { data: '{"company":"From text"}' },
+        filters: [{ col: "id", op: "eq", value: "c-json" }],
+      }));
+      const { data } = await asUser(RAVI, (c) => runQuery(c, {
+        op: "select", table: "customers", select: "data",
+        filters: [{ col: "id", op: "eq", value: "c-json" }], single: "one",
+      }));
+      expect(data.data).toEqual({ company: "From text" });
+
+      await asUser(RAVI, (c) => runQuery(c, {
+        op: "delete", table: "customers",
+        filters: [{ col: "id", op: "eq", value: "c-json" }],
+      }));
+    });
+
+    it("knows which columns are json and which are not", async () => {
+      /* The map the fix reads. A text column must NOT be serialised: a
+         quotation number would arrive with quotes around it. */
+      expect(catalog.jsonColumns.get("customers").has("data")).toBe(true);
+      expect(catalog.jsonColumns.get("customers").has("id")).toBe(false);
+      expect(catalog.jsonColumns.has("company_members")).toBe(false);
+    });
+
     it("update, then delete", async () => {
       await asUser(RAVI, (c) => runQuery(c, {
         op: "update", table: "customers", values: { data: { company: "Updated" } },

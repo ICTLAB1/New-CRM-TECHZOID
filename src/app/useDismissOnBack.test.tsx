@@ -9,7 +9,21 @@ import { useDismissOnBack } from "./useDismissOnBack";
  * the part that cannot be left to luck.
  */
 
-afterEach(cleanup);
+/**
+ * Unmounting an overlay schedules its tidy-up a tick later, and the hook
+ * swallows the one popstate that tidy-up causes. Both outlive the test that
+ * started them, so each test ends by letting them finish: without this,
+ * the previous test's tidy-up swallowed the next test's Back and the
+ * failure landed two tests away from its cause.
+ *
+ * 250ms is the hook's 200ms safety timer plus room to spare.
+ */
+const settle = () => new Promise((r) => setTimeout(r, 250));
+
+afterEach(async () => {
+  cleanup();
+  await settle();
+});
 
 function Overlay({ open, onDismiss }: { open: boolean; onDismiss: () => boolean | void }) {
   useDismissOnBack(open, onDismiss);
@@ -71,6 +85,73 @@ describe("Back, with things open", () => {
 
     expect(editor).toHaveBeenCalledTimes(1);
     expect(dialog).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not let a dialog closing ITSELF close the editor underneath", async () => {
+    /* THE BUG THIS PINS. Picking a product in "Add from catalog" closes the
+       picker by its own state, not by Back. The picker's tidy-up then walks
+       off the history entry it had pushed — and that popstate reached the
+       editor underneath, which had just become the innermost overlay. The
+       editor closed and the unsaved draft went with it.
+       Found in a browser, with a real catalog and a real quotation. */
+    const editor = vi.fn();
+    const picker = vi.fn();
+    const view = render(
+      <>
+        <Overlay open onDismiss={editor} />
+        <Overlay open onDismiss={picker} />
+      </>,
+    );
+
+    /* Add pressed: the picker closes itself. */
+    view.rerender(
+      <>
+        <Overlay open onDismiss={editor} />
+        <Overlay open={false} onDismiss={picker} />
+      </>,
+    );
+
+    /* The deferred tidy-up runs and calls history.back(), which the browser
+       answers with a popstate. jsdom's own navigation is asynchronous and
+       would land unpredictably, so back() is stubbed and the event it would
+       have produced is dispatched here. */
+    const went = vi.spyOn(window.history, "back").mockImplementation(() => {});
+    await new Promise((r) => setTimeout(r, 0));
+    expect(went).toHaveBeenCalledTimes(1);
+    back();
+
+    expect(editor).not.toHaveBeenCalled();
+    expect(picker).not.toHaveBeenCalled();
+    went.mockRestore();
+    await settle();
+  });
+
+  it("still gives the editor the NEXT real Back after that", async () => {
+    /* The swallow is one popstate, not a mood. */
+    const editor = vi.fn();
+    const picker = vi.fn();
+    const view = render(
+      <>
+        <Overlay open onDismiss={editor} />
+        <Overlay open onDismiss={picker} />
+      </>,
+    );
+    view.rerender(
+      <>
+        <Overlay open onDismiss={editor} />
+        <Overlay open={false} onDismiss={picker} />
+      </>,
+    );
+    const went = vi.spyOn(window.history, "back").mockImplementation(() => {});
+    await new Promise((r) => setTimeout(r, 0));
+    /* The first popstate is the picker's own tidy-up, swallowed. The second
+       is a person pressing Back, and the editor must get it. */
+    back();
+    back();
+
+    expect(editor).toHaveBeenCalledTimes(1);
+    went.mockRestore();
+    await settle();
   });
 
   it("does nothing at all while nothing is open", () => {
