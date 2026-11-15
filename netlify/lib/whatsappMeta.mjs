@@ -108,8 +108,92 @@ async function post(payload, { fetchImpl = fetch } = {}) {
   }
 }
 
-/** One approved template, with its blanks filled in order. */
-export async function sendTemplate({ to, templateName, values = [], languageCode = "en" }, opts = {}) {
+/**
+ * Hand a PDF to Meta and get back the id that names it.
+ *
+ * WHY THE FILE GOES FIRST, AND NOT AS A LINK. A template's document header
+ * can name either a public URL or a media id. A URL means a customer's
+ * priced quotation sitting on the open web, fetchable by anyone who guesses
+ * or is forwarded the address, with no sign-in and no expiry we control.
+ * Uploading hands it only to Meta, and the id is useless to anybody else.
+ *
+ * Meta keeps an uploaded file for about thirty days, which is why the same
+ * id can be reused for the follow-up three days later rather than the
+ * quotation being rendered and uploaded twice.
+ *
+ * @returns {{ok: true, id: string} | {ok: false, error: string}}
+ */
+export async function uploadDocument({ bytes, filename }, { fetchImpl = fetch } = {}) {
+  const { token, phoneNumberId } = credentials();
+  if (!token || !phoneNumberId) {
+    return {
+      ok: false,
+      error: "WhatsApp isn't connected. " + askAdminToAdd("WHATSAPP_TOKEN and WHATSAPP_PHONE_NUMBER_ID"),
+    };
+  }
+  if (!bytes?.byteLength) return { ok: false, error: "The quotation PDF came through empty, so there was nothing to attach." };
+
+  /* Meta's limit for a document is 100 MB. A quotation is a few hundred
+     kilobytes; anything near the limit is a fault worth naming here rather
+     than a timeout thirty seconds later. */
+  if (bytes.byteLength > 95 * 1024 * 1024) {
+    return { ok: false, error: "That quotation PDF is too large for WhatsApp to accept." };
+  }
+
+  try {
+    const form = new FormData();
+    form.append("messaging_product", "whatsapp");
+    form.append("type", "application/pdf");
+    form.append("file", new Blob([bytes], { type: "application/pdf" }), filename || "quotation.pdf");
+
+    const resp = await fetchImpl(`${GRAPH}/${encodeURIComponent(phoneNumberId)}/media`, {
+      method: "POST",
+      /* No Content-Type of our own: FormData sets it with the boundary. */
+      headers: { Authorization: `Bearer ${token}` },
+      body: form,
+    });
+    const result = await resp.json().catch(() => ({}));
+
+    if (!resp.ok) {
+      const code = Number(result?.error?.code ?? 0);
+      console.error("whatsapp upload refused:", resp.status, code, metaError(result).slice(0, 300));
+      return { ok: false, code, error: whyUploadRefused(resp.status, code, result) };
+    }
+    const id = String(result?.id ?? "");
+    if (!id) return { ok: false, error: "WhatsApp accepted the quotation PDF but did not say where it put it." };
+    return { ok: true, id };
+  } catch (err) {
+    return { ok: false, error: `The quotation PDF could not be sent to WhatsApp. ${err?.message ?? ""}`.trim() };
+  }
+}
+
+/** Why an upload was refused, in words somebody can act on. */
+function whyUploadRefused(status, code, result) {
+  const detail = metaError(result).toLowerCase();
+  if (status === 401 || code === 190) {
+    return `WhatsApp rejected the access token while uploading the quotation. Check WHATSAPP_TOKEN in ${whereSettingsLive()}.`;
+  }
+  if (status === 413 || detail.includes("too large")) {
+    return "That quotation PDF is too large for WhatsApp to accept.";
+  }
+  if (detail.includes("type") || detail.includes("format")) {
+    return "WhatsApp would not accept that file as a PDF.";
+  }
+  if (status === 429) {
+    return "WhatsApp is rate-limiting uploads on this account. The message was not sent; try again shortly.";
+  }
+  return metaError(result) || "WhatsApp would not accept the quotation PDF.";
+}
+
+/**
+ * One approved template, with its blanks filled in order.
+ *
+ * `document` attaches a file that has already been uploaded — the header
+ * component. A template that declares a header MUST be sent with one, and a
+ * template that does not MUST NOT be, so the caller decides which template
+ * it is sending and passes the document only with the one that takes it.
+ */
+export async function sendTemplate({ to, templateName, values = [], languageCode = "en", document = null }, opts = {}) {
   const number = waNumber(to);
   if (!looksSendable(number)) {
     return { ok: false, error: "That number doesn't look like a WhatsApp number. It should be like 919810012345." };
@@ -118,17 +202,26 @@ export async function sendTemplate({ to, templateName, values = [], languageCode
 
   const parameters = values.map((v) => ({ type: "text", text: String(v ?? "") }));
 
+  /* THE HEADER COMES FIRST, as Meta's own examples have it. Sending a
+     component a template does not declare is refused outright, which is why
+     this is only ever present when the caller chose a template that takes
+     one. */
+  const components = [];
+  if (document?.id) {
+    components.push({
+      type: "header",
+      parameters: [{
+        type: "document",
+        document: { id: String(document.id), filename: String(document.filename || "quotation.pdf") },
+      }],
+    });
+  }
+  if (parameters.length) components.push({ type: "body", parameters });
+
   return post({
     to: number,
     type: "template",
-    template: {
-      name: templateName,
-      language: { code: languageCode },
-      /* The BODY component only. These templates have no header and no
-         buttons that take variables; sending components a template does not
-         declare is refused outright. */
-      components: parameters.length ? [{ type: "body", parameters }] : [],
-    },
+    template: { name: templateName, language: { code: languageCode }, components },
   }, opts);
 }
 
@@ -192,6 +285,20 @@ function whyRefused(status, code, result) {
     return "WhatsApp refused the details filled into the template. A blank was empty or had a line break in it.";
   }
   return metaError(result) || "WhatsApp refused that message.";
+}
+
+/**
+ * Does Meta simply not have this template?
+ *
+ * 132001 is "template name does not exist in the translation", which is what
+ * comes back both for a name Meta has never seen and for one still in
+ * review. 132000 is a blank-count mismatch. Either way the answer is the
+ * same: this name cannot be sent right now, so try the one it replaced.
+ */
+export function templateMissing(code, error = "") {
+  if (code === 132001 || code === 132000) return true;
+  const detail = String(error).toLowerCase();
+  return detail.includes("does not exist") && detail.includes("template");
 }
 
 /** Worth trying again later, as opposed to refused on its merits. */

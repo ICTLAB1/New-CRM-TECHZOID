@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button, Chip } from "../../components/primitives";
 import { Modal } from "../../components/Modal";
 import { useToast } from "../../components/Toast";
@@ -31,14 +31,22 @@ export interface SendWhatsAppDialogProps {
   customerId?: string;
   /** The handful of facts the record cannot hold. */
   extra?: { sentTo?: string; against?: string; amount?: number };
+  /** Renders the document this message is about, where it has one.
+   *
+   *  ONLY THIS APP CAN BUILD IT. The PDF is drawn from what is on screen,
+   *  and the server has no renderer — so if the message is one that carries
+   *  the quotation, it is made here and handed over with the send. */
+  getPdf?: () => { base64: string } | null;
   onSent?: () => void;
 }
 
 export function SendWhatsAppDialog({
-  open, onClose, companyId, templates, recordType, recordId, customerId, extra, onSent,
+  open, onClose, companyId, templates, recordType, recordId, customerId, extra, getPdf, onSent,
 }: SendWhatsAppDialogProps) {
   const toast = useToast();
   const first = templates[0] ?? "";
+  /* Held, not rebuilt: the send must attach the very PDF that was shown. */
+  const pdfRef = useRef<{ base64: string } | null>(null);
   const [template, setTemplate] = useState(first);
   const [preview, setPreview] = useState<WhatsAppPreview | null>(null);
   const [problem, setProblem] = useState("");
@@ -55,7 +63,18 @@ export function SendWhatsAppDialog({
     setLoading(true);
     setProblem("");
     setPreview(null);
-    void previewWhatsApp({ companyId, template, recordType, recordId, customerId, extra })
+    /* Rendered once, for the preview and the send alike, so the filename on
+       screen is the filename that goes. A render that throws is simply no
+       attachment — never a dialog that will not open. */
+    let pdf: { base64: string } | null = null;
+    try {
+      pdf = getPdf?.() ?? null;
+    } catch {
+      pdf = null;
+    }
+    pdfRef.current = pdf;
+
+    void previewWhatsApp({ companyId, template, recordType, recordId, customerId, extra, pdf })
       .then((p) => { if (live) setPreview(p); })
       .catch((err: unknown) => {
         if (live) setProblem(err instanceof Error ? err.message : "That could not be prepared.");
@@ -69,7 +88,9 @@ export function SendWhatsAppDialog({
     if (!companyId) return;
     setSending(true);
     try {
-      const out = await sendWhatsApp({ companyId, template, recordType, recordId, customerId, extra });
+      const out = await sendWhatsApp({
+        companyId, template, recordType, recordId, customerId, extra, pdf: pdfRef.current,
+      });
       if (out.ok) {
         toast("WhatsApp message sent", "good");
         onSent?.();
@@ -139,7 +160,22 @@ export function SendWhatsAppDialog({
               To: {preview.to ? `+${preview.to}` : "no number"}
             </Chip>
             {preview.customerName ? <span className="muted">{preview.customerName}</span> : null}
+            {/* The quotation itself, when it is going with the message. */}
+            {preview.documentName ? (
+              <Chip tone="good" dot={false}>📎 {preview.documentName}</Chip>
+            ) : null}
           </div>
+
+          {/* Offered but not going: the message still sends, so this is a
+              note rather than a warning. */}
+          {preview.documentNote ? (
+            <div className="notice">
+              <span>
+                <strong>The PDF is not attached to this one.</strong> {preview.documentNote}. The message
+                itself still goes, and the quotation is in the email.
+              </span>
+            </div>
+          ) : null}
 
           {/* The approved wording with the blanks filled. When Meta could
               not be asked, the blanks are shown on their own and the reason

@@ -81,6 +81,9 @@ async function chaseQuotations(admin, companyId, today, tally) {
     await attempt(admin, tally, {
       companyId, template: "quotation_followup", recordType: "quote", recordId: quote.id,
       customerId: quote.customer_id, trigger: "daily:quotation_followup", extra: { today },
+      /* The PDF the quotation carried, if it carried one, is found and
+         reused by the sender itself — there is no browser at 10am and
+         nothing here can render a quotation. */
     });
   }
 }

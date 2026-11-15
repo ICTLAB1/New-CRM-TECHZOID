@@ -75,6 +75,26 @@ export function MessageList({ messages, emptyNote }: {
                 </div>
               ) : null}
 
+              {/* The quotation that went with it. Above the words, as
+                  WhatsApp itself shows an attachment. */}
+              {m.documentName ? (
+                <div
+                  className="row-tight"
+                  style={{
+                    fontSize: 12.5,
+                    gap: 6,
+                    padding: "5px 8px",
+                    marginBottom: 6,
+                    border: "1px solid var(--rule)",
+                    borderRadius: 7,
+                    background: "var(--surface, #fff)",
+                  }}
+                >
+                  <span aria-hidden="true">📎</span>
+                  <span style={{ wordBreak: "break-all" }}>{m.documentName}</span>
+                </div>
+              ) : null}
+
               <div style={{ whiteSpace: "pre-wrap", fontSize: 14 }}>
                 {m.body || <span className="muted">(no text)</span>}
               </div>

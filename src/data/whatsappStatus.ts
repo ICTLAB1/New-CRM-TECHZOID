@@ -17,6 +17,14 @@ export interface WhatsAppTemplateStatus {
   blanks: number;
   approved: boolean;
   problem: string;
+  /** The name this is sent as at Meta — the CRM's own name with `_v2` on
+   *  the end — so a row can be matched to what was created there. */
+  metaName?: string;
+  /** The older name it falls back to while the `_v2` one is in review. */
+  legacyName?: string;
+  legacyApproved?: boolean;
+  /** Only the quotation message attaches the PDF. */
+  carriesPdf?: boolean;
 }
 
 export interface WhatsAppStatus {

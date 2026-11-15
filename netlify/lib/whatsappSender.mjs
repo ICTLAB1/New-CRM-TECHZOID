@@ -1,7 +1,12 @@
-import { approvedTemplates, buildParams, checkTemplate, fillBody, TEMPLATES } from "./whatsappTemplates.mjs";
-import { metaAccount, sendTemplate, sendText } from "./whatsappMeta.mjs";
+import {
+  approvedTemplates, buildParams, checkTemplate, documentName, fillBody, nameFor, TEMPLATES,
+} from "./whatsappTemplates.mjs";
+import {
+  metaAccount, sendTemplate, sendText, templateMissing, uploadDocument,
+} from "./whatsappMeta.mjs";
 import { mayMessage } from "./whatsappConsent.mjs";
 import { factsFor, loadRecord, nameOf } from "./whatsappFacts.mjs";
+import { todayInIndia } from "./whatsappSchedule.mjs";
 
 /**
  * Sending one WhatsApp message, and writing down that it happened.
@@ -30,6 +35,22 @@ import { factsFor, loadRecord, nameOf } from "./whatsappFacts.mjs";
 /** The preview and the send both answer in this shape. */
 const refused = (reason, extra = {}) => ({ ok: false, reason, ...extra });
 
+/** The biggest quotation PDF worth pushing through a function request. */
+const MAX_PDF_BYTES = 8 * 1024 * 1024;
+
+/** The PDF a browser sent, as bytes, or null. Never throws on bad input. */
+export function pdfFrom(input) {
+  const base64 = String(input?.base64 ?? "").trim();
+  if (!base64) return null;
+  try {
+    const bytes = Buffer.from(base64, "base64");
+    if (!bytes.byteLength || bytes.byteLength > MAX_PDF_BYTES) return null;
+    return { bytes };
+  } catch {
+    return null;
+  }
+}
+
 /**
  * What this message will say, without sending it.
  *
@@ -37,7 +58,9 @@ const refused = (reason, extra = {}) => ({ ok: false, reason, ...extra });
  * that sends, from the same record, so the preview is the message — not an
  * impression of it.
  */
-export async function previewMessage(admin, { companyId, template, recordType, recordId, customerId, extra = {} }) {
+export async function previewMessage(admin, {
+  companyId, template, recordType, recordId, customerId, extra = {}, pdf = null, documentId = "",
+}) {
   const spec = TEMPLATES[template];
   if (!spec) return refused(`There is no WhatsApp template called ${template}.`);
 
@@ -58,18 +81,38 @@ export async function previewMessage(admin, { companyId, template, recordType, r
   const facts = factsFor(template, { record: loaded.record, customer, extra });
   const { values, missing } = buildParams(template, facts);
 
+  /* WHICH NAME WILL BE TRIED, decided here and not on screen, so the preview
+     cannot promise an attachment the send then leaves off. */
+  const hasPdf = !!pdf?.bytes?.byteLength || !!documentId;
+  const pick = nameFor(template, { hasPdf });
+  const filename = pick.wantsPdf ? documentName(facts.quoteNo) : "";
+
   /* The approved wording, read from Meta so the preview shows what the
-     customer will actually read. When Meta cannot be reached the screen
-     shows the blanks on their own and says why. */
+     customer will actually read. Asked for the name that will be tried
+     first; when that one is still in review the send falls back on its own
+     and this simply has no wording to show. */
   const { token, wabaId } = metaAccount();
   const approved = await approvedTemplates({ token, wabaId });
-  const wording = approved.ok ? approved.templates[template] : null;
-  const problem = approved.ok ? checkTemplate(template, wording).problem : "";
+  const wording = approved.ok ? (approved.templates[pick.meta] ?? approved.templates[pick.legacy]) : null;
+  const problem = approved.ok && approved.templates[pick.meta]
+    ? checkTemplate(template, approved.templates[pick.meta]).problem
+    : "";
 
   return {
     ok: true,
     template,
+    /* The name that will be tried at Meta, so a person can match it to what
+       they created there. */
+    metaTemplate: pick.meta,
     label: spec.label,
+    /* What is attached, named exactly as the customer will see it — and
+       empty when nothing is, which is what the screen reads. */
+    documentName: filename,
+    /* Why there is no attachment, when the caller offered one. */
+    documentNote: pick.wantsPdf ? "" : (pdf?.bytes?.byteLength ? pick.why : ""),
+    /* WHAT THE RECORD DOES NOT HAVE. Not a warning any more — the send is
+       refused outright rather than a vague message going to a customer. */
+    willNotSend: missing.length > 0,
     to: allowed.to ?? "",
     customerId: customer?.id ?? customerId ?? "",
     customerName: nameOf(customer),
@@ -90,7 +133,7 @@ export async function previewMessage(admin, { companyId, template, recordType, r
  */
 export async function sendMessage(admin, {
   companyId, template, recordType, recordId, customerId, manual = false,
-  trigger = "", sentBy = null, extra = {},
+  trigger = "", sentBy = null, extra = {}, pdf = null, documentId = "",
 }) {
   const spec = TEMPLATES[template];
   if (!spec) return refused(`There is no WhatsApp template called ${template}.`);
@@ -112,23 +155,73 @@ export async function sendMessage(admin, {
   if (!allowed.ok) return refused(allowed.reason, { switchedOff: !!allowed.switchedOff });
 
   const facts = factsFor(template, { record: loaded.record, customer, extra });
-  const { values } = buildParams(template, facts);
 
-  /* WHAT THE CUSTOMER WILL ACTUALLY READ, recorded with the message.
-     The approved wording lives in Meta, so it is asked for — and the answer
-     is remembered for a few minutes, because a run of two hundred reminders
-     must not ask two hundred times. Without this the log held the blanks
-     and nothing else, so the customer's record showed "(no text)" against
-     every message the business had ever sent them.
+  /* WHICH NAME TO TRY, and whether a file goes with it.
 
-     NEVER ALLOWED TO STOP A SEND. If Meta cannot be asked, the message
-     still goes — Meta fills the blanks into its own approved wording at its
-     end — and the log simply has no words against it. */
+     Only the quotation message carries one. The follow-up is text-only in
+     both its versions: it is sent by the 10am job, where there is no
+     browser and nothing that can render a quotation. */
+  const hasPdf = !!pdf?.bytes?.byteLength;
+  const pick = nameFor(template, { hasPdf });
+  const filename = pick.wantsPdf ? documentName(facts.quoteNo) : "";
+  const { values, missing } = buildParams(template, facts);
+
+  /* NOTHING GOES OUT WITH A HOLE IN IT.
+
+     Meta refuses an empty blank outright, and filling one with a stand-in
+     phrase — which this used to do — means a customer reading "your
+     quotation (number to follow) is ready", which is worse than no message.
+     So the send is refused and the reason is written into the history,
+     where the salesperson looking at that customer will see it, naming the
+     field that is missing. */
+  if (missing.length) {
+    const names = missing.map((key) => spec.params.find((p) => p.key === key)?.label ?? key);
+    const reason = `Not sent — the record has no ${names.join(", no ")}.`;
+    await logSkipped(admin, {
+      companyId, customer, customerId, phone: allowed.to, template, values,
+      reason, trigger, recordType, recordId, sentBy,
+    });
+    return refused(reason, { missing: names });
+  }
+
+  /* ALREADY GONE TODAY? ASKED BEFORE UPLOADING, not after.
+
+     The log row is still what guarantees a customer is not messaged twice —
+     the unique index refuses the second one, whatever any caller believes.
+     This is only here to avoid paying for that refusal with a wasted
+     upload, and it is a real cost: pressing Send on a quotation also tells
+     the CRM the quotation has been shared, which asks for the very same
+     message a moment later. Found in a browser, where one press put the
+     same 10 KB PDF into Meta twice and used one of them.
+
+     Only asked when something is about to be uploaded. Every other message
+     costs nothing to refuse. */
+  if (pick.wantsPdf) {
+    const gone = await sentAlreadyToday(admin, { companyId, template, recordId, phone: allowed.to });
+    if (gone) {
+      return refused(`${spec.label} has already gone to this customer today.`, { alreadySent: true });
+    }
+  }
+
+  /* THE FILE GOES TO META BEFORE ANYTHING IS CLAIMED OR SENT.
+
+     A template with a document header must be sent with a document; there
+     is no half-way. So if the upload fails the message is not sent at all
+     and the reason is handed back in plain words — never a quotation
+     message that silently arrives without the quotation, and never a log
+     row for a send that did not happen. */
+  let document = null;
+  if (pick.wantsPdf) {
+    const up = await uploadDocument({ bytes: pdf.bytes, filename });
+    if (!up.ok) return refused(up.error);
+    document = { id: up.id, filename };
+  }
+
   let body = "";
   try {
     const { token, wabaId } = metaAccount();
     const approved = await approvedTemplates({ token, wabaId });
-    const wording = approved.ok ? approved.templates[template] : null;
+    const wording = approved.ok ? (approved.templates[pick.meta] ?? approved.templates[pick.legacy]) : null;
     if (wording?.body) body = fillBody(wording.body, values);
   } catch (err) {
     console.error("whatsapp: could not read the approved wording —", err?.message ?? err);
@@ -146,9 +239,21 @@ export async function sendMessage(admin, {
       customer_id: customer?.id ?? customerId ?? null,
       phone: allowed.to,
       contact_name: nameOf(customer),
+      /* THE CRM'S OWN NAME, not Meta's. It is the key of the switch, the
+         thing every screen looks a message up by, and what the once-a-day
+         guard keys on — so it must not change when the name at Meta does.
+         Which name actually went is `meta_template` below. */
       template,
       params: values,
       body,
+      /* What was attached, so the history shows the customer got the
+         quotation and not just a message about it — and so the follow-up
+         just a message about it. */
+      document_id: document?.id ?? "",
+      document_name: document?.filename ?? "",
+      /* Filled in after the send, because which of the two names Meta
+         accepted is not known until it answers. */
+      meta_template: "",
       status: "queued",
       trigger: trigger || (manual ? "manual" : "automatic"),
       record_type: recordType || "",
@@ -166,11 +271,39 @@ export async function sendMessage(admin, {
   }
 
   const rowId = claim?.id ?? null;
-  const result = await sendTemplate({ to: allowed.to, templateName: template, values });
+
+  /* THE NEW NAME FIRST, THE OLD ONE ONCE.
+
+     The `_v2` templates are in review, and Meta answers a name it does not
+     have with the same error whether it was never created or is still being
+     looked at. Rather than anybody having to flip a setting on the day a
+     review finishes, every send tries the new name and falls back once.
+
+     The fallback never carries the document: the old quotation template has
+     no header, and sending a file to a template that does not declare one
+     is refused. */
+  let usedName = pick.meta;
+  let result = await sendTemplate({ to: allowed.to, templateName: usedName, values, document });
+
+  if (!result.ok && pick.legacy && pick.legacy !== usedName && templateMissing(result.code, result.error)) {
+    console.log(`whatsapp: ${pick.meta} is not available at Meta — sending ${pick.legacy} instead`);
+    usedName = pick.legacy;
+    result = await sendTemplate({ to: allowed.to, templateName: usedName, values, document: null });
+    if (result.ok && document) {
+      /* It went, but without the attachment. The history must not claim
+         otherwise. */
+      document = null;
+    }
+  }
 
   await admin
     .from("whatsapp_messages")
     .update({
+      /* WHICH NAME ACTUALLY WENT. The whole point of the fallback is that
+         nobody has to watch it, so the log is where it is visible. */
+      meta_template: usedName,
+      document_id: document?.id ?? "",
+      document_name: document?.filename ?? "",
       status: result.ok ? "sent" : "failed",
       wa_message_id: result.ok ? result.id ?? null : null,
       error: result.ok ? "" : String(result.error ?? "").slice(0, 500),
@@ -181,7 +314,15 @@ export async function sendMessage(admin, {
     .eq("id", rowId);
 
   return result.ok
-    ? { ok: true, id: result.id ?? null, rowId, to: allowed.to }
+    ? {
+      ok: true,
+      id: result.id ?? null,
+      rowId,
+      to: allowed.to,
+      template,
+      metaTemplate: usedName,
+      documentName: document?.filename ?? "",
+    }
     : refused(result.error, { rowId, retryable: !!result.retryable });
 }
 
@@ -227,3 +368,69 @@ async function settingsOf(admin, companyId) {
 /** The database refusing a second row for the same thing today. */
 const isDuplicate = (error) =>
   String(error?.code ?? "") === "23505" || /duplicate key|unique constraint/i.test(String(error?.message ?? ""));
+
+/**
+ * Write down a message that was NOT sent, and why.
+ *
+ * A refusal nobody can see is a message that silently never arrived. This
+ * puts it where everything else is — the customer's history — as a failed
+ * row naming the field that was missing, so the person looking at that
+ * customer can fill it in and send again.
+ *
+ * Recorded as `failed`, which is also what keeps it out of the once-a-day
+ * guard: a message that did not go must not block the one that will.
+ */
+async function logSkipped(admin, {
+  companyId, customer, customerId, phone, template, values, reason,
+  trigger, recordType, recordId, sentBy,
+}) {
+  try {
+    await admin.from("whatsapp_messages").insert({
+      company_id: companyId,
+      direction: "out",
+      customer_id: customer?.id ?? customerId ?? null,
+      phone: phone || "",
+      contact_name: nameOf(customer),
+      template,
+      params: values,
+      status: "failed",
+      error: reason.slice(0, 500),
+      trigger: trigger || "manual",
+      record_type: recordType || "",
+      record_id: recordId || "",
+      sent_by: sentBy,
+    });
+  } catch (err) {
+    /* The refusal still stands; only the note failed. */
+    console.error("whatsapp: could not record a skipped message —", err?.message ?? err);
+  }
+}
+
+/**
+ * Has this exact message already gone to this number today?
+ *
+ * The same question the unique index answers, asked cheaply and in advance.
+ * It is NOT the guarantee — two callers a millisecond apart both get "no"
+ * here and the index refuses the second insert, which is the point of
+ * claiming the row before sending. It exists so the expensive work in front
+ * of that claim is not done for nothing.
+ *
+ * The day is India's, matching the index.
+ */
+export async function sentAlreadyToday(admin, { companyId, template, recordId, phone }) {
+  if (!companyId || !template || !recordId || !phone) return false;
+  const since = new Date(`${todayInIndia()}T00:00:00+05:30`).toISOString();
+  const { data } = await admin
+    .from("whatsapp_messages")
+    .select("id")
+    .eq("company_id", companyId)
+    .eq("template", template)
+    .eq("record_id", recordId)
+    .eq("phone", phone)
+    .eq("direction", "out")
+    .neq("status", "failed")
+    .gte("created_at", since)
+    .limit(1);
+  return !!data?.length;
+}
+

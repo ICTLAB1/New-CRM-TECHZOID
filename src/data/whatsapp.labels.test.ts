@@ -9,7 +9,7 @@ import { TEMPLATES as RAW_TEMPLATES } from "../../netlify/lib/whatsappTemplates.
 // @ts-expect-error -- untyped .mjs, shape asserted below
 import { RECORD_FOR as RAW_RECORD_FOR } from "../../netlify/lib/whatsappFacts.mjs";
 
-const TEMPLATES = RAW_TEMPLATES as Record<string, { label: string }>;
+const TEMPLATES = RAW_TEMPLATES as Record<string, { label: string; metaName: string; legacyName: string; document?: boolean }>;
 const RECORD_FOR = RAW_RECORD_FOR as Record<string, string>;
 
 describe("the screens' copy of the template names", () => {
@@ -41,5 +41,29 @@ describe("the screens' copy of the template names", () => {
     expect(whatsappLabel("quotation_sent")).toBe("Quotation sent");
     expect(whatsappLabel("some_new_thing")).toBe("Some new thing");
     expect(whatsappLabel("")).toBe("");
+  });
+});
+
+describe("the name each message is sent as at Meta", () => {
+  it("is the CRM's own name with _v2 on the end", () => {
+    for (const name of Object.keys(WHATSAPP_LABELS)) {
+      expect(TEMPLATES[name]?.metaName, name).toBe(`${name}_v2`);
+      expect(TEMPLATES[name]?.legacyName, name).toBe(name);
+    }
+  });
+
+  it("never changes the name the CRM itself uses, which the switches key on", () => {
+    /* Renaming these would turn every company's switches off and orphan
+       every message ever logged. */
+    expect(Object.keys(WHATSAPP_LABELS).sort()).toEqual([
+      "licence_delivered", "order_delivered", "payment_due_reminder",
+      "payment_overdue_reminder", "payment_received", "quotation_followup",
+      "quotation_sent", "renewal_reminder",
+    ]);
+  });
+
+  it("marks only the quotation as carrying the PDF", () => {
+    const carriers = Object.keys(TEMPLATES).filter((n) => TEMPLATES[n]?.document);
+    expect(carriers).toEqual(["quotation_sent"]);
   });
 });

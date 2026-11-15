@@ -3,7 +3,8 @@ import { threadsFrom, windowOpen, type WhatsAppMessage } from "./whatsapp";
 
 const msg = (over: Partial<WhatsAppMessage>): WhatsAppMessage => ({
   id: "m", direction: "out", customerId: null, phone: "919810012345", contactName: "",
-  template: "", body: "", status: "sent", error: "", trigger: "", at: "2026-11-15T10:00:00Z", ...over,
+  template: "", body: "", status: "sent", error: "", trigger: "", documentName: "",
+  at: "2026-11-15T10:00:00Z", ...over,
 });
 
 describe("the 24-hour window", () => {

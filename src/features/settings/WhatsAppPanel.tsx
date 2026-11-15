@@ -2,7 +2,9 @@ import { useEffect, useState } from "react";
 import { Card, Chip, Field, Input } from "../../components/primitives";
 import { useToast } from "../../components/Toast";
 import { fnUrl } from "../../data/functions";
-import { whatsappStatus, type WhatsAppStatus } from "../../data/whatsappStatus";
+import {
+  whatsappStatus, type WhatsAppStatus, type WhatsAppTemplateStatus,
+} from "../../data/whatsappStatus";
 
 /**
  * WhatsApp: what goes out by itself, and whether any of it can.
@@ -150,6 +152,18 @@ export function WhatsAppPanel({
                     </td>
                     <td>
                       <div><strong>{t.label}</strong></div>
+                      {/* WHICH NAME IS ACTUALLY GOING OUT. The templates were
+                          resubmitted to Meta as "_v2" and each is sent under
+                          that name as soon as Meta has it, falling back to
+                          the old one until then — with nothing for anybody
+                          to switch over. This line is how that is visible. */}
+                      <div className="field-hint">
+                        {t.approved
+                          ? <>Sending as <code>{t.metaName}</code>{t.carriesPdf ? ", with the quotation PDF attached" : ""}.</>
+                          : t.legacyApproved
+                            ? <><code>{t.metaName}</code> is not approved yet — sending <code>{t.legacyName}</code> for now{t.carriesPdf ? ", without the PDF" : ""}.</>
+                            : <>Neither <code>{t.metaName}</code> nor <code>{t.legacyName}</code> is ready at Meta.</>}
+                      </div>
                       <div className="muted" style={{ fontSize: 12 }}>{t.name}</div>
                     </td>
                     <td className="muted">{t.when}</td>
@@ -212,13 +226,13 @@ export function WhatsAppPanel({
 /* Shown before the check comes back, so the switches are usable even when
    Meta cannot be reached — somebody setting this up offline can still
    decide what they want on. */
-const FALLBACK_ROWS = [
-  { name: "quotation_sent", label: "Quotation sent", when: "A quotation is emailed to the customer", autoKey: "quotationSent", approved: false, problem: "" },
-  { name: "quotation_followup", label: "Quotation follow-up", when: "A quotation has had no answer for three days", autoKey: "quotationFollowup", approved: false, problem: "" },
-  { name: "order_delivered", label: "Order delivered", when: "An order is marked delivered", autoKey: "orderDelivered", approved: false, problem: "" },
-  { name: "licence_delivered", label: "Licence keys sent", when: "Licence keys are marked as sent", autoKey: "licenceDelivered", approved: false, problem: "" },
-  { name: "payment_due_reminder", label: "Payment due in 3 days", when: "Three days before an invoice falls due", autoKey: "paymentDue", approved: false, problem: "" },
-  { name: "payment_overdue_reminder", label: "Payment overdue", when: "The day after the due date, then every seven days", autoKey: "paymentOverdue", approved: false, problem: "" },
-  { name: "payment_received", label: "Payment received", when: "A payment is recorded", autoKey: "paymentReceived", approved: false, problem: "" },
-  { name: "renewal_reminder", label: "Renewal in 30 days", when: "Thirty days before a subscription renews", autoKey: "renewalReminder", approved: false, problem: "" },
+const FALLBACK_ROWS: WhatsAppTemplateStatus[] = [
+  { name: "quotation_sent", label: "Quotation sent", when: "A quotation is emailed to the customer", autoKey: "quotationSent", blanks: 4, approved: false, problem: "" },
+  { name: "quotation_followup", label: "Quotation follow-up", when: "A quotation has had no answer for three days", autoKey: "quotationFollowup", blanks: 4, approved: false, problem: "" },
+  { name: "order_delivered", label: "Order delivered", when: "An order is marked delivered", autoKey: "orderDelivered", blanks: 4, approved: false, problem: "" },
+  { name: "licence_delivered", label: "Licence keys sent", when: "Licence keys are marked as sent", autoKey: "licenceDelivered", blanks: 4, approved: false, problem: "" },
+  { name: "payment_due_reminder", label: "Payment due in 3 days", when: "Three days before an invoice falls due", autoKey: "paymentDue", blanks: 4, approved: false, problem: "" },
+  { name: "payment_overdue_reminder", label: "Payment overdue", when: "The day after the due date, then every seven days", autoKey: "paymentOverdue", blanks: 5, approved: false, problem: "" },
+  { name: "payment_received", label: "Payment received", when: "A payment is recorded", autoKey: "paymentReceived", blanks: 3, approved: false, problem: "" },
+  { name: "renewal_reminder", label: "Renewal in 30 days", when: "Thirty days before a subscription renews", autoKey: "renewalReminder", blanks: 3, approved: false, problem: "" },
 ];

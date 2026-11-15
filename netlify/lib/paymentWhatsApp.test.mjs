@@ -50,10 +50,13 @@ describe("the WhatsApp reminder a bill sends", () => {
     expect(whatsappFor(bill, "overdue", {}, "2026-11-01").bodyValues[4]).toBe("0");
   });
 
-  it("falls back to the template's own words when the day is not known", () => {
+  it("leaves the days-overdue blank empty when the day is not known", () => {
+    /* Empty, not papered over: the sender refuses a message with a hole in
+       it rather than telling a customer their invoice is "a few" days
+       overdue. The nightly job always knows the day, so this is the case
+       where somebody called it wrong. */
     const wa = whatsappFor(bill, "overdue", {});
-    expect(wa.bodyValues[4]).toBe(TEMPLATES.payment_overdue_reminder.params[4].fallback);
-    expect(wa.bodyValues[4]).not.toBe("");
+    expect(wa.bodyValues[4]).toBe("");
   });
 
   it("greets the person, then the company, then Sir/Madam", () => {
@@ -72,12 +75,15 @@ describe("the WhatsApp reminder a bill sends", () => {
     expect(wa.bodyValues[2]).toContain("₹");
   });
 
-  it("leaves no blank empty, which Meta refuses", () => {
+  it("leaves a bill with nothing on it showing empty blanks, for the sender to refuse", () => {
+    /* Meta refuses an empty blank outright, and so does the sender, before
+       it ever gets that far — `sendMessage` checks what is missing and
+       writes the refusal into the customer's history instead of sending.
+       Greeting and amount always have something; the rest do not. */
     const bare = { invoice_no: "", amount: 0, amount_paid: 0, due_date: "", contact_name: "", customer_name: "" };
-    for (const tone of Object.keys(DEFAULT_TEMPLATES)) {
-      for (const v of whatsappFor(bare, tone, {}, "2026-11-15").bodyValues) {
-        expect(String(v).trim(), `${tone}`).not.toBe("");
-      }
-    }
+    const wa = whatsappFor(bare, "due", {}, "2026-11-15");
+    expect(wa.bodyValues[0]).toBe("Sir/Madam");
+    expect(wa.bodyValues[1]).toBe("");
+    expect(wa.bodyValues[3]).toBe("");
   });
 });

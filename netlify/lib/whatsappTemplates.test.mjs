@@ -131,14 +131,26 @@ describe("filling the blanks in order", () => {
     expect(values).toEqual(["Acme Industries", "TZ/INV/26-27/0042", "1,18,000", "15 Nov 2026", "8"]);
   });
 
-  it("NEVER produces an empty blank", () => {
-    /* "param text cannot be empty" fails the send outright, so a record
-       with nothing on it still has to produce five sendable strings. */
+  it("REPORTS an empty blank rather than inventing something to fill it", () => {
+    /* "param text cannot be empty" fails the send outright — so a blank
+       with nothing behind it used to be filled with a stand-in phrase, and
+       a customer could read "your quotation (number to follow) is ready".
+       Now the hole is named and the sender refuses to send at all. */
     for (const name of TEMPLATE_NAMES) {
-      const { values } = buildParams(name, {});
+      const { values, missing } = buildParams(name, {});
       expect(values).toHaveLength(TEMPLATES[name].params.length);
-      for (const v of values) expect(String(v).trim()).not.toBe("");
+      expect(missing).toEqual(TEMPLATES[name].params.map((p) => p.key));
     }
+  });
+
+  it("reports only the blanks that are actually empty", () => {
+    const { values, missing } = buildParams("payment_received", {
+      customer: "Rahul Verma", amount: 118000,
+    });
+    expect(missing).toEqual(["against"]);
+    expect(values[0]).toBe("Rahul Verma");
+    expect(values[1]).toBe("1,18,000");
+    expect(values[2]).toBe("");
   });
 
   it("says which facts it had to fall back on", () => {

@@ -2,7 +2,7 @@ import { fail, guard, json, readJson } from "../lib/http.mjs";
 import { adminClient, signedInUser } from "../lib/auth.mjs";
 import { consume, tooManyMessage } from "../lib/ratelimit.mjs";
 import { str } from "../lib/validate.mjs";
-import { previewMessage, replyInWords, sendMessage } from "../lib/whatsappSender.mjs";
+import { pdfFrom, previewMessage, replyInWords, sendMessage } from "../lib/whatsappSender.mjs";
 import { TEMPLATES, checkTemplate, readApprovedTemplates } from "../lib/whatsappTemplates.mjs";
 import { metaAccount, metaConfigured } from "../lib/whatsappMeta.mjs";
 import { checkRecordType } from "../lib/whatsappFacts.mjs";
@@ -75,18 +75,35 @@ export async function handler(event) {
       verifyTokenSet: !!process.env.WHATSAPP_VERIFY_TOKEN,
       signatureChecked: !!process.env.WHATSAPP_APP_SECRET,
       error: approved.ok ? "" : approved.error,
+      /* READ AGAINST THE NAME THAT WILL BE TRIED, which is the `_v2` one.
+         While a `_v2` template is still in review this reports it as not
+         ready, and says whether the old name it falls back to is — so the
+         screen can show "sending the old version for now" rather than
+         "broken". */
       templates: Object.keys(TEMPLATES).map((name) => {
         const spec = TEMPLATES[name];
-        const found = approved.ok ? approved.templates[name] : null;
+        const found = approved.ok ? approved.templates[spec.metaName] : null;
         const check = approved.ok ? checkTemplate(name, found) : { ok: false, problem: "" };
+
+        const legacyFound = approved.ok ? approved.templates[spec.legacyName] : null;
+        const legacyCheck = approved.ok ? checkTemplate(name, legacyFound) : { ok: false, problem: "" };
+
         return {
           name,
           label: spec.label,
           when: spec.when,
           autoKey: spec.auto,
           blanks: spec.params.length,
+          /* The name at Meta, so a person can match a row to what they
+             created there. */
+          metaName: spec.metaName,
           approved: !!check.ok,
           problem: check.problem,
+          /* The one it falls back to until the new one is approved. */
+          legacyName: spec.legacyName,
+          legacyApproved: !!legacyCheck.ok,
+          /* Only the quotation message carries the PDF. */
+          carriesPdf: !!spec.document,
         };
       }),
     });
@@ -100,6 +117,10 @@ export async function handler(event) {
       recordId: str(body.recordId, 64),
       customerId: str(body.customerId, 64),
       extra: safeExtra(body.extra),
+      /* Offered, not promised: the preview says whether it will actually be
+         attached, because that depends on Meta having approved the version
+         of the template that carries one. */
+      pdf: pdfFrom(body.pdf),
     });
     return out.ok ? json(event, 200, out) : fail(event, 400, out.reason);
   }
@@ -157,6 +178,11 @@ export async function handler(event) {
     trigger: str(body.trigger, 40),
     sentBy: user.id,
     extra: safeExtra(body.extra),
+    /* THE QUOTATION ITSELF, rendered by the browser that has it on screen.
+       Nothing on this server can produce one. It is handed to Meta before
+       the message is sent, and a failure there stops the send rather than
+       letting a quotation message arrive without the quotation. */
+    pdf: pdfFrom(body.pdf),
   });
 
   if (out.ok) return json(event, 200, out);

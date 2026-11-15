@@ -32,6 +32,17 @@ export interface WhatsAppTarget {
   /** The handful of facts a record cannot hold — where licence keys were
    *  emailed, what a payment was against. */
   extra?: { sentTo?: string; against?: string; amount?: number; today?: string };
+  /** The quotation, rendered here, for the server to hand to WhatsApp.
+   *
+   *  THE SERVER CANNOT MAKE ONE. A quotation PDF is built by this app from
+   *  the document on screen; there is no renderer on the server at all. So
+   *  for the two quotation messages that carry the file, the browser sends
+   *  it along and the server passes it to Meta.
+   *
+   *  Offering it does not promise it will be attached — the preview says
+   *  whether it actually will be, because that depends on Meta having
+   *  approved the version of the template that takes one. */
+  pdf?: { base64: string } | null;
 }
 
 export interface WhatsAppPreview {
@@ -48,6 +59,11 @@ export interface WhatsAppPreview {
   body: string;
   /** Why the wording could not be shown, or why the template will not work. */
   wordingProblem: string;
+  /** The quotation PDF that will be attached, named as the customer sees
+   *  it. Empty when nothing is attached. */
+  documentName?: string;
+  /** Why the PDF will not be attached, when one was offered. */
+  documentNote?: string;
   /** Why this cannot be sent at all — no consent, no number. */
   blocked: string;
 }
@@ -130,6 +146,8 @@ export interface WhatsAppMessage {
   status: string;
   error: string;
   trigger: string;
+  /** The file that went with it, as the customer saw it named. */
+  documentName: string;
   at: string;
 }
 
@@ -147,6 +165,7 @@ function toMessage(row: Record<string, unknown>): WhatsAppMessage {
     status: text(row.status),
     error: text(row.error),
     trigger: text(row.trigger),
+    documentName: text(row.document_name),
     at: text(row.created_at),
   };
 }

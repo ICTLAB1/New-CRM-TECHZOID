@@ -112,10 +112,10 @@ export const TEMPLATES = {
     auto: "quotationSent",
     manual: true,
     params: [
-      { key: "customer", label: "Customer name", fallback: "there" },
-      { key: "quoteNo", label: "Quotation number", fallback: "(number to follow)" },
-      { key: "product", label: "Product", fallback: "the items quoted" },
-      { key: "validTill", label: "Valid till", kind: "date", fallback: "the date on the quotation" },
+      { key: "customer", label: "Customer name" },
+      { key: "quoteNo", label: "Quotation number" },
+      { key: "product", label: "Product" },
+      { key: "validTill", label: "Valid till", kind: "date" },
     ],
   },
   quotation_followup: {
@@ -125,10 +125,10 @@ export const TEMPLATES = {
     auto: "quotationFollowup",
     manual: true,
     params: [
-      { key: "customer", label: "Customer name", fallback: "there" },
-      { key: "quoteNo", label: "Quotation number", fallback: "(number to follow)" },
-      { key: "product", label: "Product", fallback: "the items quoted" },
-      { key: "sharedOn", label: "Date shared", kind: "date", fallback: "recently" },
+      { key: "customer", label: "Customer name" },
+      { key: "quoteNo", label: "Quotation number" },
+      { key: "product", label: "Product" },
+      { key: "sharedOn", label: "Date shared", kind: "date" },
     ],
   },
   order_delivered: {
@@ -138,10 +138,10 @@ export const TEMPLATES = {
     auto: "orderDelivered",
     manual: true,
     params: [
-      { key: "customer", label: "Customer name", fallback: "there" },
-      { key: "orderNo", label: "Order number", fallback: "(number to follow)" },
-      { key: "items", label: "Items", fallback: "the items ordered" },
-      { key: "deliveredOn", label: "Delivery date", kind: "date", fallback: "today" },
+      { key: "customer", label: "Customer name" },
+      { key: "orderNo", label: "Order number" },
+      { key: "items", label: "Items" },
+      { key: "deliveredOn", label: "Delivery date", kind: "date" },
     ],
   },
   licence_delivered: {
@@ -151,10 +151,10 @@ export const TEMPLATES = {
     auto: "licenceDelivered",
     manual: true,
     params: [
-      { key: "customer", label: "Customer name", fallback: "there" },
-      { key: "product", label: "Product", fallback: "the software ordered" },
-      { key: "orderNo", label: "Order number", fallback: "(number to follow)" },
-      { key: "sentTo", label: "Email they went to", fallback: "your registered email" },
+      { key: "customer", label: "Customer name" },
+      { key: "product", label: "Product" },
+      { key: "orderNo", label: "Order number" },
+      { key: "sentTo", label: "Email they went to" },
     ],
   },
   payment_due_reminder: {
@@ -164,10 +164,10 @@ export const TEMPLATES = {
     auto: "paymentDue",
     manual: true,
     params: [
-      { key: "customer", label: "Customer name", fallback: "there" },
-      { key: "invoiceNo", label: "Invoice number", fallback: "(number to follow)" },
-      { key: "amount", label: "Amount", kind: "money", fallback: "the invoiced amount" },
-      { key: "dueOn", label: "Due date", kind: "date", fallback: "the due date" },
+      { key: "customer", label: "Customer name" },
+      { key: "invoiceNo", label: "Invoice number" },
+      { key: "amount", label: "Amount", kind: "money" },
+      { key: "dueOn", label: "Due date", kind: "date" },
     ],
   },
   payment_overdue_reminder: {
@@ -177,11 +177,11 @@ export const TEMPLATES = {
     auto: "paymentOverdue",
     manual: true,
     params: [
-      { key: "customer", label: "Customer name", fallback: "there" },
-      { key: "invoiceNo", label: "Invoice number", fallback: "(number to follow)" },
-      { key: "amount", label: "Amount", kind: "money", fallback: "the invoiced amount" },
-      { key: "dueOn", label: "Due date", kind: "date", fallback: "the due date" },
-      { key: "daysOverdue", label: "Days overdue", fallback: "a few" },
+      { key: "customer", label: "Customer name" },
+      { key: "invoiceNo", label: "Invoice number" },
+      { key: "amount", label: "Amount", kind: "money" },
+      { key: "dueOn", label: "Due date", kind: "date" },
+      { key: "daysOverdue", label: "Days overdue" },
     ],
   },
   payment_received: {
@@ -191,9 +191,9 @@ export const TEMPLATES = {
     auto: "paymentReceived",
     manual: true,
     params: [
-      { key: "customer", label: "Customer name", fallback: "there" },
-      { key: "amount", label: "Amount", kind: "money", fallback: "your payment" },
-      { key: "against", label: "Against", fallback: "your account" },
+      { key: "customer", label: "Customer name" },
+      { key: "amount", label: "Amount", kind: "money" },
+      { key: "against", label: "Against" },
     ],
   },
   renewal_reminder: {
@@ -203,9 +203,9 @@ export const TEMPLATES = {
     auto: "renewalReminder",
     manual: true,
     params: [
-      { key: "customer", label: "Customer name", fallback: "there" },
-      { key: "product", label: "Product", fallback: "your subscription" },
-      { key: "renewsOn", label: "Renewal date", kind: "date", fallback: "shortly" },
+      { key: "customer", label: "Customer name" },
+      { key: "product", label: "Product" },
+      { key: "renewsOn", label: "Renewal date", kind: "date" },
     ],
   },
 };
@@ -241,10 +241,7 @@ export function buildParams(templateName, facts = {}) {
       else text = waText(raw);
     }
 
-    if (!text) {
-      missing.push(param.key);
-      text = param.fallback;
-    }
+    if (!text) missing.push(param.key);
     values.push(text);
   }
 
@@ -363,6 +360,73 @@ export function checkTemplate(templateName, approved) {
     };
   }
   return { ok: true, problem: "" };
+}
+
+/**
+ * WHAT EACH ONE IS CALLED IN META, and what it used to be called.
+ *
+ * The names inside this CRM do not change: they are the keys of the switches
+ * a company has already set, the `template` written against every message
+ * ever sent, and what the screens look messages up by. Renaming them would
+ * rewrite history and silently turn switches off.
+ *
+ * What changed is the name AT META. The templates were resubmitted as
+ * `_v2`, so that is what goes on the wire — with the old name kept beside it
+ * because the new ones are in review and a message must still go out in the
+ * meantime. `sendMessage` tries the new name and falls back to the old one
+ * when Meta says it does not have it.
+ */
+for (const [key, spec] of Object.entries(TEMPLATES)) {
+  spec.metaName = `${key}_v2`;
+  spec.legacyName = key;
+}
+
+/* THE QUOTATION MESSAGE CARRIES THE QUOTATION. `quotation_sent_v2` is
+   created in Meta with a document header, so every send of it must have the
+   PDF; without one there is nothing to do but send the old text-only
+   template instead. The follow-up stays text-only in both versions — it goes
+   out from the 10am job, where there is no browser and so no way to render a
+   quotation. */
+TEMPLATES.quotation_sent.document = true;
+
+/** Does the name Meta knows this by take a document header? */
+export const needsDocument = (templateName) => !!TEMPLATES[templateName]?.document;
+
+/**
+ * Which name to try at Meta, and what to try if that one is not there.
+ *
+ * THE NEW NAMES ARE IN REVIEW. `quotation_sent_v2` and the rest were
+ * resubmitted and Meta takes its time; until each is approved, sending it
+ * comes back as "template name does not exist". So every send names the new
+ * one, and `sendMessage` falls back once to the old one when Meta says it
+ * does not have it. Nothing has to be edited on the day a review finishes —
+ * the next message simply goes out on the new template.
+ *
+ * THE QUOTATION MESSAGE IS THE ONE EXCEPTION, because its new version
+ * carries the PDF in a header and its old version does not. With a PDF in
+ * hand, the new name is tried and the old one is the fallback, sent without
+ * the attachment. With no PDF there is no point trying: a template with a
+ * header cannot be sent without a file, so the old name is used directly.
+ */
+export function nameFor(templateName, { hasPdf = false } = {}) {
+  const spec = TEMPLATES[templateName];
+  if (!spec) return { meta: "", legacy: "", wantsPdf: false, why: `There is no template called ${templateName}.` };
+
+  if (spec.document && !hasPdf) {
+    return {
+      meta: spec.legacyName,
+      legacy: "",
+      wantsPdf: false,
+      why: "the quotation PDF could not be built, so the message goes without it",
+    };
+  }
+  return { meta: spec.metaName, legacy: spec.legacyName, wantsPdf: !!spec.document, why: "" };
+}
+
+/** What the attached file is called, as the customer sees it. */
+export function documentName(quoteNo) {
+  const clean = String(quoteNo ?? "").trim().replace(/[^A-Za-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "");
+  return `Quotation_${clean || "TechZoid"}.pdf`;
 }
 
 /** Meta's error wording, dug out of whichever shape it arrived in. */

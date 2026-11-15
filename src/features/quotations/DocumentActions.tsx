@@ -134,6 +134,18 @@ export function DocumentActions({
      sent from the Payment tracker, which knows the due date and what has
      been paid, and a purchase order goes to a vendor, not a customer. */
   const approvedTemplates = docType === "quotation" ? (WHATSAPP_FOR["quote"] ?? []) : [];
+
+  /* The quotation as a PDF, or nothing if it cannot be drawn. NEVER THROWS:
+     a quotation that will not render is a message without an attachment,
+     not a button that does nothing. */
+  const quotationPdf = (): { base64: string } | null => {
+    try {
+      const { base64 } = pdfAttachment(renderOpts);
+      return base64 ? { base64 } : null;
+    } catch {
+      return null;
+    }
+  };
   const message = defaultMessage(doc, docType);
 
   const company = (settings["company"] ?? {}) as Record<string, unknown>;
@@ -346,6 +358,8 @@ export function DocumentActions({
         recordId: doc.id,
         customerId: doc.customerId || undefined,
         trigger: "quotation shared",
+        /* The same PDF the customer has just been emailed. */
+        pdf: quotationPdf(),
       });
     }
     if (!armable) return;
@@ -479,6 +493,10 @@ export function DocumentActions({
           recordType="quote"
           recordId={doc.id}
           customerId={doc.customerId || undefined}
+          /* THE QUOTATION ITSELF, drawn from what is on screen — the same
+             PDF the email carries. Only this app can build one, so it is
+             rendered here and handed over with the send. */
+          getPdf={() => quotationPdf()}
           /* A message the customer has read is a quotation that was sent.
              Same as the email: the status follows what happened, rather
              than waiting for somebody to change a dropdown. */

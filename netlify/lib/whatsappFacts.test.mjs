@@ -108,10 +108,15 @@ describe("a renewal", () => {
 });
 
 describe("a record with holes in it", () => {
-  it("still produces a sendable message", () => {
-    const values = sent("quotation_sent", { record: { id: "q", data: {} }, customer: null });
+  it("names every blank it could not fill, so the send is refused", () => {
+    /* The sender writes this into the customer's history and sends
+       nothing — better than a message with a hole papered over. */
+    const { values, missing } = buildParams(
+      "quotation_sent",
+      factsFor("quotation_sent", { record: { id: "q", data: {} }, customer: null }),
+    );
     expect(values).toHaveLength(4);
-    for (const v of values) expect(String(v).trim()).not.toBe("");
+    expect(missing).toEqual(["customer", "quoteNo", "product", "validTill"]);
   });
 
   it("reports which facts were missing, so a preview can say so", () => {
