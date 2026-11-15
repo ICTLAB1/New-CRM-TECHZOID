@@ -18,7 +18,8 @@
 /** Every screen the workbench can show. The dashboard lives at "/". */
 export const VIEWS: readonly string[] = [
   "dashboard",
-  "activity", "assistant", "campaigns", "catalog", "companies", "components",
+  "activity", "assistant", "campaigns", "catalog", "companies", "company-profile",
+  "components",
   "customers", "discount-approvals", "dispatch", "incentives", "integrations",
   "invoices", "mail", "orders", "payment-tracker", "pipeline", "price-book",
   "proformas", "prospects", "purchase-orders", "quotations", "receivables",

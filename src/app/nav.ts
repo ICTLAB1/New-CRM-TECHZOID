@@ -26,6 +26,12 @@ export const NAV: NavSection[] = [
       { id: "pipeline", label: "Pipeline" },
       { id: "customers", label: "Customers" },
       { id: "mail", label: "Mail" },
+      /* In "Sell" and not under "Administer" with the other settings-shaped
+         screens: replacing the PDF is an administrative act done once, and
+         sending it is what a salesperson does on a Tuesday afternoon after
+         a customer asks "what else do you do?". The screen is named for the
+         sending, so it lives where the sending happens. */
+      { id: "company-profile", label: "Company profile" },
       { id: "quotations", label: "Quotations" },
       { id: "proformas", label: "Proformas" },
     ],

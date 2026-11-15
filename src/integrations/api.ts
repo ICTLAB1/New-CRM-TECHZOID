@@ -39,6 +39,41 @@ export interface EmailResult {
   from?: string;
 }
 
+/**
+ * One finished message in a company-profile send.
+ *
+ * The browser renders these — see src/domain/outreach/profileMail.ts — and
+ * the server sends what it is given, one message per entry, with the stored
+ * profile attached. There is deliberately no attachment field here: the file
+ * the server attaches is the one an Admin uploaded, not one a browser can
+ * name.
+ */
+export interface ProfileMessageRequest {
+  email: string;
+  /** The customer this goes to, when it is one of ours. */
+  customerId?: string;
+  /** Who they are, for the log row. */
+  label?: string;
+  subject: string;
+  message: string;
+  html?: string;
+}
+
+export interface ProfileSendResult {
+  sent: number;
+  failed: number;
+  attachment: { name: string; bytes: number };
+  results: Array<{
+    email: string;
+    customerId: string | null;
+    ok: boolean;
+    via: string;
+    from: string | null;
+    error: string | null;
+    retryable: boolean;
+  }>;
+}
+
 export interface ChatMessage {
   role: "user" | "assistant";
   content: string;
@@ -88,6 +123,18 @@ export interface IntegrationsApi {
   diagnostics(): Promise<Diagnostics>;
 
   sendEmail(request: EmailRequest): Promise<EmailResult>;
+  /**
+   * Send the company profile to several people, one message each.
+   *
+   * A long list arrives in pieces (CHUNK in domain/outreach/profileMail.ts),
+   * all under one `batchId`, so the progress on screen is real and a piece
+   * that fails can be retried without sending the rest again.
+   */
+  sendCompanyProfile(request: {
+    companyId: string;
+    batchId: string;
+    messages: ProfileMessageRequest[];
+  }): Promise<ProfileSendResult>;
   sendWhatsApp(to: string, message: string): Promise<void>;
   ask(system: string, messages: ChatMessage[]): Promise<string>;
 
@@ -224,6 +271,14 @@ export function netlifyApi(): IntegrationsApi {
       });
     },
 
+    async sendCompanyProfile(request) {
+      return post<ProfileSendResult>("profile-send", {
+        companyId: request.companyId,
+        batchId: request.batchId,
+        messages: request.messages,
+      });
+    },
+
     async sendWhatsApp(to, message) {
       await post("whatsapp-send", { to, message });
     },
@@ -273,6 +328,7 @@ export function demoApi(): IntegrationsApi {
     disconnectMailbox: async () => refuse("Disconnecting a mailbox"),
     diagnostics: async () => refuse("The setup check"),
     sendEmail: async () => refuse("Sending email"),
+    sendCompanyProfile: async () => refuse("Sending the company profile"),
     sendWhatsApp: async () => refuse("Sending WhatsApp messages"),
     ask: async () => refuse("The assistant"),
     createTeamMember: async () => refuse("Creating an account"),

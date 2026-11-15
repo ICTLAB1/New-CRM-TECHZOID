@@ -51,6 +51,7 @@ import { integrations } from "../integrations";
 import { BRAND_LOGOS, DOC_IMAGES } from "./demoData";
 import type { CatalogProduct } from "../domain/catalog/types";
 import { MailScreen } from "../features/mail/MailScreen";
+import { ProfileMailerScreen } from "../features/profile/ProfileMailerScreen";
 import type { WorkspaceData } from "../data/useWorkspace";
 import type { Customer } from "../domain/customers/customer";
 import type { Workspace as OwnershipWorkspace } from "../domain/customers/cascade";
@@ -120,6 +121,9 @@ export function Workbench({
      useViewHistory. `setView` keeps its name everywhere else because every
      call site means the same thing it always did: go to that screen. */
   const [view, setView] = useViewHistory();
+  /* Customers handed from the Customers screen to the company-profile
+     screen. Cleared once that screen has adopted them. */
+  const [profileFor, setProfileFor] = useState<string[] | undefined>(undefined);
   /* Prospects handed from the Prospects screen to the composer. */
   const [composeFor, setComposeFor] = useState<string[] | undefined>(undefined);
   const [editing, setEditing] = useState<Customer | null>(null);
@@ -369,6 +373,9 @@ export function Workbench({
           settings={settings}
           api={integrations}
           onChange={(next, ownership) => { handleCustomersChange(next); applyOwnership(ownership); }}
+          /* Straight to the company-profile screen with these customers
+             already chosen, rather than a second mail composer here. */
+          onSendProfile={(ids) => { setProfileFor(ids); setView("company-profile"); }}
         />
       ) : view === "pipeline" ? (
         <main className="page">
@@ -564,6 +571,19 @@ export function Workbench({
           catalog={catalog}
           canEdit={canEditSettings}
           onChange={saveCatalog}
+        />
+      ) : view === "company-profile" ? (
+        <ProfileMailerScreen
+          api={integrations}
+          customers={customers}
+          settings={settings}
+          user={user}
+          companyId={activeCompanyId}
+          /* The same test the rest of this file uses for a settings write:
+             the PDF everybody sends is company configuration. */
+          canManageProfile={canEditSettings}
+          preselected={profileFor}
+          onDoneWithPreselection={() => setProfileFor(undefined)}
         />
       ) : view === "team" ? (
         <TeamScreen

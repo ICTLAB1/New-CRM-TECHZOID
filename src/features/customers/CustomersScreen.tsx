@@ -44,12 +44,22 @@ export interface CustomersScreenProps {
   onChange: (customers: Customer[], workspace: Workspace) => void;
   /** Open a customer, or start a new one, on arrival. */
   intent?: Intent | null;
+  /**
+   * Take these customers to the company-profile screen, chosen.
+   *
+   * Given the ids rather than doing the work here: the profile screen owns
+   * the wording, the attachment and the preview, and two screens that can
+   * both send mail to a list is how two slightly different emails start
+   * going out under one company's name.
+   */
+  onSendProfile?: (customerIds: string[]) => void;
 }
 
 type Pending = { customer: Customer; duplicate: ReturnType<typeof findDuplicate<Customer>> };
 
 export function CustomersScreen({
-  documents = {}, subscriptions = [], customers, workspace, users, customFields, currentUser, settings = {}, api, onChange, intent }: CustomersScreenProps) {
+  documents = {}, subscriptions = [], customers, workspace, users, customFields, currentUser, settings = {}, api, onChange, intent,
+  onSendProfile }: CustomersScreenProps) {
   const toast = useToast();
   const [query, setQuery] = useState("");
   const [stageFilter, setStageFilter] = useState<string>("all");
@@ -162,6 +172,18 @@ export function CustomersScreen({
                 call, so it sits next to the manual route rather than being
                 buried in a menu. */}
             <Button tone="default" onClick={() => setSharing(true)}>Share a registration link</Button>
+            {/* THE LIST ON SCREEN, not every customer in the CRM. Filter to
+                a stage, an owner or a search and this sends to exactly what
+                is in front of you — and the profile screen then shows the
+                list again, with a preview, before anything goes. */}
+            {onSendProfile && shown.length ? (
+              <Button
+                tone="default"
+                onClick={() => onSendProfile(shown.filter((c) => String(c.email ?? "").trim()).map((c) => c.id))}
+              >
+                Send company profile{shown.length === customers.length ? "" : ` to these ${shown.length}`}
+              </Button>
+            ) : null}
             <Button tone="primary" onClick={() => { setIsNew(true); setEditing(blankCustomer(currentUser.id, uid())); }}>
               New customer
             </Button>
@@ -284,6 +306,15 @@ export function CustomersScreen({
                         >
                           Documents
                         </Button>
+                        {onSendProfile && String(c.email ?? "").trim() ? (
+                          <Button
+                            size="sm"
+                            tone="quiet"
+                            onClick={(e) => { e.stopPropagation(); onSendProfile([c.id]); }}
+                          >
+                            Send profile
+                          </Button>
+                        ) : null}
                       </td>
                     </motion.tr>
                   );

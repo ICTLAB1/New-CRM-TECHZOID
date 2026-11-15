@@ -21,6 +21,11 @@ export const LIMITS = {
   "submit-lead": { limit: 5, windowSeconds: 600 },
   "public-lead-info": { limit: 30, windowSeconds: 600 },
   "email-send": { limit: 60, windowSeconds: 3600 },
+  /* Its own bucket, not email-send's: a mailshot must not eat the allowance
+     a salesperson needs for the quotation they are in the middle of. One
+     token per REQUEST, and a request carries up to six messages — see
+     netlify/functions/profile-send.mjs. */
+  "profile-send": { limit: 40, windowSeconds: 3600 },
   "whatsapp-send": { limit: 60, windowSeconds: 3600 },
   "ai-proxy": { limit: 40, windowSeconds: 3600 },
   /* Payment Tracker invoice scanning: each call reads one invoice with AI. */
