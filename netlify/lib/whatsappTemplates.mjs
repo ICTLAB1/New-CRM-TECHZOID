@@ -113,7 +113,7 @@ export const TEMPLATES = {
     manual: true,
     params: [
       { key: "customer", label: "Customer name", fallback: "there" },
-      { key: "quoteNo", label: "Quotation number", fallback: "your quotation" },
+      { key: "quoteNo", label: "Quotation number", fallback: "(number to follow)" },
       { key: "product", label: "Product", fallback: "the items quoted" },
       { key: "validTill", label: "Valid till", kind: "date", fallback: "the date on the quotation" },
     ],
@@ -126,7 +126,7 @@ export const TEMPLATES = {
     manual: true,
     params: [
       { key: "customer", label: "Customer name", fallback: "there" },
-      { key: "quoteNo", label: "Quotation number", fallback: "your quotation" },
+      { key: "quoteNo", label: "Quotation number", fallback: "(number to follow)" },
       { key: "product", label: "Product", fallback: "the items quoted" },
       { key: "sharedOn", label: "Date shared", kind: "date", fallback: "recently" },
     ],
@@ -139,8 +139,8 @@ export const TEMPLATES = {
     manual: true,
     params: [
       { key: "customer", label: "Customer name", fallback: "there" },
-      { key: "orderNo", label: "Order number", fallback: "your order" },
-      { key: "items", label: "Items", fallback: "your order" },
+      { key: "orderNo", label: "Order number", fallback: "(number to follow)" },
+      { key: "items", label: "Items", fallback: "the items ordered" },
       { key: "deliveredOn", label: "Delivery date", kind: "date", fallback: "today" },
     ],
   },
@@ -152,8 +152,8 @@ export const TEMPLATES = {
     manual: true,
     params: [
       { key: "customer", label: "Customer name", fallback: "there" },
-      { key: "product", label: "Product", fallback: "your licences" },
-      { key: "orderNo", label: "Order number", fallback: "your order" },
+      { key: "product", label: "Product", fallback: "the software ordered" },
+      { key: "orderNo", label: "Order number", fallback: "(number to follow)" },
       { key: "sentTo", label: "Email they went to", fallback: "your registered email" },
     ],
   },
@@ -165,7 +165,7 @@ export const TEMPLATES = {
     manual: true,
     params: [
       { key: "customer", label: "Customer name", fallback: "there" },
-      { key: "invoiceNo", label: "Invoice number", fallback: "your invoice" },
+      { key: "invoiceNo", label: "Invoice number", fallback: "(number to follow)" },
       { key: "amount", label: "Amount", kind: "money", fallback: "the invoiced amount" },
       { key: "dueOn", label: "Due date", kind: "date", fallback: "the due date" },
     ],
@@ -178,7 +178,7 @@ export const TEMPLATES = {
     manual: true,
     params: [
       { key: "customer", label: "Customer name", fallback: "there" },
-      { key: "invoiceNo", label: "Invoice number", fallback: "your invoice" },
+      { key: "invoiceNo", label: "Invoice number", fallback: "(number to follow)" },
       { key: "amount", label: "Amount", kind: "money", fallback: "the invoiced amount" },
       { key: "dueOn", label: "Due date", kind: "date", fallback: "the due date" },
       { key: "daysOverdue", label: "Days overdue", fallback: "a few" },
