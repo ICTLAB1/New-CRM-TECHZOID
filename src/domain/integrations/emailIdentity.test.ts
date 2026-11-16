@@ -48,9 +48,21 @@ describe("one company block, for every email the CRM sends", () => {
 });
 
 describe("the signature strip", () => {
-  it("is on by default, at an absolute URL on this site", () => {
+  it("IS OFF when no artwork has been supplied", () => {
+    /* The fault this exists to stop: the code named a file nobody had put
+       on the site, so every email carried a broken-image icon with the alt
+       text spilling out underneath it. No file, no <img>. */
     const c = emailCompanyFrom(SETTINGS, { origin: ORIGIN });
-    expect(c.signatureImage?.src).toBe(`${ORIGIN}${SIGNATURE_IMAGE_PATH}`);
+    expect(SIGNATURE_IMAGE_PATH).toBe("");
+    expect(c.signatureImage).toBeNull();
+  });
+
+  it("is on, at an absolute URL, once somebody points it at a file", () => {
+    const c = emailCompanyFrom(
+      { company: { ...SETTINGS.company, signatureImage: "/brand/email-signature.png" } },
+      { origin: ORIGIN },
+    );
+    expect(c.signatureImage?.src).toBe(`${ORIGIN}/brand/email-signature.png`);
   });
 
   it("is NEVER a data: URI", () => {
@@ -74,11 +86,17 @@ describe("the signature strip", () => {
     expect(off.signatureImage).toBeNull();
   });
 
-  it("says in words what the artwork claims, for a blocked image", () => {
-    const c = emailCompanyFrom(SETTINGS, { origin: ORIGIN });
+  it("names the strip briefly for a blocked image, rather than reciting it", () => {
+    /* Outlook blocks images by default, so this is what a great many
+       readers see. The first version was the whole list of partnerships
+       and certifications, which read as a run-on paragraph wedged under a
+       broken-image icon. */
+    const c = emailCompanyFrom(
+      { company: { ...SETTINGS.company, signatureImage: "/brand/email-signature.png" } },
+      { origin: ORIGIN },
+    );
     expect(c.signatureImage?.alt).toBe(SIGNATURE_IMAGE_ALT);
-    expect(c.signatureImage?.alt).toContain("Microsoft Solutions Partner");
-    expect(c.signatureImage?.alt).toContain("GeM registered seller");
+    expect(SIGNATURE_IMAGE_ALT.length).toBeLessThan(80);
   });
 
   it("claims nothing the artwork does not show", () => {
@@ -90,13 +108,35 @@ describe("the signature strip", () => {
   it("reaches the rendered signature, underneath the written one", () => {
     const html = signatureHtml(
       { name: "Abhinav Jain", email: "abhinav.jain@techzoidtechnologies.com", designation: "Managing Director" },
-      emailCompanyFrom(SETTINGS, { origin: ORIGIN }),
+      emailCompanyFrom(
+        { company: { ...SETTINGS.company, signatureImage: "/brand/email-signature.png" } },
+        { origin: ORIGIN },
+      ),
     );
     expect(html).toContain("Abhinav Jain");
-    expect(html).toContain(`${ORIGIN}${SIGNATURE_IMAGE_PATH}`);
+    expect(html).toContain(`${ORIGIN}/brand/email-signature.png`);
     expect(html).toContain("INDIA");
     expect(html).toContain("UAE");
     expect(html.indexOf("Abhinav Jain")).toBeLessThan(html.indexOf("email-signature.png"));
+  });
+
+  it("PUTS NO <img> IN THE SIGNATURE when there is no artwork", () => {
+    const html = signatureHtml(
+      { name: "Abhinav Jain", email: "abhinav.jain@techzoidtechnologies.com", designation: "Managing Director" },
+      emailCompanyFrom(SETTINGS, { origin: ORIGIN }),
+    );
+    expect(html).toContain("Abhinav Jain");
+    expect(html).not.toContain("<img");
+  });
+
+  it("NEVER NAMES A FILE THAT IS NOT THERE", async () => {
+    /* The guard that would have caught this before it reached a customer:
+       whatever SIGNATURE_IMAGE_PATH names has to exist in public/. Empty
+       is fine — that is the strip being off. */
+    if (!SIGNATURE_IMAGE_PATH) return;
+    const { existsSync } = await import("node:fs");
+    const onDisk = `public${SIGNATURE_IMAGE_PATH}`;
+    expect(existsSync(onDisk), `${onDisk} must exist, or no email can show it`).toBe(true);
   });
 });
 

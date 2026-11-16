@@ -18,23 +18,36 @@ import type { EmailCompany } from "./emailTemplate";
  * above it still says everything that matters. See EmailCompany.
  */
 
-/** Where the signature strip is served from, on whichever site this is. */
-export const SIGNATURE_IMAGE_PATH = "/brand/email-signature.png";
+/**
+ * Where the signature strip is served from — EMPTY UNTIL THE ARTWORK IS
+ * ACTUALLY THERE.
+ *
+ * This pointed at /brand/email-signature.png while nothing had been put at
+ * that address, and the result went to customers: a broken-image icon in
+ * every signature, with the alt text spilling out underneath as a
+ * paragraph. The code assumed "a company that has uploaded its strip gets
+ * it automatically" — but nothing anywhere checked whether one had.
+ *
+ * So it is off until somebody supplies the file, and
+ * `emailIdentity.test.ts` refuses to let this name a file that is not in
+ * `public/`. Turning it on is one line, once the artwork is committed.
+ */
+export const SIGNATURE_IMAGE_PATH = "";
 
 /**
- * What the strip claims, in words.
+ * What the strip is, in words.
  *
- * This is what a reader sees when their mail client blocks the image, which
- * in Outlook is the default. It is deliberately a plain list of what the
- * artwork already says — nothing here asserts a partnership or a
- * certification the company has not been granted, and nothing should be
- * added to it that the strip does not show.
+ * SHORT ON PURPOSE. This is what a reader sees when their mail client
+ * blocks images, which in Outlook is the default — and it is what shows if
+ * the image ever fails to load. The first version of this was the whole
+ * list of partnerships and certifications, which read as a run-on sentence
+ * wedged under a broken-image icon. A signature is not the place to recite
+ * them; the artwork says it to anyone whose client shows pictures.
+ *
+ * It also claims nothing specific, which is the safer thing for text the
+ * CRM generates rather than text somebody wrote.
  */
-export const SIGNATURE_IMAGE_ALT =
-  "TechZoid Technologies Private Limited — authorised partner and reseller: Microsoft Solutions Partner, "
-  + "Adobe Certified Reseller, Autodesk Reseller, Zoho, HP, Dell, Lenovo, Cisco. "
-  + "Certified and registered: ISO 9001:2015, ISO 27001:2022, ISO 20000, MSME, DPIIT Startup India, "
-  + "GeM registered seller.";
+export const SIGNATURE_IMAGE_ALT = "TechZoid Technologies — partner and certification badges";
 
 const text = (v: unknown): string => (v === null || v === undefined ? "" : String(v));
 
@@ -77,14 +90,17 @@ export function emailCompanyFrom(
     { label: "UAE", number: text(company["phoneUae"] ?? company["uaePhone"]) },
   ].filter((p) => p.number.trim());
 
-  /* CONFIGURED, WITH A SENSIBLE DEFAULT. A company that has uploaded its
-     strip to the site gets it on every email without anybody setting a
-     field; one that sets `signatureImage` to an empty string has turned it
-     off deliberately. */
-  const configured = company["signatureImage"];
-  const src = configured === undefined
-    ? absoluteUrl(SIGNATURE_IMAGE_PATH, options.origin)
-    : text(configured) && absoluteUrl(text(configured), options.origin);
+  /* OFF UNLESS SOMETHING REAL POINTS AT A FILE.
+
+     Either `signatureImage` is set on the company — an address somebody
+     entered — or SIGNATURE_IMAGE_PATH names artwork that is actually in
+     `public/`. Absent both, no strip is rendered at all, which is the whole
+     fix: an <img> whose file is missing is not a blank space, it is a
+     broken-image icon and a paragraph of alt text in a customer's inbox. */
+  const configured = text(company["signatureImage"]).trim();
+  const fallback = SIGNATURE_IMAGE_PATH.trim();
+  const chosen = configured || (company["signatureImage"] === undefined ? fallback : "");
+  const src = chosen ? absoluteUrl(chosen, options.origin) : "";
 
   return {
     name: text(company["name"]),
