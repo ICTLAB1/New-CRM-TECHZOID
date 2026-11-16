@@ -3,31 +3,37 @@
 The band of partner and certification badges that sits at the foot of every
 email the CRM sends.
 
-## There is no artwork here yet
+## email-signature.png
 
-`src/domain/integrations/emailIdentity.ts` has `SIGNATURE_IMAGE_PATH = ""`,
-which means **no image is put in the signature at all**. That is deliberate,
-and it is the fix for a fault that reached customers: the constant named
-`/brand/email-signature.png` while nothing had been put at that address, so
-every signature carried a broken-image icon with its alt text spilling out
-underneath as a paragraph.
+Microsoft Solutions Partner, Adobe Certified Reseller, Cisco Partner — the
+artwork TechZoid was given by those companies. 1200x281, no transparency,
+about 72 KB. Shown at 600px, so it stays sharp on a retina screen.
 
-A missing image is not a blank space. It is a broken picture in somebody's
-inbox.
+**It was flattened onto white before being committed.** The file supplied
+had a fully transparent background, which looks right in a white email and
+disappears in a dark-mode client, where those grey and black wordmarks sit
+on near-black. Compositing it onto the white it was designed for makes it
+safe everywhere, and changes nothing about how it looks.
 
-## To turn it on
+## If you replace it
 
-1. Put the artwork here as `email-signature.png`.
-   - PNG, 1200px wide (it is shown at 600px, so this is for retina screens).
+1. Put the new artwork here under the same name.
+   - PNG, about 1200px wide.
    - Under about 200 KB. Every email carries it.
-   - No transparency — Outlook composites it onto white.
-2. Set `SIGNATURE_IMAGE_PATH = "/brand/email-signature.png"` in
-   `src/domain/integrations/emailIdentity.ts`.
-3. Run the tests. `emailIdentity.test.ts` refuses to let that constant name
-   a file that is not in `public/`, so step 1 cannot be forgotten.
+   - **No transparency.** Flatten onto white:
+     `convert in.png -background white -alpha remove -alpha off -resize 1200x -strip out.png`
+2. Nothing else to change.
 
-A company can also point at its own image without touching the code, by
-setting `signatureImage` on the company settings row.
+## To turn it off
+
+Set `signatureImage` to an empty string on the company settings row, or
+`SIGNATURE_IMAGE_PATH = ""` in `src/domain/integrations/emailIdentity.ts`.
+A company can also point at its own image there instead.
+
+`emailIdentity.test.ts` refuses to let that constant name a file that is not
+in `public/`. That guard exists because the opposite once shipped: the code
+named this file before anybody had put it here, and every email went out
+with a broken-image icon and its alt text spilling out underneath.
 
 ## The artwork is supplied, never drawn here
 

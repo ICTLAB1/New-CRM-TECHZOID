@@ -32,7 +32,7 @@ import type { EmailCompany } from "./emailTemplate";
  * `emailIdentity.test.ts` refuses to let this name a file that is not in
  * `public/`. Turning it on is one line, once the artwork is committed.
  */
-export const SIGNATURE_IMAGE_PATH = "";
+export const SIGNATURE_IMAGE_PATH = "/brand/email-signature.png";
 
 /**
  * What the strip is, in words.

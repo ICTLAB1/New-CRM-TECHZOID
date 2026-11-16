@@ -48,12 +48,20 @@ describe("one company block, for every email the CRM sends", () => {
 });
 
 describe("the signature strip", () => {
-  it("IS OFF when no artwork has been supplied", () => {
-    /* The fault this exists to stop: the code named a file nobody had put
-       on the site, so every email carried a broken-image icon with the alt
-       text spilling out underneath it. No file, no <img>. */
+  it("is on, now that the artwork is actually there", () => {
     const c = emailCompanyFrom(SETTINGS, { origin: ORIGIN });
-    expect(SIGNATURE_IMAGE_PATH).toBe("");
+    expect(c.signatureImage?.src).toBe(`${ORIGIN}${SIGNATURE_IMAGE_PATH}`);
+  });
+
+  it("IS OFF the moment somebody turns it off", () => {
+    /* An empty string is a deliberate "no strip"; the field being absent
+       takes the default. The fault this whole pair exists to stop: the
+       code named a file nobody had put on the site, so every email carried
+       a broken-image icon with its alt text spilling out underneath. */
+    const c = emailCompanyFrom(
+      { company: { ...SETTINGS.company, signatureImage: "" } },
+      { origin: ORIGIN },
+    );
     expect(c.signatureImage).toBeNull();
   });
 
@@ -120,10 +128,10 @@ describe("the signature strip", () => {
     expect(html.indexOf("Abhinav Jain")).toBeLessThan(html.indexOf("email-signature.png"));
   });
 
-  it("PUTS NO <img> IN THE SIGNATURE when there is no artwork", () => {
+  it("PUTS NO <img> IN THE SIGNATURE when the strip is turned off", () => {
     const html = signatureHtml(
       { name: "Abhinav Jain", email: "abhinav.jain@techzoidtechnologies.com", designation: "Managing Director" },
-      emailCompanyFrom(SETTINGS, { origin: ORIGIN }),
+      emailCompanyFrom({ company: { ...SETTINGS.company, signatureImage: "" } }, { origin: ORIGIN }),
     );
     expect(html).toContain("Abhinav Jain");
     expect(html).not.toContain("<img");
