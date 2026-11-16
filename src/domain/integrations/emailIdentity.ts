@@ -85,9 +85,15 @@ export function emailCompanyFrom(
   /* Both offices, each with the country it rings, exactly as the signature
      shows them. An empty one is dropped rather than printed as a bare
      label. */
+  /* THE UAE OFFICE IS ITS OWN SETTINGS BLOCK, with its own address, phone
+     and licence numbers — it is not a field on the company. This read
+     `company.phoneUae`, which nothing in the product has ever written, so
+     the UAE line never appeared on a single signature. */
+  const uae = (settings?.["uaeOffice"] ?? {}) as Record<string, unknown>;
+
   const phones = [
     { label: "India", number: text(company["phone"]) },
-    { label: "UAE", number: text(company["phoneUae"] ?? company["uaePhone"]) },
+    { label: "UAE", number: text(uae["phone"]) || text(company["phoneUae"]) },
   ].filter((p) => p.number.trim());
 
   /* OFF UNLESS SOMETHING REAL POINTS AT A FILE.
@@ -102,6 +108,22 @@ export function emailCompanyFrom(
   const chosen = configured || (company["signatureImage"] === undefined ? fallback : "");
   const src = chosen ? absoluteUrl(chosen, options.origin) : "";
 
+  /* THE OFFICES, FROM THE SETTINGS SOMEBODY CAN EDIT. India is assembled
+     from the address fields on the company tab — the same ones printed on
+     a quotation — so it cannot drift from the letterhead. The UAE office
+     comes from its own section, where its address already lives beside its
+     licence and tax numbers. */
+  const india = [
+    text(company["address"]),
+    [text(company["city"]), text(company["state"])].filter(Boolean).join(", "),
+    text(company["pincode"]),
+  ].map((part) => part.trim()).filter(Boolean).join(", ");
+
+  const offices = [
+    { label: "India", address: india },
+    { label: "UAE", address: text(uae["address"]).replace(/\s*\n\s*/g, ", ").trim() },
+  ].filter((o) => o.address);
+
   return {
     name: text(company["name"]),
     tagline: text(company["tagline"]),
@@ -115,6 +137,10 @@ export function emailCompanyFrom(
     cin: text(company["cin"]),
     certifications: options.certifications ?? [],
     phones: phones.length > 1 ? phones : undefined,
+    /* Both of them, or neither: one lone labelled address reads as though
+       the other office has been closed. */
+    offices: offices.length ? offices : undefined,
+    services: text(company["services"]).trim() || undefined,
     signatureImage: src
       ? { src, alt: text(company["signatureImageAlt"]) || SIGNATURE_IMAGE_ALT, width: 600 }
       : null,

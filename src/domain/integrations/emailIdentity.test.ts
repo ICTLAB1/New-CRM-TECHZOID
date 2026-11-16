@@ -162,3 +162,86 @@ describe("absolute URLs, because a mail client has no page to be relative to", (
     expect(absoluteUrl("/brand/x.png", "https://crm.example.com/")).toBe("https://crm.example.com/brand/x.png");
   });
 });
+
+describe("the offices and what the company sells", () => {
+  const FULL = {
+    company: {
+      name: "TechZoid Technologies Private Limited",
+      address: "407, 4th Floor, Pearl Business Park, Netaji Subhash Place, Pitampura",
+      city: "New Delhi", state: "Delhi", pincode: "110034",
+      phone: "+91 11 4155 1234",
+      services: "Enterprise Software Licensing | Microsoft | Adobe | Autodesk",
+    },
+    uaeOffice: {
+      address: "C-1, 1F - SF2571, Free Zone C1 Building, Ajman, UAE",
+      phone: "+971 4 123 4567",
+    },
+  };
+
+  it("builds the India address from the fields a quotation already prints", () => {
+    const c = emailCompanyFrom(FULL, { origin: ORIGIN });
+    const india = c.offices?.find((o) => o.label === "India");
+    expect(india?.address).toBe(
+      "407, 4th Floor, Pearl Business Park, Netaji Subhash Place, Pitampura, New Delhi, Delhi, 110034",
+    );
+  });
+
+  it("TAKES THE UAE OFFICE FROM ITS OWN SETTINGS BLOCK, not from a field nothing writes", () => {
+    /* This read `company.phoneUae`, which no screen has ever saved, so the
+       UAE line never appeared on a single signature. */
+    const c = emailCompanyFrom(FULL, { origin: ORIGIN });
+    expect(c.phones?.find((p) => p.label === "UAE")?.number).toBe("+971 4 123 4567");
+    expect(c.offices?.find((o) => o.label === "UAE")?.address)
+      .toBe("C-1, 1F - SF2571, Free Zone C1 Building, Ajman, UAE");
+  });
+
+  it("drops an office that has no address rather than printing a bare label", () => {
+    const c = emailCompanyFrom({ company: FULL.company }, { origin: ORIGIN });
+    expect(c.offices?.map((o) => o.label)).toEqual(["India"]);
+  });
+
+  it("flattens a typed-in address onto one line", () => {
+    /* The UAE address box is a textarea; somebody will press Enter in it. */
+    const c = emailCompanyFrom(
+      { ...FULL, uaeOffice: { address: "C-1, 1F - SF2571\n Free Zone C1 Building\nAjman, UAE" } },
+      { origin: ORIGIN },
+    );
+    expect(c.offices?.find((o) => o.label === "UAE")?.address)
+      .toBe("C-1, 1F - SF2571, Free Zone C1 Building, Ajman, UAE");
+  });
+
+  it("carries the services line through", () => {
+    const c = emailCompanyFrom(FULL, { origin: ORIGIN });
+    expect(c.services).toBe("Enterprise Software Licensing | Microsoft | Adobe | Autodesk");
+  });
+
+  it("says nothing at all when neither is filled in", () => {
+    const c = emailCompanyFrom({ company: { name: "X" } }, { origin: ORIGIN });
+    expect(c.offices).toBeUndefined();
+    expect(c.services).toBeUndefined();
+  });
+
+  it("puts both offices and the services line into the rendered signature", () => {
+    const html = signatureHtml(
+      { name: "Chandan Singh", email: "chandan.s@techzoidtechnologies.com", designation: "Business Development Executive" },
+      emailCompanyFrom(FULL, { origin: ORIGIN }),
+    );
+    expect(html).toContain("Pearl Business Park");
+    expect(html).toContain("Free Zone C1 Building");
+    expect(html).toContain("Enterprise Software Licensing");
+    /* Each address on its own line, under the numbers, above the strip. */
+    expect(html.indexOf("+91 11 4155 1234")).toBeLessThan(html.indexOf("Pearl Business Park"));
+    expect(html.indexOf("Pearl Business Park")).toBeLessThan(html.indexOf("Free Zone C1 Building"));
+    expect(html.indexOf("Free Zone C1 Building")).toBeLessThan(html.indexOf("Enterprise Software Licensing"));
+    expect(html.indexOf("Enterprise Software Licensing")).toBeLessThan(html.indexOf("email-signature.png"));
+  });
+
+  it("escapes an address somebody pasted markup into", () => {
+    const html = signatureHtml(
+      { name: "A" },
+      emailCompanyFrom({ ...FULL, uaeOffice: { address: "<script>alert(1)</script>" } }, { origin: ORIGIN }),
+    );
+    expect(html).not.toContain("<script>");
+    expect(html).toContain("&lt;script&gt;");
+  });
+});

@@ -132,6 +132,8 @@ interface Company {
   name?: string; address?: string; city?: string; state?: string; pincode?: string;
   country?: string; gstin?: string; pan?: string; cin?: string;
   phone?: string; email?: string; website?: string; tagline?: string;
+  /** One line on the email signature saying what the company sells. */
+  services?: string;
   /** The logo as a data URI, with the natural size it was uploaded at.
    *  Both are needed: without the dimensions a renderer cannot preserve the
    *  aspect ratio and would stretch it to fill its box. */
@@ -292,6 +294,22 @@ function CompanyPanel({ settings, canEdit, onChange }: { settings: Record<string
             </Field>
             <Field label="PIN code"><Input value={draft.company.pincode ?? ""} disabled={!canEdit} onChange={set("pincode")} /></Field>
           </div>
+
+          {/* What the company sells, on the foot of every email as text
+              rather than inside the badge strip — so it is still there when
+              a mail client blocks images, and a reader can select it. The
+              UAE office has its own section further down. */}
+          <Field
+            label="Services line"
+            hint="One line on the email signature, under the addresses. Separate the items with | ."
+          >
+            <Input
+              value={draft.company.services ?? ""}
+              disabled={!canEdit}
+              onChange={set("services")}
+              placeholder="Enterprise Software Licensing | Microsoft | Adobe | Autodesk | VMware | Cloud | Cybersecurity | GeM Procurement"
+            />
+          </Field>
           <div className="grid grid-3">
             <Field label="GSTIN"><Input className="mono" value={draft.company.gstin ?? ""} disabled={!canEdit} onChange={set("gstin")} /></Field>
             <Field label="PAN"><Input className="mono" value={draft.company.pan ?? ""} disabled={!canEdit} onChange={set("pan")} /></Field>

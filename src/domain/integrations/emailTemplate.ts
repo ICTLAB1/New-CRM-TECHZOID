@@ -47,6 +47,16 @@ export interface EmailCompany {
    *  `phone` above is still the company's main line; this is for a business
    *  that answers in two countries and says so on its signature. */
   phones?: Array<{ label: string; number: string }>;
+  /** Each office's postal address, labelled by the place it is in. A
+   *  reseller bidding for government work is asked for its registered
+   *  address often enough that having it on every email saves a round
+   *  trip. Empty ones are dropped rather than printed as a bare label. */
+  offices?: Array<{ label: string; address: string }>;
+  /** The one line that says what the company actually sells — "Enterprise
+   *  Software Licensing | Microsoft | Adobe | …". Written out as text, not
+   *  baked into the strip, so it is searchable in a mail client and still
+   *  there when images are blocked. */
+  services?: string;
   /**
    * The designed signature strip, as an image.
    *
@@ -245,6 +255,29 @@ export function signatureHtml(sender: EmailSender, company: EmailCompany): strin
       })
       .join(" &nbsp;·&nbsp; ");
     rows.push(`<div style="font-size:12px;color:${MUTED};margin-top:4px;">${line}</div>`);
+  }
+
+  /* THE OFFICES, under the numbers that ring in them. Each on its own
+     line: an address run together with another address is read as one
+     wrong address. */
+  for (const office of company.offices ?? []) {
+    const address = office?.address?.trim();
+    if (!address) continue;
+    const label = office.label?.trim()
+      ? `<span style="color:${ACCENT};font-weight:700;">${escapeHtml(office.label.trim().toUpperCase())}</span> &nbsp;`
+      : "";
+    rows.push(
+      `<div style="font-size:11px;color:${MUTED};margin-top:3px;line-height:1.5;">${label}${escapeHtml(address)}</div>`,
+    );
+  }
+
+  /* What the company sells, in words. Above the strip, because the strip
+     says who it partners with and this says what it does with them. */
+  if (company.services?.trim()) {
+    rows.push(
+      `<div style="font-size:11px;color:${MUTED};margin-top:7px;line-height:1.5;">`
+      + `${escapeHtml(company.services.trim())}</div>`,
+    );
   }
 
   if (!rows.length && !company.signatureImage?.src) return "";
