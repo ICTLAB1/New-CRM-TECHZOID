@@ -4,12 +4,13 @@ import { Button, Card, Chip, Empty, Field, Input, Textarea } from "../../compone
 import { useToast } from "../../components/Toast";
 import { IntegrationError, type IntegrationsApi } from "../../integrations/api";
 import {
-  CHUNK, PROFILE_BODY, PROFILE_SUBJECT, chunk, messagesFor,
+  CHUNK, PROFILE_BODY, PROFILE_HERO, PROFILE_SUBJECT, chunk, messagesFor, profileCallToAction,
   recipientsFromCustomers, recipientsFromPaste,
   type ProfileDraft, type ProfileMessage,
 } from "../../domain/outreach/profileMail";
 import type { EmailCompany, EmailSender } from "../../domain/integrations/emailTemplate";
 import { emailCompanyFrom } from "../../domain/integrations/emailIdentity";
+import { emailProductGroups } from "../../domain/integrations/productLines";
 import {
   MAX_PROFILE_BYTES, ProfileError, loadProfileFile, loadProfileInfo, loadRecentSends,
   saveProfile, type ProfileInfo,
@@ -129,7 +130,6 @@ export function ProfileMailerScreen({
   const sender: EmailSender = {
     name: user.name,
     email: user.email ?? "",
-    designation: user.designation ?? "",
     phone: user.phone ?? "",
   };
 
@@ -171,6 +171,14 @@ export function ProfileMailerScreen({
     sender,
     company,
     attachmentName: info?.fileName ?? "company-profile.pdf",
+    /* The origin is this site, which is where the logos are served from.
+       In a browser that is always known; the server never builds this
+       draft, because the browser renders and the server only sends. */
+    products: emailProductGroups(),
+    hero: PROFILE_HERO,
+    /* The reply goes to the person sending it, which is the whole point of
+       sending one message per recipient. */
+    callToAction: profileCallToAction(user.email ?? ""),
   };
 
   const messages = useMemo(() => messagesFor(draft, recipients), [subject, body, recipients, info?.fileName, companyName, user.name, user.designation, user.email, user.phone]);

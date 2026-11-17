@@ -127,7 +127,7 @@ export function DocumentActions({
   const [whatsAppOpen, setWhatsAppOpen] = useState(false);
   const [approvedOpen, setApprovedOpen] = useState(false);
 
-  const renderOpts = { model, rows, images };
+  const renderOpts = { model, rows, totals, images };
 
   /* Only a quotation. A proforma, a purchase order and an invoice have no
      approved message about the document itself: an invoice's reminders are
@@ -176,7 +176,6 @@ export function DocumentActions({
        here put the same title under everybody's signature. Left blank rather
        than borrowed when a profile has none: a wrong job title on a customer
        email is worse than no job title. */
-    designation: currentUser?.designation || "",
     email: currentUser?.email || "",
     phone: String(company["phone"] ?? ""),
   };

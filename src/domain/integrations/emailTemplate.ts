@@ -21,10 +21,25 @@ import { automatedNotice, type AutomatedKind } from "./automated";
 
 export interface EmailSender {
   name?: string;
-  designation?: string;
   email?: string;
   phone?: string;
 }
+/**
+ * NO JOB TITLE HERE, ON PURPOSE.
+ *
+ * The signature used to print the sender's designation under their name.
+ * It is off at the company's request, and the field is REMOVED rather than
+ * accepted and ignored — a property that still type-checks and silently
+ * does nothing is how somebody later sets it, sees no change, and goes
+ * looking for a bug that is really a decision.
+ *
+ * The designation itself is not gone from the product: it is still a team
+ * member's own field, shown on the Team screen, and still printed by the
+ * campaign signature (src/domain/outreach/signature.ts), which is a
+ * separate block with its own preview in Settings. Putting the line back
+ * here means adding the field and one row in signatureHtml, plus one entry
+ * in the plain-text signature.
+ */
 
 export interface EmailCompany {
   name?: string;
@@ -37,11 +52,9 @@ export interface EmailCompany {
   gstin?: string;
   pan?: string;
   cin?: string;
-  /** Certification names, as TEXT. Deliberately not the badge artwork:
-   *  every mainstream client blocks remote images by default and Gmail
-   *  strips base64 ones, so a row of certification badges in an email is a
-   *  row of broken boxes for most readers — and a broken certification mark
-   *  is worse than none. The words always render. */
+  /** Certification names, as TEXT — printed in the footer, and what a
+   *  reader with pictures off has instead of the marks. The words always
+   *  render, which is why they are not optional on the badges below. */
   certifications?: string[];
   /** More than one number, each with the place it rings — "INDIA", "UAE".
    *  `phone` above is still the company's main line; this is for a business
@@ -122,6 +135,53 @@ export interface EmailQuotation {
   confirmTo?: string;
 }
 
+/**
+ * One vendor's line in the "what we supply" block.
+ *
+ * THE WORDS COME FIRST AND THE LOGO IS THE ADORNMENT, not the other way
+ * round. Outlook blocks remote images by default and a great many company
+ * mailboxes never turn them on, so a block that said what we sell only in
+ * pictures would say nothing at all to the reader who most needs to know.
+ * `name` is printed as text beside the logo and is also the image's alt, so
+ * the block reads the same either way.
+ */
+export interface EmailProductGroup {
+  /** "Microsoft", "Autodesk", "Adobe" — the vendor, as a reader knows it. */
+  name: string;
+  /** The heading over the list: "Microsoft 365 & perpetual licensing". */
+  heading: string;
+  /** What the group is for, in one line above the list. */
+  detail: string;
+  /**
+   * The products themselves, one per line.
+   *
+   * A LIST, NOT A SENTENCE, because of how this is read: a purchase
+   * manager is scanning for the one product they are about to buy, and a
+   * run-on line makes them read all of it to find out we do not carry it.
+   */
+  bullets?: readonly string[];
+  /** A commercial fact about the whole group, under its list. */
+  note?: string;
+  /**
+   * The vendor's own brand colour, for the rule down the side.
+   *
+   * A COLOUR IS NOT AN IMAGE: it is a table cell with a background, so it
+   * renders in every client whether or not the reader allows pictures.
+   * That is what keeps each panel identifiable when the logo does not
+   * load, which is the ordinary case in Outlook.
+   */
+  accent?: string;
+  /**
+   * The vendor's own mark, when the company has the artwork on its site.
+   *
+   * An absolute https URL — a relative path in an email resolves against
+   * nothing. Absent is a perfectly good block: the heading and the detail
+   * carry it. NOTHING HERE IS EVER DRAWN OR APPROXIMATED; a logo appears
+   * only when a real file has been put in `public/brand/`.
+   */
+  logo?: { src: string; alt: string; width: number } | null;
+}
+
 export interface EmailContent {
   /** The greeting and body, as typed by the sender. Plain text; blank lines
    *  separate paragraphs. */
@@ -133,6 +193,33 @@ export interface EmailContent {
   /** Absent for a plain covering note; present turns this into the full
    *  document email with a summary, the lines and the next steps. */
   quotation?: EmailQuotation | null;
+  /** What we supply, by vendor. Printed under the body — see productsHtml.
+   *  Empty or absent prints nothing, which is every email but the profile. */
+  products?: readonly EmailProductGroup[] | null;
+  /**
+   * A band across the top of the card, for a message that INTRODUCES the
+   * company rather than continuing a conversation.
+   *
+   * Absent on everything else, deliberately. A quotation email opens with
+   * "Your quotation is ready" because that is why it was sent; a marketing
+   * headline above that would be the company talking over its own
+   * customer. This belongs on the profile mail, which is an introduction.
+   *
+   * NO IMAGE IN IT. A coloured table cell with text renders identically
+   * whether or not the reader allows pictures, which a headline set as
+   * artwork would not.
+   */
+  hero?: { eyebrow?: string; headline: string; line?: string } | null;
+  /**
+   * The one thing the reader is being asked to do.
+   *
+   * `href` is normally a `mailto:` back to the sender, because replying IS
+   * the action: this is a personal message from a named person, and a
+   * button that opens a reply is the shortest path to what we want. The
+   * same ask is in the body in words, because a styled table cell is a
+   * button in most clients and a plain link in the rest.
+   */
+  callToAction?: { heading: string; lines: readonly string[]; label: string; href: string } | null;
   /** Set on a message a MACHINE sends — an armed follow-up, a payment
    *  reminder. It prints the line that says so. A message somebody typed
    *  and sent just now leaves it out, because it would be a lie: see
@@ -221,9 +308,6 @@ export function signatureHtml(sender: EmailSender, company: EmailCompany): strin
       `<div style="font-size:14px;font-weight:700;color:${NAVY};">${escapeHtml(sender.name)}</div>`,
     );
   }
-  if (sender.designation) {
-    rows.push(`<div style="font-size:12px;color:${MUTED};">${escapeHtml(sender.designation)}</div>`);
-  }
   if (company.name) {
     rows.push(
       `<div style="font-size:12px;font-weight:600;color:${INK};margin-top:6px;">${escapeHtml(company.name)}</div>`,
@@ -271,6 +355,30 @@ export function signatureHtml(sender: EmailSender, company: EmailCompany): strin
     );
   }
 
+  /* THE CERTIFICATIONS, AS A SENTENCE.
+     They were a row of three badge images here. The marks are genuine and
+     they rendered correctly, but three seals of different internal
+     proportions sitting under a 600px partner strip never looked like part
+     of the signature — and a certification is a claim, which reads better
+     stated than drawn. One line of text is also what survives a client
+     with pictures off, searchable and selectable, with no file to keep in
+     step with anything. */
+  const certs = (company.certifications ?? []).filter((c) => String(c ?? "").trim());
+  if (certs.length) {
+    const list = certs.length > 1
+      ? `${certs.slice(0, -1).join(", ")} and ${certs[certs.length - 1]}`
+      : certs[0]!;
+    rows.push(
+      /* Bigger and bold, and in the body ink rather than the muted grey:
+         at 11px muted it sat below the addresses and read as one more
+         small print line. It is a claim worth making, so it is set like
+         one — but still under the name and the company, which are who the
+         mail is from. */
+      `<div style="font-size:12.5px;font-weight:700;color:${INK};margin-top:9px;line-height:1.5;">`
+      + `An ${escapeHtml(list)} certified company</div>`,
+    );
+  }
+
   /* What the company sells, in words. Above the strip, because the strip
      says who it partners with and this says what it does with them. */
   if (company.services?.trim()) {
@@ -282,14 +390,13 @@ export function signatureHtml(sender: EmailSender, company: EmailCompany): strin
 
   if (!rows.length && !company.signatureImage?.src) return "";
 
-  /* The logo sits beside the text in a two-cell table rather than a float:
-     Outlook ignores float entirely and would stack them. */
-  const logoCell = company.logo
-    ? `<td style="vertical-align:top;padding-right:14px;" width="1">
-         <img src="${escapeHtml(company.logo)}" alt="${escapeHtml(company.name ?? "")}" width="120"
-              style="display:block;max-width:120px;height:auto;border:0;" />
-       </td>`
-    : "";
+  /* NO LOGO HERE — IT IS ON THE MASTHEAD. This cell used to repeat the
+     company's mark beside the signature, and the only reason it never
+     looked like clutter is that it never rendered: it was fed the data URI
+     from Settings, which Gmail strips. Now that the mark is served as a
+     hosted file and does appear, once at the top of the message is right
+     and twice in the same email is a letterhead arguing with itself. The
+     strip below carries the partner badges, which is a different job. */
 
   /* THE STRIP GOES UNDER THE WORDS. Its own row, full width, with the
      alt text carrying the same claims in case the reader's client never
@@ -297,7 +404,7 @@ export function signatureHtml(sender: EmailSender, company: EmailCompany): strin
      app into a sideways scroll. */
   const strip = company.signatureImage?.src
     ? `<tr>
-         <td colspan="2" style="padding-top:14px;">
+         <td style="padding-top:14px;">
            <img src="${escapeHtml(company.signatureImage.src)}"
                 alt="${escapeHtml(company.signatureImage.alt ?? company.name ?? "")}"
                 ${company.signatureImage.width ? `width="${Math.round(company.signatureImage.width)}"` : ""}
@@ -306,10 +413,10 @@ export function signatureHtml(sender: EmailSender, company: EmailCompany): strin
        </tr>`
     : "";
 
+
   return `
   <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-top:22px;border-top:1px solid ${RULE};padding-top:16px;width:100%;">
     <tr>
-      ${logoCell}
       <td style="vertical-align:top;">${rows.join("")}</td>
     </tr>
     ${strip}
@@ -327,14 +434,44 @@ export function signatureHtml(sender: EmailSender, company: EmailCompany): strin
  * header that is only a logo arrives as an empty box with the company's
  * name nowhere on the message. A logo may sit beside it, but the words are
  * what always render.
+ *
+ * SO THE LOGO IS BESIDE THE NAME, NOT INSTEAD OF IT — and it is the
+ * wordmark alone, not the full lockup. The company's artwork carries the
+ * strapline under the mark; printed whole it would say "Connect,
+ * Communicate & Collaborate" twice to a reader with pictures on, and say it
+ * zero times to the far larger number who have them off. Cropped to the
+ * mark, the picture and the words each do one job. See
+ * `public/brand/README.md`.
+ *
+ * ITS ALT TEXT IS EMPTY, DELIBERATELY. The company's name is set in bold
+ * directly beneath it, so alt="TechZoid Technologies Private Limited"
+ * printed that name twice in a row to every reader with pictures off —
+ * once wrapped over three lines inside the logo's narrow box, then again
+ * underneath, which reads as a fault in the email. An image whose content
+ * is already in the adjacent text is decorative: an empty alt is what makes
+ * a screen reader skip it instead of saying the name twice, and what makes
+ * a blocked image collapse to nothing rather than to a stutter. The header
+ * then looks exactly as it did before the logo existed, which is the
+ * fallback we want.
  */
 function headerHtml(company: EmailCompany): string {
   const name = company.name ? escapeHtml(company.name) : "";
-  const strapline = "Connect, Communicate &amp; Collaborate";
+  const strapline = company.tagline?.trim()
+    ? escapeHtml(company.tagline.trim())
+    : "Connect, Communicate &amp; Collaborate";
+
+  const words = `${name ? `<div style="font-size:19px;font-weight:700;letter-spacing:-0.01em;color:${HEAD};">${name}</div>` : ""}
+      <div style="margin-top:4px;font-size:13px;color:${MUTED};">${strapline}</div>`;
+
+  const mark = company.logo
+    ? `<img src="${escapeHtml(company.logo)}" alt="" width="150"
+            style="display:block;width:150px;max-width:150px;height:auto;border:0;margin:0 0 12px;" />`
+    : "";
+
   return `<tr>
     <td style="padding:22px 18px 16px;border-bottom:2px solid ${HEAD};">
-      ${name ? `<div style="font-size:19px;font-weight:700;letter-spacing:-0.01em;color:${HEAD};">${name}</div>` : ""}
-      <div style="margin-top:4px;font-size:13px;color:${MUTED};">${strapline}</div>
+      ${mark}
+      ${words}
     </td>
   </tr>`;
 }
@@ -464,6 +601,152 @@ function nextStepsHtml(q: EmailQuotation): string {
   </div>`;
 }
 
+/**
+ * What we supply, by vendor.
+ *
+ * BUILT TO SURVIVE BLOCKED IMAGES, because that is the ordinary case: a
+ * corporate Outlook shows no remote picture until the reader clicks
+ * "download pictures", and many never do. So the panel is made of things
+ * that always render — the vendor's name, a coloured rule down its side,
+ * the heading, and the product list — and the logo sits inside that rather
+ * than standing in for it. With pictures off the reader loses the marks and
+ * nothing else; with them on, they are the fastest way for a purchase
+ * manager to see we deal in what they buy.
+ *
+ * ONE PANEL PER VENDOR, each its own table. A single table with three rows
+ * would be fewer tags and would collapse in Outlook the moment one cell
+ * grew taller than its neighbour; separate tables cannot disagree about
+ * their own height.
+ *
+ * WIDTH ON THE TAG, HEIGHT NEVER — the rule the festival banner learned the
+ * hard way. Outlook renders through Word and sizes from the width
+ * attribute; a height attribute makes a blocked image reserve its whole
+ * box, so the reader gets a word of alt text floating in an empty
+ * rectangle. Without it the cell collapses to its text.
+ *
+ * THE LOGOS ARE THE VENDORS' OWN ARTWORK, supplied by the company that
+ * holds those relationships, and nothing here is drawn or approximated. A
+ * group with no logo configured simply prints its words.
+ */
+function productsHtml(groups: readonly EmailProductGroup[]): string {
+  if (!groups.length) return "";
+
+  const panel = (g: EmailProductGroup, first: boolean): string => {
+    const accent = g.accent && /^#[0-9a-f]{3,8}$/i.test(g.accent) ? g.accent : HEAD;
+
+    const mark = g.logo
+      ? `<img src="${escapeHtml(g.logo.src)}" alt="${escapeHtml(g.logo.alt)}"
+              width="${Math.round(g.logo.width)}"
+              style="display:block;width:${Math.round(g.logo.width)}px;max-width:100%;height:auto;border:0;font-size:13px;font-weight:700;color:${accent};" />`
+      /* No artwork: the vendor's name in its own colour does the job the
+         mark would have done. */
+      : `<div style="font-size:13px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:${accent};">${escapeHtml(g.name)}</div>`;
+
+    const bullets = (g.bullets ?? []).filter((b) => String(b ?? "").trim());
+    /* A table of rows rather than <ul>: Outlook indents and bullets a list
+       to its own taste, and the taste is a large hanging indent that eats
+       the panel's width. A coloured marker cell is the same shape in every
+       client. */
+    const list = bullets.length
+      ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:8px 0 0;">
+           ${bullets.map((b) => `<tr>
+             <td valign="top" width="12" style="width:12px;padding:2px 0 0;font-size:12px;line-height:1.5;color:${accent};">&bull;</td>
+             <td style="padding:2px 0 0;font-size:12.5px;line-height:1.5;color:${INK};">${escapeHtml(b)}</td>
+           </tr>`).join("")}
+         </table>`
+      : "";
+
+    const note = g.note?.trim()
+      ? `<div style="margin-top:9px;font-size:11.5px;font-weight:600;color:${accent};">${escapeHtml(g.note.trim())}</div>`
+      : "";
+
+    return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
+                   style="margin:${first ? "0" : "12px"} 0 0;background:${ZEBRA};border:1px solid ${RULE};border-left:4px solid ${accent};">
+      <tr>
+        <td style="padding:13px 15px 15px;">
+          ${mark}
+          <div style="margin-top:9px;font-size:14px;font-weight:700;color:${HEAD};">${escapeHtml(g.heading)}</div>
+          ${g.detail?.trim() ? `<div style="margin-top:3px;font-size:12.5px;line-height:1.5;color:${MUTED};">${escapeHtml(g.detail.trim())}</div>` : ""}
+          ${list}
+          ${note}
+        </td>
+      </tr>
+    </table>`;
+  };
+
+  return `<div style="margin:4px 0 20px;">
+    <div style="margin:0 0 10px;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:${ACCENT};">
+      What we supply
+    </div>
+    ${groups.map((g, i) => panel(g, i === 0)).join("")}
+  </div>`;
+}
+
+/**
+ * The band across the top, for a message that introduces the company.
+ *
+ * TEXT ON A COLOUR, never a picture of text. A headline set as artwork is a
+ * headline most readers never see, and one that no reader can select, search
+ * or have read aloud.
+ *
+ * The eyebrow is a light warm tone rather than the page's gold accent,
+ * which is nearly invisible on this near-black ground. Checked by rendering
+ * it and looking, not by trusting the palette.
+ */
+function heroHtml(hero: NonNullable<EmailContent["hero"]>): string {
+  if (!hero.headline?.trim()) return "";
+  return `<tr>
+    <td style="padding:22px 18px 24px;background:${HEAD};">
+      ${hero.eyebrow?.trim()
+        ? `<div style="font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#D8B45F;">${escapeHtml(hero.eyebrow.trim())}</div>`
+        : ""}
+      <div style="margin-top:8px;font-size:22px;font-weight:700;line-height:1.3;color:#ffffff;">${escapeHtml(hero.headline.trim())}</div>
+      ${hero.line?.trim()
+        ? `<div style="margin-top:10px;font-size:13px;line-height:1.65;color:#D6D0C6;">${escapeHtml(hero.line.trim())}</div>`
+        : ""}
+    </td>
+  </tr>`;
+}
+
+/**
+ * The one thing the reader is being asked to do.
+ *
+ * THE BUTTON IS A TABLE CELL WITH A LINK IN IT, not an <a> with padding:
+ * Outlook ignores padding on an inline element, so the "button" arrives as
+ * underlined text with no shape. A cell with a background and a link filling
+ * it is a button everywhere, and still a link where it is not.
+ *
+ * THE SAME ASK IS IN THE WORDS ABOVE IT. A reader whose client strips the
+ * styling, or who is reading the plain-text part, still knows what to do.
+ */
+function ctaHtml(cta: NonNullable<EmailContent["callToAction"]>): string {
+  if (!cta.heading?.trim() && !cta.label?.trim()) return "";
+  const href = /^(mailto:|https?:\/\/)/i.test(cta.href ?? "") ? cta.href : "";
+
+  return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
+                 style="margin:0 0 20px;background:#FBF3E6;border:1px solid #EADCC2;border-radius:6px;">
+    <tr>
+      <td style="padding:16px 18px 18px;">
+        ${cta.heading?.trim()
+          ? `<div style="font-size:15px;font-weight:700;line-height:1.35;color:${HEAD};">${escapeHtml(cta.heading.trim())}</div>`
+          : ""}
+        ${cta.lines.filter((l) => String(l ?? "").trim()).map((l) =>
+          `<div style="margin-top:7px;font-size:13px;line-height:1.6;color:${INK};">${escapeHtml(String(l).trim())}</div>`).join("")}
+        ${href && cta.label?.trim()
+          ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-top:14px;">
+               <tr>
+                 <td style="background:${ACCENT};border-radius:4px;">
+                   <a href="${escapeHtml(href)}"
+                      style="display:inline-block;padding:10px 18px;font-size:13px;font-weight:700;color:#ffffff;text-decoration:none;">${escapeHtml(cta.label.trim())}</a>
+                 </td>
+               </tr>
+             </table>`
+          : ""}
+      </td>
+    </tr>
+  </table>`;
+}
+
 export function buildEmailHtml(content: EmailContent): string {
   const { company, sender } = content;
   const q = content.quotation ?? null;
@@ -477,7 +760,6 @@ export function buildEmailHtml(content: EmailContent): string {
     company.website ? (() => { const w = websiteLink(company.website); return `<a href="${escapeHtml(w.href)}" style="color:${MUTED};text-decoration:underline;">${escapeHtml(w.label)}</a>`; })() : "",
   ].filter(Boolean).join(" · ");
 
-  const certifications = (company.certifications ?? []).filter(Boolean);
 
   const registration = [
     company.gstin ? "GSTIN " + escapeHtml(company.gstin) : "",
@@ -547,6 +829,7 @@ export function buildEmailHtml(content: EmailContent): string {
         <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600"
                style="width:100%;max-width:600px;background:${CARD};border:1px solid ${RULE};border-radius:8px;font-family:${FONT};">
           ${headerHtml(company)}
+          ${content.hero ? heroHtml(content.hero) : ""}
           <tr>
             <td style="padding:22px 18px 26px;">
               ${greetingHtml}
@@ -555,6 +838,8 @@ export function buildEmailHtml(content: EmailContent): string {
               ${q ? summaryHtml(q) : ""}
               ${q ? itemsHtml(q) : ""}
               ${q ? nextStepsHtml(q) : ""}
+              ${productsHtml(content.products ?? [])}
+              ${content.callToAction ? ctaHtml(content.callToAction) : ""}
               ${attachmentNote}
               ${signatureHtml(sender, company)}
             </td>
@@ -568,9 +853,9 @@ export function buildEmailHtml(content: EmailContent): string {
               ${addressLine ? `<div>${escapeHtml(addressLine)}</div>` : ""}
               ${footerFacts ? `<div>${footerFacts}</div>` : ""}
               ${registration ? `<div>${registration}</div>` : ""}
-              ${certifications.length
-                ? `<div style="margin-top:6px;">Certified to ${certifications.map(escapeHtml).join(" &middot; ")}</div>`
-                : ""}
+              ${/* NOT REPEATED HERE. The signature above states the
+                    certifications in one line; saying it again six lines
+                    lower is the same claim twice in one message. */ ""}
               ${content.automated
                 ? `<div style="margin-top:10px;padding-top:10px;border-top:1px solid ${RULE};font-size:11px;line-height:1.6;">`
                   + escapeHtml(automatedNotice(content.automated, company.name ?? ""))
@@ -597,6 +882,7 @@ export function buildEmailHtml(content: EmailContent): string {
  */
 export function buildEmailText(content: EmailContent): string {
   const { sender, company } = content;
+  void content.hero;
   const q = content.quotation ?? null;
   const out: string[] = [];
   /* Widest label is "Date of issue" at 13; 16 leaves room for a longer
@@ -666,11 +952,34 @@ export function buildEmailText(content: EmailContent): string {
     );
   }
 
+  /* The same block as the HTML, in words. The logos and the colour rules
+     are the only things this part cannot carry, and neither was ever what
+     the block was for — the products were. */
+  const products = content.products ?? [];
+  if (products.length) {
+    out.push("", "WHAT WE SUPPLY");
+    for (const g of products) {
+      out.push("", `  ${g.heading.toUpperCase()}`);
+      if (g.detail?.trim()) out.push(`  ${g.detail.trim()}`);
+      for (const b of g.bullets ?? []) if (String(b).trim()) out.push(`    - ${String(b).trim()}`);
+      if (g.note?.trim()) out.push(`  ${g.note.trim()}`);
+    }
+  }
+
+  const cta = content.callToAction;
+  if (cta) {
+    out.push("");
+    if (cta.heading?.trim()) out.push(cta.heading.trim().toUpperCase());
+    for (const l of cta.lines) if (String(l).trim()) out.push("", String(l).trim());
+    /* The link in full, because a plain-text reader has no button to press
+       and a bare label would be an instruction with nothing behind it. */
+    if (cta.href?.trim()) out.push("", `  ${cta.label}: ${cta.href}`);
+  }
+
   if (content.attachmentName) out.push("", "Attached: " + content.attachmentName);
 
   const sig = [
     sender.name,
-    sender.designation,
     company.name,
     [sender.phone, sender.email].filter(Boolean).join("  |  "),
     company.website ? websiteLink(company.website).label : "",

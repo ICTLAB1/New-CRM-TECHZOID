@@ -1,4 +1,8 @@
-import { buildEmailHtml, buildEmailText, type EmailCompany, type EmailSender } from "../integrations/emailTemplate";
+import {
+  buildEmailHtml, buildEmailText,
+  type EmailCompany, type EmailProductGroup, type EmailSender,
+} from "../integrations/emailTemplate";
+import { CERTIFICATION_NAMES } from "../integrations/emailIdentity";
 import { fill, valuesFor, type Values } from "./personalise";
 import { enrichFromAddress, parsePastedList } from "./paste";
 
@@ -43,10 +47,85 @@ export const PROFILE_SUBJECT = "{{sender_company}} — company profile";
  * The greeting line is NOT in here: greetingLine() builds it per recipient,
  * because the right answer depends on what we know about them.
  */
+/**
+ * The band across the top of the profile email.
+ *
+ * WHY THIS MAIL GETS ONE AND NO OTHER DOES. The profile mail introduces the
+ * company — often to somebody who has never bought from us. A quotation
+ * email does the opposite: it answers a question the customer asked, and a
+ * marketing headline above that would be the company talking over them.
+ *
+ * It says what we do, not how well we do it. No superlatives, no numbers we
+ * would have to stand behind, nothing a purchase manager could quote back
+ * at us a year later.
+ */
+export const PROFILE_HERO = {
+  eyebrow: "Software licensing solutions",
+  headline: "Genuine software licensing, procurement and renewals",
+  line: "Enterprise subscriptions, perpetual licensing and professional design applications "
+    + "from the software publishers your teams already use.",
+};
+
+/**
+ * The ask.
+ *
+ * ONE ASK, AND IT IS THE EASY ONE. The button opens a reply to the person
+ * who sent the message — not a form, not a portal login, not a calendar.
+ * This is a personal email from a named human, so the shortest path to what
+ * we want is the reader pressing reply; anything that takes them out of
+ * their inbox loses most of them on the way.
+ *
+ * No address to reply to means NO BUTTON. A button that goes nowhere is
+ * worse than no button — the same rule as the logo that is dropped rather
+ * than written as a path no mail client can resolve.
+ */
+export function profileCallToAction(senderEmail: string): {
+  heading: string; lines: string[]; label: string; href: string;
+} {
+  /* THE SUBJECT IS THE CUSTOMER'S, NOT OURS. The first version put our own
+     company name in it — which lands in the customer's sent items as
+     "Software requirement — TechZoid Technologies Private Limited", a
+     subject line about us on a mail they wrote. Their own company is not
+     ours to fill in here either: the button is built once per draft and
+     the recipient is not known until the message is assembled. Plain is
+     right. */
+  const subject = encodeURIComponent("Software requirement");
+  return {
+    heading: "Do you have any upcoming software requirements?",
+    lines: [
+      "Whether it is Microsoft 365 subscriptions, Office perpetual licensing, an Autodesk "
+      + "renewal or Adobe Creative Cloud, we would be glad to help.",
+      "Send the product names, the quantities and the term you need, and we will come back "
+      + "with a suitable option and a price.",
+    ],
+    label: "Send us your requirement",
+    href: senderEmail.trim() ? `mailto:${senderEmail.trim()}?subject=${subject}` : "",
+  };
+}
+
 export const PROFILE_BODY = [
   "I thought it would be useful to have our company profile on file — it is attached.",
-  "It covers what we supply and who we do it for: Microsoft, Adobe and Autodesk licensing, renewals and deployment, with the certifications and registration details your purchase team usually asks for.",
-  "If you would like a quotation for anything in particular, or a renewal checked against your current terms, reply to this email and I will put it together.",
+  /* WHAT WE SELL IS NO LONGER IN THIS PARAGRAPH. It is printed under the
+     body as its own block, by vendor, with each line named — see
+     domain/integrations/productLines.ts. A sentence here listing the same
+     three vendors read as a preamble to the block directly beneath it, and
+     the two would have drifted apart the first time a vendor was added. */
+  /* THE CERTIFICATIONS ARE NAMED, not alluded to. "the certifications your
+     purchase team usually asks for" told the reader we have some and made
+     them open the attachment to find out which — and a tender response is
+     written by somebody checking a list. The three marks are at the foot
+     of this email as artwork; these are the same three in words, which is
+     what survives a client with pictures off. The names come from
+     integrations/emailIdentity.ts, so there is one place to change if a
+     certification lapses or is added. */
+  `We are certified to ${CERTIFICATION_NAMES.join(", ")}, and the profile carries the `
+  + "registration details your purchase team usually asks for. The lines we supply are "
+  + "listed below.",
+  /* AND THE ASK IS NOT IN HERE EITHER. It is its own block under the
+     products — see profileCallToAction. A paragraph saying "reply to this
+     email" immediately above a button that opens a reply is the same
+     sentence twice, and a sender rewording one would leave the other
+     saying something else. */
 ].join("\n\n");
 
 export interface ProfileRecipient {
@@ -118,6 +197,18 @@ export interface ProfileDraft {
   /** Used in the greeting when we know neither a person nor a company.
    *  Empty by default, which gives a bare "Hello,". */
   greetingFallback?: string;
+  /**
+   * The lines we supply, printed under the body with each vendor's mark.
+   *
+   * ON THE DRAFT rather than built inside messageFor, for the same reason
+   * everything else on this interface is: the screen previews the real
+   * message, and the logo URLs need an origin that only the caller knows.
+   */
+  products?: readonly EmailProductGroup[] | null;
+  /** The band across the top — see PROFILE_HERO. */
+  hero?: { eyebrow?: string; headline: string; line?: string } | null;
+  /** The ask — see profileCallToAction. */
+  callToAction?: { heading: string; lines: readonly string[]; label: string; href: string } | null;
 }
 
 /** Build the message for one recipient. Exported for its own test, and for
@@ -135,6 +226,9 @@ export function messageFor(draft: ProfileDraft, recipient: ProfileRecipient): Pr
     company: draft.company,
     attachmentName: draft.attachmentName || null,
     quotation: null,
+    products: draft.products ?? null,
+    hero: draft.hero ?? null,
+    callToAction: draft.callToAction ?? null,
     /* DELIBERATELY NOT MARKED AUTOMATED. A person chose these recipients
        and pressed Send; the line that says a machine sent it would be
        untrue here, and it is the opposite of what this feature is for. */

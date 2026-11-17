@@ -191,12 +191,23 @@ describe("the message body", () => {
 });
 
 describe("the signature", () => {
-  it("carries the sender's own name, role and contact details", () => {
+  it("carries the sender's own name and contact details", () => {
     const html = signatureHtml(SENDER, COMPANY);
     expect(html).toContain("Abhinav Jain");
-    expect(html).toContain("Managing Director");
     expect(html).toContain("abhinav.jain@techzoidtechnologies.com");
     expect(html).toContain("+91 97114 92098");
+  });
+
+  it("DOES NOT PRINT A JOB TITLE — see EmailSender", () => {
+    /* Off at the company's request. The field is gone from EmailSender
+       rather than ignored, so this is really a test that nothing has
+       quietly put a title back: a designation reaching the signature
+       through some other route would show up here. */
+    const html = signatureHtml({ ...SENDER, name: "Abhinav Jain" }, COMPANY);
+    for (const title of ["Managing Director", "Director", "Sales Manager"]) {
+      expect(html).not.toContain(title);
+    }
+    expect(buildEmailText(content())).not.toContain("Managing Director");
   });
 
   it("links the email and phone so they are tappable on a phone", () => {
@@ -222,9 +233,27 @@ describe("the signature", () => {
     expect(signatureHtml({}, {})).toBe("");
   });
 
-  it("includes the logo only when one is configured", () => {
+  it("PUTS THE COMPANY'S LOGO NOWHERE NEAR IT — that belongs on the masthead", () => {
+    /* This used to assert the opposite, and passed for months, because the
+       thing it asserted never happened: the signature's logo cell was fed
+       `settings.company.logo`, which is a data: URI, and Gmail strips those
+       outright. So the test proved a cell existed in the markup, not that a
+       reader ever saw a logo. Now that the mark is served as a hosted file
+       it would really render — twice in one email, once at the top and
+       again above the sender's name. Once is right. */
     expect(signatureHtml(SENDER, COMPANY)).not.toContain("<img");
-    expect(signatureHtml(SENDER, { ...COMPANY, logo: "data:image/png;base64,AAA" })).toContain("<img");
+    expect(signatureHtml(SENDER, { ...COMPANY, logo: "https://crm.example.com/brand/company-logo.png" }))
+      .not.toContain("<img");
+  });
+
+  it("is where the badge strip goes, which is a different job", () => {
+    const html = signatureHtml(SENDER, {
+      ...COMPANY,
+      signatureImage: { src: "https://crm.example.com/brand/email-signature.png", alt: "badges", width: 600 },
+    });
+    expect(html).toContain("email-signature.png");
+    /* Under the words, never instead of them. */
+    expect(html.indexOf(SENDER.name!)).toBeLessThan(html.indexOf("email-signature.png"));
   });
 });
 
@@ -327,7 +356,6 @@ describe("the plain-text version", () => {
     const text = buildEmailText(content());
     expect(text).toContain("Please find attached our quotation.");
     expect(text).toContain("Abhinav Jain");
-    expect(text).toContain("Managing Director");
     expect(text).toContain("abhinav.jain@techzoidtechnologies.com");
     expect(text).toContain("TZ-QT-2026-27-0042 - Quotation.pdf");
   });
@@ -369,7 +397,7 @@ const QUOTE: EmailQuotation = {
 
 const withQuote = (over: Partial<EmailQuotation> = {}) => ({
   body: "Dear Rajesh Kumar,\n\nPlease find attached.",
-  sender: { name: "Priyanshi Sharma", designation: "Sales Manager", email: "p@techzoid.com" },
+  sender: { name: "Priyanshi Sharma", email: "p@techzoid.com" },
   company: { name: "TechZoid Technologies Private Limited", gstin: "07AAGCT9158R1Z0", pan: "AAGCT9158R", cin: "U72900DL2016PTC302635" },
   quotation: { ...QUOTE, ...over },
   attachmentName: "Quotation-TZ-QT-2026-27-0117.pdf",
@@ -525,10 +553,14 @@ describe("certifications in the email", () => {
     return { ...c, company: { ...c.company, certifications: certs } };
   };
 
-  it("names them in the HTML footer", () => {
+  it("names them in the signature, as one sentence", () => {
+    /* They were in the footer as "Certified to A · B · C" and are now a
+       line in the signature instead — one statement per message rather
+       than the same claim in two places. */
     const html = buildEmailHtml(content());
     for (const c of certs) expect(html, c).toContain(c);
-    expect(html).toContain("Certified to");
+    expect(html).toContain("certified company");
+    expect(html).not.toContain("Certified to");
   });
 
   it("names them in the plain text too", () => {

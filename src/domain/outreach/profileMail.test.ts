@@ -22,7 +22,7 @@ const SENDER = {
 const DRAFT: ProfileDraft = {
   subject: PROFILE_SUBJECT,
   body: PROFILE_BODY,
-  sender: { name: SENDER.name, email: SENDER.email, designation: SENDER.designation },
+  sender: { name: SENDER.name, email: SENDER.email },
   company: { name: SENDER.company, website: "techzoidtechnologies.com" },
   attachmentName: "TechZoid-Company-Profile.pdf",
 };
@@ -74,10 +74,14 @@ describe("one message, for one person", () => {
     expect(msg.message).toContain("TechZoid-Company-Profile.pdf");
   });
 
-  it("carries the sender's signature", () => {
+  it("carries the sender's signature, and no job title in it", () => {
     const msg = messageFor(DRAFT, ravi!);
     expect(msg.html).toContain("Abhinav Jain");
-    expect(msg.html).toContain("Managing Director");
+    /* The designation is off — see EmailSender in emailTemplate.ts. It is
+       still a team member's own field and still prints on the campaign
+       signature; it does not print here. */
+    expect(msg.html).not.toContain("Managing Director");
+    expect(msg.message).not.toContain("Managing Director");
   });
 
   it("does NOT say a machine sent it", () => {

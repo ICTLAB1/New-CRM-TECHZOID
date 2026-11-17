@@ -1,9 +1,16 @@
-# The email signature strip
+# Brand artwork for emails
+
+Everything in this folder is served over https from the CRM's own site and
+referenced by absolute URL from the emails it sends. Nothing here is ever
+embedded as a `data:` URI: Gmail strips those outright, which is how an
+uploaded logo can look fine in Settings and arrive as an empty box.
+
+## The email signature strip
 
 The band of partner and certification badges that sits at the foot of every
 email the CRM sends.
 
-## email-signature.png
+### email-signature.png
 
 Microsoft Solutions Partner, Adobe Certified Reseller, Cisco Partner — the
 artwork TechZoid was given by those companies. 1200x281, no transparency,
@@ -15,7 +22,7 @@ disappears in a dark-mode client, where those grey and black wordmarks sit
 on near-black. Compositing it onto the white it was designed for makes it
 safe everywhere, and changes nothing about how it looks.
 
-## If you replace it
+### If you replace it
 
 1. Put the new artwork here under the same name.
    - PNG, about 1200px wide.
@@ -55,3 +62,59 @@ under a broken image.
 
 It also claims nothing specific, which is the right shape for text the CRM
 generates rather than text a person wrote and checked.
+
+
+## company-logo.png
+
+The TechZoid wordmark, for the top of every email. 501x72, white ground,
+about 21 KB. Drawn at 150px, so it is three times the size it is shown at
+and stays sharp on a phone.
+
+**The wordmark alone, not the full lockup.** The artwork as supplied has
+"Connect, Communicate & Collaborate" set under the mark. The email header
+already prints that strapline as text — and text is what a reader sees when
+their client blocks pictures, which Outlook does by default. Printed whole,
+the lockup would say it twice to everyone with pictures on and nobody with
+them off. So the strapline was cropped away and the mark kept.
+
+**Its alt text is empty on purpose.** The company's name is set in bold
+directly beneath it, so an alt carrying the name printed it twice — once
+wrapped over three lines inside the logo's own box, then again underneath.
+An image whose content is already in the text next to it is decorative.
+
+This is NOT `settings.company.logo`. That one is stored as a `data:` URI
+for the PDF renderer, which embeds its own images, and must never be put in
+an `<img src>` in an email.
+
+## vendor-microsoft.png, vendor-autodesk.png, vendor-adobe.png
+
+The three vendors' own marks, for the "What we supply" block in the company
+profile email. Each 84px tall, white ground, drawn at 100-104px wide.
+
+**Supplied by the company that holds those relationships.** Nothing here is
+drawn, traced or reconstructed. If one of these files is removed, the block
+prints its words without a logo rather than a broken image — and
+`src/domain/integrations/productLines.test.ts` fails if the code names a
+file that is not here.
+
+**Flattened onto white**, for the same reason the signature strip was: the
+Microsoft and Adobe files came with transparent backgrounds, and the
+Autodesk one on a light grey card, which was lifted to white so it does not
+print as a grey patch on a white email.
+
+## No ISO badge files
+
+The three ISO certification marks were committed here and drawn at the foot
+of the signature. They have been removed at the company's request: three
+seals of different internal proportions under a 600px partner strip never
+looked like part of the signature, and a certification is a claim that
+reads better stated than drawn.
+
+The signature now carries one line — "An ISO 9001:2015, ISO 27001 and
+ISO/IEC 20000-1:2018 certified company" — built from CERTIFICATIONS in
+`src/domain/integrations/emailIdentity.ts`. Text is searchable, selectable,
+survives a client with pictures off, and needs no file kept in step with
+anything.
+
+The PDF still prints its own ISO marks from `src/assets/brandAssets.ts`.
+That is unchanged.

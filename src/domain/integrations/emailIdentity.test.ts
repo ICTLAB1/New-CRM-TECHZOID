@@ -115,7 +115,7 @@ describe("the signature strip", () => {
 
   it("reaches the rendered signature, underneath the written one", () => {
     const html = signatureHtml(
-      { name: "Abhinav Jain", email: "abhinav.jain@techzoidtechnologies.com", designation: "Managing Director" },
+      { name: "Abhinav Jain", email: "abhinav.jain@techzoidtechnologies.com" },
       emailCompanyFrom(
         { company: { ...SETTINGS.company, signatureImage: "/brand/email-signature.png" } },
         { origin: ORIGIN },
@@ -128,10 +128,23 @@ describe("the signature strip", () => {
     expect(html.indexOf("Abhinav Jain")).toBeLessThan(html.indexOf("email-signature.png"));
   });
 
-  it("PUTS NO <img> IN THE SIGNATURE when the strip is turned off", () => {
+  it("PUTS NO STRIP IN THE SIGNATURE when the strip is turned off", () => {
     const html = signatureHtml(
-      { name: "Abhinav Jain", email: "abhinav.jain@techzoidtechnologies.com", designation: "Managing Director" },
+      { name: "Abhinav Jain", email: "abhinav.jain@techzoidtechnologies.com" },
       emailCompanyFrom({ company: { ...SETTINGS.company, signatureImage: "" } }, { origin: ORIGIN }),
+    );
+    expect(html).toContain("Abhinav Jain");
+    expect(html).not.toContain("email-signature.png");
+  });
+
+  it("puts no image of ANY kind in it when nothing is configured and there is no origin", () => {
+    /* The original form of the test above. It asserted on "<img" and so
+       began failing the day the ISO badges arrived — which was the test
+       doing its job, not a fault: a second source of images had appeared
+       in the signature. Both are now checked, each for its own reason. */
+    const html = signatureHtml(
+      { name: "Abhinav Jain", email: "abhinav.jain@techzoidtechnologies.com" },
+      emailCompanyFrom({ company: { ...SETTINGS.company, signatureImage: "" } }, { origin: "" }),
     );
     expect(html).toContain("Abhinav Jain");
     expect(html).not.toContain("<img");
@@ -223,7 +236,7 @@ describe("the offices and what the company sells", () => {
 
   it("puts both offices and the services line into the rendered signature", () => {
     const html = signatureHtml(
-      { name: "Chandan Singh", email: "chandan.s@techzoidtechnologies.com", designation: "Business Development Executive" },
+      { name: "Chandan Singh", email: "chandan.s@techzoidtechnologies.com" },
       emailCompanyFrom(FULL, { origin: ORIGIN }),
     );
     expect(html).toContain("Pearl Business Park");

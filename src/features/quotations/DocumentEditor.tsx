@@ -326,7 +326,7 @@ export function DocumentEditor({
      which would print the editor chrome around it. Held here rather than in
      the actions row so it works from anywhere in the editor. */
   useHotkeys([
-    { key: "p", mod: true, run: () => previewPdf({ model, rows: totals.rows, images: docImages }) },
+    { key: "p", mod: true, run: () => previewPdf({ model, rows: totals.rows, totals, images: docImages }) },
     { key: "s", mod: true, run: save.ask },
     { key: "Enter", mod: true, run: save.ask },
   ]);

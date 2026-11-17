@@ -182,7 +182,6 @@ function SendLinkDialog({
   const sender: EmailSender = {
     name: user.name,
     email: user.email ?? "",
-    designation: user.designation ?? "",
   };
 
   const company: EmailCompany = emailCompanyFrom(settings);
