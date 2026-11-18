@@ -2,12 +2,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { PageHead } from "../../app/AppShell";
 import { Button, Card, Chip, Empty, Field, Input, Textarea } from "../../components/primitives";
 import { useToast } from "../../components/Toast";
-import { IntegrationError, type IntegrationsApi } from "../../integrations/api";
 import {
-  CHUNK, PROFILE_BODY, PROFILE_HERO, PROFILE_SUBJECT, chunk, messagesFor, profileCallToAction,
+  CHUNK, PROFILE_BODY, PROFILE_HERO, PROFILE_SUBJECT, messagesFor, profileCallToAction,
   recipientsFromCustomers, recipientsFromPaste,
   type ProfileDraft, type ProfileMessage,
 } from "../../domain/outreach/profileMail";
+import type { IntegrationsApi } from "../../integrations/api";
+import { runPacedSend } from "../../domain/outreach/pacedSend";
 import type { EmailCompany, EmailSender } from "../../domain/integrations/emailTemplate";
 import { emailCompanyFrom } from "../../domain/integrations/emailIdentity";
 import { emailProductGroups } from "../../domain/integrations/productLines";
@@ -89,7 +90,12 @@ export function ProfileMailerScreen({
   const [optedOut, setOptedOut] = useState<ReadonlySet<string>>(new Set());
   const [alreadySent, setAlreadySent] = useState<Map<string, string>>(new Map());
 
-  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+  /* `waitingUntil` is a timestamp while the send is sitting out
+     Microsoft's upload window — 0 the rest of the time. Held in the same
+     object as the counts so the two can never disagree on screen. */
+  const [progress, setProgress] = useState<
+    { done: number; total: number; waitingUntil?: number } | null
+  >(null);
   const [results, setResults] = useState<Array<{ email: string; label: string; ok: boolean; error: string | null }>>([]);
   const [stopped, setStopped] = useState("");
 
@@ -284,41 +290,46 @@ export function ProfileMailerScreen({
     const batchId = crypto.randomUUID();
     const collected: Array<{ email: string; label: string; ok: boolean; error: string | null }> = [];
 
-    /* IN PIECES, and the count moves after each. A single request for thirty
-       would be cut off by the function host halfway with nothing to say
-       which of them had gone. */
-    for (const piece of chunk(messages, CHUNK)) {
-      try {
-        const res = await api.sendCompanyProfile({
-          companyId,
-          batchId,
-          messages: piece.map((m) => ({
-            email: m.email,
-            customerId: m.customerId || undefined,
-            label: m.label,
-            subject: m.subject,
-            message: m.message,
-            html: m.html,
-          })),
-        });
-        for (const r of res.results) {
-          collected.push({
-            email: r.email,
-            label: piece.find((m) => m.email === r.email)?.label ?? r.email,
-            ok: r.ok,
-            error: r.error,
-          });
-        }
-      } catch (err) {
-        /* The whole piece was refused — not signed in, rate limited, no
-           profile on file. Stop: the rest would be refused the same way, and
-           what has already gone out is listed below. */
-        setStopped(err instanceof IntegrationError ? err.message : "The send stopped before it finished.");
-        break;
-      }
-      setResults([...collected]);
-      setProgress({ done: collected.length, total: messages.length });
+    /* IN PIECES, WAITING OUT WHATEVER THE SERVER ASKS IT TO — see
+       domain/outreach/pacedSend.ts, where the loop lives so that a test
+       can reach it. A single request for thirty would be cut off by the
+       function host halfway with nothing to say which of them had gone;
+       and a piece that comes back half-throttled has to record the ones
+       that went, put the untouched ones back, and wait exactly as long as
+       Microsoft said. That was four chances to drop a customer in code
+       nothing could test. */
+    const byEmail = new Map(messages.map((m) => [m.email, m]));
+    const run = await runPacedSend({
+      messages,
+      chunkSize: CHUNK,
+      send: (piece) => api.sendCompanyProfile({
+        companyId,
+        batchId,
+        messages: piece.map((m) => ({
+          email: m.email,
+          customerId: m.customerId || undefined,
+          label: m.label,
+          subject: m.subject,
+          message: m.message,
+          html: m.html,
+        })),
+      }),
+      wait: (ms) => new Promise((r) => setTimeout(r, ms)),
+      onProgress: (p) => {
+        setProgress({ done: p.done, total: p.total, waitingUntil: p.waitingUntil });
+        setResults(collected.slice());
+      },
+    });
+
+    for (const o of run.outcomes) {
+      collected.push({
+        email: o.email,
+        label: byEmail.get(o.email)?.label ?? o.email,
+        ok: o.ok,
+        error: o.error,
+      });
     }
+    if (run.stopped) setStopped(run.stopped);
 
     setResults(collected);
     setProgress(null);
@@ -618,9 +629,23 @@ export function ProfileMailerScreen({
             </div>
           ) : null}
 
-          {progress ? (
+          {progress && !progress.waitingUntil ? (
             <div className="notice">
               Sending… {progress.done} of {progress.total} done. Leave this page open until it finishes.
+            </div>
+          ) : null}
+
+          {/* A PAUSE THAT EXPLAINS ITSELF. Without this the send simply
+              stops moving for five minutes, which reads as broken — and
+              the person closes the page, which is the one thing that
+              would actually break it. */}
+          {progress?.waitingUntil ? (
+            <div className="notice notice-warn">
+              <strong>Waiting for Microsoft.</strong>{" "}
+              {progress.done} of {progress.total} have gone. Microsoft limits how much one mailbox can
+              upload at a time, and your profile is {((info?.bytes ?? 0) / 1048576).toFixed(1)} MB per message — so the rest go as soon
+              as the window clears, in about {Math.max(1, Math.ceil((progress.waitingUntil - Date.now()) / 1000))} seconds.
+              Nothing has failed and nobody will be messaged twice. Leave this page open.
             </div>
           ) : null}
 

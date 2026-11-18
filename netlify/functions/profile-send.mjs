@@ -172,6 +172,9 @@ export async function handler(event) {
      now. Everybody after that point is reported as not sent, with the
      reason and the wait — see the note in lib/mailer.mjs. */
   let throttled = null;
+  /* How long Microsoft says to wait, so the browser can wait exactly that
+     and carry on by itself rather than making somebody guess. */
+  let throttledFor = 0;
 
   for (const one of planned) {
     /* STOP, DO NOT KEEP TRYING. Once the byte budget for this mailbox is
@@ -211,7 +214,10 @@ export async function handler(event) {
       result = { ok: false, error: err?.message ?? "The message was not sent.", retryable: true };
     }
 
-    if (!result.ok && result.throttled) throttled = result.error;
+    if (!result.ok && result.throttled) {
+      throttled = result.error;
+      throttledFor = Number(result.retryAfterSeconds) || 300;
+    }
 
     results.push({
       email: one.to,
@@ -259,6 +265,11 @@ export async function handler(event) {
        does not subtract the padding — and a screen that says "2.4 MB" should
        say what the file is, not what its encoding rounds up to. */
     attachment: { name: att.attachment.name, bytes: profile.bytes || att.attachment.bytes },
+    /* Present only when the mailbox ran out of upload budget partway
+       through. The browser waits this long and sends the rest; nothing
+       here is a limit the CRM imposes, it is Microsoft's window being
+       waited out instead of guessed at. */
+    throttledFor,
     results,
   });
 }

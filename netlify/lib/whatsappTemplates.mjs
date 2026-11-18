@@ -104,6 +104,11 @@ export function waList(items, max = 300) {
  * `auto` is the settings key for this message's on/off switch. Every one of
  * them is off until somebody turns it on.
  */
+/** The language code every send names. Meta treats "en", "en_US" and
+ *  "en_GB" as three different templates, so this has to match what was
+ *  approved, exactly. */
+export const SEND_LANGUAGE = "en";
+
 export const TEMPLATES = {
   quotation_sent: {
     name: "quotation_sent",
@@ -423,10 +428,17 @@ export async function readApprovedTemplates({ token, wabaId, fetchImpl = fetch }
     for (const row of result?.data ?? []) {
       const body = (row?.components ?? []).find((c) => String(c?.type).toUpperCase() === "BODY");
       const text = String(body?.text ?? "");
+      /* The header Meta actually holds, which decides whether a file may
+         be sent with this template at all. A template created body-only
+         refuses a document; one created with a document header refuses to
+         go without one. Either way the message fails at send time, which
+         is the worst place to find out. */
+      const header = (row?.components ?? []).find((c) => String(c?.type).toUpperCase() === "HEADER");
       templates[row.name] = {
         name: row.name,
         status: String(row.status ?? "").toUpperCase(),
         language: row.language ?? "",
+        headerFormat: String(header?.format ?? "").toUpperCase(),
         body: text,
         /* The highest {{n}} the approved wording actually uses. */
         placeholders: Math.max(0, ...[...text.matchAll(/\{\{\s*(\d+)\s*\}\}/g)].map((m) => Number(m[1]))),
@@ -459,6 +471,44 @@ export function checkTemplate(templateName, approved) {
         + ` and the CRM fills ${mine.params.length}.`,
     };
   }
+
+  /* THE LANGUAGE HAS TO MATCH EXACTLY. Every send names the code "en", and
+     Meta treats "en", "en_US" and "en_GB" as three different templates —
+     so a template approved under the wrong one is not found at send time
+     and the message simply does not go. The template list looks perfect in
+     WhatsApp Manager while nothing arrives, which is a bad afternoon. */
+  if (approved.language && approved.language !== SEND_LANGUAGE) {
+    return {
+      ok: false,
+      problem: `It is approved in "${approved.language}" and the CRM sends "${SEND_LANGUAGE}". `
+        + `Meta treats those as different templates, so nothing would arrive. `
+        + `Create it again under the plain English (${SEND_LANGUAGE}) entry.`,
+    };
+  }
+
+  /* AND SO DOES THE HEADER. A template with a document header cannot be
+     sent without a file; one without a header cannot be sent with one. The
+     CRM decides which it sends by what is in this file, so a mismatch here
+     means every send of it fails. */
+  const wantsDocument = !!mine.document;
+  const hasDocument = approved.headerFormat === "DOCUMENT";
+  if (wantsDocument && !hasDocument) {
+    return {
+      ok: false,
+      problem: approved.headerFormat
+        ? `The CRM attaches a file to this one, but Meta has it with a ${approved.headerFormat.toLowerCase()} header.`
+        : "The CRM attaches a file to this one, but Meta has it with no header. "
+          + "Create it again with Header → Media → Document.",
+    };
+  }
+  if (!wantsDocument && hasDocument) {
+    return {
+      ok: false,
+      problem: "Meta has this one with a document header, but the CRM sends it as text. "
+        + "A template with a header cannot be sent without a file, so nothing would arrive.",
+    };
+  }
+
   return { ok: true, problem: "" };
 }
 

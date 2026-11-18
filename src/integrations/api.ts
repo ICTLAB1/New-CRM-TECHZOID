@@ -63,6 +63,17 @@ export interface ProfileSendResult {
   sent: number;
   failed: number;
   attachment: { name: string; bytes: number };
+  /**
+   * Seconds to wait before the rest of the list can go, when Microsoft
+   * limited how much this mailbox may upload. 0 when it did not happen.
+   *
+   * NOT A LIMIT THE CRM IMPOSES. Outlook caps the BYTES one mailbox may
+   * upload in a short window — about 150 MB in five minutes — and a
+   * mailshot carrying a 2 MB profile reaches it in roughly fifty
+   * messages. The screen waits this out and carries on, rather than
+   * reporting everybody after that point as a failure.
+   */
+  throttledFor?: number;
   results: Array<{
     email: string;
     customerId: string | null;
@@ -369,6 +380,7 @@ export function demoApi(): IntegrationsApi {
     diagnostics: async () => refuse("The setup check"),
     sendEmail: async () => refuse("Sending email"),
     sendCompanyProfile: async () => refuse("Sending the company profile"),
+    broadcastCompanyProfile: async () => refuse("Sending the company profile on WhatsApp"),
     sendWhatsApp: async () => refuse("Sending WhatsApp messages"),
     ask: async () => refuse("The assistant"),
     createTeamMember: async () => refuse("Creating an account"),

@@ -309,7 +309,13 @@ describe("reading the approved templates from Meta", () => {
 });
 
 describe("telling somebody a template will not work BEFORE it is needed", () => {
-  const approved = (over = {}) => ({ name: "quotation_sent", status: "APPROVED", placeholders: 4, body: "", ...over });
+  /* quotation_sent carries the quotation, so a correct approval has a
+     DOCUMENT header and the plain "en" language — anything else and the
+     send fails at Meta rather than here. */
+  const approved = (over = {}) => ({
+    name: "quotation_sent", status: "APPROVED", placeholders: 4, body: "",
+    language: "en", headerFormat: "DOCUMENT", ...over,
+  });
 
   it("passes one that is approved and the right shape", () => {
     expect(checkTemplate("quotation_sent", approved())).toEqual({ ok: true, problem: "" });
@@ -400,5 +406,61 @@ describe("remembering the approved wording", () => {
     const out = await approvedTemplates({ token: "", wabaId: "", fetchImpl });
     expect(out.ok).toBe(false);
     expect(asked).toBe(0);
+  });
+});
+
+
+/* ── the two things that look right in WhatsApp Manager and still fail ──
+   Both of these produce a template list that reads perfectly on screen
+   while nothing arrives, which is the worst way to lose an afternoon. */
+describe("a template approved under the wrong language or header", () => {
+  const approved = (over = {}) => ({
+    name: "quotation_sent", status: "APPROVED", placeholders: 4, body: "",
+    language: "en", headerFormat: "DOCUMENT", ...over,
+  });
+
+  it("catches en_US, which Meta treats as a different template entirely", () => {
+    const out = checkTemplate("quotation_sent", approved({ language: "en_US" }));
+    expect(out.ok).toBe(false);
+    expect(out.problem).toMatch(/en_US/);
+    expect(out.problem).toMatch(/different templates/);
+  });
+
+  it("accepts the plain en the CRM actually sends", () => {
+    expect(checkTemplate("quotation_sent", approved({ language: "en" })).ok).toBe(true);
+  });
+
+  it("catches a file-carrying template created with no header", () => {
+    const out = checkTemplate("quotation_sent", approved({ headerFormat: "" }));
+    expect(out.ok).toBe(false);
+    expect(out.problem).toMatch(/no header/);
+    expect(out.problem).toMatch(/Media → Document/);
+  });
+
+  it("catches a text template created WITH a document header", () => {
+    const out = checkTemplate("quotation_followup", {
+      name: "quotation_followup", status: "APPROVED", placeholders: 4, body: "",
+      language: "en", headerFormat: "DOCUMENT",
+    });
+    expect(out.ok).toBe(false);
+    expect(out.problem).toMatch(/sends it as text/);
+  });
+
+  /* The proforma three and the broadcast, checked the way the company
+     actually created them. */
+  it("passes the four new templates as they were submitted", () => {
+    const cases = [
+      ["proforma_sent", 4, "DOCUMENT"],
+      ["proforma_followup", 4, ""],
+      ["proforma_advance_reminder", 4, ""],
+      ["company_profile", 2, "DOCUMENT"],
+    ];
+    for (const [name, blanks, header] of cases) {
+      const out = checkTemplate(name, {
+        name, status: "APPROVED", placeholders: blanks, body: "", language: "en", headerFormat: header,
+      });
+      expect(out.problem, name).toBe("");
+      expect(out.ok, name).toBe(true);
+    }
   });
 });
