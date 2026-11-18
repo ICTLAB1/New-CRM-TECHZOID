@@ -222,6 +222,23 @@ describe("the ISO certification marks", () => {
     expect(CERTIFICATION_NAMES.join(" ")).not.toContain("27001:");
   });
 
+  it("reads as sentences, not as one welded-together line", () => {
+    /* It ran "We are certified to A, B, C, and the profile carries the
+       registration details your purchase team usually asks for. The lines
+       we supply are listed below." — three ideas in one line, ending in a
+       signpost. A covering note gets read once. */
+    const paras = PROFILE_BODY.split("\n\n").filter((p) => p.trim());
+    expect(paras).toHaveLength(2);
+    for (const p of paras) {
+      /* Nothing longer than two sentences, and no sentence over ~30 words. */
+      const sentences = p.split(/(?<=\.)\s+/).filter(Boolean);
+      expect(sentences.length, p).toBeLessThanOrEqual(2);
+      for (const sentence of sentences) {
+        expect(sentence.split(/\s+/).length, sentence).toBeLessThanOrEqual(30);
+      }
+    }
+  });
+
   it("names them in the body too, from the same one list", () => {
     for (const name of CERTIFICATION_NAMES) expect(PROFILE_BODY).toContain(name);
     /* Named, not alluded to: the reader should not have to open the
@@ -321,7 +338,10 @@ describe("the profile email's own wording", () => {
        names — a preamble to the thing directly below it, and two copies to
        keep in step the first time a vendor is added. */
     expect(PROFILE_BODY).not.toMatch(/Microsoft, Adobe and Autodesk/);
-    expect(PROFILE_BODY).toContain("The lines we supply are listed below.");
+    /* And it does not announce the block either: "The lines we supply are
+       listed below" pointed at something that already has WHAT WE SUPPLY
+       written over it in capitals. */
+    expect(PROFILE_BODY).not.toMatch(/listed below|are below/i);
   });
 
   it("offers the same three lines as sentences, for anywhere that is not an email", () => {

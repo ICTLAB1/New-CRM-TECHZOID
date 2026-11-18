@@ -104,28 +104,30 @@ export function profileCallToAction(senderEmail: string): {
 }
 
 export const PROFILE_BODY = [
-  "I thought it would be useful to have our company profile on file — it is attached.",
-  /* WHAT WE SELL IS NO LONGER IN THIS PARAGRAPH. It is printed under the
-     body as its own block, by vendor, with each line named — see
-     domain/integrations/productLines.ts. A sentence here listing the same
-     three vendors read as a preamble to the block directly beneath it, and
-     the two would have drifted apart the first time a vendor was added. */
-  /* THE CERTIFICATIONS ARE NAMED, not alluded to. "the certifications your
-     purchase team usually asks for" told the reader we have some and made
-     them open the attachment to find out which — and a tender response is
-     written by somebody checking a list. The three marks are at the foot
-     of this email as artwork; these are the same three in words, which is
-     what survives a client with pictures off. The names come from
+  /* ONE IDEA PER SENTENCE. This paragraph used to run
+     "We are certified to A, B, C, and the profile carries the registration
+     details your purchase team usually asks for. The lines we supply are
+     listed below." — three separate things welded into one line, ending
+     with a signpost to a block that already has WHAT WE SUPPLY written
+     over it in capitals. Nobody reads a covering note twice; it has to
+     land first time. */
+  "I thought it would be useful to have our company profile on file — it is attached. "
+  + "It has the registration details your purchase team usually asks for.",
+  /* THE CERTIFICATIONS ARE NAMED, not alluded to: "the certifications your
+     purchase team asks for" told the reader we hold some and made them
+     open the attachment to find out which, and a tender response is
+     written by somebody checking a list. The names come from
      integrations/emailIdentity.ts, so there is one place to change if a
-     certification lapses or is added. */
-  `We are certified to ${CERTIFICATION_NAMES.join(", ")}, and the profile carries the `
-  + "registration details your purchase team usually asks for. The lines we supply are "
-  + "listed below.",
-  /* AND THE ASK IS NOT IN HERE EITHER. It is its own block under the
-     products — see profileCallToAction. A paragraph saying "reply to this
-     email" immediately above a button that opens a reply is the same
-     sentence twice, and a sender rewording one would leave the other
-     saying something else. */
+     certification lapses or is added — and the same three words appear in
+     the signature, built from that same list. */
+  `We are an ${CERTIFICATION_NAMES.slice(0, -1).join(", ")} and `
+  + `${CERTIFICATION_NAMES[CERTIFICATION_NAMES.length - 1]} certified company.`,
+  /* WHAT WE SELL IS NOT IN HERE. It is its own block under the body, by
+     vendor, with every product named — see productLines.ts. A sentence
+     here listing the same three vendors read as a preamble to the thing
+     directly beneath it, and the two would have drifted apart the first
+     time a vendor was added. The block announces itself; this does not
+     need to announce the block. */
 ].join("\n\n");
 
 export interface ProfileRecipient {
