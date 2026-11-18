@@ -8,6 +8,7 @@ import {
   recipientsFromCustomers, recipientsFromPaste,
   type ProfileDraft, type ProfileMessage,
 } from "../../domain/outreach/profileMail";
+import { dailyCapFrom, overCapNotice } from "../../domain/outreach/sendLimit";
 import type { EmailCompany, EmailSender } from "../../domain/integrations/emailTemplate";
 import { emailCompanyFrom } from "../../domain/integrations/emailIdentity";
 import { emailProductGroups } from "../../domain/integrations/productLines";
@@ -80,6 +81,15 @@ export function ProfileMailerScreen({
   const [subject, setSubject] = useState(PROFILE_SUBJECT);
   const [body, setBody] = useState(PROFILE_BODY);
   const [previewOf, setPreviewOf] = useState(0);
+
+  /* WHAT IS LEFT OF TODAY'S SENDING, as the server last reported it.
+     The cap is known from settings before anything is sent; how much of it
+     has gone today is only known once the server answers, because only the
+     server can count it — two people sending at once would each otherwise
+     see an allowance the other was spending. */
+  const [sentToday, setSentToday] = useState<{ cap: number; remaining: number }>(
+    { cap: dailyCapFrom(settings), remaining: Number.POSITIVE_INFINITY },
+  );
 
   const [info, setInfo] = useState<ProfileInfo | null>(null);
   const [loadingInfo, setLoadingInfo] = useState(true);
@@ -280,6 +290,9 @@ export function ProfileMailerScreen({
     setResults([]);
     setStopped("");
     setProgress({ done: 0, total: messages.length });
+    /* Unknown again until the server answers: the count may have moved
+       since the last send, from this screen or somebody else's. */
+    setSentToday({ cap: dailyCapFrom(settings), remaining: Number.POSITIVE_INFINITY });
 
     const batchId = crypto.randomUUID();
     const collected: Array<{ email: string; label: string; ok: boolean; error: string | null }> = [];
@@ -301,6 +314,7 @@ export function ProfileMailerScreen({
             html: m.html,
           })),
         });
+        if (res.limit) setSentToday({ cap: res.limit.cap, remaining: res.limit.remaining });
         for (const r of res.results) {
           collected.push({
             email: r.email,
@@ -318,6 +332,19 @@ export function ProfileMailerScreen({
       }
       setResults([...collected]);
       setProgress({ done: collected.length, total: messages.length });
+
+      /* THE DAY IS SPENT — stop rather than send the next piece into a
+         refusal. The server would turn it down anyway; this makes the
+         reason the one the sender reads, instead of a 429 arriving after
+         a pointless round trip. What was held back is already in the list
+         below, named. */
+      if (sentToday.remaining <= 0 && collected.length < messages.length) {
+        setStopped(
+          `Today's limit of ${sentToday.cap} has been reached, so the rest were not sent. `
+          + "They are listed below and can be sent tomorrow, when the count resets.",
+        );
+        break;
+      }
     }
 
     setResults(collected);
@@ -463,7 +490,7 @@ export function ProfileMailerScreen({
 
           <Field
             label="Or paste addresses"
-            hint="One person per line — a bare address, a name and address in two columns straight out of a spreadsheet, or an Outlook To: line with the names still on it. The name beside an address is used for the greeting. Thirty at once is fine."
+            hint="One person per line — a bare address, a name and address in two columns straight out of a spreadsheet, or an Outlook To: line with the names still on it. The name beside an address is used for the greeting. Paste as many as you like — the day's limit decides how many go today."
           >
             <Textarea
               rows={3}
@@ -618,6 +645,18 @@ export function ProfileMailerScreen({
             </div>
           ) : null}
 
+          {/* THE DAILY LIMIT, SAID BEFORE SEND IS PRESSED. It is not a
+              blocker — the send goes, and what is held back comes back
+              named — so it reads as a plan rather than a refusal. Somebody
+              who thinks they are blocked re-picks the whole list tomorrow
+              and sends the first forty of it twice. */}
+          {overCapNotice(recipients.length, sentToday.cap) ? (
+            <div className="notice notice-warn">
+              <strong>More than one day's sending.</strong>{" "}
+              {overCapNotice(recipients.length, sentToday.cap)}
+            </div>
+          ) : null}
+
           {progress ? (
             <div className="notice">
               Sending… {progress.done} of {progress.total} done. Leave this page open until it finishes.
@@ -625,6 +664,17 @@ export function ProfileMailerScreen({
           ) : null}
 
           {stopped ? <div className="notice notice-bad"><strong>Stopped.</strong> {stopped}</div> : null}
+
+          {/* Only ever shown once the server has answered: before that this
+              screen knows the limit but not how much of it today has used,
+              and a guess would be worse than silence. */}
+          {Number.isFinite(sentToday.remaining) && !progress ? (
+            <div className="muted">
+              {sentToday.remaining > 0
+                ? `${sentToday.remaining} of today's ${sentToday.cap} company profiles left to send.`
+                : `Today's ${sentToday.cap} are used up. The count resets at midnight.`}
+            </div>
+          ) : null}
 
           <div className="row-tight wrap">
             <Button

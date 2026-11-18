@@ -3,6 +3,7 @@ import { adminClient, signedInUser } from "../lib/auth.mjs";
 import { checkAttachment, isEmail, str } from "../lib/validate.mjs";
 import { consume, tooManyMessage } from "../lib/ratelimit.mjs";
 import { sendMail } from "../lib/mailer.mjs";
+import { allowanceFor, partialMessage, spentMessage } from "../lib/profileSendLimit.mjs";
 
 /**
  * Send the company profile to several people — one message each.
@@ -167,9 +168,41 @@ export async function handler(event) {
   const att = checkAttachment(profile.content, profile.file_name, MAX_ATTACHMENT);
   if (!att.ok) return fail(event, 400, `The stored company profile cannot be sent: ${att.error}`);
 
+  /* ── THE DAY'S ALLOWANCE, CHECKED BEFORE A SINGLE MESSAGE GOES ──────
+     See lib/profileSendLimit.mjs for what this is protecting and why it is
+     a stop rather than a warning. In short: the reputation that carries
+     this company's quotations and invoices is the same reputation a
+     mailshot spends, and it is cheap to protect and slow to repair.
+
+     COUNTED HERE, NOT ON THE SCREEN. The browser shows what is left so
+     nobody is surprised, but a browser is not where a limit lives — this
+     endpoint is reachable without it, the list arrives in pieces that each
+     believe they are small, and two people sending at once would each see
+     an allowance the other was spending. */
+  let allowance;
+  try {
+    const { data: settingsRow } = await admin
+      .from("settings").select("data").eq("company_id", companyId).maybeSingle();
+    allowance = await allowanceFor(admin, companyId, settingsRow?.data ?? {});
+  } catch (err) {
+    /* A COUNT THAT CANNOT BE READ STOPS THE SEND. The alternative is
+       sending an unknown number on top of an unknown number, which is the
+       one outcome the limit exists to prevent. */
+    return fail(event, 503, "Could not check today's sending limit, so nothing was sent. Try again in a moment.", err?.message);
+  }
+
+  if (allowance.remaining <= 0) return fail(event, 429, spentMessage(allowance));
+
+  /* A LIST LONGER THAN WHAT IS LEFT IS CUT, NOT REFUSED. The first of them
+     go out and the rest come back named, so the sender knows exactly where
+     the list stopped and can pick it up tomorrow. Refusing the whole piece
+     would waste an allowance that was still there and leave them guessing. */
+  const sending = planned.slice(0, allowance.remaining);
+  const held = planned.slice(allowance.remaining);
+
   const results = [];
 
-  for (const one of planned) {
+  for (const one of sending) {
     /* ONE RECIPIENT. `to` is a single address and there is no cc — see the
        note at the top of this file. */
     let result;
@@ -224,6 +257,21 @@ export async function handler(event) {
     }
   }
 
+  /* The ones the limit held back, reported exactly like a failure so the
+     screen already knows how to show them — but marked retryable, because
+     tomorrow they will go. */
+  for (const one of held) {
+    results.push({
+      email: one.to,
+      customerId: one.customerId,
+      ok: false,
+      via: "",
+      from: null,
+      error: partialMessage(allowance),
+      retryable: true,
+    });
+  }
+
   const sent = results.filter((r) => r.ok).length;
   /* 200 WITH THE DETAIL, even when some failed. A 500 for a partial batch
      would tell the browser nothing about which messages are now in an
@@ -236,6 +284,13 @@ export async function handler(event) {
        does not subtract the padding — and a screen that says "2.4 MB" should
        say what the file is, not what its encoding rounds up to. */
     attachment: { name: att.attachment.name, bytes: profile.bytes || att.attachment.bytes },
+    /* WHAT IS LEFT AFTER THIS PIECE, so the screen can say so without
+       asking again and the next piece is not sent into a wall. */
+    limit: {
+      cap: allowance.cap,
+      sentToday: allowance.sentToday + sent,
+      remaining: Math.max(0, allowance.remaining - sent),
+    },
     results,
   });
 }

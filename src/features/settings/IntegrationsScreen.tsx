@@ -8,6 +8,7 @@ import { IntegrationError, type IntegrationsApi, type MailboxConnection } from "
 import { integrationStatus, testVerificationConnection, type IntegrationStatus } from "../../data/verification";
 import { fnPath, fnToken, fnUrl } from "../../data/functions";
 import { fmtDate } from "../../domain/dates";
+import { DEFAULT_DAILY_CAP, MAX_DAILY_CAP, dailyCapFrom } from "../../domain/outreach/sendLimit";
 
 /**
  * Settings → Integrations.
@@ -711,6 +712,7 @@ function InvoicingPanel({
   const [quoteCc, setQuoteCc] = useState(
     String(settings["quoteCcEmail"] ?? "abhinav.jain@techzoidtechnologies.com"),
   );
+  const [dailyLimit, setDailyLimit] = useState(String(dailyCapFrom(settings)));
 
   const save = () => {
     onChange({
@@ -718,6 +720,14 @@ function InvoicingPanel({
       invoicingEmail: to.trim(),
       invoicingCc: cc.trim(),
       quoteCcEmail: quoteCc.trim(),
+      /* Kept under `profile` so the server reads it from one place — see
+         netlify/lib/profileSendLimit.mjs, which clamps whatever lands here
+         rather than trusting it. A field that could be set to nothing, or
+         to five thousand, is not a limit. */
+      profile: {
+        ...((settings["profile"] ?? {}) as Record<string, unknown>),
+        dailySendLimit: Math.min(Math.max(1, Math.floor(Number(dailyLimit) || 0) || DEFAULT_DAILY_CAP), MAX_DAILY_CAP),
+      },
     });
     toast("Email addresses saved");
   };
@@ -725,7 +735,8 @@ function InvoicingPanel({
   const dirty =
     to.trim() !== String(settings["invoicingEmail"] ?? "") ||
     cc.trim() !== String(settings["invoicingCc"] ?? "") ||
-    quoteCc.trim() !== String(settings["quoteCcEmail"] ?? "abhinav.jain@techzoidtechnologies.com");
+    quoteCc.trim() !== String(settings["quoteCcEmail"] ?? "abhinav.jain@techzoidtechnologies.com") ||
+    Number(dailyLimit) !== dailyCapFrom(settings);
 
   return (
     <Card
@@ -747,6 +758,30 @@ function InvoicingPanel({
             <Input type="email" value={quoteCc} disabled={!canEdit} onChange={(e) => setQuoteCc(e.target.value)}
               placeholder="manager@example.com" />
           </Field>
+        </div>
+      </div>
+
+      <div style={{ marginTop: 18, borderTop: "1px solid var(--rule)", paddingTop: 14 }}>
+        <span className="eyebrow">Company profile mailshots</span>
+        <div className="grid grid-2" style={{ marginTop: 8 }}>
+          <Field
+            label="Most to send in one day"
+            hint={`Across the whole company, not per person. Between 1 and ${MAX_DAILY_CAP}.`}
+          >
+            <Input numeric value={dailyLimit} disabled={!canEdit}
+              onChange={(e) => setDailyLimit(e.target.value)} placeholder={String(DEFAULT_DAILY_CAP)} />
+          </Field>
+        </div>
+        <div className="notice" style={{ marginTop: 12 }}>
+          <span>
+            <strong>Why there is a limit.</strong> The reputation that carries this company's quotations and
+            invoices is the same reputation a mailshot spends. A domain that normally sends twenty ordinary
+            emails a day and then sends four hundred introductions in an afternoon looks exactly like an
+            account somebody has broken into, and gets filtered as one — quietly, for weeks, on every message
+            the company sends. {DEFAULT_DAILY_CAP} a day is a safe starting point for a domain that has not
+            done this before. Raise it slowly, over weeks rather than days, and watch what bounces. Anything
+            held back is listed by name and can be sent the next day.
+          </span>
         </div>
       </div>
 
