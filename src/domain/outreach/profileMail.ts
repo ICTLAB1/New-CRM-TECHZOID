@@ -58,12 +58,26 @@ export const PROFILE_SUBJECT = "{{sender_company}} — company profile";
  * It says what we do, not how well we do it. No superlatives, no numbers we
  * would have to stand behind, nothing a purchase manager could quote back
  * at us a year later.
+ *
+ * AND IT HAS TO COVER EVERY LINE THE EMAIL GOES ON TO LIST. This band said
+ * "software licensing" and nothing else, because it was written when that
+ * was all the email listed. A hardware line was added below it and the band
+ * was not changed, so the first thing a reader saw announced a software
+ * company and the panels underneath then offered them laptops, firewalls
+ * and accessories. A reader deciding in two seconds whether we sell what
+ * they are about to buy reads the band, not the panels — see the test in
+ * productLines.test.ts that now holds the two together.
+ *
+ * WHAT IT DELIBERATELY DOES NOT DO is repeat the specifics. The panels name
+ * the manufacturers and the products; the band names the lines. One place
+ * to correct when a line changes, rather than two that can disagree.
  */
 export const PROFILE_HERO = {
-  eyebrow: "Software licensing solutions",
-  headline: "Genuine software licensing, procurement and renewals",
+  eyebrow: "Software licensing & IT hardware",
+  headline: "Genuine software licensing and business IT hardware",
   line: "Enterprise subscriptions, perpetual licensing and professional design applications "
-    + "from the software publishers your teams already use.",
+    + "from the software publishers your teams already use — and the hardware, network "
+    + "security and accessories to run them on.",
 };
 
 /**

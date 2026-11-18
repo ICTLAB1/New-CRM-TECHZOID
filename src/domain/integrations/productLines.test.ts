@@ -140,6 +140,40 @@ describe("the band across the top, and the ask under the products", () => {
     expect(html.match(/<img/g) ?? []).toHaveLength(0);
   });
 
+  /* THE BAND AND THE PANELS MUST NOT DISAGREE, which is how this last went
+     wrong: a hardware line was added to the panels and the band above them
+     still announced a software company, so somebody looking for a laptop
+     was told in the first line that we sell licences. A reader decides in
+     about two seconds whether we sell what they are about to buy, and the
+     band is what they decide on.
+
+     Checked by subject rather than by sentence, so the band keeps its own
+     wording and a line added tomorrow still has to be let into it. The
+     band deliberately carries no specifics — the panels name the
+     manufacturers — so this asks only that no whole line is left out. */
+  it("says something about every line the email goes on to list", () => {
+    const band = `${PROFILE_HERO.eyebrow} ${PROFILE_HERO.headline} ${PROFILE_HERO.line}`.toLowerCase();
+
+    /* What a reader would look for each group under. A group missing from
+       here is a group somebody added without asking this question. */
+    const subjectOf: Record<string, readonly string[]> = {
+      Microsoft: ["licens", "subscription", "software"],
+      Autodesk: ["licens", "design", "software"],
+      Adobe: ["licens", "design", "software"],
+      Hardware: ["hardware"],
+    };
+
+    for (const group of emailProductGroups("https://crm.example")) {
+      const words = subjectOf[group.name];
+      expect(words, `${group.name} is listed in the email but this test does not know what to look for`)
+        .toBeTruthy();
+      expect(
+        words!.some((w) => band.includes(w)),
+        `the band never mentions ${group.name}, which the panels below it offer`,
+      ).toBe(true);
+    }
+  });
+
   it("gives the button a real destination, and the same ask in words", () => {
     const { callToAction } = draft();
     const html = buildEmailHtml(content({ callToAction }));
