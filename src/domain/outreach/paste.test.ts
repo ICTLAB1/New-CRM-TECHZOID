@@ -90,6 +90,69 @@ describe("reading a pasted list of addresses", () => {
     expect(parsePastedList("ravi@acme.example\n---\n•\npriya@beta.example").unreadable).toEqual([]);
   });
 
+  /* THE SHAPE EVERY CONTACT LIST ARRIVES IN. Two columns dragged out of a
+     spreadsheet, name then address, tab between them. This was read as an
+     address plus an orphaned name, so a clean paste of five contacts
+     answered "could not read 5 of what you pasted" and listed the five
+     names back — every one of which had been read perfectly well. */
+  it("reads a name and address pasted as two columns as one person", () => {
+    const out = parsePastedList("Ravi Sharma\travi@acme.example\nPriya Menon\tpriya@beta.example");
+    expect(out.unreadable).toEqual([]);
+    expect(out.people.map((p) => p.email)).toEqual(["ravi@acme.example", "priya@beta.example"]);
+    expect(out.people.map((p) => p.fullName)).toEqual(["Ravi Sharma", "Priya Menon"]);
+  });
+
+  /* And the name is ATTACHED, not coincidentally re-guessed. The addresses
+     here carry no first name for firstNameFromEmail to find, so "Ravi" can
+     only have come from the column beside it. */
+  it("prefers the typed name over anything the address could suggest", () => {
+    const out = parsePastedList("Ravi Sharma\trsharma@acme.example\nPriya Menon\tpmenon@beta.example");
+    expect(out.people.map((p) => p.firstName)).toEqual(["Ravi", "Priya"]);
+  });
+
+  /* The company column sits AFTER the address here, so this also pins which
+     neighbour is read as the name: a spreadsheet puts the person on the left,
+     and "Dear Acme," is the greeting that comes of looking right first. */
+  it("takes the whole row without mistaking its other columns for lost addresses", () => {
+    const out = parsePastedList("Ravi Sharma\travi@acme.example\tAcme Traders\t9876543210");
+    expect(out.unreadable).toEqual([]);
+    expect(out.people).toHaveLength(1);
+    expect(out.people[0]!.firstName).toBe("Ravi");
+  });
+
+  /* A column with a digit in it is not a person. The phone number is the
+     obvious case; the one that needs the guard is the half-and-half column —
+     a street line or a GST number — which has letters in it and would
+     otherwise be read as a name and greeted as one. */
+  it("never greets a phone number or an address line beside the address", () => {
+    for (const column of ["9876543210", "B-12 Okhla Phase 1", "07AABCU9603R1ZX"]) {
+      const out = parsePastedList(`${column}\travi@acme.example`);
+      expect(out.people, column).toHaveLength(1);
+      expect(out.people[0]!.firstName, column).toBe("");
+      expect(out.unreadable, column).toEqual([]);
+    }
+  });
+
+  /* Nor is a sentence a person. A signature block or a WhatsApp forward puts
+     whole lines of prose beside an address, and the first word of one is not
+     a name however much it looks like one on its own. */
+  it("never greets the first word of a sentence pasted beside the address", () => {
+    const out = parsePastedList(
+      "Please send us your best quote for the renewal at the earliest\travi@acme.example",
+    );
+    expect(out.people).toHaveLength(1);
+    expect(out.people[0]!.firstName).toBe("");
+    expect(out.unreadable).toEqual([]);
+  });
+
+  /* The row that genuinely is broken still gets reported — once, as it was
+     pasted, rather than column by column. */
+  it("reports a row whose address is missing, as one line", () => {
+    const out = parsePastedList("Ravi Sharma\travi@acme.example\nPriya Menon\t\t9876543210");
+    expect(out.people).toHaveLength(1);
+    expect(out.unreadable).toEqual(["Priya Menon\t\t9876543210"]);
+  });
+
   it("collapses a repeat and says so", () => {
     const out = parsePastedList("ravi@acme.example\nRavi Sharma <RAVI@ACME.example>\npriya@beta.example");
     expect(out.people.map((p) => p.email)).toEqual(["ravi@acme.example", "priya@beta.example"]);
@@ -123,8 +186,16 @@ describe("reading a pasted list of addresses", () => {
 });
 
 describe("the pieces", () => {
-  it("splits on every separator a clipboard produces", () => {
-    expect(splitFragments("a\nb,c;d\te|f")).toEqual(["a", "b", "c", "d", "e", "f"]);
+  it("splits a line of several addresses on every separator a clipboard produces", () => {
+    expect(splitFragments("a@a.example\nb@b.example,c@c.example;d@d.example\te@e.example|f@f.example"))
+      .toEqual(["a@a.example", "b@b.example", "c@c.example", "d@d.example", "e@e.example", "f@f.example"]);
+  });
+
+  /* The rule those separators answer to. A spreadsheet row is one record,
+     and the tab inside it is a column boundary, not a person boundary. */
+  it("keeps a line carrying one address together, whatever separates its columns", () => {
+    expect(splitFragments("Ravi Sharma\travi@acme.example")).toEqual(["Ravi Sharma ravi@acme.example"]);
+    expect(splitFragments("Ravi Sharma, ravi@acme.example")).toEqual(["Ravi Sharma ravi@acme.example"]);
   });
 
   it("suspends the separators inside angle brackets", () => {

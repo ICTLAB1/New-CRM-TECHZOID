@@ -15,12 +15,29 @@ import { ROLE_LOCAL_PARTS, classifyLocally, type Verdict } from "./verify";
  *   ravi@acme.example
  *   Ravi Sharma <ravi@acme.example>          ← Outlook, Gmail, most clients
  *   "Sharma, Ravi" <ravi@acme.example>       ← Outlook with a quoted comma
+ *   Ravi Sharma⇥ravi@acme.example            ← two columns out of a spreadsheet
+ *   Ravi Sharma⇥ravi@acme.example⇥9876…⇥Acme ← and the rest of the row with it
  *   ravi@acme.example, priya@beta.example    ← comma or semicolon separated
  *   ravi@acme.example; Priya <priya@b.ex>    ← mixed, in any order
  *
- * Separators are newline, comma, semicolon, tab and pipe — EXCEPT inside
- * angle brackets or quotes, because "Sharma, Ravi" <ravi@acme.example> is one
- * person and splitting it on the comma makes two, one of them nonsense.
+ * A LINE IS A RECORD, which is the rule everything else here follows from.
+ * Comma, semicolon, tab and pipe separate COLUMNS within a line; the line
+ * break is what separates one person from the next. That distinction is the
+ * whole difference between reading a spreadsheet and shredding it: a row
+ * pasted out of Excel arrives as "Ravi Sharma⇥ravi@acme.example", and
+ * treating the tab as a person boundary turns one contact into an address
+ * and a leftover name that belongs to nobody.
+ *
+ * So each line's columns are paired up: every column holding an address
+ * becomes a person, and a column of plain text beside one — no digits, no
+ * address — is read as that person's name. A line carrying two addresses is
+ * still two people, because "a@x.example, b@y.example" is a To: line and not
+ * a row. A line carrying none is reported whole, once, because a record with
+ * no address in it is the one case worth telling somebody about.
+ *
+ * Quotes and angle brackets suspend the column separators, because
+ * "Sharma, Ravi" <ravi@acme.example> is one column and splitting it on the
+ * comma makes two, one of them nonsense.
  *
  * A NAME IS TAKEN WHERE ONE IS OFFERED. "Ravi Sharma <ravi@acme.example>"
  * carries a first name, and the templates need one — without it that person
@@ -53,12 +70,11 @@ export interface PasteResult {
 const EMAIL_RE = /[^\s<>(),;:"'\\[\]]+@[^\s<>(),;:"'\\[\]]+\.[a-z]{2,}/i;
 
 /**
- * Split a blob into fragments, one per person.
- *
- * Angle brackets and quotes suspend the separators, so `"Sharma, Ravi"
- * <ravi@acme.example>` survives as one fragment rather than becoming two.
+ * Cut a string wherever `separates` says, ignoring anything inside quotes or
+ * angle brackets. Used twice: once on the line breaks, once on the column
+ * separators inside a line.
  */
-export function splitFragments(text: string): string[] {
+function cutOn(text: string, separates: (ch: string) => boolean): string[] {
   const out: string[] = [];
   let buf = "";
   let inAngle = false;
@@ -69,15 +85,102 @@ export function splitFragments(text: string): string[] {
     if (ch === "<") { inAngle = true; buf += ch; continue; }
     if (ch === ">") { inAngle = false; buf += ch; continue; }
 
-    const separates = ch === "\n" || ch === "\r" || ch === "," || ch === ";" || ch === "\t" || ch === "|";
-    if (separates && !inAngle && !inQuote) {
-      if (buf.trim()) out.push(buf.trim());
+    if (separates(ch) && !inAngle && !inQuote) {
+      out.push(buf);
       buf = "";
       continue;
     }
     buf += ch;
   }
-  if (buf.trim()) out.push(buf.trim());
+  out.push(buf);
+  return out;
+}
+
+const isLineBreak = (ch: string) => ch === "\n" || ch === "\r";
+const isColumnBreak = (ch: string) =>
+  ch === "," || ch === ";" || ch === "\t" || ch === "|";
+
+/**
+ * Could this column be somebody's name?
+ *
+ * Deliberately narrow, because the cost of a wrong yes is a greeting
+ * addressed to a phone number. A name has letters and no digits, and the
+ * length cap keeps a pasted sentence or a job title paragraph out of the
+ * salutation. An address is not a name even though it is made of letters,
+ * which is why the column holding one never answers yes here.
+ */
+function looksLikeName(column: string): boolean {
+  const s = column.trim();
+  if (!s || s.length > 60) return false;
+  if (/\d/.test(s)) return false;
+  if (EMAIL_RE.test(s)) return false;
+  return /[a-z]/i.test(s);
+}
+
+/**
+ * Split a blob into fragments, one per person.
+ *
+ * ONE LINE IS ONE RECORD — see the note at the top of this file. The columns
+ * of a line are paired up rather than each being treated as a person, so a
+ * spreadsheet row keeps its name attached to its address.
+ */
+export function splitFragments(text: string): string[] {
+  const out: string[] = [];
+
+  for (const line of cutOn(text, isLineBreak)) {
+    if (!line.trim()) continue;
+
+    const columns = cutOn(line, isColumnBreak).map((c) => c.trim());
+    const withAddress = columns
+      .map((c, i) => (EMAIL_RE.test(c) ? i : -1))
+      .filter((i) => i >= 0);
+
+    /* No address anywhere on the line. Report the line as it was pasted,
+       once — a row whose address is missing or mistyped is exactly what the
+       unreadable list is for, and naming it column by column would turn one
+       lost contact into four separate complaints. */
+    if (withAddress.length === 0) {
+      out.push(line.trim());
+      continue;
+    }
+
+    /* Columns already spoken for: an address column, or a name column that
+       an earlier address on this line has taken. */
+    const claimed = new Set<number>(withAddress);
+
+    for (const i of withAddress) {
+      const column = columns[i] ?? "";
+
+      /* "Ravi Sharma <ravi@acme.example>" carries its own name already. */
+      if (looksLikeName(column.replace(EMAIL_RE, ""))) {
+        out.push(column);
+        continue;
+      }
+
+      /* Otherwise look to the neighbours. Before first: a spreadsheet puts
+         the name column to the left of the address, and so does every
+         directory export anyone pastes in here. */
+      const name = [i - 1, i + 1].find(
+        (j) => !claimed.has(j) && looksLikeName(columns[j] ?? ""),
+      );
+
+      if (name === undefined) {
+        out.push(column);
+        continue;
+      }
+
+      claimed.add(name);
+      out.push(`${columns[name]} ${column}`);
+    }
+
+    /* Columns left over on a line that did yield people are that row's other
+       fields — a phone number, a city, a company, a second name nobody can
+       attach to an address. They are dropped WITHOUT being reported: this
+       list exists to account for lost ADDRESSES, and crying "could not read
+       Anoop Samdani" over a name that was read perfectly well is the exact
+       false alarm this pairing was written to stop. */
+  }
+
   return out;
 }
 

@@ -463,13 +463,13 @@ export function ProfileMailerScreen({
 
           <Field
             label="Or paste addresses"
-            hint="One per line, or separated by commas — a column from a spreadsheet, or an Outlook To: line with the names still on it. Thirty at once is fine."
+            hint="One person per line — a bare address, a name and address in two columns straight out of a spreadsheet, or an Outlook To: line with the names still on it. The name beside an address is used for the greeting. Thirty at once is fine."
           >
             <Textarea
               rows={3}
               value={pasted}
               onChange={(e) => setPasted(e.target.value)}
-              placeholder={"ravi@acme.example\nPriya Nair <priya@beta.example>"}
+              placeholder={"Ravi Sharma\travi@acme.example\nPriya Nair <priya@beta.example>\narun@gamma.example"}
             />
           </Field>
 
