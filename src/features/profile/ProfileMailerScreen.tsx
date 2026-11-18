@@ -520,8 +520,24 @@ export function ProfileMailerScreen({
         </div>
       </Card>
 
-      {/* ── the preview, which is the message ──────────────────────── */}
-      {preview ? (
+      {/* ── the preview, which is the message ────────────────────────
+           THE CARD IS ALWAYS HERE. It used to disappear entirely until a
+           recipient was chosen, so somebody opening this screen saw the
+           note box and then the Send button and had no reason to believe a
+           preview existed at all — which is exactly how it was reported.
+           An empty state that says what to do is not clutter; a feature
+           nobody can find is. */}
+      {!preview ? (
+        <Card title="What they will see">
+          <div className="notice">
+            <span>
+              Choose who it goes to above, and the exact message that person will receive appears
+              here — their greeting, your note, what we supply, and your signature. It is the real
+              message, not an impression of it: what you approve here is what is sent.
+            </span>
+          </div>
+        </Card>
+      ) : (
         <Card
           title="What they will see"
           actions={
@@ -566,7 +582,7 @@ export function ProfileMailerScreen({
             />
           </div>
         </Card>
-      ) : null}
+      )}
 
       {/* ── sending ────────────────────────────────────────────────── */}
       <Card title="Send">

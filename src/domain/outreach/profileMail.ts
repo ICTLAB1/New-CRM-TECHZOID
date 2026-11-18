@@ -4,7 +4,7 @@ import {
 } from "../integrations/emailTemplate";
 import { CERTIFICATION_NAMES } from "../integrations/emailIdentity";
 import { fill, valuesFor, type Values } from "./personalise";
-import { enrichFromAddress, parsePastedList } from "./paste";
+import { enrichFromAddress, firstNameFromEmail, parsePastedList } from "./paste";
 
 /**
  * Sending the company profile to a list of people, one message each.
@@ -320,7 +320,28 @@ export function recipientsFromCustomers(
     }
     seen.add(email);
 
-    const parts = nameParts(clean(c.contact));
+    /* THE NAME, AND WHERE IT COMES FROM WHEN THE RECORD HAS NONE.
+     *
+     * A customer row with no contact name used to fall straight through to
+     * the company name — "Dear Giri Infotech Pvt Ltd," — or to a bare
+     * "Hello," when there was not even that. Both are the opposite of what
+     * this feature is for: a message addressed to a company is a circular
+     * wearing a greeting, and the reader can tell.
+     *
+     * The address usually knows. shivdatta@… is Shivdatta, and the guess
+     * is the same one the pasted-list path has always made, with the same
+     * restraint: a shared inbox (sales@, info@, accounts@) gets nothing,
+     * because "Dear Sales," is worse than no name at all, and so do
+     * local parts with digits, initials, or no vowel. No guess, no harm —
+     * it falls through to the company name exactly as before. */
+    const given = nameParts(clean(c.contact));
+    const parts = given.first
+      ? given
+      : (() => {
+        const guess = firstNameFromEmail(email);
+        return guess ? { first: guess, last: "", full: guess } : given;
+      })();
+
     recipients.push({
       customerId: c.id,
       email,
@@ -372,35 +393,40 @@ export function recipientsFromPaste(
     }
     seen.add(email);
 
-    /* A GUESS IS NOT A GREETING, and this is the line that taught me so.
-       enrichFromAddress fills in a first name and a company from the
-       address itself, which is right for a campaign — those templates
-       cannot run without them, and the screen discloses what was inferred.
-       Here it reaches the customer as "Dear Ops," for ops@kappa.example and
-       "Dear Mu," for mail@mu.example. Both are worse than "Hello,", which
-       is what a greeting with nothing in it should be.
+    /* A GUESS IS NOT A GREETING — but a good guess is a name.
+       This refused every name taken from an address, on the strength of
+       two examples: "Dear Ops," for ops@kappa.example and "Dear Mu," for
+       mail@mu.example. Both were right, and both were failures of the
+       GUESS rather than of the idea. mail@ was already refused; ops@ was
+       not, because "ops" was missing from the role list. It is there now,
+       with the rest of the shared-inbox words an Indian reseller actually
+       meets — query@, service@, stores@, dispatch@, md@.
 
-       So the greeting uses only what the PASTE itself carried — the name in
-       "Lakshmi Menon <lakshmi@lambda.example>" is a real name somebody
-       typed. `derived` says which fields were inferred, so this is exact
-       rather than a heuristic about heuristics. The derived company is
-       still good enough to tell two rows apart on screen, so the label
-       keeps it. */
-    const guessedName = person.derived.includes("first name");
+       With the guess made honest, refusing it wholesale costs more than it
+       saves: it is the difference between "Dear Shivdatta," and "Hello," on
+       a message whose entire purpose is being addressed to one person.
+       firstNameFromEmail now returns nothing for a shared inbox, nothing
+       for digits or initials, nothing without a vowel — and when it
+       returns nothing, the greeting still falls through to the company and
+       then to "Hello,".
+
+       The COMPANY guess is still kept out of the greeting: a domain is a
+       weaker signal than a local part, and "Dear Giriinfotech," reads worse
+       than the alternative. It stays on the label, where it tells two rows
+       apart on screen. */
     const guessedCompany = person.derived.includes("company");
 
     recipients.push({
       customerId: "",
       email,
-      /* A typed name, else the company the domain implies, else the
-         address. Never the name guessed from the local part: "Ops" looks
-         like a person on screen and is not one. */
-      label: (guessedName ? "" : person.fullName) || person.company || email,
+      /* A typed name, else the one the address implies, else the company
+         the domain implies, else the address itself. */
+      label: person.fullName || person.company || email,
       values: valuesFor(
         {
-          firstName: guessedName ? "" : person.firstName,
+          firstName: person.firstName,
           lastName: person.lastName,
-          fullName: guessedName ? "" : person.fullName,
+          fullName: person.fullName,
           company: guessedCompany ? "" : person.company ?? "",
         },
         sender,

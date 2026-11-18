@@ -72,6 +72,15 @@ export const ROLE_LOCAL_PARTS: ReadonlySet<string> = new Set([
   "hr", "careers", "jobs", "recruitment", "legal", "compliance",
   "it", "sysadmin", "webmaster", "hostmaster", "postmaster", "abuse",
   "purchase", "purchasing", "procurement", "orders", "tenders",
+  /* Added when the profile mailer began greeting people by the name in
+     their address: without these it wrote "Dear Ops," and "Dear Query,".
+     A shared inbox greeted by its own label is the exact thing that gives
+     a mail merge away — see firstNameFromEmail in paste.ts. */
+  "ops", "operations", "service", "services", "query", "queries",
+  "quote", "quotes", "quotation", "reception", "front", "frontdesk",
+  "store", "stores", "logistics", "dispatch", "warehouse",
+  "director", "ceo", "md", "manager", "partner", "partners",
+  "customercare", "care", "feedback", "general", "corporate",
 ]);
 
 /** Never write to these, whatever else is true. They are not people, and

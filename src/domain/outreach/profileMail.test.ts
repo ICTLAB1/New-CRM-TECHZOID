@@ -103,8 +103,12 @@ describe("one message, for one person", () => {
   });
 
   it("leaves an unfilled variable visible rather than blanking it", () => {
+    /* A SHARED INBOX, deliberately: a record with no contact name now takes
+       one from the address, so `ravi@…` would fill the variable and this
+       would stop testing anything. `sales@` is the case where there really
+       is no name to be had. */
     const nameless = recipientsFromCustomers(
-      [customer({ contact: "", company: "" })], SENDER,
+      [customer({ contact: "", company: "", email: "sales@acme.example" })], SENDER,
     ).recipients[0]!;
     const msg = messageFor({ ...DRAFT, body: "Hello {{first_name}}, a note." }, nameless);
     expect(msg.message).toContain("{{first_name}}");
@@ -196,17 +200,38 @@ describe("thirty addresses out of the clipboard", () => {
     expect(unreadable).toContain("ask the front desk");
   });
 
-  it("does NOT greet a bare address by a name guessed from it", () => {
+  it("does NOT greet a SHARED INBOX by the name in its address", () => {
     /* Found by sending to a real list: ops@kappa.example arrived as "Dear
-       Ops," and mail@mu.example as "Dear Mu,". The paste parser infers a
-       name and a company from the address because campaign templates
-       cannot run without them. A greeting can — "Hello," is honest. */
+       Ops," and mail@mu.example as "Dear Mu,". Both were failures of the
+       guess, not of the idea — "ops" was simply missing from the role list
+       and "mu" is two letters. A greeting with nothing in it is honest;
+       one addressed to a department is not. */
     const { recipients } = recipientsFromPaste("ops@kappa.example\nmail@mu.example", SENDER);
     expect(greetingLine(recipients[0]!.values)).toBe("Hello,");
     expect(greetingLine(recipients[1]!.values)).toBe("Hello,");
     /* And nothing invented reaches the email itself. */
     const msg = messageFor(DRAFT, recipients[0]!);
     expect(msg.message).not.toMatch(/Dear Ops|Dear Kappa/i);
+  });
+
+  it("DOES greet a bare address when the address carries a real name", () => {
+    /* The whole point of one message per person. A pasted list of bare
+       addresses is the ordinary case, and "Hello," to every one of them
+       throws away a name that is sitting right there. */
+    const { recipients } = recipientsFromPaste(
+      "shivdatta@giriinfotech.example\nravi.sharma@acme.example", SENDER,
+    );
+    expect(greetingLine(recipients[0]!.values)).toBe("Dear Shivdatta,");
+    expect(greetingLine(recipients[1]!.values)).toBe("Dear Ravi,");
+    expect(messageFor(DRAFT, recipients[0]!).message).toContain("Dear Shivdatta,");
+  });
+
+  it("keeps the guessed COMPANY out of the greeting", () => {
+    /* A domain is a weaker signal than a local part: "Dear Giriinfotech,"
+       is worse than the name the address already gave us, and worse than
+       "Hello," when it gave us none. */
+    const { recipients } = recipientsFromPaste("ops@giriinfotech.example", SENDER);
+    expect(greetingLine(recipients[0]!.values)).toBe("Hello,");
   });
 
   it("still uses a name somebody actually typed", () => {
@@ -257,3 +282,53 @@ describe("sending a long list in pieces", () => {
     }
   });
 });
+
+describe("a customer record with no contact name", () => {
+  /**
+   * WHAT THE FEATURE IS FOR. A message addressed to a company is a
+   * circular wearing a greeting, and the reader can tell. The address
+   * usually knows the name the record is missing.
+   */
+  const only = (c: Record<string, unknown>) =>
+    recipientsFromCustomers([{ id: "c1", ...c } as never], { name: "A", company: "T" }).recipients[0]!;
+
+  it("takes the name from the address", () => {
+    const r = only({ email: "shivdatta@giriinfotech.com", company: "Giri Infotech Pvt Ltd" });
+    expect(greetingLine(r.values)).toBe("Dear Shivdatta,");
+  });
+
+  it("splits firstname.lastname", () => {
+    expect(greetingLine(only({ email: "ravi.sharma@acme.co.in" }).values)).toBe("Dear Ravi,");
+  });
+
+  it("NEVER GREETS A SHARED INBOX BY NAME", () => {
+    /* "Dear Sales," is worse than no name at all. These fall through to
+       the company, exactly as before. */
+    for (const email of ["sales@acme.co.in", "info@acme.co.in", "accounts@acme.co.in", "purchase@acme.co.in"]) {
+      const r = only({ email, company: "Acme Industries" });
+      expect(greetingLine(r.values), email).toBe("Dear Acme Industries,");
+    }
+  });
+
+  it("refuses a guess that is not a name", () => {
+    /* Digits, initials and vowel-less local parts are account numbers and
+       abbreviations, not people. */
+    for (const email of ["ap2024@acme.co.in", "k@acme.co.in", "mkt@acme.co.in"]) {
+      const r = only({ email, company: "Acme Industries" });
+      expect(greetingLine(r.values), email).toBe("Dear Acme Industries,");
+    }
+  });
+
+  it("leaves a record that HAS a contact name alone", () => {
+    const r = only({ email: "shivdatta@giriinfotech.com", contact: "Shiv Dutta", company: "Giri Infotech" });
+    /* The record's own name wins, and the greeting uses the first name of
+       it — which is what it has always done for a named contact. */
+    expect(greetingLine(r.values)).toBe("Dear Shiv,");
+  });
+
+  it("still falls back to the company when the address offers nothing", () => {
+    expect(greetingLine(only({ email: "sales@acme.co.in", company: "Acme Industries" }).values))
+      .toBe("Dear Acme Industries,");
+  });
+});
+
