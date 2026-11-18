@@ -21,7 +21,6 @@ const DB = {
   company_profiles: [],
   profile_sends: [],
   profiles: [],
-  settings: [],
 };
 
 let rateLimited = false;
@@ -29,31 +28,18 @@ let rateLimited = false;
 function makeClient() {
   const from = (table) => {
     const filters = [];
-    const atLeast = [];
     const q = {
-      /* The second argument is how the real client asks for a head count —
-         the daily send limit uses one, and a stub that ignored it would let
-         that query look like it worked while counting nothing. */
       select() { return q; },
       eq(col, val) { filters.push([col, val]); return q; },
-      gte(col, val) { atLeast.push([col, val]); return q; },
       _rows() {
-        return (DB[table] ?? [])
-          .filter((r) => filters.every(([c, v]) => r[c] === v))
-          .filter((r) => atLeast.every(([c, v]) => String(r[c] ?? "") >= String(v)));
+        return (DB[table] ?? []).filter((r) => filters.every(([c, v]) => r[c] === v));
       },
       maybeSingle() { return Promise.resolve({ data: q._rows()[0] ?? null, error: null }); },
       insert(row) {
-        /* created_at is written by the database in life, so the stub has to
-           write one too: without it every logged send is outside every day
-           and the limit counts nothing. */
-        (DB[table] ??= []).push({ created_at: new Date().toISOString(), ...row });
+        (DB[table] ??= []).push({ ...row });
         return Promise.resolve({ error: null });
       },
-      then(resolve) {
-        const rows = q._rows();
-        return Promise.resolve({ data: rows, count: rows.length, error: null }).then(resolve);
-      },
+      then(resolve) { return Promise.resolve({ data: q._rows(), error: null }).then(resolve); },
     };
     return q;
   };
@@ -126,7 +112,6 @@ beforeEach(() => {
   }];
   DB.profile_sends = [];
   DB.profiles = [{ id: "user-1", email: "abhinav@techzoid.example" }];
-  DB.settings = [{ company_id: COMPANY, data: {} }];
 });
 
 describe("one message per recipient, and nobody sees anybody else", () => {
@@ -420,108 +405,5 @@ describe("the log", () => {
   it("records a pasted address with no customer rather than inventing one", async () => {
     await post({ companyId: COMPANY, batchId: BATCH, messages: [message("stranger@elsewhere.example", "Stranger")] });
     expect(DB.profile_sends[0].customer_id).toBeNull();
-  });
-});
-
-/* ── the day's sending limit ──────────────────────────────────────────
-   What is being protected is not the mailbox — Microsoft would take
-   thousands — but the DOMAIN'S reputation at the receiving end, which is
-   the same reputation that carries this company's quotations and invoices.
-   A sudden jump in volume is the shape of a compromised account, and the
-   filtering that follows is slow to notice and slow to undo. Hence a stop
-   on the server rather than a warning on a screen. */
-describe("the day's sending limit", () => {
-  /** Rows for mail this company already sent today. */
-  const alreadySentToday = (n) => Array.from({ length: n }, (_, i) => ({
-    company_id: COMPANY,
-    batch_id: BATCH,
-    email: `earlier${i}@company.example`,
-    status: "sent",
-    created_at: new Date().toISOString(),
-  }));
-
-  it("sends normally while there is allowance left", async () => {
-    DB.settings = [{ company_id: COMPANY, data: { profile: { dailySendLimit: 10 } } }];
-    const res = await post({ companyId: COMPANY, batchId: BATCH, messages: THIRTY.slice(0, 3) });
-    expect(res.statusCode).toBe(200);
-    expect(parse(res).sent).toBe(3);
-    /* And it says what is left, so the screen need not ask. */
-    expect(parse(res).limit).toEqual({ cap: 10, sentToday: 3, remaining: 7 });
-  });
-
-  it("REFUSES once the day is spent, before a single message leaves", async () => {
-    DB.settings = [{ company_id: COMPANY, data: { profile: { dailySendLimit: 5 } } }];
-    DB.profile_sends = alreadySentToday(5);
-
-    const res = await post({ companyId: COMPANY, batchId: BATCH, messages: THIRTY.slice(0, 3) });
-    expect(res.statusCode).toBe(429);
-    expect(sends).toHaveLength(0);
-    expect(DB.profile_sends).toHaveLength(5);
-  });
-
-  it("says what the numbers are, when it lifts and where to change it", async () => {
-    DB.settings = [{ company_id: COMPANY, data: { profile: { dailySendLimit: 5 } } }];
-    DB.profile_sends = alreadySentToday(5);
-
-    const res = await post({ companyId: COMPANY, batchId: BATCH, messages: THIRTY.slice(0, 1) });
-    const said = parse(res).error ?? res.body;
-    expect(said).toContain("5 of 5");
-    expect(said).toMatch(/domain/i);
-    expect(said).toMatch(/midnight/i);
-  });
-
-  /* A LIST LONGER THAN WHAT IS LEFT IS CUT, NOT REFUSED. Refusing the whole
-     piece would waste the allowance that was still there and leave the
-     sender guessing where their list stopped. */
-  it("sends what it can and names the ones it held back", async () => {
-    DB.settings = [{ company_id: COMPANY, data: { profile: { dailySendLimit: 4 } } }];
-    DB.profile_sends = alreadySentToday(2);
-
-    const res = await post({ companyId: COMPANY, batchId: BATCH, messages: THIRTY.slice(0, 5) });
-    const out = parse(res);
-
-    expect(res.statusCode).toBe(200);
-    expect(out.sent).toBe(2);
-    expect(sends.map((s) => s.to)).toEqual([THIRTY[0].email, THIRTY[1].email]);
-
-    const held = out.results.filter((r) => !r.ok);
-    expect(held.map((r) => r.email)).toEqual(THIRTY.slice(2, 5).map((m) => m.email));
-    expect(held[0].error).toMatch(/Only 2 of today's 4 are left/);
-    /* Tomorrow they will go, so the screen must offer them again. */
-    expect(held.every((r) => r.retryable)).toBe(true);
-    expect(out.limit.remaining).toBe(0);
-  });
-
-  it("does not spend the allowance on mail that never left", async () => {
-    DB.settings = [{ company_id: COMPANY, data: { profile: { dailySendLimit: 3 } } }];
-    bounce = new Set([THIRTY[0].email, THIRTY[1].email]);
-
-    const res = await post({ companyId: COMPANY, batchId: BATCH, messages: THIRTY.slice(0, 3) });
-    /* Two bounced, so only one of the three counts against the day. */
-    expect(parse(res).limit).toMatchObject({ sentToday: 1, remaining: 2 });
-  });
-
-  it("uses the safe default when the company has set nothing", async () => {
-    DB.settings = [{ company_id: COMPANY, data: {} }];
-    const res = await post({ companyId: COMPANY, batchId: BATCH, messages: THIRTY.slice(0, 1) });
-    expect(parse(res).limit.cap).toBe(40);
-  });
-
-  /* A COUNT THAT CANNOT BE READ STOPS THE SEND. Sending an unknown number
-     on top of an unknown number is the one outcome the limit exists to
-     prevent, so the failure direction is "nothing goes". */
-  it("sends nothing rather than guess, when the count cannot be read", async () => {
-    const broken = { ...DB };
-    Object.defineProperty(DB, "profile_sends", {
-      configurable: true,
-      get() { throw new Error("profile_sends unreadable"); },
-    });
-
-    const res = await post({ companyId: COMPANY, batchId: BATCH, messages: THIRTY.slice(0, 2) });
-    delete DB.profile_sends;
-    DB.profile_sends = broken.profile_sends ?? [];
-
-    expect(res.statusCode).toBe(503);
-    expect(sends).toHaveLength(0);
   });
 });

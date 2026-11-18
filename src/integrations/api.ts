@@ -63,14 +63,6 @@ export interface ProfileSendResult {
   sent: number;
   failed: number;
   attachment: { name: string; bytes: number };
-  /** What is left of today's sending after this piece.
-   *
-   *  COUNTED BY THE SERVER, WHICH IS THE ONLY PLACE IT CAN BE. The cap is
-   *  readable from settings, but how much of it has gone today is a count
-   *  of rows — and two people sending at once would each otherwise see an
-   *  allowance the other was spending. Absent from an older server, so
-   *  every reader has to cope without it. */
-  limit?: { cap: number; sentToday: number; remaining: number };
   results: Array<{
     email: string;
     customerId: string | null;
