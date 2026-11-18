@@ -110,9 +110,14 @@ export const PROFILE_BODY = [
      company's name on another's mail — the mistake the header tagline was
      making until this week. The subject line already works this way. */
   "Greetings from {{sender_company}}!",
-  "We are pleased to introduce {{sender_company}} as a trusted IT solutions and technology "
-  + "partner, offering a comprehensive range of IT products, software licensing, enterprise "
-  + "solutions and technology services.",
+  /* "OURSELVES", NOT THE NAME AGAIN. The line above has just said the
+     company's name; saying it a second time in the next sentence is the
+     repetition that got this reported. The supplied wording named the
+     company twice because the second mention was the short form — and
+     {{sender_company}} is the registered name, so both came out in full. */
+  "We are pleased to introduce ourselves as a trusted IT solutions and technology partner, "
+  + "offering a comprehensive range of IT products, software licensing, enterprise solutions "
+  + "and technology services.",
   /* ONE REGISTER THROUGHOUT. This used to open "I thought it would be
      useful to have our company profile on file", which is a personal note
      — and reads oddly under a formal introduction. The opening sets the

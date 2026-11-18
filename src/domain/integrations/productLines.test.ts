@@ -57,11 +57,15 @@ describe("what we supply, as a reader sees it", () => {
        without anybody deciding to. */
     const html = htmlWithProducts();
     const groups = emailProductGroups(ORIGIN);
-    expect(groups).toHaveLength(3);
+    /* Not a fixed count — lines get added. What must hold is that every
+       one of them, and every product under it, reaches the email. */
+    expect(groups.length).toBeGreaterThanOrEqual(4);
     for (const g of groups) {
       expect(html).toContain(escapeHtml(g.heading));
       expect(html).toContain(escapeHtml(g.detail));
-      expect(g.bullets?.length, `${g.name} must list its products`).toBeGreaterThan(3);
+      /* The rule is that a line lists what it covers, not that it lists
+         four of them — the hardware line has three. */
+      expect(g.bullets?.length, `${g.name} must list its products`).toBeGreaterThan(1);
       for (const b of g.bullets ?? []) {
         expect(html, `"${b}" must be in the email`).toContain(escapeHtml(b));
       }
@@ -174,6 +178,25 @@ describe("the band across the top, and the ask under the products", () => {
 
   it("keeps the ask out of the body, so it is not written twice", () => {
     expect(PROFILE_BODY).not.toMatch(/reply to this email/i);
+  });
+});
+
+describe("a line the company holds no artwork for", () => {
+  it("prints its NAME in the accent colour rather than a drawn-up logo", () => {
+    /* The hardware panel covers three manufacturers and the repository has
+       artwork for one. A single HP mark over a list naming Dell and Lenovo
+       is a claim about HP alone, and drawing the other two is forgery. */
+    const hardware = emailProductGroups(ORIGIN).find((g) => g.name === "Hardware");
+    expect(hardware, "the hardware line must be in the block").toBeTruthy();
+    expect(hardware!.logo).toBeNull();
+
+    const html = htmlWithProducts();
+    expect(html).toContain("HP, Dell and Lenovo laptops, desktops and servers");
+    expect(html).toContain("Firewalls and network security appliances");
+    expect(html).toContain("IT accessories and peripherals");
+    /* Its name carries the panel instead, and no img was invented for it. */
+    expect(html).toContain("Hardware");
+    expect(html).not.toMatch(/<img[^>]*(dell|lenovo|hardware)/i);
   });
 });
 
@@ -347,8 +370,9 @@ describe("the profile email's own wording", () => {
 
   it("offers the same three lines as sentences, for anywhere that is not an email", () => {
     const lines = productSentences();
-    expect(lines).toHaveLength(3);
+    expect(lines).toHaveLength(emailProductGroups(ORIGIN).length);
     expect(lines[0]).toMatch(/^Microsoft 365 & perpetual licensing: /);
     expect(lines.join(" ")).toContain("Architecture, Engineering & Construction Collection");
+    expect(lines.join(" ")).toContain("HP, Dell and Lenovo");
   });
 });

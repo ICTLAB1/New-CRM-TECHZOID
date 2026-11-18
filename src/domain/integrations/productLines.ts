@@ -54,6 +54,9 @@ const ACCENTS = {
   microsoft: "#0067B8",
   autodesk: "#0696D7",
   adobe: "#EB1000",
+  /* The hardware line is not one vendor's, so it carries the company's own
+     accent rather than borrowing a manufacturer's colour. */
+  hardware: "#76550A",
 } as const;
 
 /**
@@ -72,11 +75,13 @@ const GROUPS: ReadonlyArray<{
   bullets: readonly string[];
   /** A commercial fact about the whole group, printed under its list. */
   note?: string;
-  logo: string;
+  /** Absent where the company holds no artwork for the line — see the
+   *  hardware panel. The block prints the name in the accent instead. */
+  logo?: string;
   accent: string;
   /** Drawn width in px — the marks differ in proportion, so matching
    *  widths would make the compact ones look oversized. */
-  width: number;
+  width?: number;
 }> = [
   {
     name: "Microsoft",
@@ -112,6 +117,25 @@ const GROUPS: ReadonlyArray<{
     logo: LOGO_PATHS.autodesk,
     accent: ACCENTS.autodesk,
     width: 104,
+  },
+  {
+    /* NO LOGO, AND THAT IS DELIBERATE. This panel covers three
+       manufacturers and the repository holds artwork for one of them. A
+       single HP mark over a list that also names Dell and Lenovo reads as
+       a claim about HP alone, and the other two would have to be drawn —
+       which is forgery, not branding. With no logo the block prints the
+       panel's name in the accent colour instead, which is exactly the
+       fallback it was built with. Drop real artwork into public/brand/ and
+       add `logo` here if the manufacturers supply it. */
+    name: "Hardware",
+    heading: "Hardware & IT infrastructure",
+    detail: "Business hardware, security appliances and everything that goes with them.",
+    bullets: [
+      "HP, Dell and Lenovo laptops, desktops and servers",
+      "Firewalls and network security appliances",
+      "IT accessories and peripherals",
+    ],
+    accent: ACCENTS.hardware,
   },
   {
     name: "Adobe",
@@ -156,7 +180,9 @@ export function emailProductGroups(origin?: string): EmailProductGroup[] {
     /* The alt text is the vendor's name on its own — what a reader in
        Outlook sees in place of the picture. It reads as the label the mark
        is, not as a sentence apologising for a missing image. */
-    logo: base ? { src: absoluteUrl(g.logo, base), alt: g.name, width: g.width } : null,
+    logo: g.logo && base
+      ? { src: absoluteUrl(g.logo, base), alt: g.name, width: g.width ?? 100 }
+      : null,
   }));
 }
 
