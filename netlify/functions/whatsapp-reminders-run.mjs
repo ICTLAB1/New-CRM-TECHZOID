@@ -52,6 +52,7 @@ export async function handler() {
 
   for (const company of companies) {
     await chaseQuotations(admin, company.id, today, tally);
+    await chaseProformas(admin, company.id, today, tally);
     await chasePayments(admin, company.id, today, tally);
     await chaseRenewals(admin, company.id, today, tally);
   }
@@ -84,6 +85,45 @@ async function chaseQuotations(admin, companyId, today, tally) {
       /* The PDF the quotation carried, if it carried one, is found and
          reused by the sender itself — there is no browser at 10am and
          nothing here can render a quotation. */
+    });
+  }
+}
+
+/* ── a proforma nobody has answered ──────────────────────────────────── */
+
+/**
+ * The same chase as a quotation's, against the proformas table.
+ *
+ * ONE FUNCTION PER TABLE rather than one with a flag. They differ in more
+ * than the table name — a proforma is a request for payment and will grow
+ * its own rules about when chasing it stops — and the day they diverge, a
+ * shared function with a branch in it is how one document type quietly
+ * starts behaving like the other.
+ *
+ * WHAT IT DOES NOT SEND: the advance reminder, which names a figure. A
+ * document's total is computed where the document is drawn and there is no
+ * browser here at 10am, so the only honest message from this job is the one
+ * that chases the document rather than the money.
+ */
+async function chaseProformas(admin, companyId, today, tally) {
+  const { data: proformas, error } = await admin
+    .from("proformas").select("id, customer_id, data").eq("company_id", companyId);
+  if (error) {
+    console.error("whatsapp reminders: proformas unreadable —", error.message);
+    return;
+  }
+
+  for (const proforma of proformas ?? []) {
+    if (tally.sent >= MAX_PER_RUN) return;
+    const d = proforma.data ?? {};
+    if (!awaitingAnswer(d.status)) continue;
+
+    const sentOn = String(d.sentAt ?? d.date ?? "").slice(0, 10);
+    if (!followUpDueToday(sentOn, today)) continue;
+
+    await attempt(admin, tally, {
+      companyId, template: "proforma_followup", recordType: "proforma", recordId: proforma.id,
+      customerId: proforma.customer_id, trigger: "daily:proforma_followup", extra: { today },
     });
   }
 }

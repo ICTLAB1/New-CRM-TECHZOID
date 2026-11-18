@@ -1,11 +1,11 @@
 import {
-  approvedTemplates, buildParams, checkTemplate, documentName, fillBody, nameFor, TEMPLATES,
+  approvedTemplates, buildParams, checkTemplate, documentFor, fillBody, nameFor, TEMPLATES,
 } from "./whatsappTemplates.mjs";
 import {
   metaAccount, sendTemplate, sendText, templateMissing, uploadDocument,
 } from "./whatsappMeta.mjs";
 import { mayMessage } from "./whatsappConsent.mjs";
-import { factsFor, loadRecord, nameOf } from "./whatsappFacts.mjs";
+import { checkRecordType, factsFor, loadRecord, nameOf } from "./whatsappFacts.mjs";
 import { todayInIndia } from "./whatsappSchedule.mjs";
 
 /**
@@ -85,7 +85,7 @@ export async function previewMessage(admin, {
      cannot promise an attachment the send then leaves off. */
   const hasPdf = !!pdf?.bytes?.byteLength || !!documentId;
   const pick = nameFor(template, { hasPdf });
-  const filename = pick.wantsPdf ? documentName(facts.quoteNo) : "";
+  const filename = pick.wantsPdf ? documentFor(template, facts) : "";
 
   /* The approved wording, read from Meta so the preview shows what the
      customer will actually read. Asked for the name that will be tried
@@ -139,6 +139,18 @@ export async function sendMessage(admin, {
   if (!spec) return refused(`There is no WhatsApp template called ${template}.`);
   if (!companyId) return refused("No company was named for this message.");
 
+  /* THE RIGHT MESSAGE ABOUT THE RIGHT KIND OF RECORD.
+     The endpoint a browser goes through checks this already, and this is
+     not that check repeated for the sake of it: the daily job, the payment
+     sender and anything added next call `sendMessage` directly, and a
+     quotation template pointed at a proforma row does not fail — both
+     hold a number and a date, so it quietly produces a message telling a
+     customer that the invoice they have been asked to pay is a quotation.
+     The pairing is an invariant of sending, so it is checked where the
+     sending happens. */
+  const wrongRecord = checkRecordType(template, recordType || "");
+  if (wrongRecord) return refused(wrongRecord);
+
   const loaded = recordId
     ? await loadRecord(admin, { recordType: recordType || "", recordId })
     : { record: null, customer: null };
@@ -158,12 +170,20 @@ export async function sendMessage(admin, {
 
   /* WHICH NAME TO TRY, and whether a file goes with it.
 
-     Only the quotation message carries one. The follow-up is text-only in
-     both its versions: it is sent by the 10am job, where there is no
-     browser and nothing that can render a quotation. */
+     The quotation and the proforma messages carry one. Both follow-ups are
+     text-only: they are sent by the 10am job, where there is no browser and
+     nothing that can render a document. */
   const hasPdf = !!pdf?.bytes?.byteLength;
   const pick = nameFor(template, { hasPdf });
-  const filename = pick.wantsPdf ? documentName(facts.quoteNo) : "";
+
+  /* NO NAME TO SEND UNDER. A message whose template carries the document
+     itself, asked for without one, has nothing to fall back to — and an
+     empty name reaches Meta as "No WhatsApp template was named", which tells
+     the person at the screen nothing about what went wrong. `nameFor` has
+     the reason; this is where it gets said. */
+  if (!pick.meta) return refused(pick.why || "That message cannot be sent as asked.");
+
+  const filename = pick.wantsPdf ? documentFor(template, facts) : "";
   const { values, missing } = buildParams(template, facts);
 
   /* NOTHING GOES OUT WITH A HOLE IN IT.

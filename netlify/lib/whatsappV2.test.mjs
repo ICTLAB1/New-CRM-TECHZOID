@@ -18,7 +18,7 @@ const { uploadDocument, sendTemplate } = await import("./whatsappMeta.mjs");
 const { pdfFrom, sendMessage, previewMessage } = await import("./whatsappSender.mjs");
 
 /* ── a stand-in database ────────────────────────────────────────────── */
-const DB = { quotes: [], payment_bills: [], customers: [], settings: [], whatsapp_messages: [] };
+const DB = { quotes: [], proformas: [], payment_bills: [], customers: [], settings: [], whatsapp_messages: [] };
 function makeClient() {
   const from = (table) => {
     const eqs = []; const neqs = [];
@@ -58,8 +58,14 @@ const FULL_QUOTE = {
   data: { number: "TZ/26-27/0311", validUntil: "2026-11-30", items: [{ desc: "AutoCAD", qty: 3 }] },
 };
 
+const FULL_PROFORMA = {
+  id: "p1", company_id: "c1", customer_id: "cu1",
+  data: { number: "TZ/PI/26-27/0134", date: "2026-11-12", validUntil: "2026-11-30", items: [{ desc: "AutoCAD", qty: 3 }] },
+};
+
 beforeEach(() => {
   DB.quotes = [{ ...FULL_QUOTE }];
+  DB.proformas = [{ ...FULL_PROFORMA }];
   DB.payment_bills = [{
     id: "b1", company_id: "c1", customer_id: "cu1", invoice_no: "TZ/INV/0042",
     customer_name: "Acme", amount: 118000, amount_paid: 118000, due_date: "2026-11-10",
@@ -199,6 +205,73 @@ describe("the quotation, which carries the PDF", () => {
     expect(uploadDocument).not.toHaveBeenCalled();
     expect(sendTemplate.mock.calls[0][0].document).toBeNull();
     expect(names()).toEqual(["quotation_followup_v2"]);
+  });
+});
+
+describe("the proforma, which carries its own document and its own wording", () => {
+  const sendPi = (over = {}) => send({
+    template: "proforma_sent", recordType: "proforma", recordId: "p1",
+    extra: { amount: 47200 }, ...over,
+  });
+
+  it("sends proforma_sent under its own name, with no _v2 and no fallback", async () => {
+    const out = await sendPi({ pdf: pdfFrom(PDF) });
+    expect(out.ok).toBe(true);
+    /* Created once, so there is no older name to try and none to fall back
+       to — one call, not two. */
+    expect(names()).toEqual(["proforma_sent"]);
+  });
+
+  it("attaches the file named for the document it actually is", async () => {
+    await sendPi({ pdf: pdfFrom(PDF) });
+    expect(uploadDocument.mock.calls[0][0].filename).toBe("Proforma_TZ-PI-26-27-0134.pdf");
+    expect(sendTemplate.mock.calls[0][0].document)
+      .toEqual({ id: "media-123", filename: "Proforma_TZ-PI-26-27-0134.pdf" });
+  });
+
+  it("tells the customer the figure that is printed on the document", async () => {
+    await sendPi({ pdf: pdfFrom(PDF) });
+    expect(sendTemplate.mock.calls[0][0].values)
+      .toEqual(["Rahul Verma", "TZ/PI/26-27/0134", "47,200", "30 Nov 2026"]);
+  });
+
+  /* A PROFORMA IS A REQUEST FOR MONEY AND THE DOCUMENT IS THE REQUEST.
+     The quotation message has an older text-only version to drop back to;
+     this one does not, and announcing a proforma invoice without attaching
+     it is worse than saying nothing. */
+  it("REFUSES rather than announcing a proforma it cannot attach", async () => {
+    const out = await sendPi();
+    expect(out.ok).toBe(false);
+    expect(out.reason).toContain("carries the document itself");
+    expect(sendTemplate).not.toHaveBeenCalled();
+    expect(uploadDocument).not.toHaveBeenCalled();
+  });
+
+  it("will not send the advance reminder with no figure to name", async () => {
+    const out = await send({
+      template: "proforma_advance_reminder", recordType: "proforma", recordId: "p1", extra: {},
+    });
+    expect(out.ok).toBe(false);
+    expect(out.reason).toContain("Amount");
+    expect(sendTemplate).not.toHaveBeenCalled();
+  });
+
+  it("sends the advance reminder as text, naming the amount asked for", async () => {
+    const out = await send({
+      template: "proforma_advance_reminder", recordType: "proforma", recordId: "p1",
+      extra: { amount: 23600 },
+    });
+    expect(out.ok).toBe(true);
+    expect(sendTemplate.mock.calls[0][0].document).toBeNull();
+    expect(sendTemplate.mock.calls[0][0].values)
+      .toEqual(["Rahul Verma", "TZ/PI/26-27/0134", "23,600", "12 Nov 2026"]);
+  });
+
+  /* The wording of a proforma message must never be a quotation's. */
+  it("refuses a quotation message pointed at a proforma", async () => {
+    const out = await send({ template: "quotation_sent", recordType: "proforma", recordId: "p1" });
+    expect(out.ok).toBe(false);
+    expect(sendTemplate).not.toHaveBeenCalled();
   });
 });
 

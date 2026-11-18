@@ -5,7 +5,8 @@ import { Confirm, Modal } from "../../components/Modal";
 import { Field, Input, Textarea } from "../../components/primitives";
 import { WhatsAppDialog } from "../integrations/WhatsAppDialog";
 import { SendWhatsAppDialog } from "../whatsapp/SendWhatsAppDialog";
-import { WHATSAPP_FOR, notifyWhatsApp } from "../../data/whatsapp";
+import { notifyWhatsApp } from "../../data/whatsapp";
+import { approvedMessagesFor, sentMessageFor } from "../../domain/integrations/documentWhatsApp";
 import { SendForInvoicing } from "../integrations/SendForInvoicing";
 import { downloadPdf, pdfAttachment, previewPdf } from "../../documents/pdf/deliver";
 import { fmtCurrency } from "../../domain/currency/format";
@@ -129,11 +130,20 @@ export function DocumentActions({
 
   const renderOpts = { model, rows, images };
 
-  /* Only a quotation. A proforma, a purchase order and an invoice have no
-     approved message about the document itself: an invoice's reminders are
-     sent from the Payment tracker, which knows the due date and what has
-     been paid, and a purchase order goes to a vendor, not a customer. */
-  const approvedTemplates = docType === "quotation" ? (WHATSAPP_FOR["quote"] ?? []) : [];
+  /* Which approved messages this document may send, which table the server
+     reads it out of, and whether the wording names a figure this screen has
+     to supply — see domain/integrations/documentWhatsApp.ts, where the rule
+     lives so that a test can hold it down. */
+  const {
+    templates: approvedTemplates,
+    recordType: approvedRecordType,
+    needsAmount,
+  } = approvedMessagesFor(docType);
+
+  /* THE FIGURE, taken from what this screen has just drawn on the document
+     rather than recomputed anywhere else — which is what stops the message
+     and the PDF attached to it disagreeing in a customer's hand. */
+  const approvedExtra = needsAmount ? { amount: totals.grand } : undefined;
 
   /* The quotation as a PDF, or nothing if it cannot be drawn. NEVER THROWS:
      a quotation that will not render is a message without an attachment,
@@ -349,16 +359,19 @@ export function DocumentActions({
 
        Sending it by hand first does not send it twice: the server refuses a
        second copy of the same message about the same record on the same day. */
-    if (companyId && approvedTemplates.includes("quotation_sent")) {
+    const sentTemplate = sentMessageFor(docType);
+    if (companyId && approvedTemplates.includes(sentTemplate)) {
       void notifyWhatsApp({
         companyId,
-        template: "quotation_sent",
-        recordType: "quote",
+        template: sentTemplate,
+        recordType: approvedRecordType,
         recordId: doc.id,
         customerId: doc.customerId || undefined,
-        trigger: "quotation shared",
+        trigger: `${docType === "proforma" ? "proforma" : "quotation"} shared`,
         /* The same PDF the customer has just been emailed. */
         pdf: quotationPdf(),
+        /* And the same figure that is printed on it — see approvedExtra. */
+        extra: approvedExtra,
       });
     }
     if (!armable) return;
@@ -412,10 +425,11 @@ export function DocumentActions({
 
           "Send on WhatsApp" sends one of the approved messages from the
           business's own WhatsApp number, by itself, and logs it. It needs
-          the customer's permission and only exists for a quotation, because
-          that is the only one of the eight approved messages that is about a
-          document on this screen — the money ones are sent from the Payment
-          tracker, where the CRM knows what is still owed.
+          the customer's permission, and it appears on a quotation and on a
+          proforma — the two documents on this screen that approved wording
+          exists for. An invoice's reminders are sent from the Payment
+          tracker instead, where the CRM knows what is still owed, and a
+          purchase order goes to a vendor rather than a customer.
 
           "Open in WhatsApp" opens WhatsApp on this computer with the words
           typed in, for somebody to send themselves. It works for anybody,
@@ -489,10 +503,11 @@ export function DocumentActions({
           onClose={() => setApprovedOpen(false)}
           companyId={companyId ?? null}
           templates={approvedTemplates}
-          recordType="quote"
+          recordType={approvedRecordType}
           recordId={doc.id}
           customerId={doc.customerId || undefined}
-          /* THE QUOTATION ITSELF, drawn from what is on screen — the same
+          extra={approvedExtra}
+          /* THE DOCUMENT ITSELF, drawn from what is on screen — the same
              PDF the email carries. Only this app can build one, so it is
              rendered here and handed over with the send. */
           getPdf={() => quotationPdf()}

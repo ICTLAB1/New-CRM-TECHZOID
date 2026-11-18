@@ -30,6 +30,9 @@ const TABLES = {
 export const RECORD_FOR = {
   quotation_sent: "quote",
   quotation_followup: "quote",
+  proforma_sent: "proforma",
+  proforma_followup: "proforma",
+  proforma_advance_reminder: "proforma",
   order_delivered: "order",
   licence_delivered: "order",
   payment_due_reminder: "bill",
@@ -117,6 +120,46 @@ export function factsFor(templateName, { record, customer, extra = {} }) {
         /* The day it was actually sent, when the CRM recorded one —
            "shared on" is about the conversation, not about when somebody
            first typed the quotation. */
+        sharedOn: text(d.sentAt) || text(d.date) || text(record?.created_at)?.slice(0, 10),
+      };
+
+    /* ── the proforma three ─────────────────────────────────────────
+       THE AMOUNT IS THE ONE FACT NOT READ FROM THE ROW, and that is worth
+       stating because the rule everywhere else in this file is the
+       opposite. A document's total is not stored: it is computed from its
+       lines, its tax type, the seller's state, the discount and the
+       round-off, by code that runs where the document is drawn. The server
+       has no renderer and no second copy of that arithmetic — and a second
+       copy is precisely how a customer ends up reading one figure in a
+       message and a different one on the PDF attached to it.
+
+       So `extra.amount` is the figure the browser has just put on the
+       document it is sending, handed over with it. That is not a number a
+       request chose: it is the number on the page the customer is about to
+       open, which is the only one that can be right. Where it is missing,
+       `buildParams` reports the blank and the send is refused rather than
+       guessed at. */
+    case "proforma_sent":
+      return {
+        customer: customerName,
+        proformaNo: text(d.number) || text(record?.number),
+        amount: extra.amount,
+        validTill: text(d.validUntil) || text(d.validTill),
+      };
+
+    case "proforma_followup":
+      return {
+        customer: customerName,
+        proformaNo: text(d.number) || text(record?.number),
+        product: productOf(d),
+        sharedOn: text(d.sentAt) || text(d.date) || text(record?.created_at)?.slice(0, 10),
+      };
+
+    case "proforma_advance_reminder":
+      return {
+        customer: customerName,
+        proformaNo: text(d.number) || text(record?.number),
+        amount: extra.amount,
         sharedOn: text(d.sentAt) || text(d.date) || text(record?.created_at)?.slice(0, 10),
       };
 

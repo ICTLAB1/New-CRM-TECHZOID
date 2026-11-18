@@ -5,11 +5,16 @@ import { WHATSAPP_FOR, WHATSAPP_LABELS, whatsappLabel } from "./whatsapp";
    plain JavaScript on purpose — they run in the Function App, which has no
    build step — so the shapes are named here rather than inferred. */
 // @ts-expect-error -- untyped .mjs, shape asserted below
-import { TEMPLATES as RAW_TEMPLATES } from "../../netlify/lib/whatsappTemplates.mjs";
+import { TEMPLATES as RAW_TEMPLATES, documentFor } from "../../netlify/lib/whatsappTemplates.mjs";
 // @ts-expect-error -- untyped .mjs, shape asserted below
 import { RECORD_FOR as RAW_RECORD_FOR } from "../../netlify/lib/whatsappFacts.mjs";
 
-const TEMPLATES = RAW_TEMPLATES as Record<string, { label: string; metaName: string; legacyName: string; document?: boolean }>;
+const TEMPLATES = RAW_TEMPLATES as Record<string, {
+  label: string; metaName: string; legacyName: string;
+  /** Set only on a template created in Meta with a document header; says
+   *  what the attached file is called and which fact holds its number. */
+  document?: { kind: string; numberFrom: string };
+}>;
 const RECORD_FOR = RAW_RECORD_FOR as Record<string, string>;
 
 describe("the screens' copy of the template names", () => {
@@ -45,10 +50,27 @@ describe("the screens' copy of the template names", () => {
 });
 
 describe("the name each message is sent as at Meta", () => {
-  it("is the CRM's own name with _v2 on the end", () => {
-    for (const name of Object.keys(WHATSAPP_LABELS)) {
+  /* The eight that were submitted once, refused, and resubmitted under a
+     `_v2` name. Every send tries the new name and falls back to the old. */
+  const RESUBMITTED = [
+    "quotation_sent", "quotation_followup", "order_delivered", "licence_delivered",
+    "payment_due_reminder", "payment_overdue_reminder", "payment_received", "renewal_reminder",
+  ];
+
+  it("is the CRM's own name with _v2 on the end, for the eight that were resubmitted", () => {
+    for (const name of RESUBMITTED) {
       expect(TEMPLATES[name]?.metaName, name).toBe(`${name}_v2`);
       expect(TEMPLATES[name]?.legacyName, name).toBe(name);
+    }
+  });
+
+  /* A template created once needs neither. Giving it a `_v2` would make
+     every send ask Meta for a name nobody ever submitted, fail, and then
+     ask for the real one. */
+  it("is the plain name, with nothing to fall back to, for one created once", () => {
+    for (const name of ["proforma_sent", "proforma_followup", "proforma_advance_reminder"]) {
+      expect(TEMPLATES[name]?.metaName, name).toBe(name);
+      expect(TEMPLATES[name]?.legacyName, name).toBe("");
     }
   });
 
@@ -57,13 +79,25 @@ describe("the name each message is sent as at Meta", () => {
        every message ever logged. */
     expect(Object.keys(WHATSAPP_LABELS).sort()).toEqual([
       "licence_delivered", "order_delivered", "payment_due_reminder",
-      "payment_overdue_reminder", "payment_received", "quotation_followup",
+      "payment_overdue_reminder", "payment_received", "proforma_advance_reminder",
+      "proforma_followup", "proforma_sent", "quotation_followup",
       "quotation_sent", "renewal_reminder",
     ]);
   });
 
-  it("marks only the quotation as carrying the PDF", () => {
+  it("marks the two messages that carry their document, and no others", () => {
     const carriers = Object.keys(TEMPLATES).filter((n) => TEMPLATES[n]?.document);
-    expect(carriers).toEqual(["quotation_sent"]);
+    expect(carriers).toEqual(["quotation_sent", "proforma_sent"]);
+  });
+
+  /* The file the customer keeps must not contradict the message. A
+     proforma arriving as "Quotation_TZ-PI-0134.pdf" is the same mistake as
+     the wording calling it a quotation, in the part they are likeliest to
+     save. */
+  it("names the attached file after the document it actually is", () => {
+    expect(documentFor("quotation_sent", { quoteNo: "TZ/QT/2627/0117" }))
+      .toBe("Quotation_TZ-QT-2627-0117.pdf");
+    expect(documentFor("proforma_sent", { proformaNo: "TZ/PI/2627/0134" }))
+      .toBe("Proforma_TZ-PI-2627-0134.pdf");
   });
 });

@@ -33,6 +33,40 @@ describe("a quotation", () => {
   });
 });
 
+describe("a proforma", () => {
+  const record = {
+    id: "p1", number: "TZ/PI/26-27/0134", customer_id: "c1",
+    data: {
+      number: "TZ/PI/26-27/0134", date: "2026-11-10", sentAt: "2026-11-12", validUntil: "2026-11-22",
+      items: [{ desc: "Microsoft 365 E3", qty: 10 }],
+    },
+  };
+
+  it("names the proforma, not the quotation it came from", () => {
+    expect(sent("proforma_sent", { record, customer, extra: { amount: 47200 } }))
+      .toEqual(["Ravi Sharma", "TZ/PI/26-27/0134", "47,200", "22 Nov 2026"]);
+  });
+
+  it("chases it with the day it was SENT, like a quotation", () => {
+    expect(sent("proforma_followup", { record, customer })[3]).toBe("12 Nov 2026");
+    expect(sent("proforma_followup", { record, customer })[1]).toBe("TZ/PI/26-27/0134");
+  });
+
+  it("asks for the advance by naming the figure on the document", () => {
+    expect(sent("proforma_advance_reminder", { record, customer, extra: { amount: 23600 } }))
+      .toEqual(["Ravi Sharma", "TZ/PI/26-27/0134", "23,600", "12 Nov 2026"]);
+  });
+
+  /* THE FIGURE IS NEVER INVENTED. A document's total is computed where the
+     document is drawn; if it did not arrive with the send, the blank is
+     reported and the sender refuses rather than writing a plausible
+     number into a message asking a customer for money. */
+  it("reports the amount as missing rather than guessing at one", () => {
+    const { missing } = buildParams("proforma_sent", factsFor("proforma_sent", { record, customer }));
+    expect(missing).toContain("amount");
+  });
+});
+
 describe("an order", () => {
   const record = {
     id: "o1", number: "TZ/SO/26-27/0007", customer_id: "c1",

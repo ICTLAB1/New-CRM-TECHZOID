@@ -48,12 +48,25 @@ export function optedIn(customer = {}) {
   return data.whatsappOptIn === true;
 }
 
-/** The eight switches, as the settings row holds them. Absent means OFF. */
+/**
+ * The switches, as the settings row holds them. Absent means OFF.
+ *
+ * A MESSAGE THAT ONLY A PERSON CAN SEND HAS NO SWITCH, and is left out
+ * rather than given one. Reading `spec.auto` off such a template produces
+ * `undefined`, and an object keyed by it grows a switch literally called
+ * "undefined" — which every manual-only template would then share, so
+ * turning one on would turn them all on. There is one of those templates
+ * today and there will be more.
+ */
 export function autoSwitches(settings = {}) {
   const block = settings?.[WHATSAPP_SETTINGS_KEY] ?? {};
   const auto = block?.auto ?? {};
   const out = {};
-  for (const name of Object.keys(TEMPLATES)) out[TEMPLATES[name].auto] = auto[TEMPLATES[name].auto] === true;
+  for (const name of Object.keys(TEMPLATES)) {
+    const key = TEMPLATES[name].auto;
+    if (!key) continue;
+    out[key] = auto[key] === true;
+  }
   return out;
 }
 

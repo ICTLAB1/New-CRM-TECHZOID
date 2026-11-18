@@ -179,10 +179,12 @@ describe("filling the blanks in order", () => {
   });
 });
 
-describe("the eight, as a set", () => {
-  it("is the eight the business asked for, named exactly", () => {
+describe("the templates, as a set", () => {
+  it("is the set the business asked for, named exactly", () => {
     expect(TEMPLATE_NAMES).toEqual([
-      "quotation_sent", "quotation_followup", "order_delivered", "licence_delivered",
+      "quotation_sent", "quotation_followup",
+      "proforma_sent", "proforma_followup", "proforma_advance_reminder",
+      "order_delivered", "licence_delivered",
       "payment_due_reminder", "payment_overdue_reminder", "payment_received", "renewal_reminder",
     ]);
   });
@@ -191,6 +193,9 @@ describe("the eight, as a set", () => {
     const order = (n) => TEMPLATES[n].params.map((p) => p.key);
     expect(order("quotation_sent")).toEqual(["customer", "quoteNo", "product", "validTill"]);
     expect(order("quotation_followup")).toEqual(["customer", "quoteNo", "product", "sharedOn"]);
+    expect(order("proforma_sent")).toEqual(["customer", "proformaNo", "amount", "validTill"]);
+    expect(order("proforma_followup")).toEqual(["customer", "proformaNo", "product", "sharedOn"]);
+    expect(order("proforma_advance_reminder")).toEqual(["customer", "proformaNo", "amount", "sharedOn"]);
     expect(order("order_delivered")).toEqual(["customer", "orderNo", "items", "deliveredOn"]);
     expect(order("licence_delivered")).toEqual(["customer", "product", "orderNo", "sentTo"]);
     expect(order("payment_due_reminder")).toEqual(["customer", "invoiceNo", "amount", "dueOn"]);
@@ -199,10 +204,26 @@ describe("the eight, as a set", () => {
     expect(order("renewal_reminder")).toEqual(["customer", "product", "renewsOn"]);
   });
 
-  it("gives every one its own switch", () => {
-    const keys = TEMPLATE_NAMES.map((n) => TEMPLATES[n].auto);
+  it("gives every message that can send itself its own switch", () => {
+    const keys = TEMPLATE_NAMES.map((n) => TEMPLATES[n].auto).filter(Boolean);
     expect(new Set(keys).size).toBe(keys.length);
-    for (const k of keys) expect(k).toBeTruthy();
+    /* Every one that is not sent by hand alone has a switch to turn it off
+       with. Two switches sharing a key would silently turn off a message
+       nobody meant to stop, which is what the uniqueness above is for. */
+    for (const name of TEMPLATE_NAMES) {
+      if (TEMPLATES[name].auto) continue;
+      expect(TEMPLATES[name].manual, `${name} has no switch, so it must be sendable by hand`).toBe(true);
+    }
+  });
+
+  /* THE ONE THAT ONLY A PERSON CAN SEND. Asking a customer for an advance
+     is a judgement about that customer, and the figure it names is only
+     available where the document is drawn — so it has no switch, by
+     design. If it ever grows one, this test is the place that argument has
+     to be had again. */
+  it("sends the advance reminder only by hand", () => {
+    expect(TEMPLATES.proforma_advance_reminder.auto).toBeUndefined();
+    expect(TEMPLATES.proforma_advance_reminder.manual).toBe(true);
   });
 
   it("carries no wording of its own", () => {

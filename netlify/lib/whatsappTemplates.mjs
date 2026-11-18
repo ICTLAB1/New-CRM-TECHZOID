@@ -131,6 +131,72 @@ export const TEMPLATES = {
       { key: "sharedOn", label: "Date shared", kind: "date" },
     ],
   },
+  /* ── the proforma, which is a quotation that has become a bill ──────
+     A proforma is not a quotation and must not be described as one: the
+     customer is being asked to pay against it, often in advance, and a
+     message calling it a quotation invites them to treat it as a price
+     they may still haggle over. So these three carry their own wording
+     and their own number, and none of them reuses the quotation's. */
+  proforma_sent: {
+    name: "proforma_sent",
+    fresh: true,
+    label: "Proforma invoice sent",
+    when: "A proforma invoice is sent to the customer",
+    auto: "proformaSent",
+    manual: true,
+    params: [
+      { key: "customer", label: "Customer name" },
+      { key: "proformaNo", label: "Proforma number" },
+      { key: "amount", label: "Amount", kind: "money" },
+      { key: "validTill", label: "Valid till", kind: "date" },
+    ],
+  },
+  proforma_followup: {
+    name: "proforma_followup",
+    fresh: true,
+    label: "Proforma follow-up",
+    when: "A proforma has had no answer for three days",
+    auto: "proformaFollowup",
+    manual: true,
+    /* NO AMOUNT, AND THAT IS WHY IT CAN BE AUTOMATIC. This one goes out
+       from the 10am job, where there is no browser — and a document's
+       total is computed from its lines and its tax rules by code that
+       only runs in one, so the server does not have a figure it can
+       stand behind. Chasing the document needs no figure; chasing the
+       money does, which is why the advance reminder below is sent by
+       hand. */
+    params: [
+      { key: "customer", label: "Customer name" },
+      { key: "proformaNo", label: "Proforma number" },
+      { key: "product", label: "Product" },
+      { key: "sharedOn", label: "Date shared", kind: "date" },
+    ],
+  },
+  proforma_advance_reminder: {
+    name: "proforma_advance_reminder",
+    fresh: true,
+    label: "Advance payment reminder",
+    when: "Sent by hand from the proforma, to ask for the advance",
+    /* BY HAND ONLY — no `auto` key, so no switch and no scheduled send.
+       See the note above: the amount is the point of this message and
+       the figure is only available where the document is drawn. Asking a
+       customer for an advance is also a judgement about that customer,
+       which is a reasonable thing to want a person behind.
+
+       AND THE FIGURE IS THE PROFORMA'S VALUE, NOT THE ADVANCE SLICE OF IT.
+       A proforma can ask for part of its total up front, and when it does
+       it prints that row itself. So the approved wording asks for "the
+       advance against" a proforma of this value rather than naming a
+       number that would be wrong on every part-advance document — one
+       figure, true whether the advance is half of it or all of it. */
+    manual: true,
+    params: [
+      { key: "customer", label: "Customer name" },
+      { key: "proformaNo", label: "Proforma number" },
+      { key: "amount", label: "Amount", kind: "money" },
+      { key: "sharedOn", label: "Date shared", kind: "date" },
+    ],
+  },
   order_delivered: {
     name: "order_delivered",
     label: "Order delivered",
@@ -375,10 +441,18 @@ export function checkTemplate(templateName, approved) {
  * because the new ones are in review and a message must still go out in the
  * meantime. `sendMessage` tries the new name and falls back to the old one
  * when Meta says it does not have it.
+ *
+ * A TEMPLATE THAT NEVER HAD A FIRST VERSION gets neither: the proforma
+ * three were created once, under their own names, so there is no `_v2` to
+ * prefer and no older name to fall back to. Giving them one anyway would
+ * mean every send asking Meta for a name nobody ever submitted, failing,
+ * and then asking for the real one — two round trips and a misleading line
+ * in the log for every message.
  */
 for (const [key, spec] of Object.entries(TEMPLATES)) {
-  spec.metaName = `${key}_v2`;
-  spec.legacyName = key;
+  const resubmitted = !spec.fresh;
+  spec.metaName = resubmitted ? `${key}_v2` : key;
+  spec.legacyName = resubmitted ? key : "";
 }
 
 /* THE QUOTATION MESSAGE CARRIES THE QUOTATION. `quotation_sent_v2` is
@@ -387,7 +461,14 @@ for (const [key, spec] of Object.entries(TEMPLATES)) {
    template instead. The follow-up stays text-only in both versions — it goes
    out from the 10am job, where there is no browser and so no way to render a
    quotation. */
-TEMPLATES.quotation_sent.document = true;
+TEMPLATES.quotation_sent.document = { kind: "Quotation", numberFrom: "quoteNo" };
+
+/* AND THE PROFORMA MESSAGE CARRIES THE PROFORMA, for the same reason and
+   with one difference that matters: it has no older text-only version to
+   drop back to. A proforma is a request for money and the document is the
+   request, so a message announcing one without it attached is worse than
+   no message — `nameFor` refuses rather than sending a bare sentence. */
+TEMPLATES.proforma_sent.document = { kind: "Proforma", numberFrom: "proformaNo" };
 
 /** Does the name Meta knows this by take a document header? */
 export const needsDocument = (templateName) => !!TEMPLATES[templateName]?.document;
@@ -413,6 +494,19 @@ export function nameFor(templateName, { hasPdf = false } = {}) {
   if (!spec) return { meta: "", legacy: "", wantsPdf: false, why: `There is no template called ${templateName}.` };
 
   if (spec.document && !hasPdf) {
+    /* NOTHING TO FALL BACK TO. A template created once, with a header, has
+       no text-only twin — naming it without a file is refused by Meta, and
+       naming nothing at all would reach `sendTemplate` as an empty string
+       and come back as "No WhatsApp template was named", which tells the
+       person at the screen nothing about what went wrong. */
+    if (!spec.legacyName) {
+      return {
+        meta: "",
+        legacy: "",
+        wantsPdf: false,
+        why: `“${spec.label}” carries the document itself, so it cannot be sent without one.`,
+      };
+    }
     return {
       meta: spec.legacyName,
       legacy: "",
@@ -424,9 +518,28 @@ export function nameFor(templateName, { hasPdf = false } = {}) {
 }
 
 /** What the attached file is called, as the customer sees it. */
-export function documentName(quoteNo) {
-  const clean = String(quoteNo ?? "").trim().replace(/[^A-Za-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "");
-  return `Quotation_${clean || "TechZoid"}.pdf`;
+export function documentName(number, kind = "Quotation") {
+  const clean = String(number ?? "").trim().replace(/[^A-Za-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "");
+  const label = String(kind ?? "").trim().replace(/[^A-Za-z0-9]+/g, "") || "Quotation";
+  return `${label}_${clean || "TechZoid"}.pdf`;
+}
+
+/**
+ * The file a message carries, named from the record it is about.
+ *
+ * WHY THE TEMPLATE DECIDES AND NOT THE SENDER. "Quotation_…pdf" arriving on
+ * a customer's phone attached to a proforma invoice is the same mistake as
+ * the wording calling it a quotation, in the one part of the message they
+ * are most likely to keep. Each template that carries a file says which
+ * fact holds its number and what the file is called, beside the template
+ * itself, rather than the sender guessing from the record type.
+ */
+export function documentFor(templateName, facts = {}) {
+  const spec = TEMPLATES[templateName];
+  const doc = spec?.document;
+  if (!doc) return "";
+  if (doc === true) return documentName(facts.quoteNo);
+  return documentName(facts[doc.numberFrom], doc.kind);
 }
 
 /** Meta's error wording, dug out of whichever shape it arrived in. */

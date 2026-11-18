@@ -259,8 +259,8 @@ export function threadsFrom(messages: readonly WhatsAppMessage[]): WhatsAppThrea
 }
 
 /**
- * The eight messages, named the way a person would say them, and which kind
- * of record each is sent about.
+ * The messages, named the way a person would say them, and which kind of
+ * record each is sent about.
  *
  * A COPY, KEPT HONEST BY A TEST. The templates themselves live on the server
  * (netlify/lib/whatsappTemplates.mjs) because the server is what sends them;
@@ -271,6 +271,9 @@ export function threadsFrom(messages: readonly WhatsAppMessage[]): WhatsAppThrea
 export const WHATSAPP_LABELS: Record<string, string> = {
   quotation_sent: "Quotation sent",
   quotation_followup: "Quotation follow-up",
+  proforma_sent: "Proforma invoice sent",
+  proforma_followup: "Proforma follow-up",
+  proforma_advance_reminder: "Advance payment reminder",
   order_delivered: "Order delivered",
   licence_delivered: "Licence keys sent",
   payment_due_reminder: "Payment due in 3 days",
@@ -282,6 +285,10 @@ export const WHATSAPP_LABELS: Record<string, string> = {
 /** Which messages can be sent about each kind of record. */
 export const WHATSAPP_FOR: Record<string, readonly string[]> = {
   quote: ["quotation_sent", "quotation_followup"],
+  /* Sending it comes first because that is what the button is pressed for;
+     the two chasers are below it in the chooser, where somebody looking for
+     one will find them. */
+  proforma: ["proforma_sent", "proforma_followup", "proforma_advance_reminder"],
   order: ["order_delivered", "licence_delivered"],
   bill: ["payment_due_reminder", "payment_overdue_reminder", "payment_received"],
   subscription: ["renewal_reminder"],

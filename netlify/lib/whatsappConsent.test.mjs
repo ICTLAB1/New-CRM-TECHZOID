@@ -80,11 +80,19 @@ describe("which number is used", () => {
   });
 });
 
-describe("the eight switches", () => {
+describe("the switches", () => {
   it("are every one of them off when nobody has touched them", () => {
     const switches = autoSwitches({});
-    expect(Object.keys(switches)).toHaveLength(8);
+    expect(Object.keys(switches)).toHaveLength(10);
     expect(Object.values(switches).every((v) => v === false)).toBe(true);
+  });
+
+  /* A message that only a person can send has no switch, and must not be
+     given one: an object keyed by a missing `auto` grows a switch called
+     "undefined" that every manual-only template would share. */
+  it("leaves out a message that has no automatic send", () => {
+    expect(Object.keys(autoSwitches({}))).not.toContain("undefined");
+    expect(autoEnabled({ whatsapp: { auto: { undefined: true } } }, "proforma_advance_reminder")).toBe(false);
   });
 
   it("are off for a settings row that has no whatsapp block at all", () => {
