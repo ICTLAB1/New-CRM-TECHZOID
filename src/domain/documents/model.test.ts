@@ -312,8 +312,28 @@ describe("header and details", () => {
     expect(m.details.find(([k]) => k === "Customer ID")?.[1]).toBe("—");
   });
 
-  it("carries the company tagline", () => {
-    expect(build().header.tagline).toContain("Technology Procurement");
+  /** Settings with the company's tagline set to whatever is passed. */
+  const withTagline = (tagline?: string) =>
+    build({}, "quotation", { company: { ...SETTINGS.company, tagline } });
+
+  it("carries the company's OWN tagline", () => {
+    expect(withTagline("Connect, Communicate & Collaborate").header.tagline)
+      .toBe("Connect, Communicate & Collaborate");
+  });
+
+  it("GIVES A COMPANY WITH NO TAGLINE NO TAGLINE — not another company's", () => {
+    /* This used to fall back to "Technology Procurement | Licensing |
+       Hardware | Enterprise Solutions", which is one company's strapline.
+       Two faults: the field could not be switched off (clearing it swapped
+       in different words rather than removing the line), and every other
+       company in the workspace printed TechZoid's wording on its own
+       quotations. A company that never wrote those words should never
+       print them. */
+    for (const tagline of [undefined, "", "   "]) {
+      const header = withTagline(tagline).header;
+      expect(header.tagline).toBe("");
+      expect(header.tagline).not.toContain("Technology Procurement");
+    }
   });
 
   /**

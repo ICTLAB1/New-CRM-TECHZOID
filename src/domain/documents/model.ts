@@ -799,7 +799,24 @@ export function buildDocumentModel(input: BuildModelInput): DocumentModel {
       /* Only a logo with its natural size is usable: without both, a
          renderer cannot preserve the aspect ratio and would stretch it. */
       logo: c.logo && c.logoW && c.logoH ? { src: String(c.logo), w: Number(c.logoW), h: Number(c.logoH) } : null,
-      tagline: c.tagline || "Technology Procurement  |  Licensing  |  Hardware  |  Enterprise Solutions",
+      /* NO TAGLINE UNLESS THE COMPANY WROTE ONE.
+       *
+       * This read `c.tagline || "Technology Procurement | Licensing |
+       * Hardware | Enterprise Solutions"`, which is wrong twice over.
+       *
+       * It made the field impossible to switch off: clearing it in
+       * Settings did not remove the line, it swapped in a different one.
+       * A company whose logo already carries its strapline — which is the
+       * ordinary case for a designed lockup — had no way to stop the
+       * document printing it a second time underneath.
+       *
+       * And the words are one company's. This product runs more than one
+       * company (see the company switcher), and every one of them that
+       * never filled the field in has been printing TechZoid's strapline
+       * on its own quotations. Same mistake as the signature strip that
+       * named a file nobody had uploaded: code supplying a value on the
+       * company's behalf and nothing checking whether it was theirs. */
+      tagline: String(c.tagline ?? "").trim(),
       addressLines: headerAddressLines, contactLine, registration, uaeOffice, meta,
     },
     details,

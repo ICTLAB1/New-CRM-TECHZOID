@@ -238,6 +238,10 @@ export function renderDocumentPdf(opts: RenderOptions): jsPDF {
        last baseline instead. */
     let lastLead = 0;
     const say = (text: string, lead: number): void => {
+      /* An empty line is not a line. Without this, a company with no
+         tagline printed nothing and still paid five millimetres for it,
+         leaving a hole between its name and its address. */
+      if (!text.trim()) return;
       const width = inScanBand(ly) ? leftW : CW;
       for (const out of pdf.splitTextToSize(text, width) as string[]) {
         pdf.text(out, M, ly);
