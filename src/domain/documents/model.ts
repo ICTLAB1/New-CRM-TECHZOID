@@ -81,7 +81,10 @@ export interface DocumentModel {
      *  exactly the drift this architecture exists to prevent — the preview
      *  used to hardcode "TECHZOID" while the PDF drew whatever it was given. */
     logo: { src: string; w: number; h: number } | null;
-    /** "Technology Procurement | Licensing | Hardware | Enterprise Solutions" */
+    /** The company's own strapline, or EMPTY when it has not written one.
+     *  Never a default: this comment used to name one company's wording as
+     *  if it were the field's value, which is exactly what the code was
+     *  doing underneath — see where this is built. */
     tagline: string;
     /** Each element is one printed line: street, then city/state/pincode,
      *  then country. */
