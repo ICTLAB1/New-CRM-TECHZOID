@@ -117,8 +117,7 @@ export const PROFILE_BODY = [
      useful to have our company profile on file", which is a personal note
      — and reads oddly under a formal introduction. The opening sets the
      tone and the rest follows it. */
-  "Our company profile is attached, with the registration details your purchase team "
-  + "usually asks for.",
+  "Our company profile is attached.",
   /* THE CERTIFICATIONS ARE NAMED, not alluded to: "the certifications your
      purchase team asks for" told the reader we hold some and made them
      open the attachment to find out which, and a tender response is
