@@ -170,12 +170,12 @@ export function RecipientsPicker({
         <>
           <Field
             label="Paste addresses"
-            hint="One per line, or separated by commas or semicolons. Ravi Sharma <ravi@acme.example> works too — the name is kept and used in the greeting."
+            hint="One person per line, or separated by commas or semicolons. A name and address in two columns out of a spreadsheet works, and so does Ravi Sharma <ravi@acme.example> — either way the name is kept and used in the greeting."
           >
             <Textarea
               rows={7}
               value={pasted}
-              placeholder={"ravi@acme.example\nPriya Menon <priya@beta.example>\narun@gamma.example"}
+              placeholder={"Ravi Sharma\travi@acme.example\nPriya Menon <priya@beta.example>\narun@gamma.example"}
               onChange={(e) => setPasted(e.target.value)}
             />
           </Field>
