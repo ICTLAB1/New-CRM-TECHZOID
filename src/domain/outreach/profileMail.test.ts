@@ -3,6 +3,7 @@ import {
   CHUNK, PROFILE_BODY, PROFILE_SUBJECT, chunk, greetingLine, messageFor, messagesFor,
   recipientsFromCustomers, recipientsFromPaste, type ProfileDraft,
 } from "./profileMail";
+import { fill } from "./personalise";
 
 /**
  * What is being asserted here is the promise the feature makes: thirty
@@ -95,10 +96,15 @@ describe("one message, for one person", () => {
 
   it("sends the same words in text and in HTML", () => {
     const msg = messageFor(DRAFT, ravi!);
-    for (const sentence of PROFILE_BODY.split("\n\n")) {
-      const start = sentence.slice(0, 40);
-      expect(msg.message).toContain(start);
-      expect(msg.html).toContain(start.replace(/&/g, "&amp;"));
+    for (const para of PROFILE_BODY.split("\n\n")) {
+      /* COMPARED AFTER THE VARIABLES ARE FILLED. The body carries
+         {{sender_company}}, so the raw paragraph is not what either part
+         of the message says — and a test that compared the raw text would
+         fail for the one reason that is not a fault. */
+      const filled = fill(para, ravi!.values).text;
+      const start = filled.slice(0, 40);
+      expect(msg.message, start).toContain(start);
+      expect(msg.html, start).toContain(start.replace(/&/g, "&amp;"));
     }
   });
 

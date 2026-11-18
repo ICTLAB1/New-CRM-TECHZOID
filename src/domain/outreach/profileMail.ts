@@ -104,30 +104,32 @@ export function profileCallToAction(senderEmail: string): {
 }
 
 export const PROFILE_BODY = [
-  /* ONE IDEA PER SENTENCE. This paragraph used to run
-     "We are certified to A, B, C, and the profile carries the registration
-     details your purchase team usually asks for. The lines we supply are
-     listed below." — three separate things welded into one line, ending
-     with a signpost to a block that already has WHAT WE SUPPLY written
-     over it in capitals. Nobody reads a covering note twice; it has to
-     land first time. */
-  "I thought it would be useful to have our company profile on file — it is attached. "
-  + "It has the registration details your purchase team usually asks for.",
+  /* THE COMPANY'S OWN WORDS, supplied verbatim. What changed is the name:
+     {{sender_company}} rather than the name typed out. It renders exactly
+     the same, and it cannot go stale when the name changes or print one
+     company's name on another's mail — the mistake the header tagline was
+     making until this week. The subject line already works this way. */
+  "Greetings from {{sender_company}}!",
+  "We are pleased to introduce {{sender_company}} as a trusted IT solutions and technology "
+  + "partner, offering a comprehensive range of IT products, software licensing, enterprise "
+  + "solutions and technology services.",
+  /* ONE REGISTER THROUGHOUT. This used to open "I thought it would be
+     useful to have our company profile on file", which is a personal note
+     — and reads oddly under a formal introduction. The opening sets the
+     tone and the rest follows it. */
+  "Our company profile is attached, with the registration details your purchase team "
+  + "usually asks for.",
   /* THE CERTIFICATIONS ARE NAMED, not alluded to: "the certifications your
      purchase team asks for" told the reader we hold some and made them
      open the attachment to find out which, and a tender response is
      written by somebody checking a list. The names come from
      integrations/emailIdentity.ts, so there is one place to change if a
-     certification lapses or is added — and the same three words appear in
-     the signature, built from that same list. */
+     certification lapses — and the signature is built from that same list. */
   `We are an ${CERTIFICATION_NAMES.slice(0, -1).join(", ")} and `
   + `${CERTIFICATION_NAMES[CERTIFICATION_NAMES.length - 1]} certified company.`,
   /* WHAT WE SELL IS NOT IN HERE. It is its own block under the body, by
-     vendor, with every product named — see productLines.ts. A sentence
-     here listing the same three vendors read as a preamble to the thing
-     directly beneath it, and the two would have drifted apart the first
-     time a vendor was added. The block announces itself; this does not
-     need to announce the block. */
+     vendor, with every product named — see productLines.ts. The block
+     announces itself; this does not need to announce the block. */
 ].join("\n\n");
 
 export interface ProfileRecipient {

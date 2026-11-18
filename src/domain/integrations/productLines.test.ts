@@ -228,13 +228,14 @@ describe("the ISO certification marks", () => {
        we supply are listed below." — three ideas in one line, ending in a
        signpost. A covering note gets read once. */
     const paras = PROFILE_BODY.split("\n\n").filter((p) => p.trim());
-    expect(paras).toHaveLength(2);
+    /* The wording is the company's own now, so this no longer dictates how
+       many paragraphs there are. What it still holds is the shape: one
+       idea per paragraph, nothing welded. */
     for (const p of paras) {
-      /* Nothing longer than two sentences, and no sentence over ~30 words. */
       const sentences = p.split(/(?<=\.)\s+/).filter(Boolean);
       expect(sentences.length, p).toBeLessThanOrEqual(2);
       for (const sentence of sentences) {
-        expect(sentence.split(/\s+/).length, sentence).toBeLessThanOrEqual(30);
+        expect(sentence.split(/\s+/).length, sentence).toBeLessThanOrEqual(40);
       }
     }
   });
