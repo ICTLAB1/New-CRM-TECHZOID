@@ -68,7 +68,7 @@ describe("the name each message is sent as at Meta", () => {
      every send ask Meta for a name nobody ever submitted, fail, and then
      ask for the real one. */
   it("is the plain name, with nothing to fall back to, for one created once", () => {
-    for (const name of ["proforma_sent", "proforma_followup", "proforma_advance_reminder"]) {
+    for (const name of ["proforma_sent", "proforma_followup", "proforma_advance_reminder", "company_profile"]) {
       expect(TEMPLATES[name]?.metaName, name).toBe(name);
       expect(TEMPLATES[name]?.legacyName, name).toBe("");
     }
@@ -78,16 +78,16 @@ describe("the name each message is sent as at Meta", () => {
     /* Renaming these would turn every company's switches off and orphan
        every message ever logged. */
     expect(Object.keys(WHATSAPP_LABELS).sort()).toEqual([
-      "licence_delivered", "order_delivered", "payment_due_reminder",
+      "company_profile", "licence_delivered", "order_delivered", "payment_due_reminder",
       "payment_overdue_reminder", "payment_received", "proforma_advance_reminder",
       "proforma_followup", "proforma_sent", "quotation_followup",
       "quotation_sent", "renewal_reminder",
     ]);
   });
 
-  it("marks the two messages that carry their document, and no others", () => {
+  it("marks the messages that carry their document, and no others", () => {
     const carriers = Object.keys(TEMPLATES).filter((n) => TEMPLATES[n]?.document);
-    expect(carriers).toEqual(["quotation_sent", "proforma_sent"]);
+    expect(carriers).toEqual(["quotation_sent", "proforma_sent", "company_profile"]);
   });
 
   /* The file the customer keeps must not contradict the message. A

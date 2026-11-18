@@ -161,3 +161,58 @@ describe("a template nobody has heard of", () => {
     expect(out.reason).toMatch(/no WhatsApp template/i);
   });
 });
+
+/* ── a number with no record behind it ──────────────────────────────── */
+describe("a pasted number, which has no record to carry a tick", () => {
+  const base = { settings: {}, template: "company_profile", manual: true };
+
+  it("may be messaged when somebody declares the consent, and says who", () => {
+    const out = mayMessage({
+      ...base, customer: null,
+      declared: { phone: "+919811122233", by: "user-1" },
+    });
+    expect(out.ok).toBe(true);
+    expect(out.to).toBe("919811122233");
+    expect(out.declaredBy).toBe("user-1");
+  });
+
+  /* A declaration with nobody behind it is not a declaration. The point of
+     it is that the message row can name who vouched for the number. */
+  it("is refused when nobody is named as having declared it", () => {
+    const out = mayMessage({ ...base, customer: null, declared: { phone: "+919811122233" } });
+    expect(out.ok).toBe(false);
+    expect(out.reason).toMatch(/Nobody has said/i);
+  });
+
+  it("is refused when the number is not one WhatsApp can reach", () => {
+    const out = mayMessage({ ...base, customer: null, declared: { phone: "12345", by: "user-1" } });
+    expect(out.ok).toBe(false);
+  });
+
+  /* THE RULE THAT MAKES THE TICK MEAN SOMETHING. A customer ON FILE is
+     judged on their own record. If a declaration could override it, the
+     box on the customer screen would be decoration: anybody could tick a
+     different box on a send screen and message somebody who had said no.
+     The record is the better evidence and it wins. */
+  it("NEVER overrides the record of a customer who said no", () => {
+    const out = mayMessage({
+      ...base,
+      customer: { data: { whatsappOptIn: false, phone: "9810012345" } },
+      declared: { phone: "9810012345", by: "user-1" },
+    });
+    expect(out.ok).toBe(false);
+    expect(out.reason).toMatch(/has not agreed/i);
+  });
+
+  it("leaves a customer who DID agree judged on their record, not the declaration", () => {
+    const out = mayMessage({
+      ...base,
+      customer: { data: { whatsappOptIn: true, phone: "9810012345" } },
+      declared: { phone: "9999999999", by: "user-1" },
+    });
+    expect(out.ok).toBe(true);
+    /* Their own number, not the one the declaration named. */
+    expect(out.to).toBe("919810012345");
+    expect(out.declaredBy).toBeUndefined();
+  });
+});

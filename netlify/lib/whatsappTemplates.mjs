@@ -197,6 +197,40 @@ export const TEMPLATES = {
       { key: "sharedOn", label: "Date shared", kind: "date" },
     ],
   },
+  /* ── the one message that is not about a transaction ───────────────
+     THIS ONE IS MARKETING, AND THE DISTINCTION IS NOT PAPERWORK. Every
+     other template here is Utility: it is about a document the customer
+     already has — their quotation, their proforma, their order, their
+     invoice. This one is an introduction. Sending an introduction on a
+     Utility template is a policy breach, and the penalty lands on the
+     company's only WhatsApp number, which is also the number its payment
+     reminders go out on.
+
+     SENT ABOUT A CUSTOMER, NOT A DOCUMENT, which is what makes it the odd
+     one out in `RECORD_FOR` too. There is no quotation to name and no
+     amount to state: the recipient IS the record.
+
+     AND IT CARRIES THE PROFILE PDF, the same stored file the email
+     mailshot attaches. Without the document there is nothing to send — an
+     introduction with no profile attached is a cold message with no
+     purpose, so like the proforma it refuses rather than going bare. */
+  company_profile: {
+    name: "company_profile",
+    fresh: true,
+    label: "Company profile",
+    when: "Sent by hand to customers who have opted in, with the profile attached",
+    /* NO `auto` KEY, DELIBERATELY. Nothing schedules an introduction.
+       Every other automatic message is triggered by something the customer
+       did — they asked for a quotation, they owe an invoice, their licence
+       expires. There is no event that means "introduce ourselves again",
+       and a switch that broadcast on a timer would be the single fastest
+       way to lose the number. */
+    manual: true,
+    params: [
+      { key: "customer", label: "Customer name" },
+      { key: "senderCompany", label: "Your company name" },
+    ],
+  },
   order_delivered: {
     name: "order_delivered",
     label: "Order delivered",
@@ -469,6 +503,12 @@ TEMPLATES.quotation_sent.document = { kind: "Quotation", numberFrom: "quoteNo" }
    request, so a message announcing one without it attached is worse than
    no message — `nameFor` refuses rather than sending a bare sentence. */
 TEMPLATES.proforma_sent.document = { kind: "Proforma", numberFrom: "proformaNo" };
+
+/* The profile PDF, named for what it is. `numberFrom` names no fact,
+   so the file is "CompanyProfile_TechZoid.pdf" — the fallback in
+   documentName, which is right here: a company profile has no number
+   and inventing one would be odder than leaving it out. */
+TEMPLATES.company_profile.document = { kind: "CompanyProfile", numberFrom: "senderCompany" };
 
 /** Does the name Meta knows this by take a document header? */
 export const needsDocument = (templateName) => !!TEMPLATES[templateName]?.document;

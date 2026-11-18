@@ -92,9 +92,36 @@ export const alertEmailOf = (settings = {}, fallback = "") =>
  * @param {string} args.template   which of the eight
  * @param {boolean} args.manual    true when a person pressed the button
  */
-export function mayMessage({ customer, settings, template, manual = false }) {
+export function mayMessage({ customer, settings, template, manual = false, declared = null }) {
   if (!TEMPLATES[template]) {
     return { ok: false, reason: `There is no WhatsApp template called ${template}.` };
+  }
+
+  /* ── A NUMBER WITH NO RECORD BEHIND IT ─────────────────────────────
+     A broadcast to a pasted list reaches people the CRM has never heard
+     of, so there is no row to carry a tick. The consent still has to exist
+     — Meta's rule is about the person, not about where their number is
+     stored — so the sender declares it, and the declaration is recorded
+     with their own user id on the message row.
+
+     THIS IS NOT A WAY ROUND THE TICK, and the difference matters. A
+     customer ON FILE is governed by their record: somebody who has not
+     ticked the box is refused here even if a caller passes a declaration,
+     because the record is the better evidence and quietly overriding it
+     would make the tick meaningless. The declaration only answers the
+     case where there is no record to consult. */
+  if (declared?.phone) {
+    if (customer) {
+      /* Fall through to the ordinary rules: a known customer is judged on
+         their own record, declaration or no declaration. */
+    } else {
+      if (!declared.by) {
+        return { ok: false, reason: "Nobody has said these numbers agreed to be messaged." };
+      }
+      const to = waNumber(declared.phone);
+      if (!looksSendable(to)) return { ok: false, reason: "That is not a number WhatsApp can reach." };
+      return { ok: true, to, declaredBy: String(declared.by) };
+    }
   }
 
   if (!optedIn(customer)) {

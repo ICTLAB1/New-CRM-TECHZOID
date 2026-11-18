@@ -128,7 +128,25 @@ export function splitNumber(
   return null;
 }
 
+/**
+ * The number a WhatsApp message to this customer would actually go to.
+ *
+ * THEIR WHATSAPP FIELD FIRST, their ordinary phone when that is blank —
+ * which is the rule the server already followed, in whatsappConsent.mjs.
+ * This did not: it read `phone` alone, so a customer who had given a
+ * separate WhatsApp number and no landline showed on screen as having no
+ * WhatsApp at all, while the server would have messaged them perfectly
+ * well. One screen saying "no number" about somebody the sender can see is
+ * reachable is the kind of disagreement nobody reports as a bug; they just
+ * stop trusting the screen.
+ */
+export const whatsAppNumberOf = (
+  customer: { phone?: string; whatsappPhone?: string },
+): { countryCode: string; phoneNumber: string } | null =>
+  splitNumber(customer.whatsappPhone) ?? splitNumber(customer.phone);
+
 /** Whether this customer may be messaged at all. Meta requires opt-in
  *  before a business writes first, and an unticked box is not consent. */
-export const mayWhatsApp = (customer: { whatsappOptIn?: boolean; phone?: string }): boolean =>
-  customer.whatsappOptIn === true && !!splitNumber(customer.phone);
+export const mayWhatsApp = (
+  customer: { whatsappOptIn?: boolean; phone?: string; whatsappPhone?: string },
+): boolean => customer.whatsappOptIn === true && !!whatsAppNumberOf(customer);

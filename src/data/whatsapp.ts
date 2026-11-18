@@ -274,6 +274,7 @@ export const WHATSAPP_LABELS: Record<string, string> = {
   proforma_sent: "Proforma invoice sent",
   proforma_followup: "Proforma follow-up",
   proforma_advance_reminder: "Advance payment reminder",
+  company_profile: "Company profile",
   order_delivered: "Order delivered",
   licence_delivered: "Licence keys sent",
   payment_due_reminder: "Payment due in 3 days",
@@ -292,6 +293,10 @@ export const WHATSAPP_FOR: Record<string, readonly string[]> = {
   order: ["order_delivered", "licence_delivered"],
   bill: ["payment_due_reminder", "payment_overdue_reminder", "payment_received"],
   subscription: ["renewal_reminder"],
+  /* Not offered from a record screen at all — an introduction is sent to
+     people, not about a document — so it is listed here only so that the
+     screens know the name. The broadcast screen names it directly. */
+  customer: ["company_profile"],
 };
 
 /** The label, or the name tidied up, so an unknown template still reads. */

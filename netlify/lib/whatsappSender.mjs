@@ -134,6 +134,9 @@ export async function previewMessage(admin, {
 export async function sendMessage(admin, {
   companyId, template, recordType, recordId, customerId, manual = false,
   trigger = "", sentBy = null, extra = {}, pdf = null, documentId = "",
+  /* A number with no record behind it, and who says it agreed — see
+     `mayMessage`. Only consulted when there is no customer to judge. */
+  declared = null,
 }) {
   const spec = TEMPLATES[template];
   if (!spec) return refused(`There is no WhatsApp template called ${template}.`);
@@ -163,8 +166,17 @@ export async function sendMessage(admin, {
   }
 
   const settings = await settingsOf(admin, companyId);
-  const allowed = mayMessage({ customer, settings, template, manual });
+  const allowed = mayMessage({ customer, settings, template, manual, declared });
   if (!allowed.ok) return refused(allowed.reason, { switchedOff: !!allowed.switchedOff });
+
+  /* WHO VOUCHED FOR A NUMBER THAT HAS NO RECORD, written into the reason
+     the message exists. There is no column for a declaration and there does
+     not need to be one: `sent_by` already names the person and this names
+     what they asserted, so the row answers "why did this stranger get
+     this?" the way every other row does. */
+  const why = allowed.declaredBy
+    ? `${trigger || "broadcast"} (consent declared by ${allowed.declaredBy})`
+    : trigger;
 
   const facts = factsFor(template, { record: loaded.record, customer, extra });
 
@@ -173,7 +185,10 @@ export async function sendMessage(admin, {
      The quotation and the proforma messages carry one. Both follow-ups are
      text-only: they are sent by the 10am job, where there is no browser and
      nothing that can render a document. */
-  const hasPdf = !!pdf?.bytes?.byteLength;
+  /* An id the caller has already uploaded counts as having the file — see
+     the upload below. Without this the broadcast would decide it had no
+     document, and a template that carries one refuses in that case. */
+  const hasPdf = !!pdf?.bytes?.byteLength || !!documentId;
   const pick = nameFor(template, { hasPdf });
 
   /* NO NAME TO SEND UNDER. A message whose template carries the document
@@ -199,7 +214,7 @@ export async function sendMessage(admin, {
     const reason = `Not sent — the record has no ${names.join(", no ")}.`;
     await logSkipped(admin, {
       companyId, customer, customerId, phone: allowed.to, template, values,
-      reason, trigger, recordType, recordId, sentBy,
+      reason, trigger: why, recordType, recordId, sentBy,
     });
     return refused(reason, { missing: names });
   }
@@ -229,12 +244,24 @@ export async function sendMessage(admin, {
      is no half-way. So if the upload fails the message is not sent at all
      and the reason is handed back in plain words — never a quotation
      message that silently arrives without the quotation, and never a log
-     row for a send that did not happen. */
+     row for a send that did not happen.
+
+     UNLESS THE CALLER HAS ALREADY UPLOADED IT. A broadcast sends one file
+     to two hundred people; uploading it two hundred times would push the
+     same few megabytes to Meta on every message, for an id that is
+     identical each time. The caller uploads once and passes the id, and
+     this skips straight to sending. `documentId` was already in this
+     function's arguments and silently ignored, which meant a caller could
+     pass one, believe it had been used, and pay for the upload anyway. */
   let document = null;
   if (pick.wantsPdf) {
-    const up = await uploadDocument({ bytes: pdf.bytes, filename });
-    if (!up.ok) return refused(up.error);
-    document = { id: up.id, filename };
+    if (documentId) {
+      document = { id: String(documentId), filename };
+    } else {
+      const up = await uploadDocument({ bytes: pdf.bytes, filename });
+      if (!up.ok) return refused(up.error);
+      document = { id: up.id, filename };
+    }
   }
 
   let body = "";
@@ -275,7 +302,7 @@ export async function sendMessage(admin, {
          accepted is not known until it answers. */
       meta_template: "",
       status: "queued",
-      trigger: trigger || (manual ? "manual" : "automatic"),
+      trigger: why || (manual ? "manual" : "automatic"),
       record_type: recordType || "",
       record_id: recordId || "",
       sent_by: sentBy,

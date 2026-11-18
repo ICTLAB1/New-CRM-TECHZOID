@@ -39,6 +39,11 @@ export const RECORD_FOR = {
   payment_overdue_reminder: "bill",
   payment_received: "bill",
   renewal_reminder: "subscription",
+  /* THE ODD ONE OUT, and worth saying why. Every other template is about
+     a document; this is an introduction, so the recipient is the record.
+     That is also what makes it the only one a broadcast can use — there
+     is no list of quotations to send an introduction about. */
+  company_profile: "customer",
 };
 
 /**
@@ -206,6 +211,29 @@ export function factsFor(templateName, { record, customer, extra = {} }) {
           || (text(d.number) ? `invoice ${text(d.number)}` : ""),
       };
     }
+
+    /* The recipient's own name, and ours. Nothing from a document,
+       because there is no document — see RECORD_FOR above. The sending
+       company's name comes from `extra`: it is the same for everybody in
+       a broadcast and reading the settings row once per recipient would
+       be a query per message for a value that cannot change mid-send. */
+    case "company_profile":
+      return {
+        /* A pasted number may arrive with no name at all, and an empty
+           blank fails the whole message at Meta. So this one has a
+           stand-in — and it is worth saying why that is allowed here when
+           it is refused everywhere else in this file.
+
+           The stand-in that was taken out was "(number to follow)" in
+           place of a quotation number: a customer reading a sentence about
+           a document whose identity the sender did not know. "Hello
+           there," is not that. It is an ordinary greeting, complete and
+           true, and the only alternative is refusing to send an
+           introduction to somebody whose name we were never given — which
+           is most of a pasted list. */
+        customer: customerName || text(extra.customerName) || "there",
+        senderCompany: text(extra.senderCompany),
+      };
 
     case "renewal_reminder":
       return {

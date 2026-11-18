@@ -184,6 +184,7 @@ describe("the templates, as a set", () => {
     expect(TEMPLATE_NAMES).toEqual([
       "quotation_sent", "quotation_followup",
       "proforma_sent", "proforma_followup", "proforma_advance_reminder",
+      "company_profile",
       "order_delivered", "licence_delivered",
       "payment_due_reminder", "payment_overdue_reminder", "payment_received", "renewal_reminder",
     ]);
@@ -196,6 +197,7 @@ describe("the templates, as a set", () => {
     expect(order("proforma_sent")).toEqual(["customer", "proformaNo", "amount", "validTill"]);
     expect(order("proforma_followup")).toEqual(["customer", "proformaNo", "product", "sharedOn"]);
     expect(order("proforma_advance_reminder")).toEqual(["customer", "proformaNo", "amount", "sharedOn"]);
+    expect(order("company_profile")).toEqual(["customer", "senderCompany"]);
     expect(order("order_delivered")).toEqual(["customer", "orderNo", "items", "deliveredOn"]);
     expect(order("licence_delivered")).toEqual(["customer", "product", "orderNo", "sentTo"]);
     expect(order("payment_due_reminder")).toEqual(["customer", "invoiceNo", "amount", "dueOn"]);
