@@ -9,6 +9,7 @@ import {
 } from "../../domain/outreach/profileMail";
 import type { IntegrationsApi } from "../../integrations/api";
 import { runPacedSend } from "../../domain/outreach/pacedSend";
+import { audienceSummary, readPastedNumbers, whatsappAudience } from "../../domain/outreach/whatsappAudience";
 import type { EmailCompany, EmailSender } from "../../domain/integrations/emailTemplate";
 import { emailCompanyFrom } from "../../domain/integrations/emailIdentity";
 import { emailProductGroups } from "../../domain/integrations/productLines";
@@ -82,6 +83,17 @@ export function ProfileMailerScreen({
   const [body, setBody] = useState(PROFILE_BODY);
   const [previewOf, setPreviewOf] = useState(0);
 
+  /* ── the WhatsApp broadcast ───────────────────────────────────────
+     Its own paste box, deliberately separate from the email one. The two
+     lists are rarely the same people, and a number pasted into a box
+     labelled "addresses" would be read as a lost address rather than a
+     contact. */
+  const [waPasted, setWaPasted] = useState("");
+  const [waVouched, setWaVouched] = useState(false);
+  const [waProgress, setWaProgress] = useState<{ done: number; total: number } | null>(null);
+  const [waResults, setWaResults] = useState<Array<{ who: string; ok: boolean; error: string | null }>>([]);
+  const [waStopped, setWaStopped] = useState("");
+
   const [info, setInfo] = useState<ProfileInfo | null>(null);
   const [loadingInfo, setLoadingInfo] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -149,12 +161,79 @@ export function ProfileMailerScreen({
     designation: user.designation ?? "",
   };
 
+  /**
+   * Send the profile on WhatsApp, to customers and to pasted numbers.
+   *
+   * SAME SHAPE AS THE EMAIL SEND and for the same reasons: in pieces, so a
+   * function host cannot cut a long list in half with nothing to say which
+   * of them went; and every answer recorded by name, so a list that half
+   * worked is a list somebody can finish.
+   */
+  const sendOnWhatsApp = async () => {
+    if (!companyId || !waTotal) return;
+    setWaResults([]);
+    setWaStopped("");
+    setWaProgress({ done: 0, total: waTotal });
+
+    const queue: Array<{ customerId?: string; phone?: string; label: string }> = [
+      ...waFromCustomers.recipients.map((r) => ({ customerId: r.id, label: r.label })),
+      ...waFromPaste.numbers.map((n) => ({ phone: n.number, label: n.label || n.number })),
+    ];
+
+    const collected: Array<{ who: string; ok: boolean; error: string | null }> = [];
+
+    for (let i = 0; i < queue.length; i += CHUNK) {
+      const piece = queue.slice(i, i + CHUNK);
+      try {
+        const res = await api.broadcastCompanyProfile({
+          companyId,
+          customerIds: piece.filter((p) => p.customerId).map((p) => p.customerId!),
+          numbers: piece.filter((p) => p.phone).map((p) => ({ phone: p.phone!, label: p.label })),
+          declaredConsent: waVouched,
+        });
+        for (const r of res.results) {
+          const who = piece.find((p) => p.customerId === r.customerId || p.phone === r.phone)?.label
+            ?? r.label ?? r.phone ?? r.customerId ?? "";
+          collected.push({ who, ok: r.ok, error: r.error });
+        }
+      } catch (err) {
+        /* The whole piece was refused — not signed in, no profile on file,
+           the template not approved yet. The rest would be refused the
+           same way. */
+        setWaStopped(err instanceof Error && err.message ? err.message : "The broadcast stopped before it finished.");
+        break;
+      }
+      setWaResults([...collected]);
+      setWaProgress({ done: collected.length, total: waTotal });
+    }
+
+    setWaResults(collected);
+    setWaProgress(null);
+
+    const ok = collected.filter((r) => r.ok).length;
+    if (ok && ok === collected.length) toast(`Sent to ${ok} on WhatsApp`, "good");
+    else if (ok) toast(`${ok} sent, ${collected.length - ok} did not go — see the list`, "warn");
+    else toast("Nothing was sent on WhatsApp", "bad");
+  };
+
   /* ── who it goes to ────────────────────────────────────────────────── */
 
   const picked = useMemo(
     () => customers.filter((c) => chosen.has(c.id)),
     [customers, chosen],
   );
+
+  /* WHO COULD ACTUALLY BE MESSAGED, out of the customers ticked above.
+     Everybody else is shown with the reason rather than quietly left
+     out — see domain/outreach/whatsappAudience.ts. */
+  const waFromCustomers = useMemo(() => whatsappAudience(picked.map((c) => ({
+    id: c.id, company: c.company, contact: c.contact,
+    phone: c.phone, whatsappPhone: c.whatsappPhone, whatsappOptIn: c.whatsappOptIn,
+  }))), [picked]);
+
+  const waFromPaste = useMemo(() => readPastedNumbers(waPasted), [waPasted]);
+
+  const waTotal = waFromCustomers.recipients.length + waFromPaste.numbers.length;
 
   const fromCustomers = useMemo(
     () => recipientsFromCustomers(picked, senderFields),
@@ -693,6 +772,135 @@ export function ProfileMailerScreen({
                   </tbody>
                 </table>
               </div>
+            </div>
+          ) : null}
+        </div>
+      </Card>
+
+      {/* ── the same profile, on WhatsApp ───────────────────────────────
+          A SECOND CARD RATHER THAN A SECOND MODE on the first one. The
+          two lists are rarely the same people: the email list is whoever
+          gave an address, and this one is whoever agreed to WhatsApp or
+          whose number somebody has pasted. Folding them into one picker
+          would mean a screen where ticking somebody does different things
+          depending on a toggle they set earlier. */}
+      <Card title="Send on WhatsApp">
+        <div className="stack">
+          <p className="muted" style={{ marginTop: 0 }}>
+            The same profile PDF, sent one message at a time from the company's own WhatsApp number.
+            Numbers you paste here are <strong>not</strong> saved as customers.
+          </p>
+
+          <Field
+            label="Paste numbers"
+            hint="One person per line — a name and number in two columns out of a spreadsheet, or bare numbers. +91 is assumed for a ten-digit number."
+          >
+            <Textarea
+              rows={5}
+              value={waPasted}
+              onChange={(e) => setWaPasted(e.target.value)}
+              placeholder={"Anoop Samdani\t9810012345\n+91 98200 99887\n9811122233"}
+            />
+          </Field>
+
+          {waFromPaste.unreadable.length ? (
+            <div className="notice notice-warn">
+              <strong>Could not read {waFromPaste.unreadable.length} of what you pasted.</strong>{" "}
+              {waFromPaste.unreadable.slice(0, 4).map((u) => `\u201C${u}\u201D`).join(", ")}
+              {waFromPaste.unreadable.length > 4 ? " and more" : ""}. Nothing was dropped silently.
+            </div>
+          ) : null}
+
+          {waFromPaste.duplicates.length ? (
+            <div className="notice">
+              {waFromPaste.duplicates.length} number{waFromPaste.duplicates.length === 1 ? " was" : "s were"} in the
+              list more than once. Each person is messaged once.
+            </div>
+          ) : null}
+
+          {picked.length ? (
+            <div className="notice">
+              <strong>From the customers ticked above:</strong> {audienceSummary(waFromCustomers)}
+              {waFromCustomers.excluded.length ? (
+                <div className="muted" style={{ marginTop: 6 }}>
+                  {waFromCustomers.excluded.slice(0, 6).map((e) => e.label).join(", ")}
+                  {waFromCustomers.excluded.length > 6 ? " and others" : ""} — a customer who has not
+                  agreed cannot be messaged, and that tick is on their own record.
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
+          {/* THE DECLARATION, FOR PASTED NUMBERS ONLY. A customer on file
+              is governed by their own record and this cannot override it.
+              What this answers is the case where there IS no record. */}
+          {waFromPaste.numbers.length ? (
+            <label className="row-tight" style={{ alignItems: "flex-start", gap: 10 }}>
+              <input
+                type="checkbox"
+                checked={waVouched}
+                onChange={(e) => setWaVouched(e.target.checked)}
+                style={{ marginTop: 4 }}
+              />
+              <span>
+                These {waFromPaste.numbers.length} number{waFromPaste.numbers.length === 1 ? " has" : "s have"} agreed
+                to hear from us on WhatsApp.{" "}
+                <span className="muted">
+                  Recorded against your name on every message. WhatsApp does not check this when you send —
+                  the people who receive it do, by blocking or reporting, and that falls on the number your
+                  quotations go out on.
+                </span>
+              </span>
+            </label>
+          ) : null}
+
+          {!info ? (
+            <div className="notice notice-warn">Upload the company profile PDF first.</div>
+          ) : null}
+
+          {waProgress ? (
+            <div className="notice">
+              Sending… {waProgress.done} of {waProgress.total} done. Leave this page open until it finishes.
+            </div>
+          ) : null}
+
+          {waStopped ? <div className="notice notice-bad"><strong>Stopped.</strong> {waStopped}</div> : null}
+
+          <div className="row-tight wrap">
+            <Button
+              onClick={() => void sendOnWhatsApp()}
+              disabled={!info || !waTotal || !!waProgress || (waFromPaste.numbers.length > 0 && !waVouched)}
+            >
+              {waProgress
+                ? `Sending ${waProgress.done}/${waProgress.total}…`
+                : waTotal
+                  ? `Send to ${waTotal} on WhatsApp`
+                  : "Send on WhatsApp"}
+            </Button>
+            {waTotal && !waProgress ? (
+              <span className="muted">
+                {waFromCustomers.recipients.length} from your customers, {waFromPaste.numbers.length} pasted.
+              </span>
+            ) : null}
+          </div>
+
+          {waResults.length ? (
+            <div className="table-wrap" style={{ marginTop: 10 }}>
+              <table className="table">
+                <thead><tr><th>Who</th><th>Result</th></tr></thead>
+                <tbody>
+                  {waResults.map((r, i) => (
+                    <tr key={`${r.who}-${i}`}>
+                      <td>{r.who}</td>
+                      <td>
+                        {r.ok
+                          ? <Chip tone="good">sent</Chip>
+                          : <><Chip tone="bad">not sent</Chip> <span className="muted">{r.error}</span></>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           ) : null}
         </div>
