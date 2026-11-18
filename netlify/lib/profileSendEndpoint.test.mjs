@@ -56,6 +56,8 @@ function makeClient() {
 let sends = [];
 /** Addresses the transport should refuse, to test a partial failure. */
 let bounce = new Set();
+/** From this address onwards the transport answers "throttled". */
+let throttleFrom = null;
 /** Addresses for which the transport THROWS rather than answering — a
  *  dropped socket, which is not the same as a refusal. */
 let explode = new Set();
@@ -68,6 +70,13 @@ vi.mock("./auth.mjs", () => ({
 vi.mock("./mailer.mjs", () => ({
   sendMail: async (args) => {
     sends.push(args);
+    if (throttleFrom && args.to === throttleFrom) {
+      return {
+        ok: false, retryable: true, throttled: true, retryAfterSeconds: 300,
+        error: "Microsoft is limiting how much this mailbox can send at once — not a problem with the address. "
+          + "Nothing was sent to them. Try again in about 5 minutes.",
+      };
+    }
     if (explode.has(args.to)) throw new Error("socket hang up");
     if (bounce.has(args.to)) {
       return { ok: false, error: "Mailbox unavailable.", retryable: false };
@@ -100,6 +109,7 @@ const THIRTY = Array.from({ length: 30 }, (_, i) => message(`buyer${i}@company${
 beforeEach(() => {
   sends = [];
   bounce = new Set();
+  throttleFrom = null;
   explode = new Set();
   rateLimited = false;
   DB.company_members = [{ company_id: COMPANY, user_id: "user-1" }];
@@ -405,5 +415,47 @@ describe("the log", () => {
   it("records a pasted address with no customer rather than inventing one", async () => {
     await post({ companyId: COMPANY, batchId: BATCH, messages: [message("stranger@elsewhere.example", "Stranger")] });
     expect(DB.profile_sends[0].customer_id).toBeNull();
+  });
+});
+
+/* ── when Microsoft limits how much the mailbox may upload ──────────────
+   "Application is over its IncomingBytes limit" is a BYTE budget per
+   mailbox over a short window, not a problem with any address. A mailshot
+   carrying a two-megabyte profile reaches it in roughly fifty messages.
+   Read as a refusal it produced a screen of identical failures against
+   thirty real customers, and no hint that the answer was to wait. */
+describe("when the mailbox is throttled mid-list", () => {
+  beforeEach(() => {
+    throttleFrom = null;
+  });
+
+  it("stops rather than spending the rest of the list on the same error", async () => {
+    throttleFrom = THIRTY[2].email;
+    const res = await post({ companyId: COMPANY, batchId: BATCH, messages: THIRTY.slice(0, 6) });
+    const out = parse(res);
+
+    /* Two went. The third was throttled, and nothing after it was even
+       attempted — the transport is called twice, not six times. */
+    expect(out.sent).toBe(2);
+    expect(sends).toHaveLength(3);
+    expect(out.results.filter((r) => !r.ok)).toHaveLength(4);
+  });
+
+  it("says it is a limit and not the address, and how long to wait", async () => {
+    throttleFrom = THIRTY[0].email;
+    const res = await post({ companyId: COMPANY, batchId: BATCH, messages: THIRTY.slice(0, 3) });
+    const said = parse(res).results[0].error;
+    expect(said).toMatch(/limiting how much/i);
+    expect(said).toMatch(/not a problem with the address/i);
+    expect(said).toMatch(/Nothing was sent to them/i);
+    expect(said).toMatch(/minute/);
+  });
+
+  /* They can all be sent again once the window clears, so the screen must
+     offer them rather than treating them as dead. */
+  it("marks every one of them as worth trying again", async () => {
+    throttleFrom = THIRTY[0].email;
+    const res = await post({ companyId: COMPANY, batchId: BATCH, messages: THIRTY.slice(0, 3) });
+    expect(parse(res).results.every((r) => r.retryable)).toBe(true);
   });
 });

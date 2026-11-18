@@ -188,11 +188,48 @@ async function sendViaMicrosoft({ mailbox, persistToken, to, cc, subject, messag
     }
 
     const errBody = await sendResp.json().catch(() => ({}));
-    console.error("graph sendMail refused:", sendResp.status, errBody?.error?.code);
+    const code = String(errBody?.error?.code ?? "");
+    const detail = String(errBody?.error?.message ?? "");
+    console.error("graph sendMail refused:", sendResp.status, code);
+
+    /* ── THROTTLED IS NOT REFUSED, AND THE DIFFERENCE IS THE WHOLE POINT.
+       Microsoft limits how many BYTES an app may upload for one mailbox in
+       a short window — "IncomingBytes", reported as about 150 MB per five
+       minutes. A mailshot carrying a two-megabyte profile reaches that in
+       roughly fifty messages, and every message after it comes back with
+       the same error.
+
+       Read as a refusal, that produced a screen of identical failures, the
+       word "failed" against thirty real customers, and no hint that the
+       answer was to wait. Nothing was wrong with those addresses and
+       nothing was rejected by anybody: the message was never handed over,
+       so it is retryable in the strict sense — trying again cannot deliver
+       it twice.
+
+       `throttled` tells a caller sending a list to STOP rather than spend
+       the rest of the batch collecting the same error. */
+    const throttled = sendResp.status === 429
+      || code === "ApplicationThrottled"
+      || /over its .*limit|too many requests/i.test(detail);
+
+    if (throttled) {
+      const header = Number(sendResp.headers?.get?.("Retry-After"));
+      const retryAfterSeconds = Number.isFinite(header) && header > 0 ? header : 300;
+      return {
+        ok: false,
+        retryable: true,
+        throttled: true,
+        retryAfterSeconds,
+        error: "Microsoft is limiting how much this mailbox can send at once — "
+          + `not a problem with the address. Nothing was sent to them. Try again in about ${Math.ceil(retryAfterSeconds / 60)} minute`
+          + `${Math.ceil(retryAfterSeconds / 60) === 1 ? "" : "s"}.`,
+      };
+    }
+
     return {
       ok: false,
       error: "Microsoft 365 refused to send that message. " +
-        (errBody?.error?.message ? "It said: " + String(errBody.error.message).slice(0, 300) : "Check the mailbox is still active."),
+        (detail ? "It said: " + detail.slice(0, 300) : "Check the mailbox is still active."),
     };
   } catch (err) {
     /* Retryable: the message was never handed over, so trying again later

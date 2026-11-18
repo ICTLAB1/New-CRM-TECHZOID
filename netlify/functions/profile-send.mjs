@@ -168,8 +168,29 @@ export async function handler(event) {
   if (!att.ok) return fail(event, 400, `The stored company profile cannot be sent: ${att.error}`);
 
   const results = [];
+  /* Set the moment Microsoft says the mailbox has uploaded too much for
+     now. Everybody after that point is reported as not sent, with the
+     reason and the wait — see the note in lib/mailer.mjs. */
+  let throttled = null;
 
   for (const one of planned) {
+    /* STOP, DO NOT KEEP TRYING. Once the byte budget for this mailbox is
+       spent, every remaining message comes back with the same error. The
+       old behaviour spent the whole list collecting it and put the word
+       "failed" against thirty real customers who were never written to. */
+    if (throttled) {
+      results.push({
+        email: one.to,
+        customerId: one.customerId,
+        ok: false,
+        via: "",
+        from: null,
+        error: throttled,
+        retryable: true,
+      });
+      continue;
+    }
+
     /* ONE RECIPIENT. `to` is a single address and there is no cc — see the
        note at the top of this file. */
     let result;
@@ -189,6 +210,8 @@ export async function handler(event) {
     } catch (err) {
       result = { ok: false, error: err?.message ?? "The message was not sent.", retryable: true };
     }
+
+    if (!result.ok && result.throttled) throttled = result.error;
 
     results.push({
       email: one.to,

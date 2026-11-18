@@ -74,6 +74,21 @@ export interface ProfileSendResult {
   }>;
 }
 
+/** One piece of a WhatsApp broadcast, as the server answers it. */
+export interface WhatsAppBroadcastResult {
+  sent: number;
+  failed: number;
+  attachment: { name: string; bytes: number };
+  results: Array<{
+    /** One of the two, depending on how this recipient was chosen. */
+    customerId?: string;
+    phone?: string;
+    label?: string;
+    ok: boolean;
+    error: string | null;
+  }>;
+}
+
 export interface ChatMessage {
   role: "user" | "assistant";
   content: string;
@@ -136,6 +151,22 @@ export interface IntegrationsApi {
     messages: ProfileMessageRequest[];
   }): Promise<ProfileSendResult>;
   sendWhatsApp(to: string, message: string): Promise<void>;
+  /**
+   * Send the company profile to several people on WhatsApp, one message
+   * each, with the PDF attached.
+   *
+   * `declaredConsent` is the sender saying the PASTED numbers agreed to be
+   * messaged — there is no record in the CRM to carry a tick for them, and
+   * nothing in a pasted list is sent without it. It says nothing about the
+   * customers chosen from the list: those are judged on their own record,
+   * and somebody who has not ticked the box stays refused.
+   */
+  broadcastCompanyProfile(request: {
+    companyId: string;
+    customerIds?: string[];
+    numbers?: Array<{ phone: string; label: string }>;
+    declaredConsent?: boolean;
+  }): Promise<WhatsAppBroadcastResult>;
   ask(system: string, messages: ChatMessage[]): Promise<string>;
 
   createTeamMember(input: TeamMemberInput): Promise<CreatedMember>;
@@ -281,6 +312,15 @@ export function netlifyApi(): IntegrationsApi {
 
     async sendWhatsApp(to, message) {
       await post("whatsapp-send", { to, message });
+    },
+
+    async broadcastCompanyProfile(request) {
+      return post<WhatsAppBroadcastResult>("whatsapp-profile-send", {
+        companyId: request.companyId,
+        customerIds: request.customerIds ?? [],
+        numbers: request.numbers ?? [],
+        declaredConsent: request.declaredConsent === true,
+      });
     },
 
     async ask(system, messages) {
