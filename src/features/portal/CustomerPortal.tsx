@@ -373,7 +373,7 @@ function DownloadButton({ doc, token }: { doc: PortalDocument; token: string }) 
         return;
       }
       const { totals, model } = documentModelFor(body.doc, body.settings, doc.kind);
-      downloadPdf({ model, rows: totals.rows, totals, images: DOC_IMAGES });
+      downloadPdf({ model, rows: totals.rows, images: DOC_IMAGES });
     } catch {
       setError("We couldn't reach our system. Check your connection and try again.");
     } finally {

@@ -68,27 +68,8 @@ export interface DocLabels {
   grandTotalLabel: string;
 }
 
-/**
- * WHICH SHEET THE DOCUMENT IS PRINTED ON.
- *
- * "standard" is the design this CRM has always produced. "boxed" is the
- * dense, fully-ruled grid an Indian distributor's tax invoice uses — the
- * same facts, laid out as labelled cells so a customer's accounts
- * department can check it field by field against a purchase order.
- *
- * Absent means "standard", like every other toggle in this file: a
- * settings row saved before this existed keeps printing what it printed.
- */
-export type DocLayout = "standard" | "boxed";
-
-export const DOC_LAYOUTS: ReadonlyArray<readonly [DocLayout, string, string]> = [
-  ["standard", "Standard", "The CRM's own design — roomy, with the partner strip and the annexure page."],
-  ["boxed", "Boxed tax invoice", "The dense ruled grid distributors print. Every field in its own labelled cell."],
-];
-
 export interface DocTemplate {
   accentColor: string;
-  layout?: DocLayout;
   sectionOrder: SectionKey[];
   sections: SectionToggles;
   columns: ColumnToggles;
@@ -116,7 +97,6 @@ export const DEFAULT_LABELS: DocLabels = {
 
 export const DEFAULT_DOC_TEMPLATE: DocTemplate = {
   accentColor: "#2563EB",
-  layout: "standard",
   sectionOrder: DEFAULT_SECTION_ORDER,
   sections: {
     /* Off by default: the approved reference quotation carries neither a
@@ -139,12 +119,6 @@ export function normalizeDocTemplate(saved: Partial<DocTemplate> | null | undefi
   const order = saved?.sectionOrder?.length ? saved.sectionOrder : DEFAULT_SECTION_ORDER;
   return {
     accentColor: saved?.accentColor || DEFAULT_DOC_TEMPLATE.accentColor,
-    /* Only a layout this build knows how to draw. A settings row holding
-       the name of a layout that was renamed, or anything at all, prints the
-       standard sheet rather than nothing. */
-    layout: DOC_LAYOUTS.some(([key]) => key === saved?.layout)
-      ? (saved?.layout as DocLayout)
-      : "standard",
     sectionOrder: order,
     sections: { ...DEFAULT_DOC_TEMPLATE.sections, ...(saved?.sections ?? {}) },
     columns: { ...DEFAULT_DOC_TEMPLATE.columns, ...(saved?.columns ?? {}) },

@@ -127,7 +127,7 @@ export function DocumentActions({
   const [whatsAppOpen, setWhatsAppOpen] = useState(false);
   const [approvedOpen, setApprovedOpen] = useState(false);
 
-  const renderOpts = { model, rows, totals, images };
+  const renderOpts = { model, rows, images };
 
   /* Only a quotation. A proforma, a purchase order and an invoice have no
      approved message about the document itself: an invoice's reminders are

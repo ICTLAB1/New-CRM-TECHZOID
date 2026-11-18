@@ -1,5 +1,3 @@
-import type { DocumentTotals } from "../../domain/tax/types";
-import { renderBoxedPdf } from "./boxed";
 import { documentFilename, renderDocumentPdf, type RenderOptions } from "./render";
 
 /**
@@ -11,21 +9,6 @@ import { documentFilename, renderDocumentPdf, type RenderOptions } from "./rende
  * twice through two code paths is how the emailed copy quietly drifts.
  */
 
-/**
- * What a destination needs to produce the document.
- *
- * `totals` is only read by the boxed layout, which draws CGST and SGST or
- * IGST — two different tables — from the one place that has already worked
- * out which it is. It is optional so that nothing which only ever prints
- * the standard sheet has to carry it, and WITHOUT IT A BOXED MODEL PRINTS
- * THE STANDARD SHEET rather than a boxed one with guessed tax columns. A
- * document in the wrong house style is a surprise; a document with the
- * wrong tax columns is one an auditor rejects.
- */
-export interface DeliverOptions extends RenderOptions {
-  totals?: DocumentTotals;
-}
-
 export interface DeliverableDocument {
   filename: string;
   /** Base64 without the data: prefix, which is what every mail API wants. */
@@ -33,12 +16,8 @@ export interface DeliverableDocument {
   blob: Blob;
 }
 
-export function buildPdf(opts: DeliverOptions): DeliverableDocument {
-  const pdf = opts.model.layout === "boxed" && opts.totals
-    ? renderBoxedPdf({
-      model: opts.model, rows: opts.rows, totals: opts.totals, images: opts.images,
-    })
-    : renderDocumentPdf(opts);
+export function buildPdf(opts: RenderOptions): DeliverableDocument {
+  const pdf = renderDocumentPdf(opts);
   const dataUri = pdf.output("datauristring");
   return {
     filename: documentFilename(opts.model),
@@ -48,7 +27,7 @@ export function buildPdf(opts: DeliverOptions): DeliverableDocument {
 }
 
 /** Save it. The browser names the file; we only choose what that name is. */
-export function downloadPdf(opts: DeliverOptions): string {
+export function downloadPdf(opts: RenderOptions): string {
   const { blob, filename } = buildPdf(opts);
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
@@ -62,14 +41,14 @@ export function downloadPdf(opts: DeliverOptions): string {
 }
 
 /** Open it in a new tab, for a look before sending. */
-export function previewPdf(opts: DeliverOptions): void {
+export function previewPdf(opts: RenderOptions): void {
   const { blob } = buildPdf(opts);
   const url = URL.createObjectURL(blob);
   window.open(url, "_blank", "noopener,noreferrer");
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
-export const pdfAttachment = (opts: DeliverOptions): { base64: string; filename: string } => {
+export const pdfAttachment = (opts: RenderOptions): { base64: string; filename: string } => {
   const { base64, filename } = buildPdf(opts);
   return { base64, filename };
 };

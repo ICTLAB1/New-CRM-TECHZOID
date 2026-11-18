@@ -286,7 +286,7 @@ export function QuotationsScreen({
      what the editor showed cannot differ. */
   const previewSaved = (d: SalesDocument) => {
     const { totals, model } = documentModelFor(d, settings, docType);
-    previewPdf({ model, rows: totals.rows, totals, images: docImages });
+    previewPdf({ model, rows: totals.rows, images: docImages });
   };
 
   const save = async (draft: SalesDocument) => {

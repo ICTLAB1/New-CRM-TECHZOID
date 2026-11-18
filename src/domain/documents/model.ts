@@ -6,7 +6,7 @@ import { stateNameForCode, STATES } from "../geo/states";
 import { partitionClauses } from "./clauses";
 import { SCAN_CAPTION, scanPayload } from "./scanCode";
 import { buildItemColumns, type ItemColumn } from "./columns";
-import { isOn, type DocLayout, type DocTemplate, type SectionKey } from "./template";
+import { isOn, type DocTemplate, type SectionKey } from "./template";
 import { DEFAULT_CERTIFICATIONS } from "./brandDefaults";
 
 export type DocType = "quotation" | "proforma" | "purchase_order" | "invoice";
@@ -71,15 +71,6 @@ export interface DocumentModel {
   title: string;
   /** Sections to draw, in order, already filtered by visibility. */
   sectionOrder: SectionKey[];
-  /**
-   * Which sheet to print on — see DocLayout.
-   *
-   * ON THE MODEL, so that the choice reaches every destination through one
-   * value. A quotation downloaded, emailed and opened in a tab must be the
-   * same sheet; a layout read separately at each of those three places is
-   * how the attachment stops matching the preview.
-   */
-  layout: DocLayout;
   accentColor: string;
 
   header: {
@@ -802,7 +793,6 @@ export function buildDocumentModel(input: BuildModelInput): DocumentModel {
     number: doc.number,
     title: isPurchaseOrder ? "PURCHASE ORDER" : isInvoice ? "TAX INVOICE" : isProforma ? "PROFORMA INVOICE" : "QUOTATION",
     sectionOrder: dt.sectionOrder,
-    layout: dt.layout ?? "standard",
     accentColor: dt.accentColor,
     header: {
       companyName: c.name || "",

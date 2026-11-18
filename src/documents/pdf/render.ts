@@ -222,7 +222,15 @@ export function renderDocumentPdf(opts: RenderOptions): jsPDF {
     const inScanBand = (at: number): boolean =>
       !!m.scan && at > scanTop - 1 && at < scanTop + scanBox + 1;
 
-    let ly = y + (logo ? 1 : 2);
+    /* CLEARANCE UNDER THE LOGO. pdf.text places a BASELINE, not a top, so
+       `y + 1` put the company name's cap-height two and a half millimetres
+       back up into the two-millimetre gap left under the logo — leaving
+       about a fifth of a millimetre between the artwork and the name,
+       which prints as the two touching. 3.2 puts the cap top a clear
+       2.4mm below the logo. The no-logo case is left alone: there is
+       nothing above it to collide with, and moving it would shift the
+       header of every document that has no logo. */
+    let ly = y + (logo ? 3.2 : 2);
     /* The last line's leading is the gap BELOW it, which the header does
        not owe: measuring the block to that point left six millimetres of
        air under the registration line and cost a full page on a document

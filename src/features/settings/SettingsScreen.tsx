@@ -11,7 +11,7 @@ import { Confirm } from "../../components/Modal";
 import { useToast } from "../../components/Toast";
 import { CURRENCIES } from "../../domain/currency/currencies";
 import { STATE_NAMES } from "../../domain/geo/states";
-import { DOC_LAYOUTS, normalizeDocTemplate, SECTION_ORDER_META, type DocLayout, type DocTemplate, type SectionKey } from "../../domain/documents/template";
+import { normalizeDocTemplate, SECTION_ORDER_META, type DocTemplate, type SectionKey } from "../../domain/documents/template";
 import { DEFAULT_VALIDITY_DAYS } from "../../domain/documents/create";
 import { DOMESTIC_TERMS, SELLER_TOKEN } from "../../domain/documents/terms";
 import { DEFAULT_REVENUE_BASIS, REVENUE_BASES, type IncentiveScheme, type IncentiveSlab } from "../../domain/incentives/incentives";
@@ -423,39 +423,6 @@ function DocumentPanel({ settings, canEdit, onChange }: { settings: Record<strin
 
   return (
     <div className="stack">
-      <Card title="Which sheet a document prints on">
-        <p className="muted" style={{ marginTop: 0 }}>
-          The same quotation or invoice, laid out two different ways. Switching between them changes nothing
-          about the figures, the tax or the numbering — only how the page is arranged. Open any document and
-          press <strong>Open PDF</strong> to see the one you have chosen before you send anything.
-        </p>
-        <div className="stack" style={{ marginTop: 12, gap: 8 }}>
-          {DOC_LAYOUTS.map(([key, label, hint]) => (
-            <label className="row-tight" key={key} style={{ cursor: canEdit ? "pointer" : "default", alignItems: "flex-start" }}>
-              <input
-                type="radio"
-                name="doc-layout"
-                disabled={!canEdit}
-                checked={(draft.layout ?? "standard") === key}
-                onChange={() => setDraft((d) => ({ ...d, layout: key as DocLayout }))}
-                style={{ marginTop: 3 }}
-              />
-              <span>
-                <strong>{label}</strong>
-                <span className="muted"> — {hint}</span>
-              </span>
-            </label>
-          ))}
-        </div>
-        <div className="field-hint" style={{ marginTop: 10 }}>
-          The boxed sheet prints a tax invoice in the three copies the rules ask for — Original for Recipient,
-          Duplicate for Transporter, Triplicate for Supplier — and prints a quotation once. It carries no IRN
-          and no e-invoice QR, because this CRM does not register invoices with the e-invoice portal; the
-          square on it opens the document in the CRM.
-        </div>
-        <SaveBar dirty={dirty} canEdit={canEdit} onSave={save} onReset={reset} />
-      </Card>
-
       <Card title="What appears on a document">
         <p className="muted" style={{ marginTop: 0 }}>
           Switching a block off hides it on every quotation and proforma, including ones already saved — the
