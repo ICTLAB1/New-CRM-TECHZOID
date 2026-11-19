@@ -1,6 +1,5 @@
 import { adminClient } from "../lib/auth.mjs";
 import { drainQueue } from "../lib/outreachSender.mjs";
-import { bulkEmailPaused, pausedLog } from "../lib/bulkEmailPause.mjs";
 
 /**
  * Drain the campaign queue on a schedule.
@@ -27,15 +26,6 @@ import { bulkEmailPaused, pausedLog } from "../lib/bulkEmailPause.mjs";
 const BATCH = 5;
 
 export async function handler() {
-  /* NOTHING IS MARKED FAILED, which is the whole point of stopping here
-     rather than letting the sends refuse one at a time: a follow-up left
-     `scheduled` goes out when sending resumes, a follow-up marked failed
-     has to be armed again by hand. See lib/bulkEmailPause.mjs. */
-  if (bulkEmailPaused()) {
-    console.log(pausedLog("outreach queue"));
-    return { statusCode: 200, body: JSON.stringify({ paused: true, sent: 0 }) };
-  }
-
   let admin;
   try {
     admin = adminClient();

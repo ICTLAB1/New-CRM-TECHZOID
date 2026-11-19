@@ -12,6 +12,10 @@ describe("the screens' copy of the pause", () => {
 
   it("tells somebody what still works and that nothing was lost", () => {
     expect(BULK_PAUSE_NOTICE).toMatch(/Nothing has been lost/i);
-    expect(BULK_PAUSE_NOTICE).toMatch(/one quotation to one customer still works/i);
+    expect(BULK_PAUSE_NOTICE).toMatch(/one quotation to one customer are unaffected/i);
+    /* Naming them matters: "paused" on its own reads as the whole CRM
+       having stopped sending, which is what somebody will tell their
+       team. */
+    expect(BULK_PAUSE_NOTICE).toMatch(/Follow-ups, payment reminders/i);
   });
 });

@@ -6,25 +6,26 @@ import { PAUSE_REASON, PAUSED, bulkEmailPaused, pausedLog } from "./bulkEmailPau
 const FUNCTIONS = join(import.meta.dirname, "..", "functions");
 const read = (name) => readFileSync(join(FUNCTIONS, name), "utf8");
 
-/* Everything that sends to many people, or sends without a person pressing
-   a button for one named customer. */
-const BULK = [
-  "profile-send.mjs",
+/* The one thing the pause covers: the company-profile mailshot. */
+const BULK = ["profile-send.mjs"];
+
+/* Everything that keeps running, at the company's instruction and after
+   being told what it means while the mailbox is still restricted.
+
+   The line is volume per send rather than whether somebody is watching: a
+   follow-up is one customer, one document they asked about, no
+   attachment, a handful a morning. The mailshot is hundreds of cold
+   introductions carrying two megabytes each, which is what Microsoft
+   objected to. */
+const NOT_BULK = [
+  "email-send.mjs",
+  "discount-approval-notify.mjs",
+  "outreach-test-send.mjs",
   "outreach-launch.mjs",
   "outreach-run.mjs",
   "followups-run.mjs",
   "payment-reminders-run.mjs",
 ];
-
-/* One message, one customer, one person behind it. Pausing these would
-   stop the company trading.
-
-   outreach-test-send is here on purpose even though it belongs to the
-   campaign system: it sends ONE message, to the signed-in user's own
-   address, read server-side. That makes it the cheapest way to find out
-   whether Microsoft has lifted the restriction — which is exactly what
-   somebody will want the moment they think it has. */
-const NOT_BULK = ["email-send.mjs", "discount-approval-notify.mjs", "outreach-test-send.mjs"];
 
 describe("the pause on automated email", () => {
   it("is on", () => {
@@ -40,6 +41,9 @@ describe("the pause on automated email", () => {
     expect(PAUSE_REASON).toMatch(/restricted/i);
     expect(PAUSE_REASON).toMatch(/Nothing has been lost/i);
     expect(PAUSE_REASON).toMatch(/Restricted entities/);
+    /* It has to say what still works, or somebody reads "paused" and
+       assumes their quotations are stuck too. */
+    expect(PAUSE_REASON).toMatch(/Follow-ups, payment reminders/i);
   });
 
   it("names the job in a log line, so a job that did nothing says so", () => {
@@ -51,7 +55,7 @@ describe("which senders the pause reaches", () => {
   /* THE LIST IS THE POINT. A new bulk sender added later without this
      guard is a mailshot that goes out while the mailbox is restricted,
      and nothing else in the codebase would notice. */
-  it("stops every send that goes to many people or runs unattended", () => {
+  it("stops the company-profile mailshot", () => {
     for (const name of BULK) {
       const src = read(name);
       expect(src, `${name} does not import the pause`).toContain("bulkEmailPause.mjs");
@@ -59,36 +63,25 @@ describe("which senders the pause reaches", () => {
     }
   });
 
-  it("leaves one message to one customer alone", () => {
+  it("leaves follow-ups, reminders, campaigns and single sends alone", () => {
     for (const name of NOT_BULK) {
       expect(read(name), `${name} should not be paused`).not.toContain("bulkEmailPause.mjs");
     }
   });
 
-  /* A scheduled job must return BEFORE it reads any rows. Letting it run
-     and refuse each send one at a time would mark today's follow-ups
-     failed, and a failed follow-up has to be armed again by hand. */
-  it("stops a scheduled job before it does any work at all", () => {
-    for (const name of ["followups-run.mjs", "payment-reminders-run.mjs", "outreach-run.mjs"]) {
-      const src = read(name);
-      const guard = src.indexOf("bulkEmailPaused()");
-      expect(guard, `${name} has no guard`).toBeGreaterThan(0);
-
-      /* The first thing the handler actually does: read rows, or hand off
-         to the library that does. Whichever comes first has to come after
-         the guard. outreach-run reads nothing itself — it calls
-         drainQueue — so looking only for `.from(` would pass it blindly. */
-      const work = [src.indexOf(".from("), src.indexOf("await ")]
-        .filter((i) => i > 0);
-      expect(work.length, `${name} appears to do nothing`).toBeGreaterThan(0);
-      expect(guard, `${name} starts work before checking the pause`).toBeLessThan(Math.min(...work));
-    }
+  /* THE MAILSHOT IS STOPPED BEFORE IT READS ANYTHING, so a paused send
+     costs nothing and answers with the reason rather than a wall of
+     refusals one recipient at a time. */
+  it("stops the mailshot before it reads the profile or the list", () => {
+    const src = read("profile-send.mjs");
+    const guard = src.indexOf("bulkEmailPaused()");
+    const firstRead = src.indexOf(".from(");
+    expect(guard).toBeGreaterThan(0);
+    expect(guard, "the mailshot reads rows before checking the pause").toBeLessThan(firstRead);
   });
 
   it("answers a person with words rather than a silent nothing", () => {
-    for (const name of ["profile-send.mjs", "outreach-launch.mjs"]) {
-      expect(read(name)).toContain("PAUSE_REASON");
-    }
+    expect(read("profile-send.mjs")).toContain("PAUSE_REASON");
   });
 });
 

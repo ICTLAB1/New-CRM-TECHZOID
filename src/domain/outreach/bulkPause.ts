@@ -17,8 +17,7 @@ export const BULK_EMAIL_PAUSED = true;
 
 /** Said on screen, where a sender will meet it. */
 export const BULK_PAUSE_NOTICE =
-  "Microsoft has restricted this company's mailbox from sending, after a large mailshot. "
-  + "Until an administrator lifts it, the CRM will not send mailshots, campaigns, follow-up chasers "
-  + "or payment reminders — every further attempt counts against the account. "
-  + "Nothing has been lost: everything queued stays queued and goes out when sending is turned back on. "
-  + "Sending one quotation to one customer still works.";
+  "Microsoft has restricted this company's mailbox from sending, after a large mailshot — and sending "
+  + "more of them is what would keep it restricted. Nothing has been lost: your list is still here and "
+  + "will send when this is turned back on. "
+  + "Follow-ups, payment reminders and sending one quotation to one customer are unaffected.";
