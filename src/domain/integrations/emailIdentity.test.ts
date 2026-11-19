@@ -73,6 +73,40 @@ describe("the signature strip", () => {
     expect(c.signatureImage?.src).toBe(`${ORIGIN}/brand/email-signature.png`);
   });
 
+  /* THE FAULT A CUSTOMER REPORTED, with a photograph of their own inbox:
+     a grey box with a question mark in it, sitting under the signature
+     where the badges belong, on a quotation follow-up.
+
+     `absoluteUrl` hands the path back UNCHANGED when there is no origin to
+     put in front of it. "/brand/email-signature.png" is fine on a screen
+     and meaningless in an inbox, which resolves it against nothing. The
+     company logo two fields away had always guarded against this; the
+     strip — the biggest image in the email, and so the one a reader is
+     likeliest to notice — had not. */
+  it("is DROPPED rather than sent as a relative path nothing can resolve", () => {
+    const c = emailCompanyFrom(SETTINGS);
+    expect(c.signatureImage).toBeNull();
+    /* And the logo keeps behaving the same way, so the two cannot drift
+       apart again. */
+    expect(c.logo).toBeUndefined();
+  });
+
+  it("refuses a plain http address, which a mail client flags or blocks", () => {
+    const c = emailCompanyFrom(
+      { company: { ...SETTINGS.company, signatureImage: "http://insecure.example/strip.png" } },
+      { origin: ORIGIN },
+    );
+    expect(c.signatureImage).toBeNull();
+  });
+
+  /* Losing the artwork must not lose the claims. Everything the strip says
+     in pictures is also in the signature in words. */
+  it("still names the company and its certifications when the strip is dropped", () => {
+    const c = emailCompanyFrom(SETTINGS);
+    expect(c.name).toBeTruthy();
+    expect(c.certifications?.length).toBeGreaterThan(0);
+  });
+
   it("is NEVER a data: URI", () => {
     /* Gmail strips an embedded image outright, so a signature built that
        way is simply missing for most readers — with nothing in its place. */

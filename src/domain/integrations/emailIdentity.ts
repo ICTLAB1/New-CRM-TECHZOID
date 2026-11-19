@@ -198,7 +198,26 @@ export function emailCompanyFrom(
   const configured = text(company["signatureImage"]).trim();
   const fallback = SIGNATURE_IMAGE_PATH.trim();
   const chosen = configured || (company["signatureImage"] === undefined ? fallback : "");
-  const src = chosen ? absoluteUrl(chosen, options.origin) : "";
+  const resolved = chosen ? absoluteUrl(chosen, options.origin) : "";
+
+  /* AND ONLY IF IT CAME OUT ABSOLUTE.
+
+     `absoluteUrl` hands back the path UNCHANGED when there is no origin to
+     put in front of it — which is the right answer for a screen, and a
+     broken image in an inbox. "/brand/email-signature.png" in an email
+     resolves against nothing: the reader gets a grey box with a question
+     mark in it, sitting under the signature where the badges should be,
+     on every message sent from wherever no origin was available.
+
+     The logo two fields up has always guarded against this (`if (!base)
+     return undefined`). The strip did not, and it is the one image in the
+     email a reader is most likely to notice is broken, because it is the
+     biggest.
+
+     Dropped rather than patched up with a guess at the host: the signature
+     prints the company's name, addresses, numbers and certifications in
+     words regardless, so a reader loses artwork and no information. */
+  const src = /^https:\/\//i.test(resolved) ? resolved : "";
 
   /* THE OFFICES, FROM THE SETTINGS SOMEBODY CAN EDIT. India is assembled
      from the address fields on the company tab — the same ones printed on
