@@ -6,8 +6,9 @@ import { orderFulfilment, type Challan } from "../orders/fulfilment";
 import type { SalesOrder } from "../orders/create";
 import { daysLeft, dueForRenewal, valueAtRisk, type Subscription } from "../subscriptions/expiry";
 import type { Customer } from "../customers/customer";
-import { totalsByCurrency, type CurrencyTotal } from "../currency/format";
+import { moneyList, totalsByCurrency, type CurrencyTotal } from "../currency/format";
 import { backingFor, backingNote } from "../pipeline/backing";
+import { grandTotalOf, mismatchNote, wonMismatches } from "../pipeline/reconcile";
 import { countsAsWon, isOpenStage, wonAmount } from "../pipeline/stages";
 import { scopeTo, type Owned } from "./scope";
 import { TODAY, localISO } from "../dates";
@@ -107,7 +108,8 @@ export function kpis(ws: Workspace, sellerState: string, now: Date = new Date())
   };
 }
 
-export type AttentionKind = "overdue-proforma" | "follow-up" | "stale-quotation" | "renewal" | "unbacked-win";
+export type AttentionKind =
+  "overdue-proforma" | "follow-up" | "stale-quotation" | "renewal" | "unbacked-win" | "won-mismatch";
 
 export interface AttentionRow {
   kind: AttentionKind;
@@ -185,6 +187,30 @@ export function needsAttention(ws: Workspace, sellerState: string, now: Date = n
          money still outranks both — that is cash, not bookkeeping. */
       urgency: backing.nothingRaised ? 700 : 400,
       value: wonAmount(c), currency: c.currency, tone: "warn", view: "pipeline",
+    });
+  }
+
+  /* REVENUE REPORTED AT A FIGURE THE PAPERWORK DISAGREES WITH.
+     Reported: total sales not matching the order won. The cause is fixed
+     for every win recorded from now on, but a figure frozen months ago
+     still carries the estimate somebody typed when the lead was created,
+     and those are the numbers on this screen. Like the unbacked row above,
+     this changes no total — it says which deal to look at, and the
+     pipeline board offers to put it right.
+
+     Above an unbacked win that at least has a quotation behind it: this is
+     a specific wrong number with a specific right one beside it, which is
+     a minute's work. Below a sale with nothing raised at all. */
+  for (const { customer: c, figure } of wonMismatches(ws.customers, ws, grandTotalOf(sellerState))) {
+    rows.push({
+      kind: "won-mismatch", id: c.id,
+      title: c.company ?? "Untitled customer",
+      /* The FULL figures, not the compact dashboard form: the whole
+         point of this row is checking a number against a document, and
+         "₹50.0 K against ₹1.18 L" cannot be checked against anything. */
+      detail: mismatchNote(figure, (n) => moneyList(n, c.currency)),
+      urgency: 500,
+      value: figure.documented, currency: c.currency, tone: "warn", view: "pipeline",
     });
   }
 

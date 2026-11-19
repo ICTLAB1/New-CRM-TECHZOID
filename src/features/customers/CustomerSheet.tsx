@@ -17,7 +17,9 @@ import { checkDuplicate, duplicateCheckAvailable, type DuplicateHit } from "../.
 import { gstinMessage, validateGSTIN } from "../../domain/gstin/validate";
 import { COUNTRIES } from "../../domain/geo/countries";
 import { STATE_NAMES } from "../../domain/geo/states";
-import { SEGMENTS, SOURCES, STAGES, applyStage, type StageId } from "../../domain/pipeline/stages";
+import { SEGMENTS, SOURCES, STAGES, applyStage, countsAsWon, type StageId } from "../../domain/pipeline/stages";
+import { grandTotalOf, mismatchNote, wonFigure, type ReconcileSource } from "../../domain/pipeline/reconcile";
+import { moneyList } from "../../domain/currency/format";
 import { CURRENCIES } from "../../domain/currency/currencies";
 import { TAX_TYPES } from "../../domain/tax/types";
 
@@ -65,12 +67,20 @@ export interface CustomerSheetProps {
    *  form, and "it is in there somewhere, scroll" is how a feature stays
    *  unused. */
   focus?: "files";
+  /** Orders, invoices, proformas and quotations, so a won deal can be
+   *  checked against the paperwork behind it. Optional: without them the
+   *  sheet still shows what is counted as revenue, it just cannot say
+   *  whether a document disagrees. */
+  documents?: ReconcileSource;
+  /** Needed to total a document — intra-state or inter-state changes the
+   *  tax and so the grand total. */
+  sellerState?: string;
   onSave: (customer: Customer) => void;
   onClose: () => void;
 }
 
 export function CustomerSheet({
-  profile, unavailable = [], open = true, customer, isNew = false, users, customFields, canReassign, currentUser, settings = {}, focus, companyId, onSave, onClose }: CustomerSheetProps) {
+  profile, unavailable = [], open = true, customer, isNew = false, users, customFields, canReassign, currentUser, settings = {}, focus, companyId, documents, sellerState = "", onSave, onClose }: CustomerSheetProps) {
   const [f, setF] = useState<Customer>({ ...customer, notes: customer.notes ?? [], customFields: customer.customFields ?? {} });
   const set = <K extends keyof Customer>(k: K) => (e: { target: { value: string } }) =>
     setF((cur) => ({ ...cur, [k]: e.target.value }));
@@ -306,7 +316,12 @@ export function CustomerSheet({
                 {STAGES.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
               </Select>
             </Field>
-            <Field label="Deal value"><Input numeric value={String(f.value ?? "")} onChange={set("value")} /></Field>
+            <Field
+              label="Deal value"
+              hint={countsAsWon(f) ? "What was expected. The won figure below is what gets reported." : undefined}
+            >
+              <Input numeric value={String(f.value ?? "")} onChange={set("value")} />
+            </Field>
             <Field label="Next follow-up"><Input type="date" value={f.nextFollowUp ?? ""} onChange={set("nextFollowUp")} /></Field>
             <Field label="Owner" hint={canReassign ? "Reassigning moves this customer's quotations, orders and subscriptions too." : "Only an admin or manager can reassign."}>
               <Select value={f.ownerId} onChange={set("ownerId")} disabled={!canReassign}>
@@ -314,6 +329,56 @@ export function CustomerSheet({
               </Select>
             </Field>
           </div>
+
+          {/* WHAT THIS DEAL IS REPORTED AS, and whether the paperwork
+              agrees.
+
+              REPORTED FAULT: "Total sales or closed orders values are not
+              getting matched with the order won or invoice." They were
+              not, and this screen was part of why nobody could tell: the
+              figure every revenue report counts is `wonValue`, frozen at
+              the moment of the win, and there was nowhere in the CRM to
+              see it. "Deal value" above is the estimate, and the two
+              being different looked like the reports being wrong.
+
+              So the frozen figure is shown, it is editable, and where a
+              document behind the deal says something else both numbers
+              are named with one button to accept the document's. Changing
+              a concluded deal's revenue is a decision, so it is a button
+              somebody presses and not something that happens quietly. */}
+          {countsAsWon(f) ? (
+            <Field
+              label="Reported as revenue"
+              hint="The figure frozen when this was won. Every sales total in the CRM counts this one."
+            >
+              <Input
+                numeric
+                value={String(f.wonValue ?? "")}
+                placeholder={String(f.value ?? "")}
+                onChange={(e) => setF((c) => ({ ...c, wonValue: Number(e.target.value) || undefined }))}
+              />
+              {(() => {
+                if (!documents) return null;
+                const fig = wonFigure(f, documents, grandTotalOf(sellerState));
+                if (fig.matches) return null;
+                return (
+                  <div className="stack" style={{ gap: 6, marginTop: 6 }}>
+                    <div style={{ color: "var(--warn)" }}>
+                      {mismatchNote(fig, (n) => moneyList(n, f.currency))}
+                    </div>
+                    <div>
+                      <Button
+                        tone="default"
+                        onClick={() => setF((c) => ({ ...c, wonValue: fig.documented }))}
+                      >
+                        Use {moneyList(fig.documented, f.currency)} from {fig.number || fig.tier}
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })()}
+            </Field>
+          ) : null}
 
           {/* Currency and tax regime are already decided by the country —
               see applyCountry in domain/customers/customer.ts — so on the

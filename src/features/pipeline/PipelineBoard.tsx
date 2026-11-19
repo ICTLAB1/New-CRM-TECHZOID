@@ -3,9 +3,10 @@ import { AnimatePresence, LayoutGroup, motion } from "motion/react";
 import { STAGES, applyStage, stageNeedsReason, type LostDetail, type StageId } from "../../domain/pipeline/stages";
 import type { Customer } from "../../domain/customers/customer";
 import { customerLabel } from "../../domain/customers/customer";
-import { formatTotals, moneyShort, totalsByCurrency } from "../../domain/currency/format";
+import { formatTotals, moneyList, moneyShort, totalsByCurrency } from "../../domain/currency/format";
 import { backingFor, backingNote, type BackingSource } from "../../domain/pipeline/backing";
-import { countsAsWon } from "../../domain/pipeline/stages";
+import { countsAsWon, wonAmount } from "../../domain/pipeline/stages";
+import { grandTotalOf, mismatchNote, wonFigure, type ReconcileSource } from "../../domain/pipeline/reconcile";
 import { fmtDateShort, isOverdue } from "../../domain/dates";
 import { LostReasonModal } from "./LostReasonModal";
 import { Button, Card, Input, Select } from "../../components/primitives";
@@ -22,6 +23,7 @@ import { SavedViews } from "../../components/SavedViews";
 export function PipelineBoard({
   customers,
   documents,
+  sellerState = "",
   users = [],
   onChange,
   onOpen,
@@ -30,7 +32,10 @@ export function PipelineBoard({
   /** Orders, invoices, proformas and quotations, so a card can say when a
    *  deal is being counted as won with nothing sold. Optional: the board
    *  still works without them, it just cannot make that check. */
-  documents?: BackingSource;
+  documents?: BackingSource & ReconcileSource;
+  /** Needed to total a document, for the check that a won deal's reported
+   *  figure matches its own paperwork. */
+  sellerState?: string;
   /** For the owner filter. Without them the board shows everybody's deals,
    *  which is the right default for one person and unreadable for ten. */
   users?: { id: string; name: string }[];
@@ -133,8 +138,23 @@ export function PipelineBoard({
               {/* Per currency. A column holding one dirham deal and one rupee
                   deal has no single total, and printing their sum with a ₹
                   in front is a number in no unit at all. */}
+              {/* THE WON COLUMN TOTALS THE WON FIGURES. It used to total
+                  `value` for every column alike, so the Won column's own
+                  heading disagreed with the dashboard, the revenue report
+                  and the cards beneath it — four numbers for one month's
+                  sales, which is what "total sales not matching" looked
+                  like from the outside. Every other column still totals
+                  the estimate, because for an open deal that is the only
+                  figure there is. */}
               <div className="board-head-total">
-                {formatTotals(totalsByCurrency(inStage, (c) => Number(c.value) || 0, (c) => c.currency), moneyShort) || "—"}
+                {formatTotals(
+                  totalsByCurrency(
+                    inStage,
+                    (c) => (countsAsWon(c) ? wonAmount(c) : Number(c.value) || 0),
+                    (c) => c.currency,
+                  ),
+                  moneyShort,
+                ) || "—"}
               </div>
               <div className="board-body">
                 <AnimatePresence initial={false}>
@@ -147,6 +167,19 @@ export function PipelineBoard({
                   const unbacked = documents && countsAsWon(c) && !backingFor(c.id, documents).backed
                     ? backingNote(backingFor(c.id, documents))
                     : "";
+                  /* Counted as revenue at a figure its own paperwork
+                     disagrees with — the reported "total sales not
+                     matching the order won". Same reasoning as the line
+                     above: this is the screen where the stage gets set, so
+                     it is the screen that says so, and opening the card is
+                     where it gets put right. */
+                  const mismatch = documents && countsAsWon(c)
+                    ? mismatchNote(
+                        wonFigure(c, documents, grandTotalOf(sellerState)),
+                        (n) => moneyList(n, c.currency),
+                      )
+                    : "";
+                  const wonShown = countsAsWon(c) ? wonAmount(c) : Number(c.value) || 0;
                   return (
                     <motion.div
                       key={c.id}
@@ -174,8 +207,15 @@ export function PipelineBoard({
                           </span>
                         ) : null}
                       </div>
-                      {Number(c.value) > 0 ? <div className="deal-value">{moneyShort(c.value, c.currency)}</div> : null}
+                      {/* A WON CARD SHOWS WHAT IT WAS WON FOR. This used
+                          to read `c.value` whatever the stage, so a deal
+                          won on a ₹4,72,000 order sat in the Won column
+                          showing the ₹50,000 somebody estimated in March
+                          while the dashboard showed something else again.
+                          wonAmount is the figure the reports count. */}
+                      {wonShown > 0 ? <div className="deal-value">{moneyShort(wonShown, c.currency)}</div> : null}
                       {unbacked ? <div className="deal-flag" title={unbacked}>No order yet</div> : null}
+                      {mismatch ? <div className="deal-flag" title={mismatch}>Figure disagrees</div> : null}
                     </button>
                     </motion.div>
                   );

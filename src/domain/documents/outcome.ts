@@ -102,17 +102,27 @@ export function outcomesFor(
 /**
  * What a deal is worth, for the snapshot a win freezes.
  *
- * The customer's own figure wins where there is one: it is what somebody
- * typed about this deal, and a quotation is one document against it. Where
- * there is none — which is every customer created from a quotation, and so
- * most of them — the quotation's own total is the only number anybody has,
- * and without it the win reaches the revenue report worth zero.
+ * THE DOCUMENT WINS. This used to be the other way round — the figure
+ * somebody had typed on the customer took precedence, on the reasoning
+ * that it was what a person had said about the deal while a quotation was
+ * only one document against it. In use that was wrong, and was reported as
+ * wrong: the typed figure is a rough estimate from the day the lead was
+ * created, the document is what the customer actually agreed to buy, and
+ * the revenue report was showing the estimate. A deal won on a ₹4,72,000
+ * order reported ₹50,000 because somebody had guessed ₹50,000 in March,
+ * and no screen in the CRM explained the difference.
+ *
+ * So the order, invoice or quotation the win was recorded on IS the
+ * number, and the typed estimate is only a fallback — for a win recorded
+ * against a document with no total on it at all.
+ *
+ * `undefined` rather than 0 when there is no number anywhere: a snapshot
+ * of zero blocks the live value for ever. See applyStage.
  */
 export function wonValueFor(
   customer: { value?: number | string } | null | undefined,
   documentTotal: number,
 ): number | undefined {
-  const typed = Number(customer?.value) || 0;
-  if (typed > 0) return typed;
-  return documentTotal > 0 ? documentTotal : undefined;
+  if (documentTotal > 0) return documentTotal;
+  return Number(customer?.value) || undefined;
 }

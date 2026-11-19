@@ -227,11 +227,19 @@ export function Workbench({
      decision rather than a nudge, so it lands on a concluded deal too, and
      it carries what the deal was worth and why it was lost.
 
-     The value is only ever filled IN, never overwritten: a figure somebody
-     typed about this customer is better information than one quotation's
-     total, and applyStage freezes whichever is there at the moment of the
-     win. Without it a customer created from a quotation — which is most of
-     them — won a deal worth nothing at all. */
+     THE FIGURE GOES TO `wonValue`, VIA applyStage, AND IT OVERWRITES.
+     This used to only ever fill `value` in, and only where the customer
+     had none, on the reasoning that a figure somebody typed about the
+     customer beat one quotation's total. Both halves of that were wrong
+     and were reported as wrong — total sales not matching the order won.
+     The typed figure is a rough estimate from the day the lead was
+     created; `detail.value` is the total of the document somebody has
+     just pressed "Order won" on. The precedence now lives in applyStage
+     (StageChange.wonValue), which is where it can be tested.
+
+     `value` is still filled in where it is empty, so the customer's own
+     card is not blank, but a typed estimate is never overwritten: it is
+     what somebody expected, kept beside what actually happened. */
   const recordDealOutcome = (
     customerId: string,
     stage: StageId,
@@ -240,8 +248,12 @@ export function Workbench({
     handleCustomersChange(
       customers.map((c) => {
         if (c.id !== customerId) return c;
-        const valued = detail?.value && !(Number(c.value) > 0) ? { ...c, value: detail.value } : c;
-        return { ...applyStage(valued, stage), ...(detail?.lost ?? {}), updatedAt: Date.now() };
+        const estimated = detail?.value && !(Number(c.value) > 0) ? { ...c, value: detail.value } : c;
+        return {
+          ...applyStage(estimated, stage, Date.now(), { wonValue: detail?.value }),
+          ...(detail?.lost ?? {}),
+          updatedAt: Date.now(),
+        };
       }),
     );
   };
@@ -394,7 +406,7 @@ export function Workbench({
             title="Pipeline"
             sub="Drag a deal to move it. Moving to Lost asks why — you can always skip."
           />
-          <PipelineBoard customers={customers} documents={analytics} users={team} onChange={handleCustomersChange} onOpen={setEditing} />
+          <PipelineBoard customers={customers} documents={analytics} sellerState={sellerStateOf(settings)} users={team} onChange={handleCustomersChange} onOpen={setEditing} />
           <Presence value={editing}>
             {(record, open) => (
             <CustomerSheet
@@ -405,6 +417,10 @@ export function Workbench({
               canReassign={isAdmin || user.role === "Manager"}
               currentUser={user}
               settings={settings}
+              /* So a won deal can be checked against its own paperwork —
+                 the figure the reports count, beside the invoice. */
+              documents={analytics}
+              sellerState={sellerStateOf(settings)}
               onSave={(next) => {
                 handleCustomersChange(customers.map((c) => (c.id === next.id ? next : c)));
                 setEditing(null);

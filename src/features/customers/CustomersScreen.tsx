@@ -354,6 +354,12 @@ export function CustomersScreen({
           canReassign={canReassign}
           currentUser={currentUser}
           settings={settings}
+          /* So a won deal can be checked against its own paperwork. This
+             screen's set carries no orders — invoices outrank them
+             anyway, and a quotation is still better than nothing to
+             compare against. */
+          documents={documents}
+          sellerState={String((settings?.["company"] as { state?: string } | undefined)?.state ?? "Delhi")}
           onSave={save}
           onClose={() => { setEditing(null); setFocusFiles(false); }}
         />

@@ -402,6 +402,71 @@ describe("a deal counted as won with nothing sold", () => {
   });
 });
 
+/* ── revenue reported at a figure the paperwork disagrees with ────────
+   REPORTED: "Total sales or closed orders values are not getting matched
+   with the order won or invoice." The cause is fixed for wins recorded
+   from now on, but a figure frozen months ago still carries whatever
+   estimate was typed when the lead was created, and those are the numbers
+   on this screen. */
+describe("a win reported at the wrong figure", () => {
+  const base = {
+    customers: [], quotations: [], proformas: [], invoices: [], orders: [], challans: [], subscriptions: [],
+  };
+  const rowsFor = (ws: Partial<Workspace>) =>
+    needsAttention({ ...base, ...ws } as unknown as Workspace, "Delhi", NOW)
+      .filter((r) => r.kind === "won-mismatch");
+
+  /* ₹1,00,000 + 18% GST, Delhi to Delhi. */
+  const INVOICE_TOTAL = 118000;
+
+  it("names both figures and the invoice they came from", () => {
+    const [row] = rowsFor({
+      customers: [customer({ id: "e", company: "Edelweiss", stage: "won", wonAt: at("2026-08-10"), wonValue: 50000 })],
+      invoices: [doc({ id: "i1", number: "TZ/INV/2627/0007", customerId: "e" })],
+    });
+    expect(row?.title).toBe("Edelweiss");
+    expect(row?.detail).toContain("TZ/INV/2627/0007");
+    expect(row?.detail).toContain("50,000");
+    expect(row?.detail).toContain("1,18,000");
+    /* The figure on the row is the one the paperwork says, because that is
+       what somebody is deciding whether to accept. */
+    expect(row?.value).toBe(INVOICE_TOTAL);
+    expect(row?.view).toBe("pipeline");
+    expect(row?.tone).toBe("warn");
+  });
+
+  it("says nothing where the two agree", () => {
+    expect(rowsFor({
+      customers: [customer({ id: "e", stage: "won", wonAt: at("2026-08-10"), wonValue: INVOICE_TOTAL })],
+      invoices: [doc({ id: "i1", customerId: "e" })],
+    })).toEqual([]);
+  });
+
+  it("says nothing about an open deal, however wrong its estimate", () => {
+    expect(rowsFor({
+      customers: [customer({ id: "e", stage: "negotiation", value: 7 })],
+      invoices: [doc({ id: "i1", customerId: "e" })],
+    })).toEqual([]);
+  });
+
+  it("ranks below a sale with nothing raised and above a quotation-only win", () => {
+    /* A specific wrong number with the right one beside it is a minute's
+       work; a sale that never existed is worse. */
+    const rows = needsAttention({
+      ...base,
+      customers: [
+        customer({ id: "phantom", company: "Metrro", stage: "won", wonAt: at("2026-08-26"), wonValue: 663750 }),
+        customer({ id: "wrong", company: "Edelweiss", stage: "won", wonAt: at("2026-08-10"), wonValue: 50000 }),
+        customer({ id: "early", company: "OrbIT", stage: "won", wonAt: at("2026-08-06"), wonValue: INVOICE_TOTAL }),
+      ],
+      invoices: [doc({ id: "i1", customerId: "wrong" })],
+      quotations: [doc({ id: "d1", customerId: "early" })],
+    } as unknown as Workspace, "Delhi", NOW);
+    expect(rows.map((r) => r.kind)).toEqual(["unbacked-win", "won-mismatch", "unbacked-win"]);
+    expect(rows.map((r) => r.title)).toEqual(["Metrro", "Edelweiss", "OrbIT"]);
+  });
+});
+
 describe("how loudly an unbacked win is reported", () => {
   const NOTHING = { customers: [], quotations: [], proformas: [], invoices: [], orders: [], challans: [], subscriptions: [] };
   const rank = (ws: Partial<Workspace>) =>
@@ -418,9 +483,13 @@ describe("how loudly an unbacked win is reported", () => {
   });
 
   it("but one that at least has a quotation behind it does not", () => {
+    /* wonValue is the quotation's own grand total — ₹1,00,000 plus 18% GST,
+       Delhi to Delhi. Anything else and this deal is ALSO a won-mismatch,
+       which is a different row about a different problem and would make
+       this test about the wrong thing. */
     const rows = rank({
       customers: [
-        customer({ id: "early", company: "OrbIT", stage: "won", wonAt: at("2026-08-06"), wonValue: 10478 }),
+        customer({ id: "early", company: "OrbIT", stage: "won", wonAt: at("2026-08-06"), wonValue: 118000 }),
         customer({ id: "cold", company: "Someone", stage: "qualified", nextFollowUp: "2026-08-20", value: 50000 }),
       ],
       quotations: [doc({ id: "d1", customerId: "early" })],

@@ -208,6 +208,61 @@ describe("a deal won before anybody typed its value", () => {
   });
 });
 
+/* ── the figure the document says ─────────────────────────────────────
+   REPORTED FAULT: "Total sales or closed orders values are not getting
+   matched with the order won or invoice." They were not. The figure typed
+   on the customer when the lead was created was frozen as the win, so a
+   deal won on a ₹4,72,000 order reported whatever somebody had guessed
+   months earlier. The document the win was recorded on is what the
+   customer agreed to buy, and it now arrives as StageChange.wonValue. */
+describe("a win recorded from a document", () => {
+  it("freezes the document's total, not the estimate typed months ago", () => {
+    const won = applyStage(deal({ stage: "quoted", value: 50000 }), "won", day(5), { wonValue: 472000 });
+    expect(won.wonValue).toBe(472000);
+    expect(wonAmount(won)).toBe(472000);
+  });
+
+  it("does the same where the estimate was the larger guess", () => {
+    /* An optimistic figure is not revenue either, and the gap pointing the
+       other way is the half a one-sided fix would have missed. */
+    const won = applyStage(deal({ stage: "quoted", value: 900000 }), "won", day(5), { wonValue: 472000 });
+    expect(wonAmount(won)).toBe(472000);
+  });
+
+  it("CORRECTS AN EARLIER SNAPSHOT, so a wrong figure can be put right", () => {
+    /* Won on the wrong document, or won before the order was revised.
+       Pressing "Order won" on the right one is the only correction
+       anybody has, and an earlier snapshot used to block it for ever. */
+    const wrong = applyStage(deal({ stage: "quoted", value: 50000 }), "won", day(5), { wonValue: 50000 });
+    expect(wrong.wonValue).toBe(50000);
+    const right = applyStage(wrong, "won", day(9), { wonValue: 472000 });
+    expect(right.wonValue).toBe(472000);
+    /* The DATE of the win still does not move — the trailing revenue
+       reports read it, and a correction is not a new sale. */
+    expect(right.wonAt).toBe(day(5));
+  });
+
+  it("leaves the typed estimate alone on the record", () => {
+    /* What somebody expected, kept beside what happened. Only the frozen
+       figure is read as revenue. */
+    const won = applyStage(deal({ stage: "quoted", value: 50000 }), "won", day(5), { wonValue: 472000 });
+    expect(won.value).toBe(50000);
+  });
+
+  it("still falls back to the typed figure when the document carries no total", () => {
+    const won = applyStage(deal({ stage: "quoted", value: 250000 }), "won", day(5), { wonValue: undefined });
+    expect(won.wonValue).toBe(250000);
+  });
+
+  it("does not freeze a figure onto a loss", () => {
+    /* recordDealOutcome passes the same detail for every outcome; only a
+       win has a figure to freeze. */
+    const lost = applyStage(deal({ stage: "quoted" }), "lost", day(5), { wonValue: 472000 });
+    expect(lost.wonValue).toBeUndefined();
+    expect(countsAsWon(lost)).toBe(false);
+  });
+});
+
 describe("taking back a win that never happened", () => {
   /* FROM A LIVE WORKSPACE. Two deals were marked Won, then moved back to
      Quoted when the orders did not land. Neither had a quotation, a proforma,

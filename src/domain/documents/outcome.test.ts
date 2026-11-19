@@ -73,18 +73,37 @@ describe("which buttons a row offers", () => {
 });
 
 describe("what a win is worth", () => {
-  it("keeps a figure somebody typed about the deal", () => {
-    expect(wonValueFor({ value: 250000 }, 90000)).toBe(250000);
-    expect(wonValueFor({ value: "250000" }, 90000)).toBe(250000);
+  /* THE REPORTED FAULT. "Total sales or closed orders values are not
+     getting matched with the order won or invoice." They were not: the
+     figure typed on the customer when the lead was created took
+     precedence over the document the win was recorded on, so a deal won
+     on a ₹4,72,000 order reported whatever somebody had guessed months
+     earlier. The document is what the customer agreed to buy. */
+  it("is the total of the document the win was recorded on", () => {
+    expect(wonValueFor({ value: 50000 }, 472000)).toBe(472000);
+    expect(wonValueFor({ value: "50000" }, 472000)).toBe(472000);
   });
 
-  it("falls back to the quotation's total, so the win is not worth nothing", () => {
+  it("is the document's total even where the estimate was the larger guess", () => {
+    /* The direction of the gap is not the point — matching the paperwork
+       is. An optimistic ₹9,00,000 typed in March is not revenue either. */
+    expect(wonValueFor({ value: 900000 }, 472000)).toBe(472000);
+  });
+
+  it("uses the document's total where the customer has no figure at all", () => {
     /* Every customer created from a quotation has no value of its own. A
        win snapshotted at zero is three won deals and an empty revenue
-       report, which is exactly what this stops. */
+       report, which is what this stops. */
     expect(wonValueFor({}, 429992)).toBe(429992);
     expect(wonValueFor(null, 429992)).toBe(429992);
     expect(wonValueFor({ value: 0 }, 429992)).toBe(429992);
+  });
+
+  it("falls back to the typed figure only when the document has no total", () => {
+    /* A win recorded against a document with nothing priced on it. The
+       estimate is then the only number anybody has. */
+    expect(wonValueFor({ value: 250000 }, 0)).toBe(250000);
+    expect(wonValueFor({ value: "250000" }, 0)).toBe(250000);
   });
 
   it("freezes nothing when there is no number anywhere", () => {
@@ -92,5 +111,6 @@ describe("what a win is worth", () => {
        for ever. */
     expect(wonValueFor({}, 0)).toBeUndefined();
     expect(wonValueFor({ value: "" }, 0)).toBeUndefined();
+    expect(wonValueFor({ value: 0 }, 0)).toBeUndefined();
   });
 });

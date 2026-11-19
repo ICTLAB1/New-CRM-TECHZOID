@@ -470,8 +470,8 @@ export function QuotationsScreen({
     const stage = stageAfterOutcome(outcome, customer?.stage);
     if (stage && doc.customerId) {
       onDealOutcome?.(doc.customerId, stage, {
-        /* Only a win freezes a figure, and only where the deal has none of
-           its own — see wonValueFor. */
+        /* Only a win freezes a figure, and it is THIS document's total —
+           see wonValueFor. */
         value: outcome === "won"
           ? wonValueFor(customer, computeDocument(doc, sellerState).grand)
           : undefined,
@@ -483,6 +483,25 @@ export function QuotationsScreen({
        outcome is recorded whether or not the queue could be reached, and a
        sequence that outlives it is stopped by the runner anyway. */
     void cancelFollowUps(doc.id).catch(() => {});
+
+    /* NOTHING TO RECORD IT AGAINST. A document can be raised with a name
+       typed straight onto it and no customer linked, and an outcome then
+       has no deal to land on: the status changes, and the pipeline board,
+       the revenue report and the incentive screen never hear about it.
+       That used to happen in silence, behind a dialog that said the deal
+       was "now marked Won on the pipeline board, worth ₹…" — which is most
+       of what "clicking order won is not working properly" was. So say so,
+       and do not open a dialog that would claim otherwise or ask for a
+       lost reason there is nowhere to save. */
+    if (!doc.customerId) {
+      toast(
+        `${doc.number} is marked ${statusAfterOutcome(outcome).toLowerCase()}, but no customer is linked to it, `
+        + `so this has NOT reached the pipeline board or the revenue report. `
+        + `Open ${doc.number}, link the customer on it, then press ${OUTCOME_LABEL[outcome]} again.`,
+        "warn",
+      );
+      return;
+    }
 
     if (outcome === "lost") setPendingLost(doc);
     if (outcome === "won") setWonNext(doc);

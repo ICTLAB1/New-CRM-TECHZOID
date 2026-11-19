@@ -86,6 +86,21 @@ export interface StageChange {
   /** A new quotation to a previously-won customer — the one move off Won
    *  that is not a correction. Set by the quotation screen, never by hand. */
   requote?: boolean;
+  /**
+   * What the win is worth, taken from the document it was recorded on.
+   *
+   * THIS BEATS BOTH THE TYPED FIGURE AND AN EARLIER SNAPSHOT, which is the
+   * whole reason it exists. Reported fault: total sales not matching the
+   * order won. `value` is a rough estimate from the day the lead was
+   * created, and freezing it meant a deal won on a ₹4,72,000 order
+   * reporting whatever somebody had guessed in March. Overwriting an
+   * earlier snapshot is what makes a wrong figure correctable — press
+   * "Order won" on the right document and the number follows it.
+   *
+   * Only ever set when moving to Won, and only by the document screens:
+   * see wonValueFor in domain/documents/outcome.ts.
+   */
+  wonValue?: number;
 }
 
 export function applyStage<T extends { stage?: string; value?: number | string; wonAt?: number; wonValue?: number; lostAt?: number }>(
@@ -110,7 +125,7 @@ export function applyStage<T extends { stage?: string; value?: number | string; 
        screen. Leaving it unset lets the live value through until there is
        something real to freeze. */
     wonValue: stage === "won"
-      ? (customer.wonValue || (Number(customer.value) || undefined))
+      ? (change.wonValue || customer.wonValue || (Number(customer.value) || undefined))
       : (undoingWin ? undefined : customer.wonValue),
     /* Re-stamped on every loss, unlike the win: this one dates the CURRENT
        conclusion, and a quotation raised after it is what tells the pipeline
