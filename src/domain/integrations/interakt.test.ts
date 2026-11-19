@@ -1,7 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  addressee, DEFAULT_TEMPLATE_NAMES, mayWhatsApp, splitNumber, templateFor,
-} from "./interakt";
+import { addressee, DEFAULT_TEMPLATE_NAMES, formatNumber, mayWhatsApp, splitNumber, templateFor } from "./interakt";
 
 const facts = {
   contact: "Rajesh Kumar",
@@ -85,7 +83,33 @@ describe("splitting a number for Interakt", () => {
     expect(splitNumber("")).toBeNull();
     expect(splitNumber("12345")).toBeNull();
     expect(splitNumber("not a phone")).toBeNull();
-    expect(splitNumber("+99 123456789012")).toBeNull();
+    // A bare string of digits from an unknown country is still refused:
+    // nothing says which digits are the country, so splitting it would be
+    // the guess this test is named for.
+    expect(splitNumber("2348032034059")).toBeNull();
+  });
+
+  /* WHAT CHANGED, AND WHY IT IS NOT THE GUESS ABOVE. A number typed with a
+     + has already been told to us in full. Thirteen Nigerian numbers,
+     every one written as +234…, were reported as unreadable because 234 is
+     not in the ten-code list — a list whose job is to guess a country for
+     a bare ten-digit number in an Indian office, not to decide which
+     countries the company may message.
+
+     Nothing is split in this case, so nothing can be mis-split: the digits
+     go to the server exactly as typed, and the server has always
+     normalised on digits alone. A country code that does not exist is
+     refused by WhatsApp with a message that says so, which is a far better
+     failure than refusing thirteen real numbers at the paste box. */
+  it("accepts an international number whose country it does not split", () => {
+    expect(splitNumber("+234 803 203 4059")).toEqual({ countryCode: "", phoneNumber: "2348032034059" });
+    expect(splitNumber("+358 40 1234567")).toEqual({ countryCode: "", phoneNumber: "358401234567" });
+  });
+
+  it("shows one with the plus in front, never with a leading space", () => {
+    expect(formatNumber(splitNumber("+234 803 203 4059"))).toBe("+2348032034059");
+    expect(formatNumber(splitNumber("9810012345"))).toBe("+91 9810012345");
+    expect(formatNumber(null)).toBe("");
   });
 });
 

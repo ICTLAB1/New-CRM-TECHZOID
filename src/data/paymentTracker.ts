@@ -2,7 +2,7 @@ import { getDb, hasBackend } from "./backend";
 import { fnPath, fnToken } from "./functions";
 import { squashCompanyName } from "../domain/customers/nameMatch";
 import { DEFAULT_SCHEDULE, dueDateFor, type ReminderSchedule } from "../domain/paymentTracker/schedule";
-import { splitNumber } from "../domain/integrations/interakt";
+import { formatNumber, splitNumber } from "../domain/integrations/interakt";
 import { localISO } from "../domain/dates";
 
 /**
@@ -145,7 +145,7 @@ export const trackerLive = (): boolean => hasBackend();
 export function phoneForStorage(raw: string): string {
   if (!raw.trim()) return "";
   const split = splitNumber(raw);
-  return split ? `${split.countryCode} ${split.phoneNumber}` : "";
+  return formatNumber(split);
 }
 
 const newId = (): string =>

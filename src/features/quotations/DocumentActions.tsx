@@ -29,7 +29,7 @@ import {
 import { TONE_LABELS, autoFollowUpsOn, followUpBody, followUpSubject, planFollowUps, stepsFor, stopReason, type FollowUpFacts, type FollowUpTone } from "../../domain/followups/followups";
 import { armFollowUps, followUpsAvailable } from "../../data/followups";
 import { buildArmedSteps, type Armable } from "./armedSteps";
-import { mayWhatsApp, splitNumber, TEMPLATE_SETTING } from "../../domain/integrations/interakt";
+import { formatNumber, mayWhatsApp, splitNumber, TEMPLATE_SETTING } from "../../domain/integrations/interakt";
 import { TODAY } from "../../domain/dates";
 
 /* NO DEFAULT CC ADDRESS HERE. A real address baked into a template is one
@@ -319,7 +319,7 @@ export function DocumentActions({
         facts: followUpFacts,
         plan: plannedFollowUps,
         whatsapp: waAllowed && templatesNamed
-          ? { to: `${waNumber.countryCode} ${waNumber.phoneNumber}`, why: "" }
+          ? { to: formatNumber(waNumber), why: "" }
           : { to: "", why: whyNoWhatsApp(waNumber, waCustomer, templatesNamed) },
         templateNames,
         company: doc.billName || "",

@@ -77,3 +77,48 @@ describe("a pasted list of numbers", () => {
     expect(readPastedNumbers("")).toEqual({ numbers: [], unreadable: [], duplicates: [] });
   });
 });
+
+/* ── numbers from outside the ten countries the guesser knows ────────
+   Reported with a photograph: thirteen Nigerian numbers, every one typed
+   in full as +234…, all listed as "could not read". The country-code list
+   exists to GUESS a country for a bare ten-digit number in an Indian
+   office; it was being used as the set of countries the CRM would accept
+   at all. */
+describe("a number from a country the guesser does not know", () => {
+  it("reads a Nigerian number typed in full", () => {
+    const out = readPastedNumbers("+234 803 203 4059");
+    expect(out.unreadable).toEqual([]);
+    expect(out.numbers.map((n) => n.number)).toEqual(["+2348032034059"]);
+  });
+
+  it("reads a whole pasted list of them", () => {
+    const out = readPastedNumbers([
+      "+234 803 203 4059",
+      "+234 913 969 4528",
+      "+234 707 487 9183",
+    ].join("\n"));
+    expect(out.unreadable).toEqual([]);
+    expect(out.numbers).toHaveLength(3);
+  });
+
+  it("still reads the countries it does know, unchanged", () => {
+    expect(readPastedNumbers("9810012345").numbers[0]!.number).toBe("+91 9810012345");
+    expect(readPastedNumbers("+971 50 123 4567").numbers[0]!.number).toBe("+971 501234567");
+  });
+
+  /* The plus is what says "this is already international". Without one, a
+     bare string of digits is still guessed at, and a short one is still
+     refused — otherwise an order number pasted by mistake becomes a
+     customer getting a WhatsApp. */
+  it("does not start accepting anything that is merely long", () => {
+    expect(readPastedNumbers("12345").numbers).toEqual([]);
+    expect(readPastedNumbers("ring the office").numbers).toEqual([]);
+  });
+
+  it("never shows a number with a leading space and no plus", () => {
+    for (const raw of ["+234 803 203 4059", "+358 40 1234567", "9810012345"]) {
+      const shown = readPastedNumbers(raw).numbers[0]!.number;
+      expect(shown, raw).toMatch(/^\+\d/);
+    }
+  });
+});

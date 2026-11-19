@@ -114,7 +114,23 @@ export function splitNumber(
   defaultCountryCode = "91",
 ): { countryCode: string; phoneNumber: string } | null {
   const digits = normalisePhone(raw, defaultCountryCode);
-  if (!/^\d{10,15}$/.test(digits)) return null;
+
+  /* SOMEBODY WHO TYPED A + HAS ALREADY TOLD US THE COUNTRY. The list below
+     exists to GUESS a country for a bare ten-digit number, which is the
+     common case in an Indian office. It was also being used as the set of
+     countries the CRM would accept at all — so a perfectly good Nigerian
+     number, typed in full as +234…, was reported as something that could
+     not be read. Thirteen of them at once, in a paste that was entirely
+     valid.
+
+     An explicitly international number is accepted whatever its country,
+     and the few digits of its country code are not split out, because
+     doing that needs a table of every country's code and getting it wrong
+     silently moves a digit from the country to the number. The server
+     normalises on digits alone and never needed the split. */
+  const explicit = String(raw ?? "").trim().startsWith("+");
+  const plausible = /^\d{10,15}$/.test(digits) || (explicit && /^\d{8,15}$/.test(digits));
+  if (!plausible) return null;
 
   for (const code of COUNTRY_CODES) {
     if (!digits.startsWith(code)) continue;
@@ -125,8 +141,31 @@ export function splitNumber(
     if (rest.length < 6) continue;
     return { countryCode: "+" + code, phoneNumber: rest };
   }
+
+  /* Known to be international, country not one this list splits. An empty
+     `countryCode` says exactly that — see `formatNumber`, which is how it
+     should be shown. */
+  if (explicit) return { countryCode: "", phoneNumber: digits };
+
   return null;
 }
+
+/**
+ * A split number as a person should read it.
+ *
+ * WHY A FUNCTION AND NOT A TEMPLATE STRING AT EACH SITE. With the country
+ * code split out it is "+91 9810012345"; without, the whole thing is the
+ * number and the plus belongs in front of it. Four screens were building
+ * this by hand, and every one of them would have printed a leading space
+ * and no plus — " 2348032034059" — the first time a number arrived from a
+ * country the list does not split.
+ */
+export const formatNumber = (
+  split: { countryCode: string; phoneNumber: string } | null,
+): string => {
+  if (!split) return "";
+  return split.countryCode ? `${split.countryCode} ${split.phoneNumber}` : `+${split.phoneNumber}`;
+};
 
 /**
  * The number a WhatsApp message to this customer would actually go to.

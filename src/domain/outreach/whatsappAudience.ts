@@ -1,4 +1,4 @@
-import { mayWhatsApp, splitNumber, whatsAppNumberOf } from "../integrations/interakt";
+import { formatNumber, mayWhatsApp, splitNumber, whatsAppNumberOf } from "../integrations/interakt";
 import { splitFragments } from "./paste";
 
 /**
@@ -81,7 +81,7 @@ export function whatsappAudience(customers: readonly AudienceCustomer[]): WhatsA
       continue;
     }
 
-    recipients.push({ id: c.id, label, number: `${number.countryCode} ${number.phoneNumber}` });
+    recipients.push({ id: c.id, label, number: formatNumber(number) });
   }
 
   return { recipients, excluded };
@@ -176,7 +176,7 @@ export function readPastedNumbers(text: string): PastedNumbers {
     }
 
     for (const { split } of usable) {
-      const number = `${split!.countryCode} ${split!.phoneNumber}`;
+      const number = formatNumber(split);
       if (seen.has(number)) {
         duplicates.push(number);
         continue;
