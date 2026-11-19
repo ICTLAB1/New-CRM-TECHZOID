@@ -62,6 +62,20 @@ let throttleFrom = null;
  *  dropped socket, which is not the same as a refusal. */
 let explode = new Set();
 
+/* THE PAUSE IS OFF FOR THESE TESTS, deliberately. Everything below is
+   about what happens when a send actually runs — one message per person,
+   nobody in anybody else's To line, the log row. The pause is tested
+   where it lives, in bulkEmailPause.test.mjs, and leaving it on here
+   would turn thirty assertions about sending into thirty assertions that
+   nothing was sent. */
+let paused = false;
+vi.mock("./bulkEmailPause.mjs", () => ({
+  get PAUSED() { return paused; },
+  bulkEmailPaused: () => paused,
+  PAUSE_REASON: "Bulk email is paused.",
+  pausedLog: (what) => `${what}: skipped`,
+}));
+
 vi.mock("./auth.mjs", () => ({
   adminClient: () => makeClient(),
   signedInUser: async () => ({ id: "user-1", email: "abhinav@techzoid.example" }),
@@ -109,6 +123,7 @@ const THIRTY = Array.from({ length: 30 }, (_, i) => message(`buyer${i}@company${
 beforeEach(() => {
   sends = [];
   bounce = new Set();
+  paused = false;
   throttleFrom = null;
   explode = new Set();
   rateLimited = false;
@@ -457,5 +472,30 @@ describe("when the mailbox is throttled mid-list", () => {
     throttleFrom = THIRTY[0].email;
     const res = await post({ companyId: COMPANY, batchId: BATCH, messages: THIRTY.slice(0, 3) });
     expect(parse(res).results.every((r) => r.retryable)).toBe(true);
+  });
+});
+
+
+describe("while bulk email is paused", () => {
+  /* The company's mailbox was restricted by Microsoft after a large
+     mailshot. Nothing further must go out, and the person pressing Send
+     must be told why rather than meeting a wall of refusals. */
+  it("sends nothing at all, and says why", async () => {
+    paused = true;
+    const res = await post({ companyId: COMPANY, batchId: BATCH, messages: THIRTY.slice(0, 3) });
+    expect(res.statusCode).toBe(503);
+    expect(res.body).toMatch(/paused/i);
+    expect(sends).toHaveLength(0);
+    expect(DB.profile_sends).toHaveLength(0);
+  });
+
+  it("refuses before reading the profile or the company, so nothing is charged for", async () => {
+    paused = true;
+    DB.company_profiles = [];
+    DB.company_members = [];
+    const res = await post({ companyId: COMPANY, batchId: BATCH, messages: THIRTY.slice(0, 1) });
+    /* Not "no profile on file" and not "not a member" — the pause answers
+       first, because it is the true reason nothing is going out. */
+    expect(res.statusCode).toBe(503);
   });
 });

@@ -9,6 +9,7 @@ import {
 } from "../../domain/outreach/profileMail";
 import type { IntegrationsApi } from "../../integrations/api";
 import { runPacedSend } from "../../domain/outreach/pacedSend";
+import { BULK_EMAIL_PAUSED, BULK_PAUSE_NOTICE } from "../../domain/outreach/bulkPause";
 import { audienceSummary, readPastedNumbers, whatsappAudience } from "../../domain/outreach/whatsappAudience";
 import type { EmailCompany, EmailSender } from "../../domain/integrations/emailTemplate";
 import { emailCompanyFrom } from "../../domain/integrations/emailIdentity";
@@ -344,6 +345,9 @@ export function ProfileMailerScreen({
   const blockers: string[] = [];
   if (!companyId) blockers.push("Choose a company first.");
   if (!info) blockers.push("Upload the company profile PDF first.");
+  /* Listed as a blocker so the button is off and the reason sits with the
+     other reasons, rather than the press being refused by the server. */
+  if (BULK_EMAIL_PAUSED) blockers.push("Email sending is paused — see the note at the top of this screen.");
   if (!recipients.length) blockers.push("Choose at least one recipient.");
   if (!subject.trim()) blockers.push("The email needs a subject.");
   if (!body.trim()) blockers.push("The email needs something in the body.");
@@ -496,6 +500,16 @@ export function ProfileMailerScreen({
           />
         )}
       </Card>
+
+      {/* THE PAUSE, SAID BEFORE A LIST IS FILLED IN rather than after Send
+          is pressed. The server refuses either way — see
+          netlify/lib/bulkEmailPause.mjs — but meeting it at the end of the
+          work is how somebody comes to believe the CRM is broken. */}
+      {BULK_EMAIL_PAUSED ? (
+        <div className="notice notice-warn">
+          <strong>Email sending is paused.</strong> {BULK_PAUSE_NOTICE}
+        </div>
+      ) : null}
 
       {/* ── which way it goes ──────────────────────────────────────── */}
       <Tabs

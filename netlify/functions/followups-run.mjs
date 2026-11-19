@@ -4,6 +4,7 @@ import { adminClient } from "../lib/auth.mjs";
 import { sendMail } from "../lib/mailer.mjs";
 import { sendWhatsAppTemplate } from "../lib/whatsapp.mjs";
 import { stopReason, TABLE_FOR } from "../lib/followupRules.mjs";
+import { bulkEmailPaused, pausedLog } from "../lib/bulkEmailPause.mjs";
 
 /**
  * Send the follow-ups that are due this morning.
@@ -78,6 +79,15 @@ function escapeHtml(value) {
 }
 
 export async function handler() {
+  /* NOTHING IS MARKED FAILED, which is the whole point of stopping here
+     rather than letting the sends refuse one at a time: a follow-up left
+     `scheduled` goes out when sending resumes, a follow-up marked failed
+     has to be armed again by hand. See lib/bulkEmailPause.mjs. */
+  if (bulkEmailPaused()) {
+    console.log(pausedLog("follow-ups"));
+    return { statusCode: 200, body: JSON.stringify({ paused: true, sent: 0 }) };
+  }
+
   let admin;
   try {
     admin = adminClient();

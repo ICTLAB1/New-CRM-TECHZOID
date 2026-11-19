@@ -3,6 +3,7 @@ import { buildAudience, buildValues, withGreetingFallback } from "../lib/outreac
 import { renderCampaignFor } from "../lib/outreachRender.mjs";
 import { drainQueue } from "../lib/outreachSender.mjs";
 import { renderSignature, signatureFrom } from "../lib/outreachSignature.mjs";
+import { PAUSE_REASON, bulkEmailPaused } from "../lib/bulkEmailPause.mjs";
 
 /**
  * Turn a campaign and a list of prospects into a send queue.
@@ -39,6 +40,11 @@ export async function handler(event) {
   if (event.httpMethod !== "POST") {
     return json(405, { error: "Use POST." });
   }
+
+  /* STOPPED BEFORE A QUEUE IS BUILT. Launching a campaign while sending is
+     paused would fill a queue that cannot drain and leave somebody
+     believing their campaign is away — see lib/bulkEmailPause.mjs. */
+  if (bulkEmailPaused()) return json(503, { error: PAUSE_REASON });
 
   const caller = await signedInProfile(event);
   if (!caller?.user) return json(401, { error: "Sign in first." });

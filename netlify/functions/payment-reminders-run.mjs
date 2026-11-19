@@ -4,6 +4,7 @@ import { sendMail } from "../lib/mailer.mjs";
 import { billFromRow, scheduleFrom, stepDueToday } from "../lib/paymentRules.mjs";
 import { renderDigest } from "../lib/paymentMessages.mjs";
 import { sendReminder, splitList } from "../lib/paymentSender.mjs";
+import { bulkEmailPaused, pausedLog } from "../lib/bulkEmailPause.mjs";
 
 /**
  * Payment Tracker — the morning run. 09:30 in India, every day.
@@ -23,6 +24,15 @@ import { sendReminder, splitList } from "../lib/paymentSender.mjs";
 const BATCH = 200;
 
 export async function handler() {
+  /* NOTHING IS MARKED FAILED, which is the whole point of stopping here
+     rather than letting the sends refuse one at a time: a follow-up left
+     `scheduled` goes out when sending resumes, a follow-up marked failed
+     has to be armed again by hand. See lib/bulkEmailPause.mjs. */
+  if (bulkEmailPaused()) {
+    console.log(pausedLog("payment reminders"));
+    return { statusCode: 200, body: JSON.stringify({ paused: true, sent: 0 }) };
+  }
+
   let admin;
   try {
     admin = adminClient();

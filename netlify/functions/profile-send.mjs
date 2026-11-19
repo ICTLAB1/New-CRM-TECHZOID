@@ -3,6 +3,7 @@ import { adminClient, signedInUser } from "../lib/auth.mjs";
 import { checkAttachment, isEmail, str } from "../lib/validate.mjs";
 import { consume, tooManyMessage } from "../lib/ratelimit.mjs";
 import { sendMail } from "../lib/mailer.mjs";
+import { PAUSE_REASON, bulkEmailPaused } from "../lib/bulkEmailPause.mjs";
 
 /**
  * Send the company profile to several people — one message each.
@@ -47,6 +48,11 @@ const MAX_ATTACHMENT = 3.5 * 1024 * 1024;
 export async function handler(event) {
   const stop = guard(event);
   if (stop) return stop;
+
+  /* STOPPED BEFORE ANYTHING IS READ OR SENT. A person pressing Send gets
+     the reason in words rather than a wall of refusals one recipient at a
+     time — see lib/bulkEmailPause.mjs. */
+  if (bulkEmailPaused()) return fail(event, 503, PAUSE_REASON);
 
   const user = await signedInUser(event);
   if (!user) return fail(event, 403, "Sign in required.");
