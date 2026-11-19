@@ -131,7 +131,15 @@ export function buildReports(
   /* ── pipeline funnel ── */
   const funnel = STAGES.map((s) => {
     const inStage = ws.customers.filter((c) => (c.stage ?? "lead") === s.id);
-    return { stage: s.label, count: inStage.length, value: inStage.reduce((a, c) => a + (Number(c.value) || 0), 0) };
+    return {
+      stage: s.label,
+      count: inStage.length,
+      /* A WON DEAL AT ITS WON FIGURE. This totalled the estimate for every
+         stage alike, so this report's own Won row disagreed with the "Won
+         value" column of the salesperson table above it. For an open deal
+         the estimate is still the only figure there is. */
+      value: inStage.reduce((a, c) => a + (countsAsWon(c) ? wonAmount(c) : Number(c.value) || 0), 0),
+    };
   });
   reports.push({
     id: "funnel", title: "Pipeline funnel", description: "Deals and value at each stage.",

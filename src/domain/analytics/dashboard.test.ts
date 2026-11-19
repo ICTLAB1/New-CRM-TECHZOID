@@ -257,6 +257,36 @@ describe("a deal that was won and then lost", () => {
     expect(funnelWon?.totals).toEqual(kpis(churned, "Delhi", NOW).wonThisMonth);
   });
 
+  /* THE TEST ABOVE AGREED BY ACCIDENT. Neither fixture deal carried a
+     `wonValue`, so `wonAmount` fell through to `value` and the funnel's
+     "total the estimate" read the same number as the tile's "total the
+     frozen figure". Give the deals a frozen figure that differs from the
+     estimate — which is what every deal won from a quotation now has —
+     and the two disagreed by ₹4,00,000. Reported as total sales not
+     matching. */
+  const frozen: Workspace = {
+    ...churned,
+    customers: churned.customers.map((c) => (
+      c.stage === "won" ? { ...c, value: 50000, wonValue: Number(c.value) } : c
+    )),
+  };
+
+  it("agrees with it even when the frozen figure differs from the estimate", () => {
+    const funnelWon = pipelineFunnel(frozen, STAGES).find((s) => s.id === "won");
+    expect(rupees(funnelWon?.totals ?? [])).toBe(193000);
+    expect(funnelWon?.totals).toEqual(kpis(frozen, "Delhi", NOW).wonThisMonth);
+  });
+
+  it("still totals the estimate for an open stage, which has no other figure", () => {
+    const leads = pipelineFunnel(frozen, STAGES).find((s) => s.id === "lead");
+    expect(leads?.totals).toEqual([]);
+    const open: Workspace = {
+      ...churned,
+      customers: [customer({ id: "o1", ownerId: "u1", stage: "qualified", value: 77000 })],
+    };
+    expect(rupees(pipelineFunnel(open, STAGES).find((s) => s.id === "qualified")?.totals ?? [])).toBe(77000);
+  });
+
   it("is not revenue in the trailing chart either", () => {
     const august = trailingRevenue(churned, 6, NOW).at(-1);
     expect(august?.value).toBe(193000);

@@ -131,3 +131,39 @@ describe("individual reports", () => {
     expect(empty.find((r) => r.id === "revenue")?.total?.revenue).toBe(0);
   });
 });
+
+/* ── the funnel's Won row against the salesperson table's Won value ──
+   REPORTED: "Total sales or closed orders values are not getting matched
+   with the order won or invoice." The funnel totalled `value` — the
+   estimate — for every stage alike, while the salesperson table in the
+   same report set totalled the frozen won figure. Two rows in one export
+   disagreeing about one month's sales. */
+describe("the pipeline funnel's won row", () => {
+  const frozen: Workspace = {
+    ...WS,
+    customers: [
+      { id: "c1", ownerId: "u1", company: "Acme", stage: "won", value: 50000, wonValue: 472000, wonAt: at("2026-08-05") } as Customer,
+      { id: "c3", ownerId: "u1", company: "Vertex", stage: "lead", value: 900000 } as Customer,
+    ],
+  };
+  const built = buildReports(frozen, USERS, "Delhi", 6, NOW);
+  const row = (id: string, stage: string) =>
+    (built.find((r) => r.id === id)!.rows as { stage: string; value: number }[]).find((x) => x.stage === stage);
+
+  it("totals what the deal was won for, not the estimate typed earlier", () => {
+    expect(row("funnel", "Won")?.value).toBe(472000);
+  });
+
+  it("agrees with the Won value column of the salesperson table", () => {
+    /* A CROSS-CHECK, not two assertions of the same constant: somebody
+       exporting this set reads both tables, and the point is that they
+       cannot come out different. Asserting only the sales table would
+       pass with the funnel saying anything at all. */
+    const sales = built.find((r) => r.id === "salespeople")!.rows as { wonValue: number }[];
+    expect(row("funnel", "Won")?.value).toBe(sales.reduce((a, r) => a + r.wonValue, 0));
+  });
+
+  it("still totals the estimate for an open stage, which has no other figure", () => {
+    expect(row("funnel", "Lead")?.value).toBe(900000);
+  });
+});

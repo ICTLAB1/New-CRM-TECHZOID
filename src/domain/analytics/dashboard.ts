@@ -288,8 +288,16 @@ export function pipelineFunnel(ws: Workspace, stages: readonly { id: string; lab
       count: inStage.length,
       /* Same field, same treatment. A stage holding one AED deal and one
          rupee deal has no single total, and inventing one by addition is how
-         the number stopped meaning anything. */
-      totals: totalsByCurrency(inStage, (c) => Number(c.value) || 0, (c) => c.currency),
+         the number stopped meaning anything.
+
+         A WON DEAL IS TOTALLED AT ITS WON FIGURE, as everywhere else.
+         This read the estimate for every stage alike, so the funnel's Won
+         row disagreed with the "Won this month" tile on the same screen. */
+      totals: totalsByCurrency(
+        inStage,
+        (c) => (countsAsWon(c) ? wonAmount(c) : Number(c.value) || 0),
+        (c) => c.currency,
+      ),
     };
   });
 }
