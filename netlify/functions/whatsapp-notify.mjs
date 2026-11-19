@@ -6,6 +6,7 @@ import { pdfFrom, previewMessage, replyInWords, sendMessage } from "../lib/whats
 import { TEMPLATES, checkTemplate, readApprovedTemplates } from "../lib/whatsappTemplates.mjs";
 import { metaAccount, metaConfigured } from "../lib/whatsappMeta.mjs";
 import { checkRecordType } from "../lib/whatsappFacts.mjs";
+import { MAX_CAPTION, mediaKindFor } from "../lib/whatsappMedia.mjs";
 
 /**
  * The one address the browser uses for WhatsApp.
@@ -137,7 +138,24 @@ export async function handler(event) {
     const phone = str(body.phone, 20).replace(/[^0-9]/g, "");
     const text = String(body.body ?? "").trim();
     if (!phone) return fail(event, 400, "There is no number to reply to.");
-    if (!text) return fail(event, 400, "There is nothing to send.");
+
+    /* WHAT MAY BE ATTACHED IS DECIDED HERE, not only on screen. The file
+       picker decides what is easy to choose; this decides what is
+       actually sent, because a request can be made without the screen. */
+    const attached = attachmentFrom(body.attachment);
+    if (attached.error) return fail(event, 400, attached.error);
+
+    if (!text && !attached.attachment) return fail(event, 400, "There is nothing to send.");
+
+    /* Meta allows 1,024 characters alongside a file, against 4,096 for a
+       message on its own. Cutting the words in half silently is worse
+       than asking for fewer, and sending them as a second message risks
+       the two arriving out of order. */
+    if (attached.attachment && text.length > MAX_CAPTION) {
+      return fail(event, 400,
+        `A message sent with a file can be ${MAX_CAPTION} characters at most, and that one is ${text.length}. `
+        + "Shorten it, or send the file on its own and the words after it.");
+    }
 
     /* THE 24-HOUR WINDOW IS CHECKED HERE, not only on screen. Meta refuses
        free text outside it, and a refusal a salesperson sees as "failed"
@@ -150,7 +168,12 @@ export async function handler(event) {
     }
 
     const out = await replyInWords(admin, {
-      companyId, customerId: str(body.customerId, 64), phone, body: text, sentBy: user.id,
+      companyId,
+      customerId: str(body.customerId, 64),
+      phone,
+      body: text,
+      sentBy: user.id,
+      attachment: attached.attachment,
     });
     return out.ok ? json(event, 200, out) : fail(event, 400, out.reason);
   }
@@ -226,4 +249,42 @@ async function windowOpen(admin, companyId, phone) {
     .gte("created_at", since)
     .limit(1);
   return Array.isArray(data) && data.length > 0;
+}
+
+/**
+ * The file the browser says it wants to attach, checked.
+ *
+ * NOTHING THE BROWSER SAYS ABOUT THE FILE IS TAKEN ON TRUST. Its name
+ * decides the kind and the MIME type Meta is told (see whatsappMedia),
+ * its real decoded length decides whether it is within the limit — not
+ * any length the browser claimed — and anything outside the list is
+ * refused by name rather than handed to Meta to refuse slowly.
+ *
+ * @returns {{attachment: object|null, error: string}}
+ */
+function attachmentFrom(input) {
+  const none = { attachment: null, error: "" };
+  if (!input || typeof input !== "object") return none;
+
+  const base64 = String(input.base64 ?? "").trim();
+  const filename = str(input.filename, 200).trim();
+  if (!base64 && !filename) return none;
+  if (!base64) return { attachment: null, error: "That file came through empty, so there was nothing to attach." };
+  if (!filename) return { attachment: null, error: "That file arrived without a name, so there is no way to tell WhatsApp what it is." };
+
+  let bytes;
+  try {
+    bytes = Buffer.from(base64, "base64");
+  } catch {
+    return { attachment: null, error: "That file could not be read." };
+  }
+
+  /* THE DECODED LENGTH, not one the browser declared. */
+  const decided = mediaKindFor(filename, bytes.byteLength);
+  if (!decided.ok) return { attachment: null, error: decided.error };
+
+  return {
+    attachment: { bytes, filename, kind: decided.kind, mimeType: decided.mimeType },
+    error: "",
+  };
 }

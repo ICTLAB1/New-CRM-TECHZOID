@@ -2,7 +2,7 @@ import {
   approvedTemplates, buildParams, checkTemplate, documentFor, fillBody, nameFor, TEMPLATES,
 } from "./whatsappTemplates.mjs";
 import {
-  metaAccount, sendTemplate, sendText, templateMissing, uploadDocument,
+  metaAccount, sendMedia, sendTemplate, sendText, templateMissing, uploadDocument, uploadMedia,
 } from "./whatsappMeta.mjs";
 import { mayMessage } from "./whatsappConsent.mjs";
 import { checkRecordType, factsFor, loadRecord, nameOf } from "./whatsappFacts.mjs";
@@ -380,23 +380,68 @@ export async function sendMessage(admin, {
  * ours. The caller checks the window so the screen can hide the box; this
  * records what was sent either way, because a refusal is worth seeing.
  */
-export async function replyInWords(admin, { companyId, customerId, phone, body, sentBy = null }) {
-  const result = await sendText({ to: phone, body });
+export async function replyInWords(admin, {
+  companyId, customerId, phone, body, sentBy = null, attachment = null,
+}) {
+  /* WITH A FILE IT IS ONE MESSAGE, NOT TWO. The typed words ride as the
+     caption, so the customer gets what a person sending this from their
+     own phone would send. Two messages could arrive out of order, and a
+     file whose explanation failed to send is worse than neither. */
+  let uploaded = null;
+  if (attachment) {
+    uploaded = await uploadMedia({
+      bytes: attachment.bytes,
+      filename: attachment.filename,
+      mimeType: attachment.mimeType,
+    });
+    if (!uploaded.ok) {
+      /* NOTHING WAS SENT, so this is written down against the customer
+         rather than vanishing into a toast nobody keeps. */
+      await logReply(admin, {
+        companyId, customerId, phone, body, sentBy,
+        documentName: attachment.filename,
+        result: { ok: false, error: uploaded.error },
+      });
+      return refused(uploaded.error);
+    }
+  }
 
+  const result = uploaded
+    ? await sendMedia({
+      to: phone,
+      kind: attachment.kind,
+      mediaId: uploaded.id,
+      filename: attachment.filename,
+      caption: body,
+    })
+    : await sendText({ to: phone, body });
+
+  await logReply(admin, {
+    companyId, customerId, phone, body, sentBy,
+    documentName: attachment?.filename ?? "",
+    result,
+  });
+
+  return result.ok
+    ? { ok: true, id: result.id ?? null, documentName: attachment?.filename ?? "" }
+    : refused(result.error);
+}
+
+/** One row in the customer's history, whether it went or was refused. */
+async function logReply(admin, { companyId, customerId, phone, body, sentBy, documentName, result }) {
   await admin.from("whatsapp_messages").insert({
     company_id: companyId,
     direction: "out",
     customer_id: customerId || null,
     phone,
     body,
+    document_name: documentName || "",
     status: result.ok ? "sent" : "failed",
     wa_message_id: result.ok ? result.id ?? null : null,
     error: result.ok ? "" : String(result.error ?? "").slice(0, 500),
     trigger: "reply",
     sent_by: sentBy,
   });
-
-  return result.ok ? { ok: true, id: result.id ?? null } : refused(result.error);
 }
 
 /** The company's settings row, or an empty one. */

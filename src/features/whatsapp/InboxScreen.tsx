@@ -1,12 +1,15 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { PageHead } from "../../app/AppShell";
 import { Button, Card, Chip, Empty, Input, Textarea } from "../../components/primitives";
 import { useToast } from "../../components/Toast";
 import { MessageList } from "./MessageList";
 import {
-  WINDOW_HOURS, loadRecentMessages, replyOnWhatsApp, replyWindow, threadsFrom,
+  WINDOW_HOURS, loadRecentMessages, readFileForWhatsApp, replyOnWhatsApp, replyWindow, threadsFrom,
   type WhatsAppThread,
 } from "../../data/whatsapp";
+import {
+  ACCEPT_ATTRIBUTE, MAX_CAPTION, fileSizeLabel, whyFileRefused,
+} from "../../domain/outreach/whatsappMedia";
 import type { Customer } from "../../domain/customers/customer";
 
 /**
@@ -53,6 +56,10 @@ export function InboxScreen({ companyId, customers, onOpenCustomer }: InboxScree
      half is never blank, and a phone opening straight into a conversation
      nobody chose would hide the list behind a Back button. */
   const [reading, setReading] = useState(false);
+  /* The file chosen for the reply, not yet read off the disk: it is read
+     only on Send, so picking one costs nothing. */
+  const [file, setFile] = useState<File | null>(null);
+  const picker = useRef<HTMLInputElement>(null);
 
   const refresh = async () => {
     if (!companyId) {
@@ -92,20 +99,38 @@ export function InboxScreen({ companyId, customers, onOpenCustomer }: InboxScree
   const open = canReply === "open";
   const waiting = threads.filter((t) => t.unanswered).length;
 
+  /* ATTACHING, AND REFUSING EARLY. The server decides what may go (see
+     domain/outreach/whatsappMedia and its server twin), but a file that
+     was never going to be accepted should be refused the moment it is
+     chosen rather than after somebody has typed a message and waited
+     through an upload. */
+  const chooseFile = (file: File | null) => {
+    if (!file) return;
+    const why = whyFileRefused(file.name, file.size);
+    if (why) { toast(why, "bad"); return; }
+    setFile(file);
+  };
+
+  const tooLong = !!file && draft.trim().length > MAX_CAPTION;
+  const nothingToSend = !draft.trim() && !file;
+
   const send = async () => {
-    if (!thread || !companyId || !draft.trim()) return;
+    if (!thread || !companyId || nothingToSend || tooLong) return;
     setSending(true);
     try {
+      const attachment = file ? await readFileForWhatsApp(file) : null;
       const out = await replyOnWhatsApp({
         companyId,
         customerId: thread.customerId ?? undefined,
         phone: thread.phone,
         body: draft.trim(),
+        attachment,
       });
       if (out.ok) {
         setDraft("");
+        setFile(null);
         await refresh();
-        toast("Sent", "good");
+        toast(file ? `Sent, with ${file.name}.` : "Sent", "good");
       } else {
         toast(out.reason ?? "That did not send.", "bad");
       }
@@ -166,7 +191,7 @@ export function InboxScreen({ companyId, customers, onOpenCustomer }: InboxScree
                   key={t.phone}
                   type="button"
                   className="row-open"
-                  onClick={() => { setActive(t.phone); setDraft(""); setReading(true); }}
+                  onClick={() => { setActive(t.phone); setDraft(""); setFile(null); setReading(true); }}
                   style={{
                     textAlign: "left",
                     width: "100%",
@@ -233,11 +258,58 @@ export function InboxScreen({ companyId, customers, onOpenCustomer }: InboxScree
                       rows={3}
                       value={draft}
                       onChange={(e) => setDraft(e.target.value)}
-                      placeholder="Type your reply…"
+                      placeholder={file ? "Say something about it… (optional)" : "Type your reply…"}
                       aria-label="Your reply"
                     />
+
+                    {/* THE CHOSEN FILE, SHOWN BEFORE IT GOES. A paperclip
+                        that only changes colour leaves somebody wondering
+                        whether the right file is attached, and the answer
+                        arrives in the customer's chat. Named, sized, and
+                        removable. */}
+                    {file ? (
+                      <div
+                        className="row-tight wrap"
+                        style={{
+                          gap: 8, padding: "6px 10px", borderRadius: 8,
+                          border: "1px solid var(--rule)", background: "var(--card-tint, #f6f4f0)",
+                        }}
+                      >
+                        <span aria-hidden="true">📎</span>
+                        <span style={{ wordBreak: "break-all", fontSize: 13 }}>{file.name}</span>
+                        <Chip tone="neutral" dot={false}>{fileSizeLabel(file.size)}</Chip>
+                        <Button size="sm" tone="quiet" onClick={() => setFile(null)}>Remove</Button>
+                      </div>
+                    ) : null}
+
+                    {/* Meta's limit on the words that ride with a file is a
+                        quarter of the limit on a message of its own, so it
+                        is said here rather than discovered on Send. */}
+                    {tooLong ? (
+                      <div style={{ fontSize: 12.5, color: "var(--bad)" }}>
+                        A message sent with a file can be {MAX_CAPTION} characters at most, and this one is{" "}
+                        {draft.trim().length}. Shorten it, or send the file on its own and the words after it.
+                      </div>
+                    ) : null}
+
                     <div className="row-tight wrap">
-                      <Button onClick={() => void send()} disabled={sending || !draft.trim()}>
+                      <input
+                        ref={picker}
+                        type="file"
+                        accept={ACCEPT_ATTRIBUTE}
+                        style={{ display: "none" }}
+                        onChange={(e) => {
+                          chooseFile(e.target.files?.[0] ?? null);
+                          /* Cleared so choosing the SAME file again still
+                             fires a change — otherwise removing it and
+                             picking it back does nothing. */
+                          e.target.value = "";
+                        }}
+                      />
+                      <Button tone="quiet" onClick={() => picker.current?.click()} disabled={sending}>
+                        📎 {file ? "Change file" : "Attach a file"}
+                      </Button>
+                      <Button onClick={() => void send()} disabled={sending || nothingToSend || tooLong}>
                         {sending ? "Sending…" : "Send reply"}
                       </Button>
                       <span className="muted">

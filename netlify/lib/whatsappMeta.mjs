@@ -123,7 +123,23 @@ async function post(payload, { fetchImpl = fetch } = {}) {
  *
  * @returns {{ok: true, id: string} | {ok: false, error: string}}
  */
-export async function uploadDocument({ bytes, filename }, { fetchImpl = fetch } = {}) {
+export async function uploadDocument({ bytes, filename }, opts = {}) {
+  return uploadMedia({ bytes, filename: filename || "quotation.pdf", mimeType: "application/pdf" }, opts);
+}
+
+/**
+ * Hand any file Meta accepts to Meta, and get back the id that names it.
+ *
+ * `uploadDocument` above is this with a quotation's PDF filled in — kept
+ * as its own name because that is what every template send calls, and
+ * because its refusals are worded about a quotation, which is what those
+ * callers are sending.
+ *
+ * WHAT MAY BE UPLOADED IS NOT DECIDED HERE. whatsappMedia.mjs holds that,
+ * and the caller asks it first. This hands over whatever it is given and
+ * reports what Meta said about it.
+ */
+export async function uploadMedia({ bytes, filename, mimeType }, { fetchImpl = fetch } = {}) {
   const { token, phoneNumberId } = credentials();
   if (!token || !phoneNumberId) {
     return {
@@ -131,20 +147,27 @@ export async function uploadDocument({ bytes, filename }, { fetchImpl = fetch } 
       error: "WhatsApp isn't connected. " + askAdminToAdd("WHATSAPP_TOKEN and WHATSAPP_PHONE_NUMBER_ID"),
     };
   }
-  if (!bytes?.byteLength) return { ok: false, error: "The quotation PDF came through empty, so there was nothing to attach." };
+  const type = String(mimeType || "application/pdf");
+  /* The quotation wording is kept for the quotation path, whose callers
+     and tests are about a quotation and nothing else. */
+  const what = type === "application/pdf" ? "quotation PDF" : "file";
 
-  /* Meta's limit for a document is 100 MB. A quotation is a few hundred
-     kilobytes; anything near the limit is a fault worth naming here rather
-     than a timeout thirty seconds later. */
+  if (!bytes?.byteLength) {
+    return { ok: false, error: `The ${what} came through empty, so there was nothing to attach.` };
+  }
+
+  /* META'S OWN CEILING, not the CRM's: whatsappMedia holds the much lower
+     limits a reply is actually held to. Anything near this is a fault
+     worth naming here rather than a timeout thirty seconds later. */
   if (bytes.byteLength > 95 * 1024 * 1024) {
-    return { ok: false, error: "That quotation PDF is too large for WhatsApp to accept." };
+    return { ok: false, error: `That ${what} is too large for WhatsApp to accept.` };
   }
 
   try {
     const form = new FormData();
     form.append("messaging_product", "whatsapp");
-    form.append("type", "application/pdf");
-    form.append("file", new Blob([bytes], { type: "application/pdf" }), filename || "quotation.pdf");
+    form.append("type", type);
+    form.append("file", new Blob([bytes], { type }), filename || "attachment");
 
     const resp = await fetchImpl(`${GRAPH}/${encodeURIComponent(phoneNumberId)}/media`, {
       method: "POST",
@@ -157,32 +180,34 @@ export async function uploadDocument({ bytes, filename }, { fetchImpl = fetch } 
     if (!resp.ok) {
       const code = Number(result?.error?.code ?? 0);
       console.error("whatsapp upload refused:", resp.status, code, metaError(result).slice(0, 300));
-      return { ok: false, code, error: whyUploadRefused(resp.status, code, result) };
+      return { ok: false, code, error: whyUploadRefused(resp.status, code, result, what) };
     }
     const id = String(result?.id ?? "");
-    if (!id) return { ok: false, error: "WhatsApp accepted the quotation PDF but did not say where it put it." };
+    if (!id) return { ok: false, error: `WhatsApp accepted the ${what} but did not say where it put it.` };
     return { ok: true, id };
   } catch (err) {
-    return { ok: false, error: `The quotation PDF could not be sent to WhatsApp. ${err?.message ?? ""}`.trim() };
+    return { ok: false, error: `The ${what} could not be sent to WhatsApp. ${err?.message ?? ""}`.trim() };
   }
 }
 
 /** Why an upload was refused, in words somebody can act on. */
-function whyUploadRefused(status, code, result) {
+function whyUploadRefused(status, code, result, what = "quotation PDF") {
   const detail = metaError(result).toLowerCase();
   if (status === 401 || code === 190) {
-    return `WhatsApp rejected the access token while uploading the quotation. Check WHATSAPP_TOKEN in ${whereSettingsLive()}.`;
+    return `WhatsApp rejected the access token while uploading the ${what === "quotation PDF" ? "quotation" : what}. Check WHATSAPP_TOKEN in ${whereSettingsLive()}.`;
   }
   if (status === 413 || detail.includes("too large")) {
-    return "That quotation PDF is too large for WhatsApp to accept.";
+    return `That ${what} is too large for WhatsApp to accept.`;
   }
   if (detail.includes("type") || detail.includes("format")) {
-    return "WhatsApp would not accept that file as a PDF.";
+    return what === "quotation PDF"
+      ? "WhatsApp would not accept that file as a PDF."
+      : "WhatsApp would not accept that kind of file.";
   }
   if (status === 429) {
     return "WhatsApp is rate-limiting uploads on this account. The message was not sent; try again shortly.";
   }
-  return metaError(result) || "WhatsApp would not accept the quotation PDF.";
+  return metaError(result) || `WhatsApp would not accept the ${what}.`;
 }
 
 /**
@@ -223,6 +248,41 @@ export async function sendTemplate({ to, templateName, values = [], languageCode
     type: "template",
     template: { name: templateName, language: { code: languageCode }, components },
   }, opts);
+}
+
+/**
+ * A file that has already been uploaded, as its own message.
+ *
+ * Only inside the 24-hour window, like free text — this is a session
+ * message, not a template, and Meta refuses it outside.
+ *
+ * THE FILENAME IS ONLY SENT WITH A DOCUMENT. Meta's image message has no
+ * filename field, and sending a field a message type does not declare is
+ * refused outright — the same rule that governs a template's header. The
+ * customer sees a document's name on the file and an image in the chat,
+ * which is the whole reason the two are different kinds.
+ *
+ * THE CAPTION IS THE TYPED MESSAGE. One message carrying the words and
+ * the file together, the way a person sending this from their own phone
+ * would — not a file followed by a separate line of text that may arrive
+ * out of order, or not at all.
+ */
+export async function sendMedia({ to, kind, mediaId, filename = "", caption = "" }, opts = {}) {
+  const number = waNumber(to);
+  if (!looksSendable(number)) {
+    return { ok: false, error: "That number doesn't look like a WhatsApp number. It should be like 919810012345." };
+  }
+  if (kind !== "image" && kind !== "document") {
+    return { ok: false, error: `There is no way to send a “${kind}” on WhatsApp from here.` };
+  }
+  if (!mediaId) return { ok: false, error: "The file was not uploaded, so there is nothing to send." };
+
+  const media = { id: String(mediaId) };
+  const words = String(caption ?? "").trim();
+  if (words) media.caption = words;
+  if (kind === "document" && filename) media.filename = String(filename);
+
+  return post({ to: number, type: kind, [kind]: media }, opts);
 }
 
 /** Free text. Only inside the 24-hour window — Meta refuses it outside. */

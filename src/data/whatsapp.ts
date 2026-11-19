@@ -128,10 +128,40 @@ export async function notifyWhatsApp(
   }
 }
 
+/** A file going out with a reply, already read off the disk. */
+export interface WhatsAppAttachment {
+  filename: string;
+  /** The file itself, base64, with no `data:` prefix. */
+  base64: string;
+}
+
 /** Answer a customer in your own words, inside the 24-hour window. */
 export const replyOnWhatsApp = (args: {
   companyId: string; customerId?: string; phone: string; body: string;
+  attachment?: WhatsAppAttachment | null;
 }): Promise<WhatsAppSendResult> => call<WhatsAppSendResult>({ ...args, action: "reply" });
+
+/**
+ * A file the person chose, as the server wants it.
+ *
+ * THE `data:` PREFIX IS CUT OFF HERE. FileReader hands back
+ * "data:application/pdf;base64,JVBER…" and the server decodes the whole
+ * string, so leaving it on means Meta is given a file whose first bytes
+ * are the word "data". It fails as a corrupt file rather than as anything
+ * that names the cause.
+ */
+export function readFileForWhatsApp(file: File): Promise<WhatsAppAttachment> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error(`${file.name} could not be read.`));
+    reader.onload = () => {
+      const raw = String(reader.result ?? "");
+      const comma = raw.indexOf(",");
+      resolve({ filename: file.name, base64: comma >= 0 ? raw.slice(comma + 1) : raw });
+    };
+    reader.readAsDataURL(file);
+  });
+}
 
 /* ── reading the log ─────────────────────────────────────────────────── */
 
