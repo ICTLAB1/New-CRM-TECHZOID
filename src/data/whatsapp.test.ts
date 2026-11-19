@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { threadsFrom, windowOpen, type WhatsAppMessage } from "./whatsapp";
+import { replyWindow, threadsFrom, windowOpen, type WhatsAppMessage } from "./whatsapp";
 
 const msg = (over: Partial<WhatsAppMessage>): WhatsAppMessage => ({
   id: "m", direction: "out", customerId: null, phone: "919810012345", contactName: "",
@@ -23,6 +23,47 @@ describe("the 24-hour window", () => {
   it("is shut when they have never written", () => {
     expect(windowOpen("", now)).toBe(false);
     expect(windowOpen("not a date", now)).toBe(false);
+  });
+});
+
+/* ── why the reply box is missing ─────────────────────────────────────
+   REPORTED, from a phone: "There is no chatting option in this." Part of
+   that was the layout; part was this. Three of the five threads on the
+   live inbox were ones the COMPANY had started — a quotation sent, a
+   profile broadcast to a number nobody has written from — and the screen
+   told the reader "more than 24 hours since they wrote" about people who
+   had never written a word. That reads as the CRM having lost their
+   replies, which is the one thing this inbox exists to disprove. */
+describe("which of the three states a thread is in", () => {
+  const now = new Date("2026-11-15T12:00:00Z");
+
+  it("is open inside a day of their message", () => {
+    expect(replyWindow("2026-11-15T11:59:00Z", now)).toBe("open");
+    expect(replyWindow("2026-11-14T12:30:00Z", now)).toBe("open");
+  });
+
+  it("is closed once a day has passed SINCE THEY WROTE", () => {
+    expect(replyWindow("2026-11-14T11:30:00Z", now)).toBe("closed");
+    expect(replyWindow("2026-11-10T12:00:00Z", now)).toBe("closed");
+  });
+
+  it("is NEVER, not closed, when they have not written at all", () => {
+    /* The distinction the screen was missing. "Closed" promises there was
+       a message once. */
+    expect(replyWindow("", now)).toBe("never");
+  });
+
+  it("treats an unreadable date as never rather than guessing", () => {
+    expect(replyWindow("not a date", now)).toBe("never");
+  });
+
+  it("never disagrees with windowOpen about whether the box shows", () => {
+    /* The two must not drift: windowOpen is what the rest of the CRM
+       asks, and a third state that said "open" where it says shut would
+       offer somebody a message Meta will refuse. */
+    for (const at of ["", "not a date", "2026-11-14T11:30:00Z", "2026-11-15T11:59:00Z"]) {
+      expect(replyWindow(at, now) === "open", at).toBe(windowOpen(at, now));
+    }
   });
 });
 

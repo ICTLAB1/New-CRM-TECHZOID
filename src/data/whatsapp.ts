@@ -223,6 +223,25 @@ export function windowOpen(lastInboundAt: string, now: Date = new Date()): boole
 }
 
 /**
+ * Why the reply box is or is not there — three cases, not two.
+ *
+ * "never" IS NOT "closed", and saying otherwise is the screen telling
+ * somebody something untrue. A thread the COMPANY started — a quotation
+ * sent, a company profile broadcast to a number nobody has written from —
+ * carries no inbound message at all, and the inbox said "more than 24
+ * hours since they wrote" about a person who has never written a word. On
+ * the live inbox that was three threads out of five, and it reads as the
+ * CRM having lost their messages.
+ */
+export type ReplyWindow = "open" | "closed" | "never";
+
+export function replyWindow(lastInboundAt: string, now: Date = new Date()): ReplyWindow {
+  if (!lastInboundAt) return "never";
+  if (Number.isNaN(new Date(lastInboundAt).getTime())) return "never";
+  return windowOpen(lastInboundAt, now) ? "open" : "closed";
+}
+
+/**
  * One thread per number, newest first.
  *
  * BY NUMBER AND NOT BY CUSTOMER, because the 24-hour window belongs to the

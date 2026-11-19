@@ -208,6 +208,15 @@
 .split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--gap-wide); align-items: start; }
 .split-preview { position: sticky; top: calc(var(--topbar-h) + var(--tabbar-h) + var(--gap-block)); }
 
+/* ── WhatsApp inbox: a list beside a chat, or one at a time ──────────
+   The desktop shows both halves. A phone cannot: `.split` stacks them, so
+   the conversation and its reply box sat below a 520px list that scrolled
+   inside itself — reported from a phone as "there is no chatting option in
+   this", because the chat was simply off the bottom of the screen. Under
+   the split's own breakpoint the two panes take turns, which is how every
+   messaging app on a phone behaves. */
+.inbox-threads { max-height: 520px; overflow: auto; }
+
 /* ── mobile ────────────────────────────────────────────────────────── */
 .mobile-only { display: none; }
 
@@ -219,6 +228,17 @@
   .split-preview { display: none; }
   .app-name { display: none; }
   .topbar-crumb { display: none; }
+
+  /* Declared since the first release and never given a rule that shows
+     it, so every .mobile-only control in the app was invisible on the one
+     device it was written for. */
+  .mobile-only { display: inline-flex; }
+
+  .inbox-split[data-phone-pane="list"] .inbox-pane-thread { display: none; }
+  .inbox-split[data-phone-pane="thread"] .inbox-pane-list { display: none; }
+  /* One scroll, the page's. A box that scrolls inside a page that also
+     scrolls is what swallows a drag meant for the conversation. */
+  .inbox-threads { max-height: none; overflow: visible; }
 }
 @media (max-width: 640px) {
   .gh-search-wrap { min-width: 0; }

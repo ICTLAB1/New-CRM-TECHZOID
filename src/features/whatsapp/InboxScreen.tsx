@@ -4,7 +4,7 @@ import { Button, Card, Chip, Empty, Input, Textarea } from "../../components/pri
 import { useToast } from "../../components/Toast";
 import { MessageList } from "./MessageList";
 import {
-  WINDOW_HOURS, loadRecentMessages, replyOnWhatsApp, threadsFrom, windowOpen,
+  WINDOW_HOURS, loadRecentMessages, replyOnWhatsApp, replyWindow, threadsFrom,
   type WhatsAppThread,
 } from "../../data/whatsapp";
 import type { Customer } from "../../domain/customers/customer";
@@ -22,6 +22,15 @@ import type { Customer } from "../../domain/customers/customer";
  * customer writes, you can answer in your own words. After that only the
  * approved templates may be sent, so the reply box goes away and says why
  * rather than letting somebody type a message that will be refused.
+ *
+ * ON A PHONE IT IS ONE PANE AT A TIME. Two cards side by side is a desktop
+ * idea; under 960px `.split` stacks them, which put the whole conversation
+ * — the messages AND the reply box — below a list that is itself 520px
+ * tall and scrolls inside itself. Reported, from a phone, as "there is no
+ * chatting option in this": the list filled the screen and the chat was
+ * off the bottom of it. So the list and the conversation take turns, the
+ * way every messaging app on a phone does it, with a way back. The desktop
+ * is unchanged and still shows both.
  */
 
 export interface InboxScreenProps {
@@ -39,6 +48,11 @@ export function InboxScreen({ companyId, customers, onOpenCustomer }: InboxScree
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [query, setQuery] = useState("");
+  /* Which pane a PHONE is showing. `active` cannot stand in for it: a
+     thread is made active automatically on arrival so the desktop's right
+     half is never blank, and a phone opening straight into a conversation
+     nobody chose would hide the list behind a Back button. */
+  const [reading, setReading] = useState(false);
 
   const refresh = async () => {
     if (!companyId) {
@@ -71,7 +85,11 @@ export function InboxScreen({ companyId, customers, onOpenCustomer }: InboxScree
   }, [threads, query, customers]);
 
   const thread = threads.find((t) => t.phone === active) ?? null;
-  const open = thread ? windowOpen(thread.lastInboundAt) : false;
+  /* Three cases, not two: open, closed, and never written. See
+     replyWindow — "closed" said about somebody who has never messaged
+     reads as the CRM having lost their messages. */
+  const canReply = thread ? replyWindow(thread.lastInboundAt) : "never";
+  const open = canReply === "open";
   const waiting = threads.filter((t) => t.unanswered).length;
 
   const send = async () => {
@@ -123,9 +141,10 @@ export function InboxScreen({ companyId, customers, onOpenCustomer }: InboxScree
           />
         </Card>
       ) : (
-        <div className="split">
+        <div className="split inbox-split" data-phone-pane={reading ? "thread" : "list"}>
           {/* ── the threads ──────────────────────────────────────── */}
           <Card
+            className="inbox-pane-list"
             title={`Conversations${threads.length > 1 ? ` — ${threads.length}` : ""}`}
             actions={
               <Input
@@ -136,13 +155,18 @@ export function InboxScreen({ companyId, customers, onOpenCustomer }: InboxScree
               />
             }
           >
-            <div className="stack" style={{ maxHeight: 520, overflow: "auto" }}>
+            {/* The inner scrollbox is for the DESKTOP, where the list sits
+                beside the conversation and must not push the page down.
+                On a phone the list is the whole screen and a box that
+                scrolls inside a page that also scrolls is the thing that
+                eats a tap. See .inbox-threads. */}
+            <div className="stack inbox-threads">
               {shown.map((t) => (
                 <button
                   key={t.phone}
                   type="button"
                   className="row-open"
-                  onClick={() => { setActive(t.phone); setDraft(""); }}
+                  onClick={() => { setActive(t.phone); setDraft(""); setReading(true); }}
                   style={{
                     textAlign: "left",
                     width: "100%",
@@ -167,13 +191,27 @@ export function InboxScreen({ companyId, customers, onOpenCustomer }: InboxScree
 
           {/* ── the conversation ─────────────────────────────────── */}
           <Card
+            className="inbox-pane-thread"
             title={thread ? nameFor(thread) : "Conversation"}
             actions={
-              thread?.customerId && onOpenCustomer ? (
-                <Button size="sm" tone="quiet" onClick={() => onOpenCustomer(thread.customerId!)}>
-                  Open the customer
+              <>
+                {/* Phone only: the list is hidden behind this. On the
+                    desktop both panes are on screen, so a Back that goes
+                    nowhere would be a button that does nothing. */}
+                <Button
+                  size="sm"
+                  tone="quiet"
+                  className="mobile-only"
+                  onClick={() => setReading(false)}
+                >
+                  ← All chats
                 </Button>
-              ) : null
+                {thread?.customerId && onOpenCustomer ? (
+                  <Button size="sm" tone="quiet" onClick={() => onOpenCustomer(thread.customerId!)}>
+                    Open the customer
+                  </Button>
+                ) : null}
+              </>
             }
           >
             {!thread ? (
@@ -206,6 +244,15 @@ export function InboxScreen({ companyId, customers, onOpenCustomer }: InboxScree
                         You can write freely for {WINDOW_HOURS} hours after their message.
                       </span>
                     </div>
+                  </div>
+                ) : canReply === "never" ? (
+                  <div className="notice notice-warn">
+                    <span>
+                      <strong>They have not written to you on WhatsApp yet.</strong> WhatsApp only lets you
+                      type a message in your own words once a customer has messaged you, and then for{" "}
+                      {WINDOW_HOURS} hours. Until they do, send one of the approved messages from their
+                      quotation, proforma, order or invoice — or ring them. Their reply will open this box.
+                    </span>
                   </div>
                 ) : (
                   <div className="notice notice-warn">
