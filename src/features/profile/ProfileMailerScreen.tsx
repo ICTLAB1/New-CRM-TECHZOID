@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { PageHead } from "../../app/AppShell";
-import { Button, Card, Chip, Empty, Field, Input, Textarea } from "../../components/primitives";
+import { Button, Card, Chip, Empty, Field, Input, Tabs, Textarea } from "../../components/primitives";
 import { useToast } from "../../components/Toast";
 import {
   CHUNK, PROFILE_BODY, PROFILE_HERO, PROFILE_SUBJECT, messagesFor, profileCallToAction,
@@ -82,6 +82,14 @@ export function ProfileMailerScreen({
   const [subject, setSubject] = useState(PROFILE_SUBJECT);
   const [body, setBody] = useState(PROFILE_BODY);
   const [previewOf, setPreviewOf] = useState(0);
+
+  /* WHICH WAY THE PROFILE GOES OUT.
+     The two routes were one screen with the WhatsApp half at the bottom,
+     under the recipient table, the editor, the preview and the Send panel.
+     On a phone that is a very long scroll past things that belong to the
+     other route, and it was reported as the feature not being there at
+     all — which, for anybody who did not scroll, it was not. */
+  const [route, setRoute] = useState<"email" | "whatsapp">("email");
 
   /* ── the WhatsApp broadcast ───────────────────────────────────────
      Its own paste box, deliberately separate from the email one. The two
@@ -439,7 +447,9 @@ export function ProfileMailerScreen({
     <main className="page">
       <PageHead
         title="Company profile"
-        sub="Send your profile to customers — each one gets their own email."
+        sub={route === "whatsapp"
+          ? "Send your profile on WhatsApp — each person gets their own message, with the PDF attached."
+          : "Send your profile to customers — each one gets their own email."}
         actions={
           <>
             {info ? <Button tone="quiet" onClick={download}>Download the PDF</Button> : null}
@@ -487,6 +497,17 @@ export function ProfileMailerScreen({
         )}
       </Card>
 
+      {/* ── which way it goes ──────────────────────────────────────── */}
+      <Tabs
+        tabs={[
+          { id: "email" as const, label: "By email" },
+          { id: "whatsapp" as const, label: "On WhatsApp" },
+        ]}
+        active={route}
+        onChange={setRoute}
+      />
+
+      {route === "email" ? (<>
       {/* ── who ────────────────────────────────────────────────────── */}
       <Card
         title={`Who it goes to${recipients.length ? ` — ${recipients.length}` : ""}`}
@@ -777,6 +798,8 @@ export function ProfileMailerScreen({
         </div>
       </Card>
 
+      </>) : null}
+
       {/* ── the same profile, on WhatsApp ───────────────────────────────
           A SECOND CARD RATHER THAN A SECOND MODE on the first one. The
           two lists are rarely the same people: the email list is whoever
@@ -784,6 +807,7 @@ export function ProfileMailerScreen({
           whose number somebody has pasted. Folding them into one picker
           would mean a screen where ticking somebody does different things
           depending on a toggle they set earlier. */}
+      {route === "whatsapp" ? (
       <Card title="Send on WhatsApp">
         <div className="stack">
           <p className="muted" style={{ marginTop: 0 }}>
@@ -905,6 +929,7 @@ export function ProfileMailerScreen({
           ) : null}
         </div>
       </Card>
+      ) : null}
     </main>
   );
 }
