@@ -28,13 +28,20 @@ const NOT_BULK = [
 ];
 
 describe("the pause on automated email", () => {
-  it("is on", () => {
+  it("is off", () => {
     /* This test states the current position rather than asserting a
-       constant can never change: when Microsoft lifts the restriction,
-       PAUSED goes false, this flips with it, and the change is visible in
-       a diff rather than silent. */
-    expect(PAUSED).toBe(true);
-    expect(bulkEmailPaused()).toBe(true);
+       constant can never change. It was written to flip when the pause
+       was lifted, so that the change is visible in a diff rather than
+       silent — lifted 21 November 2026 at the company's instruction. */
+    expect(PAUSED).toBe(false);
+    expect(bulkEmailPaused()).toBe(false);
+  });
+
+  it("answers the question the call sites ask, rather than its own", () => {
+    /* `bulkEmailPaused()` has to READ PAUSED and not be a second constant
+       beside it, or putting the pause back would be a change that
+       silently did nothing. */
+    expect(bulkEmailPaused()).toBe(PAUSED);
   });
 
   it("says why, where it is lifted, and that nothing was lost", () => {

@@ -12,8 +12,9 @@
  * under.
  */
 
-/** Keep in step with PAUSED in netlify/lib/bulkEmailPause.mjs. */
-export const BULK_EMAIL_PAUSED = true;
+/** Keep in step with PAUSED in netlify/lib/bulkEmailPause.mjs.
+ *  Currently off — lifted 21 November 2026 at the company's instruction. */
+export const BULK_EMAIL_PAUSED = false;
 
 /** Said on screen, where a sender will meet it. */
 export const BULK_PAUSE_NOTICE =
