@@ -4,7 +4,7 @@ import { Button, Card, Chip, Empty, Field, Input, Tabs, Textarea } from "../../c
 import { useToast } from "../../components/Toast";
 import {
   CHUNK, PROFILE_BODY, PROFILE_HERO, PROFILE_SUBJECT, messagesFor, profileCallToAction,
-  recipientsFromCustomers, recipientsFromPaste,
+  recipientsFromCustomers, recipientsFromPaste, senderNumber,
   type ProfileDraft, type ProfileMessage,
 } from "../../domain/outreach/profileMail";
 import type { IntegrationsApi } from "../../integrations/api";
@@ -19,6 +19,7 @@ import {
   saveProfile, type ProfileInfo,
 } from "../../data/companyProfile";
 import { suppressedAddresses } from "../../data/outreach";
+import { setMyDetails } from "../../data/session";
 import type { Customer } from "../../domain/customers/customer";
 
 /**
@@ -83,6 +84,11 @@ export function ProfileMailerScreen({
   const [subject, setSubject] = useState(PROFILE_SUBJECT);
   const [body, setBody] = useState(PROFILE_BODY);
   const [previewOf, setPreviewOf] = useState(0);
+  /* Their own mobile for the signature. Seeded from their profile and
+     kept here so the preview follows the box as it is typed. */
+  const [myMobileSaved, setMyMobileSaved] = useState(user.phone ?? "");
+  const [myMobile, setMyMobile] = useState(user.phone ?? "");
+  const [savingMobile, setSavingMobile] = useState(false);
 
   /* WHICH WAY THE PROFILE GOES OUT.
      The two routes were one screen with the WhatsApp half at the bottom,
@@ -149,15 +155,41 @@ export function ProfileMailerScreen({
     return () => { live = false; };
   }, [companyId]);
 
+  /** Keep it on their profile, so the next mailshot starts with it set. */
+  const saveMobile = async () => {
+    setSavingMobile(true);
+    try {
+      await setMyDetails({ phone: myMobile.trim() });
+      setMyMobileSaved(myMobile.trim());
+      toast("Saved to your profile", "good");
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Couldn't save your mobile.", "bad");
+    }
+    setSavingMobile(false);
+  };
+
   /* ── who it is from ────────────────────────────────────────────────── */
 
   const companySettings = (settings["company"] as Record<string, unknown> | undefined) ?? {};
   const companyName = String(companySettings["name"] ?? "");
 
+  /* THE NUMBER THAT GOES UNDER THEIR NAME. Their own mobile where they
+     have set one, the company's where they have not — the rule the
+     campaign signature has followed since 031 and this path never did,
+     so a profile mailshot could go out with no number on it at all.
+     `whose` drives the note beside the preview: a fallback nobody is
+     told about is how the switchboard ended up under everybody's name. */
+  /* READ FROM THE BOX, NOT FROM THE SAVED VALUE. The preview on this
+     screen IS the message, so the number it shows has to be the number
+     that will be sent — including one typed and not yet saved. Save
+     persists it to their profile for next time; it is not what makes it
+     apply to this send. */
+  const myNumber = senderNumber(myMobile, companySettings["phone"]);
+
   const sender: EmailSender = {
     name: user.name,
     email: user.email ?? "",
-    phone: user.phone ?? "",
+    phone: myNumber.number,
   };
 
   const company: EmailCompany = emailCompanyFrom(settings);
@@ -166,7 +198,7 @@ export function ProfileMailerScreen({
     name: user.name,
     company: companyName,
     email: user.email ?? "",
-    phone: user.phone ?? "",
+    phone: myNumber.number,
     designation: user.designation ?? "",
   };
 
@@ -275,7 +307,14 @@ export function ProfileMailerScreen({
     callToAction: profileCallToAction(user.email ?? ""),
   };
 
-  const messages = useMemo(() => messagesFor(draft, recipients), [subject, body, recipients, info?.fileName, companyName, user.name, user.designation, user.email, user.phone]);
+  /* myNumber.number, not user.phone: the number in the signature follows
+     the box on this screen, including one typed and not yet saved, and a
+     preview that did not recompute for it would show a different message
+     from the one about to go out. */
+  const messages = useMemo(
+    () => messagesFor(draft, recipients),
+    [subject, body, recipients, info?.fileName, companyName, user.name, user.designation, user.email, myNumber.number],
+  );
 
   const preview: ProfileMessage | null = messages[Math.min(previewOf, Math.max(0, messages.length - 1))] ?? null;
 
@@ -641,6 +680,47 @@ export function ProfileMailerScreen({
             hint="The greeting is added for you — “Dear Ravi,” where we have a name, the company where we only have that, and a plain “Hello,” rather than an empty one. Your signature goes underneath."
           >
             <Textarea rows={7} value={body} onChange={(e) => setBody(e.target.value)} />
+          </Field>
+
+          {/* THE NUMBER UNDER YOUR NAME, said before it goes out rather
+              than discovered by a customer who could not ring you. A cold
+              introduction with no phone number on it is a leaflet, and
+              the company switchboard printed as though it were yours is
+              worse than either — so which of the two it is gets named. */}
+          <Field
+            label="Your mobile, in the signature"
+            hint={
+              myNumber.whose === "mine"
+                ? "Printed under your name, and a tap-to-call link on a phone."
+                : myNumber.whose === "company"
+                  ? "You have no mobile of your own set, so the company number below is being used. Type yours to use it instead — it saves to your profile."
+                  : "Nothing is set, so this profile will go out with NO number under your name. Type your mobile, or set a company number in Settings → Company."
+            }
+          >
+            <div className="row-tight" style={{ gap: 8, alignItems: "center" }}>
+              <Input
+                value={myMobile}
+                placeholder="+91 98100 12345"
+                onChange={(e) => setMyMobile(e.target.value)}
+                style={{ maxWidth: 260 }}
+              />
+              <Button
+                tone="primary"
+                loading={savingMobile}
+                disabled={myMobile.trim() === myMobileSaved.trim()}
+                onClick={() => void saveMobile()}
+              >
+                Save
+              </Button>
+              {myNumber.whose !== "none" ? (
+                <span className="muted small">
+                  Signature will read <span className="strong">{myNumber.number}</span>
+                  {myNumber.whose === "company" ? " (the company number)" : ""}
+                </span>
+              ) : (
+                <span className="small" style={{ color: "var(--bad)" }}>No number will be printed.</span>
+              )}
+            </div>
           </Field>
         </div>
       </Card>

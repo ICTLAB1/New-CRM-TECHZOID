@@ -81,6 +81,41 @@ export const PROFILE_HERO = {
 };
 
 /**
+ * Which number goes under the sender's name, and whose it is.
+ *
+ * REPORTED: the agent's mobile was wanted in the signature on a company
+ * profile. It was already printed — when the agent had one on file. When
+ * they did not, the signature had NO number at all: name, company, email,
+ * and nothing to ring. A cold introduction to a buyer who has never heard
+ * of this company, carrying no phone number, is a leaflet.
+ *
+ * THE COMPANY NUMBER IS THE FALLBACK, and not a silent substitution. This
+ * is what the campaign signature has done since 031 — see signatureFrom
+ * in signature.ts, whose comment is worth reading: the switchboard is
+ * "still a real number, just not a personal one". The profile mailshot
+ * was the one path with no fallback, so the two signatures disagreed
+ * about the same person on the same day.
+ *
+ * `whose` is returned so the SCREEN can say which of the two it is before
+ * anything goes out. Falling back silently is how the switchboard ended
+ * up under everybody's name in the first place, and "the number under my
+ * name is not mine" is not something to work out from a received email.
+ */
+export interface SenderNumber {
+  /** What will be printed, or "" when there is nothing to print. */
+  number: string;
+  whose: "mine" | "company" | "none";
+}
+
+export function senderNumber(myPhone: unknown, companyPhone: unknown): SenderNumber {
+  const mine = clean(myPhone);
+  if (mine) return { number: mine, whose: "mine" };
+  const company = clean(companyPhone);
+  if (company) return { number: company, whose: "company" };
+  return { number: "", whose: "none" };
+}
+
+/**
  * The ask.
  *
  * ONE ASK, AND IT IS THE EASY ONE. The button opens a reply to the person

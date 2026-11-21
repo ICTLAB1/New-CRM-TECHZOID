@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   CHUNK, PROFILE_BODY, PROFILE_SUBJECT, chunk, greetingLine, messageFor, messagesFor,
-  recipientsFromCustomers, recipientsFromPaste, type ProfileDraft,
+  recipientsFromCustomers, recipientsFromPaste, senderNumber, type ProfileDraft,
 } from "./profileMail";
 import { fill } from "./personalise";
 
@@ -338,3 +338,95 @@ describe("a customer record with no contact name", () => {
   });
 });
 
+
+/* ── the number under the sender's name ───────────────────────────────
+   ASKED FOR: "Need agent mobile number in signature when sending company
+   profiles." It was already printed where the agent had one on file —
+   and where they did not, the signature carried NO number at all: name,
+   company, email, and nothing to ring. A cold introduction to a buyer
+   who has never heard of this company, with no phone number on it, is a
+   leaflet.
+
+   The campaign signature has fallen back to the company number since
+   031 (see signatureFrom). The profile mailshot was the one path that
+   did not, so the two signatures disagreed about the same person. */
+describe("whose number goes in the signature", () => {
+  it("is the agent's own mobile where they have one", () => {
+    expect(senderNumber("+91 98100 12345", "011-4567890"))
+      .toEqual({ number: "+91 98100 12345", whose: "mine" });
+  });
+
+  it("falls back to the company number where they have none", () => {
+    /* A real number, just not a personal one — better than a cold email
+       nobody can ring. */
+    expect(senderNumber("", "011-4567890")).toEqual({ number: "011-4567890", whose: "company" });
+    expect(senderNumber(undefined, "011-4567890")).toEqual({ number: "011-4567890", whose: "company" });
+    expect(senderNumber(null, "011-4567890")).toEqual({ number: "011-4567890", whose: "company" });
+  });
+
+  it("treats a box with only spaces in it as not set", () => {
+    /* Otherwise a stray space beats the company number and prints
+       nothing at all. */
+    expect(senderNumber("   ", "011-4567890").whose).toBe("company");
+  });
+
+  it("SAYS WHICH OF THE TWO IT IS, rather than substituting silently", () => {
+    /* The screen prints this beside the preview. Falling back without
+       saying so is how the switchboard came to sit under everybody's
+       name, and "the number under my name is not mine" is not something
+       to work out from a received email. */
+    expect(senderNumber("+91 98100 12345", "011-4567890").whose).toBe("mine");
+    expect(senderNumber("", "011-4567890").whose).toBe("company");
+  });
+
+  it("reports nothing to print when neither is set", () => {
+    /* Not an empty string pretending to be a number: the screen says in
+       red that the profile will go out with no number on it. */
+    expect(senderNumber("", "")).toEqual({ number: "", whose: "none" });
+    expect(senderNumber(undefined, undefined)).toEqual({ number: "", whose: "none" });
+  });
+
+  it("trims what it returns, so the signature is not printed with padding", () => {
+    expect(senderNumber("  +91 98100 12345 ", "")).toEqual({ number: "+91 98100 12345", whose: "mine" });
+  });
+});
+
+describe("the number actually reaching a sent profile", () => {
+  /* The rule above is only worth having if the rendered message carries
+     it. These render the real message rather than asserting about the
+     helper a second time. */
+  const draftWith = (phone: string) => ({
+    subject: PROFILE_SUBJECT,
+    body: PROFILE_BODY,
+    sender: { name: "Abhinav Jain", email: "abhinav@example.com", phone },
+    company: { name: "TechZoid Technologies Private Limited", email: "sales@example.com" },
+    attachmentName: "Profile.pdf",
+  }) as unknown as Parameters<typeof messageFor>[0];
+
+  const to = {
+    customerId: "c1", email: "ravi@acme.in", label: "Acme",
+    values: { first_name: "Ravi", sender_company: "TechZoid Technologies Private Limited" },
+  } as unknown as Parameters<typeof messageFor>[1];
+
+  it("prints the agent's mobile, and as something a phone can dial", () => {
+    const m = messageFor(draftWith(senderNumber("+91 98100 12345", "011-4567890").number), to);
+    expect(m.message).toContain("+91 98100 12345");
+    expect(m.html).toContain("+91 98100 12345");
+    /* A number on a phone screen that is not a link is a number being
+       copied out by hand. */
+    expect(m.html).toContain("tel:+919810012345");
+  });
+
+  it("prints the company number where the agent has none, rather than nothing", () => {
+    const m = messageFor(draftWith(senderNumber("", "011-4567890").number), to);
+    expect(m.message).toContain("011-4567890");
+    expect(m.html).toMatch(/tel:/);
+  });
+
+  it("was the bug: nothing at all when the agent had no mobile", () => {
+    /* What the old code did — `phone: user.phone ?? ""` with no
+       fallback. Kept as a test so the gap cannot quietly return. */
+    const m = messageFor(draftWith(""), to);
+    expect(m.html).not.toMatch(/tel:/);
+  });
+});
