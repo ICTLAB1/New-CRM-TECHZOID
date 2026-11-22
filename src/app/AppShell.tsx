@@ -7,6 +7,7 @@ import { useHotkeys } from "../components/hotkeys";
 import { ShortcutsHelp } from "../components/ShortcutsHelp";
 import { NAV } from "./nav";
 import { NavIcon } from "./NavIcon";
+import { COMPANY_LOCKUP_PATH } from "./brand";
 import { ConnectionBanner } from "../components/ConnectionBanner";
 import { Button } from "../components/primitives";
 import { fyLabel } from "../domain/numbering/docNumber";
@@ -106,18 +107,22 @@ export function AppShell({ view, onNavigate, user, brand, onSignOut, banner, bel
           below 960px, where the bottom bar takes over — a 268px rail on
           a phone is the whole screen. */}
       <aside className="rail" aria-label="Sections">
+        {/* THE LOCKUP IS BLACK ARTWORK AND THE RAIL IS NEAR-BLACK, so the
+            brand block is a white panel. Inverting the supplied logo to
+            sit on the dark was the alternative and is not ours to do:
+            the pinwheel is blue and amber, and a recoloured mark is a
+            company's identity redrawn by its own software.
+
+            NO TEXT BESIDE IT. The lockup already carries the name and
+            the strapline; setting them again next to it prints both
+            twice, which is the same mistake public/brand/README.md
+            records about the email header. */}
         <div className="rail-brand">
-          {brand?.logo ? (
-            <img className="rail-logo" src={brand.logo} alt={brand.name || "Home"} />
-          ) : (
-            <>
-              <span className="rail-mark" aria-hidden>TZ</span>
-              <span className="rail-words">
-                <span className="rail-name">{brand?.name || "TechZoid"}</span>
-                <span className="rail-tag">Connect, Communicate &amp; Collaborate</span>
-              </span>
-            </>
-          )}
+          <img
+            className="rail-logo"
+            src={brand?.logo || COMPANY_LOCKUP_PATH}
+            alt={brand?.name || "TechZoid Technologies"}
+          />
         </div>
 
         <nav className="rail-nav scroll" aria-label="Main">
@@ -164,15 +169,14 @@ export function AppShell({ view, onNavigate, user, brand, onSignOut, banner, bel
           onClick={() => setMenuOpen(true)}>
           <span aria-hidden className="waffle">{Array.from({ length: 9 }, (_, i) => <i key={i} />)}</span>
         </button>
+        {/* The phone's copy of the brand. The bar is white here, so the
+            lockup needs no panel of its own. */}
         <span className="gh-brand mobile-brand">
-          {brand?.logo ? (
-            <img className="brand-logo" src={brand.logo} alt={brand.name || "Home"} />
-          ) : (
-            <>
-              <span className="brand-mark" aria-hidden>TZ</span>
-              <span className="brand-name">{brand?.name || "TechZoid"}</span>
-            </>
-          )}
+          <img
+            className="brand-logo"
+            src={brand?.logo || COMPANY_LOCKUP_PATH}
+            alt={brand?.name || "TechZoid Technologies"}
+          />
         </span>
         <span className="grow gh-search-wrap">
           {search ?? <input className="topsearch" type="search" placeholder="Search…" aria-label="Search" />}

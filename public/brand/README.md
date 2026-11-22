@@ -86,6 +86,44 @@ This is NOT `settings.company.logo`. That one is stored as a `data:` URI
 for the PDF renderer, which embeds its own images, and must never be put in
 an `<img src>` in an email.
 
+## company-lockup.png
+
+The full lockup — the wordmark, the pinwheel and "Connect, Communicate &
+Collaborate" under it — as supplied. 640x131, white ground, about 12 KB.
+Shown at about 220px in the rail, so it is three times its drawn size and
+stays sharp.
+
+**This one is for the SCREEN, company-logo.png is for the email.** They
+are two crops of the same artwork and the difference is deliberate: the
+email header prints the strapline as text underneath, so the lockup would
+say it twice there. The interface prints no such text beside it, so it
+shows the artwork whole. Do not point one at the other.
+
+**It sits on a white panel in the navigation rail.** The rail is
+near-black and the lockup is black artwork with a blue-and-amber mark, so
+the rail gives it the ground it was drawn for. Inverting or recolouring it
+to sit on the dark was the alternative and is not ours to do — a
+recoloured mark is a company's identity redrawn by its own software.
+
+**It is not `settings.company.logo`.** A company that uploads its own logo
+overrides this everywhere; this is what shows when that has never been
+filled in.
+
+### If you replace it
+
+1. Put the new artwork here under the same name.
+   - PNG, about 640px wide, white ground, no transparency.
+   - Under 60 KB — `src/app/brand.test.ts` fails above that, because this
+     loads on first paint before anything else on the screen.
+   - `convert in.png -fuzz 4% -trim +repage -background white -alpha remove
+     -alpha off -resize 640x -strip -colors 64 out.png`
+2. Nothing else to change. `.rail-logo` is height-led, so a mark of any
+   proportion lands correctly without stretching.
+
+`src/app/brand.test.ts` refuses to let `COMPANY_LOCKUP_PATH` name a file
+that is not in `public/` — the same guard, and the same reason, as the
+signature image above.
+
 ## vendor-microsoft.png, vendor-autodesk.png, vendor-adobe.png
 
 The three vendors' own marks, for the "What we supply" block in the company
