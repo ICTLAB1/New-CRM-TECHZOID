@@ -6,6 +6,7 @@ const ViewLabel = createContext<string>("");
 import { useHotkeys } from "../components/hotkeys";
 import { ShortcutsHelp } from "../components/ShortcutsHelp";
 import { NAV } from "./nav";
+import { NavIcon } from "./NavIcon";
 import { ConnectionBanner } from "../components/ConnectionBanner";
 import { Button } from "../components/primitives";
 import { fyLabel } from "../domain/numbering/docNumber";
@@ -92,18 +93,78 @@ export function AppShell({ view, onNavigate, user, brand, onSignOut, banner, bel
   };
 
   const nav = NAV.map((sec) => ({ ...sec, items: sec.items.map((i) => ({ ...i, badge: badges[i.id] || undefined })) }));
-  const all = nav.flatMap((sec) => sec.items.map((i) => ({ ...i, section: sec.label })));
 
   return (
     <div className="shell">
       <ShortcutsHelp open={helpOpen} onClose={() => setHelpOpen(false)} />
 
+      {/* ── the left rail ──────────────────────────────────────────────
+          NAVIGATION IS A COLUMN NOW, not a row of dropdown menus. The
+          row fitted eight of thirty-two destinations and hid the rest
+          two clicks deep behind a section name; a rail shows every one
+          of them, grouped, in the order somebody works. It is hidden
+          below 960px, where the bottom bar takes over — a 268px rail on
+          a phone is the whole screen. */}
+      <aside className="rail" aria-label="Sections">
+        <div className="rail-brand">
+          {brand?.logo ? (
+            <img className="rail-logo" src={brand.logo} alt={brand.name || "Home"} />
+          ) : (
+            <>
+              <span className="rail-mark" aria-hidden>TZ</span>
+              <span className="rail-words">
+                <span className="rail-name">{brand?.name || "TechZoid"}</span>
+                <span className="rail-tag">Connect, Communicate &amp; Collaborate</span>
+              </span>
+            </>
+          )}
+        </div>
+
+        <nav className="rail-nav scroll" aria-label="Main">
+          {nav.map((sec) => (
+            <div key={sec.label} className="rail-group">
+              <div className="rail-group-label">{sec.label}</div>
+              {sec.items.filter((i) => i.id !== "components").map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  className="rail-item"
+                  aria-current={item.id === view ? "page" : undefined}
+                  onClick={() => go(item.id)}
+                >
+                  <NavIcon id={item.id} />
+                  <span className="rail-label">{item.label}</span>
+                  {item.badge ? <span className="nav-badge">{item.badge}</span> : null}
+                  {item.id === view ? (
+                    <motion.span
+                      layoutId="rail-ink"
+                      className="rail-ink"
+                      transition={{ type: "spring", stiffness: 480, damping: 38, mass: 0.7 }}
+                    />
+                  ) : null}
+                </button>
+              ))}
+            </div>
+          ))}
+        </nav>
+
+        {/* The warm glow at the foot of the rail. Decoration, and the one
+            piece of it in the whole interface — it carries no meaning and
+            is marked hidden so a screen reader never meets it. */}
+        <div className="rail-glow" aria-hidden />
+      </aside>
+
+      <div className="shell-main">
       <header className="global-header">
+        {/* The launcher stays, and on a phone it is the only way to the
+            sections the bottom bar has no room for. On a desktop the
+            rail has already shown them, so it steps back to a quiet
+            square rather than the first thing on the bar. */}
         <button type="button" className="launcher-btn" aria-label="App launcher" title="App launcher"
           onClick={() => setMenuOpen(true)}>
           <span aria-hidden className="waffle">{Array.from({ length: 9 }, (_, i) => <i key={i} />)}</span>
         </button>
-        <span className="gh-brand">
+        <span className="gh-brand mobile-brand">
           {brand?.logo ? (
             <img className="brand-logo" src={brand.logo} alt={brand.name || "Home"} />
           ) : (
@@ -124,10 +185,29 @@ export function AppShell({ view, onNavigate, user, brand, onSignOut, banner, bel
         ) : null}
         {companyPicker}
         {bell}
+        <button type="button" className="gh-icon-btn" aria-label="Keyboard shortcuts" title="Keyboard shortcuts"
+          onClick={() => setHelpOpen(true)}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden>
+            <circle cx="12" cy="12" r="9" />
+            <path d="M9.6 9.5a2.5 2.5 0 1 1 3.3 2.4c-.5.2-.9.6-.9 1.1v.5" strokeLinecap="round" />
+            <path d="M12 17h.01" strokeLinecap="round" />
+          </svg>
+        </button>
         <span className="topbar-crumb" title={`Financial year ${fyLabel()}`}>FY {fyLabel()}</span>
         <span className="gh-user">
-          <button type="button" className="who-mark" aria-label={`${user.name} — account`} title={`${user.name} · ${user.role}`}
-            onClick={() => setUserOpen((o) => !o)}>{initials(user.name)}</button>
+          {/* NAME AND ROLE BESIDE THE INITIALS on a wide screen. On a
+              shared machine — which is most of them here — a circle with
+              two letters in it is not an answer to "whose session is
+              this?". It folds back to the circle alone under 1200px. */}
+          <button type="button" className="who-btn" aria-label={`${user.name} — account`} title={`${user.name} · ${user.role}`}
+            onClick={() => setUserOpen((o) => !o)}>
+            <span className="who-mark" aria-hidden>{initials(user.name)}</span>
+            <span className="who-words">
+              <span className="who-btn-name">{user.name}</span>
+              <span className="who-btn-role">{user.role}</span>
+            </span>
+            <span className="who-caret" aria-hidden>▾</span>
+          </button>
           {userOpen ? (
             <div className="gh-user-menu" role="menu" onMouseLeave={() => setUserOpen(false)}>
               <div className="who-name">{user.name}</div>
@@ -138,35 +218,10 @@ export function AppShell({ view, onNavigate, user, brand, onSignOut, banner, bel
         </span>
       </header>
 
-      <nav className="app-nav" aria-label="Main">
-        <span className="app-name">Sales</span>
-        <div className="app-tabs scroll">
-          {DIRECT_TABS.map((id) => all.find((i) => i.id === id)).filter(Boolean).map((item) => (
-            <button key={item!.id} type="button" className="app-tab"
-              aria-current={item!.id === view ? "page" : undefined} onClick={() => go(item!.id)}>
-              {item!.label}
-              {item!.badge ? <span key={item!.badge} className="nav-badge">{item!.badge}</span> : null}
-              {item!.id === view ? <motion.span layoutId="app-tab-ink" className="app-tab-ink" transition={{ type: "spring", stiffness: 480, damping: 38, mass: 0.7 }} /> : null}
-            </button>
-          ))}
-          {nav.map((sec) => {
-            const items = sec.items.filter((i) => !DIRECT_TABS.includes(i.id) && i.id !== "components");
-            if (!items.length) return null;
-            const here = items.find((i) => i.id === view);
-            const badge = items.reduce((n, i) => n + (i.badge ?? 0), 0);
-            return (
-              <button key={sec.label} type="button" className="app-tab"
-                aria-current={here ? "page" : undefined} aria-haspopup="menu" aria-expanded={menu?.id === sec.label}
-                onClick={(e) => openMenu(sec.label, e.currentTarget)}>
-                {sec.label}{here ? <span className="app-tab-sub">· {here.label}</span> : null}
-                {badge ? <span key={badge} className="nav-badge">{badge}</span> : null}
-                <span className="app-caret" aria-hidden>▾</span>
-                {here ? <motion.span layoutId="app-tab-ink" className="app-tab-ink" transition={{ type: "spring", stiffness: 480, damping: 38, mass: 0.7 }} /> : null}
-              </button>
-            );
-          })}
-        </div>
-      </nav>
+      {/* The horizontal tab bar that used to sit here is gone: the rail
+          above is the navigation now. Keeping both would be the same
+          thirty-two destinations offered twice, in two different
+          orders, with two different ideas of which one you are on. */}
 
       {menu ? (
         <>
@@ -252,6 +307,7 @@ export function AppShell({ view, onNavigate, user, brand, onSignOut, banner, bel
         <ViewLabel.Provider value={current?.label ?? ""}>
           <div key={view} className="view" data-obj={objOf(view)}>{children}</div>
         </ViewLabel.Provider>
+      </div>
       </div>
     </div>
   );

@@ -8,6 +8,16 @@ import { describe, expect, it } from "vitest";
  * These are not style preferences — each one is a decision from the brief
  * that a later change could quietly undo. A test is cheaper than noticing
  * six months later that the product has grown three blues and a gradient.
+ *
+ * REWRITTEN IN NOVEMBER 2026 with the direction itself. Three of these
+ * rules enforced the old brief — no gradients, one shadow, a dark top
+ * bar — and the company replaced that brief with a reference design. The
+ * rules were not deleted when they started failing: a rule removed
+ * because it was inconvenient is a rule that was never enforcing
+ * anything. Each one below either still says what it said, or says the
+ * new decision in the same enforceable form. What did NOT change is the
+ * discipline underneath: a fixed, named set of places colour and depth
+ * may be used, and no loose hex anywhere outside the token file.
  */
 
 const DIR = "src/styles";
@@ -20,28 +30,43 @@ const code = (s: string): string => s.replace(/\/\*[\s\S]*?\*\//g, "");
 const allCode = code(all);
 
 describe("no decoration", () => {
-  it("uses gradients only as scroll affordances, never as decoration", () => {
-    // "No gradients" is explicit in the brief, and v1's primary button had
-    // one. The single permitted use is the fade at the edge of a scrolling
-    // region: it carries information (there is more this way) rather than
-    // decorating a surface. Every occurrence must be inside a *-wrap::after.
+  it("uses gradients only where the direction allows one", () => {
+    // THE OLD RULE WAS "NONE", and it is now a list. The reference design
+    // asked for a warm band behind the dashboard title and a glow at the
+    // foot of the rail, so a blanket ban would have been a rule the
+    // product broke on day one. A LIST still does the work a ban did:
+    // somebody adding a gradient to a button has to come here and argue
+    // for it, which is the whole point of the test.
+    //
+    // Each entry earns its place:
+    //   -wrap::after  the fade at the edge of a scrolling region — it says
+    //                 "there is more this way", which is information
+    //   .skel         the shimmer standing in for content still loading
+    //   .hero         the band behind the dashboard title
+    //   .hero::after  its scrim, which is what keeps the words legible
+    //   .rail-glow    the warm glow at the foot of the navigation rail
+    //   .rail-ink     the wash behind the current rail item
+    //   .bar          the chart bars, and the darker current month
+    const ALLOWED = /-wrap::after$|^\.skel$|^\.hero$|^\.hero::after$|^\.rail-glow$|^\.rail-ink$|^\.bar$|^\.bar\.is-last$/;
     const uses = [...allCode.matchAll(/([^{}]*)\{[^}]*(linear|radial|conic)-gradient[^}]*\}/g)]
       .map((m) => (m[1] ?? "").trim().split("\n").pop()?.trim() ?? "");
-    // The one other use: the shimmer on a skeleton loader (.skel), asked for
-    // in the motion brief. It stands in for content that is loading — it
-    // carries information too, and it is gone the moment the content lands.
     for (const selector of uses) {
-      expect(selector, `gradient in ${selector}`).toMatch(/-wrap::after$|^\.skel$/);
+      expect(selector, `gradient in ${selector} — add it to ALLOWED above, with a reason`).toMatch(ALLOWED);
     }
   });
 
-  it("defines exactly one shadow token and uses no ad-hoc box-shadows", () => {
-    // Depth is for things genuinely floating: modals, sheets, toasts — and,
-    // since the motion brief, the subtle lift under the pointer. All of it
-    // comes from the --lift / --elev-N tokens; never an ad-hoc shadow.
+  it("defines two shadow tokens and uses no ad-hoc box-shadows", () => {
+    // TWO NOW, NOT ONE. --shadow-1 is the resting lift of a card on the
+    // canvas, which the reference design's depth comes from; --shadow-2
+    // is something genuinely floating above the page, a menu or a dialog.
+    // A third would be a judgement nobody could repeat, so the list is
+    // closed and this test is what closes it.
+    //
+    // inset is the exception: the bar down the side of the current rail
+    // item is a shadow by syntax and a border by intent.
     const shadows = allCode.match(/box-shadow:\s*([^;]+);/g) ?? [];
     for (const decl of shadows) {
-      expect(decl, decl).toMatch(/var\(--lift\)|var\(--elev-\d\)|var\(--accent-weak\)|none/);
+      expect(decl, decl).toMatch(/var\(--shadow-[12]\)|var\(--lift\)|var\(--accent-weak\)|^box-shadow:\s*inset|none/);
     }
   });
 
@@ -81,20 +106,27 @@ describe("one accent", () => {
 });
 
 describe("the chrome is dark and the content is light", () => {
-  /* Selectors painted on .global-header or .app-nav. Both are
-     background: var(--shell), which is charcoal. */
+  /* THE DARK CHROME MOVED. It used to be the top bar and the row of app
+     tabs; it is the left rail now, and the top bar went white — so the
+     top bar's own labels correctly use content ink and are no longer
+     listed here. The rule itself is unchanged: whatever sits on
+     background: var(--shell) must not be painted in content ink. */
+  /* The bottom bar on a phone is NOT on this list: it is
+     background: var(--surface), white, and its labels correctly use
+     content ink. Listing it was this test's own mistake, caught by
+     itself on the first run after the rewrite. */
   const CHROME = [
-    ".global-header", ".app-nav", ".app-name", ".app-tab", ".app-tab:hover",
-    ".app-tab-sub", ".app-caret", ".brand-name", ".topbar-crumb", ".waffle i",
+    ".rail", ".rail-name", ".rail-tag", ".rail-item", ".rail-item:hover",
+    ".rail-label", ".rail-group-label", ".rail-brand",
   ];
 
   it("never paints content ink onto the dark shell", () => {
-    /* --ink is for content on white cards. On charcoal it is invisible, and
-       invisible is not something a screenshot review catches reliably —
-       somebody has to notice a label that was always there is now missing.
-       A rule may still use --ink if it paints itself a light background
-       first, which is what the search field does. */
-    const text = css["shell.css"] ?? "";
+    /* --ink is for content on white cards. On near-black it is invisible,
+       and invisible is not something a screenshot review catches
+       reliably — somebody has to notice that a label which was always
+       there is now missing. A rule may still use --ink if it paints
+       itself a light background first. */
+    const text = (css["shell.css"] ?? "") + "\n" + (css["components.css"] ?? "");
     const offenders: string[] = [];
 
     for (const match of text.matchAll(/([^{}]+)\{([^}]*)\}/g)) {
@@ -163,7 +195,10 @@ describe("mobile", () => {
     // stayed pinned onto a 390px phone and wrapped every figure mid-value.
     const comp = code(css["components.css"] ?? "");
     expect(comp).toMatch(/\.summary\s*\{[^}]*var\(--summary-cols/);
-    const mobile = comp.slice(comp.indexOf("@media (max-width: 620px)"));
+    // STILL TWO ON THE NARROWEST PHONE, which survived the redesign: four
+    // headline figures at one per screen is four screens before any
+    // content, and the tiles grew taller, not shorter.
+    const mobile = comp.slice(comp.lastIndexOf("@media (max-width: 620px)"));
     expect(mobile).toMatch(/\.summary\s*\{\s*grid-template-columns:\s*repeat\(2/);
   });
 

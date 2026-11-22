@@ -1,147 +1,182 @@
 /* ─────────────────────────────────────────────────────────────────────
    Design tokens.
 
-   The direction, as chosen: WHITE AND GREEN. A light shell around a light
-   canvas, with one green carrying every action.
+   THE DIRECTION CHANGED IN NOVEMBER 2026, and this preamble is rewritten
+   rather than left standing, because the one it replaced forbade in
+   writing several things the code below now does. A comment that argues
+   against its own file is worse than no comment: the next person trusts
+   it, writes to it, and is wrong.
 
-   THE TENSION THIS CREATES, recorded because it is the interesting part.
-   Green already meant something here — won, paid, delivered — and a system
-   whose brand colour is also one of its status colours has given the same
-   hue two jobs. The resolution is a division of labour, not a second
-   green: the accent appears only on things you can ACT on (a primary
-   button, the current nav item, a link, a focus ring), and --good appears
-   only inside a status chip, which always carries a dot and a word. A pill
-   reading "Won" is never mistaken for a button, and nothing is ever
-   coloured green for decoration. --good is also pitched deeper and cooler
-   than the accent so the two do not read as the same paint.
+   WHAT WAS THERE BEFORE, and why it went. The previous direction was an
+   enterprise CRM "in the Lightning manner" — a charcoal shell, hairline
+   rules, 13px body, 4px corners, and a standing rule of NO gradients, NO
+   shadows, NO colour used decoratively. It was coherent and it was not
+   wrong. It was replaced because the company asked for a specific look,
+   with a reference design in hand: a dark left rail, a light airy canvas,
+   soft rounded cards lifting off it, and stat tiles washed in the colour
+   of the thing they measure.
 
-   REVISED for a current look, without changing what any of it MEANS. The
-   scale went up (12.5px body reads as a spreadsheet), the geometry went
-   soft (3px corners read as 2015), the hairlines went lighter so structure
-   comes from space rather than from lines, and the navy was lifted just
-   far enough to look present-day — it still has to sit beside the navy on
-   the documents this company sends, so it was not replaced.
-   Colour is reserved for meaning — green for won/paid, amber for attention,
-   red for overdue — and never used decoratively. Structure is carried by
-   hairline rules and a left edge on things that need action, not by
-   gradients, drop shadows or coloured panels.
+   WHAT SURVIVED THE CHANGE, deliberately:
 
-   Rules this file exists to enforce:
-     · no gradients
-     · no shadow larger than a lift on something genuinely floating
-     · every figure renders with tabular numerals so columns align
-     · a semantic colour never appears except to mean its state
+     · A SEMANTIC COLOUR STILL MEANS ONE THING. Green is won and paid,
+       amber is due, red is overdue, and none of them is ever applied for
+       decoration. The tinted tiles look decorative and are not: the Won
+       tile is green BECAUSE it counts won deals, and the Payments Due
+       tile is red because that money is late. A tile whose colour did
+       not state its own meaning would be a tile painted at random.
+     · FIGURES STILL RENDER WITH TABULAR NUMERALS, so columns align.
+     · THE ACCENT IS STILL RARE. It marks what you can act on.
+
+   WHAT CHANGED:
+
+     · Gradients and shadows are allowed, and confined — see --shadow-1
+       and --shadow-2. There is no third.
+     · Corners are soft: 10px on controls, 14px on cards.
+     · The body scale went up, because 13px was sized for a spreadsheet.
+     · The shell moved from a top tab bar to a LEFT RAIL, and went nearly
+       black rather than charcoal.
+
+   TWO ORANGES, AND THE REASON IS CONTRAST. The brand orange in the
+   reference is bright — lovely as a fill, and about 3.3:1 on white,
+   which fails AA for anything at body size. So --brand PAINTS things
+   (icon tiles, the active rail item, chart bars, the hero band, and big
+   display text, where AA Large applies at 3:1) while --accent, a deeper
+   burnt orange at 5.9:1, carries every piece of INTERACTIVE TEXT: links,
+   small buttons, the focus ring. They are the same family and never the
+   same job. Using --brand for a 13px link is the one mistake this pair
+   exists to prevent.
    ───────────────────────────────────────────────────────────────────── */
 
 :root {
-  /* ── THE LOOK: an enterprise CRM in the Lightning manner ─────────────
-     Asked for in October 2026: "make it look like Salesforce". The style,
-     not the brand — no logo, name or icon set of theirs. What carries the
-     resemblance is the structure (a global header, a row of app tabs, a
-     record page with a highlights strip and a stage path).
-
-     THE PALETTE IS NOT THEIRS. A charcoal shell, a neutral grey canvas,
-     white cards, and one restrained burnt orange for every action. The blue
-     it replaced read as somebody else's product and, at four shades of one
-     saturated hue, made every button on screen shout equally. Orange is
-     used sparingly on purpose: it marks the action worth taking, which only
-     works while it is rare. */
-
   /* ── ink ─────────────────────────────────────────────────────────── */
-  --ink:          #181818;  /* values, headings */
-  --ink-2:        #2E2E2E;  /* body copy */
-  --ink-3:        #5C5C5C;  /* labels */
-  --ink-4:        #747474;  /* meta, placeholders */
+  --ink:          #15161A;  /* values, headings */
+  --ink-2:        #2B2D33;  /* body copy */
+  --ink-3:        #5A5D66;  /* labels */
+  --ink-4:        #80838C;  /* meta, placeholders */
 
   /* ── surfaces ────────────────────────────────────────────────────── */
-  --bg:           #F2F2F1;  /* the canvas behind the cards — neutral, not blue */
+  --bg:           #F5F5F7;  /* the canvas the cards sit on */
   --surface:      #FFFFFF;  /* cards, tables, sheets */
-  --surface-2:    #F3F3F3;  /* table headers, inset panels */
-  --surface-3:    #E5E5E5;  /* hover, track */
+  --surface-2:    #F7F7F9;  /* table headers, inset panels */
+  --surface-3:    #ECECEF;  /* hover, track */
 
   /* ── rules ───────────────────────────────────────────────────────── */
-  --rule:         #E5E5E5;  /* hairline between things */
-  --rule-strong:  #C9C9C9;  /* card and control borders */
+  --rule:         #EBEBEF;  /* hairline between things */
+  --rule-strong:  #D8D9DF;  /* card and control borders */
 
-  /* ── the one accent: burnt orange ──────────────────────────────────
-     5.9:1 against white, so white text on a filled button and the colour
-     itself as a link both clear AA without a second shade for each. */
+  /* ── the brand orange: FILLS and display text, never small text ───── */
+  --brand:        #EE6A24;
+  --brand-lift:   #F79455;  /* the lighter end of a bar's gradient */
+  --brand-deep:   #D2550F;
+  --brand-weak:   #FFF3EB;  /* tile wash */
+  --brand-rule:   #FAD9C2;
+
+  /* ── the accent: interactive TEXT and controls. 5.9:1 on white ────── */
   --accent:       #C2410C;
   --accent-hover: #9A3412;
-  --accent-weak:  #FDF1EA;  /* selected row, active tab wash, focus halo */
-  --accent-rule:  #F0BFA0;
+  --accent-weak:  #FFF3EB;  /* selected row, focus halo */
+  --accent-rule:  #FAD9C2;
   --on-accent:    #FFFFFF;
+  /* Text and glyphs sitting ON a filled brand or semantic shape. Its own
+     name rather than #fff inline, so the no-loose-hex rule holds and a
+     later change of mind has one place to make it. */
+  --on-fill:      #FFFFFF;
 
   /* ── semantic: each means exactly one thing ──────────────────────── */
-  --good:         #2E844A;  /* won, paid, delivered */
-  --good-weak:    #EBF7E6;
-  --warn:         #A96404;  /* needs attention, due soon */
-  --warn-weak:    #FEF1DD;
-  --bad:          #BA0517;  /* overdue, lost, failed */
-  --bad-weak:     #FDEDEA;
-  --neutral:      #5C5C5C;  /* draft, inactive */
-  --neutral-weak: #F3F3F3;
+  --good:         #15803D;  /* won, paid, delivered */
+  --good-weak:    #EDF8F1;
+  --good-rule:    #C6E7D2;
+  --warn:         #A5620A;  /* needs attention, due soon */
+  --warn-weak:    #FEF6E7;
+  --warn-rule:    #F6DFAE;
+  --bad:          #B42318;  /* overdue, lost, failed */
+  --bad-weak:     #FEF0EF;
+  --bad-rule:     #F6CFCB;
+  --neutral:      #5A5D66;  /* draft, inactive */
+  --neutral-weak: #F2F2F5;
+  --neutral-rule: #E2E2E8;
 
-  /* ── the shell: charcoal header and tab bar ──────────────────────────
-     Dark chrome around light content is what separates an enterprise tool
-     from a web page, and it does the orange a favour: one warm accent on
-     charcoal reads as deliberate where the same orange on white would
-     start competing with the content. Ink flips to light here — every rule
-     in shell.css reads these tokens rather than naming a colour, so the
-     two move together. */
-  --shell:        #1F2123;
-  --shell-2:      #2A2D30;
-  --shell-ink:    #F5F5F4;  /* 14:1 on the shell */
-  --shell-ink-2:  #B4B6B8;  /* 7:1 — muted, still AA for small text */
-  --shell-rule:   #35383B;
+  /* ── the shell: a dark left rail ─────────────────────────────────────
+     Nearly black rather than charcoal, so one warm orange on it reads as
+     deliberate. Everything painted on the rail uses --shell-ink /
+     --shell-ink-2; --ink is for content on white and is invisible here. */
+  --shell:        #141417;
+  --shell-2:      #1F2024;
+  --shell-3:      #2A2B31;
+  --shell-ink:    #F6F6F7;  /* 15:1 on the rail */
+  --shell-ink-2:  #A9ABB4;  /* 7:1 — muted, still AA for small text */
+  --shell-ink-3:  #6E7079;  /* group headings only: 4.6:1, never body text */
+  --shell-rule:   #26272C;
+
+  /* The hero band's gradient, and the warm glow at the foot of the rail.
+     Named here because a loose hex in a stylesheet is how a product grows
+     a second orange nobody decided on. */
+  --hero-from:    #1A1B1F;
+  --hero-mid:     #27262A;
+  --hero-to:      #6B3418;
+  --hero-scrim:   rgba(16, 16, 19, .86);
+  --hero-scrim-2: rgba(16, 16, 19, .24);
+  --glow-1:       rgba(238, 106, 36, .55);
+  --glow-2:       rgba(210, 85, 15, .45);
+  --rail-wash-1:  rgba(238, 106, 36, .26);
+  --rail-wash-2:  rgba(238, 106, 36, .10);
+  --on-tint:      rgba(255, 255, 255, .72);  /* the trend chip on a tinted tile */
 
   /* ── object colours ────────────────────────────────────────────────
      The coloured tile beside each page title, one per kind of record, so
-     "this is a quotation" is recognisable before it is read. Identity, not
-     state: they never appear inside a status chip. */
-  --obj-1: #7F8CED;  /* customers, team */
-  --obj-2: #FF5D2D;  /* pipeline, deals */
-  --obj-3: #3BA755;  /* quotations, proformas */
-  --obj-4: #0D9DDA;  /* orders, dispatch, purchasing */
-  --obj-5: #E3066A;  /* invoices, receivables */
-  --obj-6: #9050E9;  /* reports, dashboard */
-  --obj-7: #06A59A;  /* renewals, subscriptions */
-  --obj-8: #747474;  /* settings and the rest */
+     "this is a quotation" is recognisable before it is read. Identity,
+     not state: they never appear inside a status chip. */
+  --obj-1: #6366F1;  /* customers, team */
+  --obj-2: #EE6A24;  /* pipeline, deals */
+  --obj-3: #15803D;  /* quotations, proformas */
+  --obj-4: #0284C7;  /* orders, dispatch, purchasing */
+  --obj-5: #DB2777;  /* invoices, receivables */
+  --obj-6: #7C3AED;  /* reports, dashboard */
+  --obj-7: #0D9488;  /* renewals, subscriptions */
+  --obj-8: #5A5D66;  /* settings and the rest */
 
-  /* ── chart series: fixed order, never reassigned ─────────────────── */
-  /* SERIES ARE CHOSEN TO BE TOLD APART, not to match the brand. When
-     series-1 became orange, series-2 at #B2560F was a second burnt orange
-     a few percent away from it — two lines on one chart that nobody could
-     separate, which is worse than an ugly palette. It is a blue now: one
-     blue inside a five-colour series is distinguishability, not a blue
-     interface. */
-  --series-1: #C2410C;
-  --series-2: #1F6FB2;
-  --series-3: #2E844A;
-  --series-4: #7B3FD4;
-  --series-5: #A61E5A;
+  /* ── chart series: fixed order, never reassigned ─────────────────────
+     CHOSEN TO BE TOLD APART, not to match the brand. A second burnt
+     orange a few percent from the first is two lines nobody can
+     separate, which is worse than an ugly palette. */
+  --series-1: #EE6A24;
+  --series-2: #0E7490;
+  --series-3: #15803D;
+  --series-4: #7C3AED;
+  --series-5: #BE185D;
 
-  /* A SEQUENTIAL ramp, for intensity rather than identity: pale to deep
-     along one hue, so a heatmap reads as more-and-less at a glance. It was
-     left behind as the old blue when everything around it moved, which
-     would have put a Lightning-blue heatmap next to an orange interface. */
-  --ramp-1: #FDF1EA;
-  --ramp-2: #F8D5BC;
-  --ramp-3: #EFA873;
-  --ramp-4: #DC6B28;
-  --ramp-5: #9A3412;
+  /* THE PIPELINE RAMP: one step per stage, early to late.
+     TEAL TO ORANGE RATHER THAN PALE TO DEEP. The sequential ramp below
+     is right for a heatmap and wrong for a ring: its first two steps are
+     nearly white, so the two biggest stages in the pipeline arrived as
+     an invisible arc and a legend dot nobody could see. These five are
+     ordered — they still read as a journey from left to right — but
+     every one of them is visible on white, which is the job. */
+  --stage-1: #0E7490;
+  --stage-2: #3C9FAE;
+  --stage-3: #7FC9AE;
+  --stage-4: #F0A055;
+  --stage-5: #EE6A24;
 
-  /* ── type: the system face, as Lightning falls back to ───────────── */
+  /* A SEQUENTIAL ramp, pale to deep along one hue, for intensity rather
+     than identity — so a heatmap reads as more-and-less at a glance. */
+  --ramp-1: #FFF3EB;
+  --ramp-2: #FBD9C0;
+  --ramp-3: #F4A86F;
+  --ramp-4: #EE6A24;
+  --ramp-5: #A63C0B;
+
+  /* ── type ─────────────────────────────────────────────────────────── */
   --sans: -apple-system, "Segoe UI", system-ui, Roboto, "Helvetica Neue", Arial, sans-serif;
   --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 
   --t-micro:  11px;
   --t-small:  12px;
-  --t-body:   13px;
-  --t-mid:    14px;
-  --t-lg:     16px;
-  --t-xl:     24px;
-  --t-page:   18px;
+  --t-body:   13.5px;
+  --t-mid:    15px;
+  --t-lg:     17px;
+  --t-xl:     28px;
+  --t-page:   20px;
 
   /* ── space ───────────────────────────────────────────────────────── */
   --gap-hair:  2px;
@@ -149,20 +184,30 @@
   --gap:       10px;
   --gap-wide:  16px;
   --gap-block: 24px;
-  --gap-page:  20px;
+  --gap-page:  24px;
 
-  /* ── geometry: square-ish, as enterprise software is ─────────────── */
-  --radius:      4px;
-  --radius-card: 6px;
-  --control-h:   32px;
-  --control-h-lg:38px;
-  --edge:        3px;
+  /* ── geometry: soft ──────────────────────────────────────────────── */
+  --radius:       10px;  /* controls, chips */
+  --radius-card:  14px;  /* cards, tiles, sheets */
+  --radius-pill:  999px;
+  --control-h:    38px;
+  --control-h-lg: 44px;
+  --edge:         3px;
 
-  --lift: 0 8px 24px rgba(24, 24, 24, .16), 0 2px 4px rgba(24, 24, 24, .08);
+  /* TWO SHADOWS AND NO MORE. --shadow-1 is the resting state of a card
+     on the canvas; --shadow-2 is something genuinely floating above the
+     page — a menu, a dialog. A third would be a judgement nobody could
+     repeat. */
+  --shadow-1: 0 1px 2px rgba(20, 20, 23, .05), 0 8px 24px -14px rgba(20, 20, 23, .18);
+  --shadow-2: 0 12px 32px rgba(20, 20, 23, .18), 0 2px 6px rgba(20, 20, 23, .08);
+  --lift: var(--shadow-2);   /* the older name, still read in places */
 
-  --sidebar-w: 0px;
-  --topbar-h:  50px;
-  --tabbar-h:  40px;
+  --sidebar-w: 268px;
+  --topbar-h:  66px;
+  /* The horizontal tab bar is gone: navigation is the left rail now.
+     Kept at zero rather than deleted because sticky offsets around the
+     app are written as topbar + tabbar, and those stay correct at 0. */
+  --tabbar-h:  0px;
 }
 
 /* ── motion ──────────────────────────────────────────────────────────
@@ -176,7 +221,7 @@
   --t-exit:    .14s;   /* and leaving — shorter, nobody waits to watch it */
 }
 
-/* Nothing here is load-bearing: motion only says where something came from. */
-/* Reduced motion is handled in motion.css: calmer, not switched off,
+/* Nothing here is load-bearing: motion only says where something came from.
+   Reduced motion is handled in motion.css: calmer, not switched off,
    because movement was asked for and a long-forgotten Windows setting
    ("Animation effects: off") was silently removing all of it. */

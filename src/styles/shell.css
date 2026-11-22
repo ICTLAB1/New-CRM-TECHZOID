@@ -1,57 +1,154 @@
 /* ─────────────────────────────────────────────────────────────────────
-   The application shell: sidebar, topbar, page frame, mobile nav.
+   The application shell: a dark left rail, a white top bar, the page
+   frame, and the bottom bar a phone gets instead of the rail.
    ───────────────────────────────────────────────────────────────────── */
 
-/* CHROME IS DARK, CONTENT IS LIGHT. Everything painted on .global-header
-   or .app-nav reads --shell-ink / --shell-ink-2, never --ink: those are for
-   content on white cards, and on charcoal they are invisible. The search box
-   is the exception that proves it — a white field on the dark bar, so its
-   text is --ink and correctly dark. */
-.shell { display: flex; flex-direction: column; min-height: 100vh; background: var(--bg); }
+/* THE RAIL IS DARK, THE CONTENT IS LIGHT. Everything painted on .rail or
+   .bottom-nav reads --shell-ink / --shell-ink-2, never --ink: those are
+   for content on white cards and are invisible on near-black. */
 
-/* ── global header ─────────────────────────────────────────────────────
-   Launcher, brand, a centred search, then the person's own controls. */
+.shell { display: flex; min-height: 100vh; background: var(--bg); }
+.shell-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+
+/* ── the left rail ─────────────────────────────────────────────────── */
+.rail {
+  position: sticky; top: 0; z-index: 45;
+  flex: 0 0 var(--sidebar-w); width: var(--sidebar-w);
+  height: 100vh; display: flex; flex-direction: column;
+  background: var(--shell); color: var(--shell-ink);
+  overflow: hidden;
+}
+.rail-brand {
+  flex: none; display: flex; align-items: center; gap: 10px;
+  padding: 18px var(--gap-wide); min-height: var(--topbar-h);
+  border-bottom: 1px solid var(--shell-rule);
+}
+.rail-mark {
+  width: 36px; height: 36px; flex: none; display: grid; place-items: center;
+  border-radius: var(--radius); background: var(--brand); color: var(--on-fill);
+  font-size: var(--t-mid); font-weight: 800; letter-spacing: .02em;
+}
+.rail-words { display: grid; gap: 1px; min-width: 0; }
+.rail-name { font-size: var(--t-mid); font-weight: 700; color: var(--shell-ink); line-height: 1.15; }
+.rail-tag { font-size: 10.5px; color: var(--shell-ink-2); letter-spacing: .01em; }
+.rail-logo { max-width: 100%; max-height: 40px; object-fit: contain; object-position: left center; display: block; }
+
+.rail-nav { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 12px 10px 90px; }
+.rail-group + .rail-group { margin-top: 14px; }
+.rail-group-label {
+  padding: 6px 12px 5px; font-size: 10.5px; font-weight: 700; letter-spacing: .09em;
+  text-transform: uppercase; color: var(--shell-ink-3);
+}
+.rail-item {
+  position: relative; display: flex; align-items: center; gap: 11px; width: 100%;
+  padding: 9px 12px; margin-bottom: 1px; border: 0; border-radius: var(--radius);
+  background: transparent; cursor: pointer; text-align: left;
+  font: inherit; font-size: var(--t-body); color: var(--shell-ink-2);
+  transition: background var(--t-quick) var(--ease), color var(--t-quick) var(--ease);
+}
+.rail-item svg { flex: none; opacity: .9; }
+.rail-label { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rail-item:hover { background: var(--shell-2); color: var(--shell-ink); }
+.rail-item[aria-current="page"] { color: var(--on-fill); font-weight: 600; }
+/* The wash and the bar are ONE element, animated between items by
+   motion's layoutId, so moving from Pipeline to Customers slides rather
+   than blinking. It sits behind the label — see the z-index. */
+.rail-ink {
+  position: absolute; inset: 0; z-index: -1;
+  border-radius: var(--radius);
+  background: linear-gradient(90deg, var(--rail-wash-1), var(--rail-wash-2));
+  box-shadow: inset 3px 0 0 var(--brand);
+}
+.rail-item[aria-current="page"] svg { opacity: 1; color: var(--brand); }
+
+/* Decoration, and the only piece of it in the interface: a warm glow at
+   the foot of the rail, as in the reference. aria-hidden in the markup. */
+.rail-glow {
+  position: absolute; left: -40px; right: -10px; bottom: -60px; height: 260px;
+  pointer-events: none;
+  background:
+    radial-gradient(60% 55% at 20% 85%, var(--glow-1), transparent 70%),
+    radial-gradient(45% 40% at 55% 100%, var(--glow-2), transparent 70%);
+  filter: blur(14px); opacity: .55;
+}
+
+
+/* ── the top bar ───────────────────────────────────────────────────────
+   WHITE, NOT DARK. The rail carries the dark now, and two dark bands
+   meeting at the corner read as a frame around the work rather than a
+   place to put things. Search, the bell, help, and whose session this
+   is. */
 .global-header {
   position: sticky; top: 0; z-index: 40;
   display: flex; align-items: center; gap: var(--gap);
-  height: var(--topbar-h); padding: 0 var(--gap-wide);
-  background: var(--shell);
-  border-bottom: 1px solid var(--shell-rule);
+  height: var(--topbar-h); padding: 0 var(--gap-page);
+  background: var(--surface);
+  border-bottom: 1px solid var(--rule);
 }
 .launcher-btn {
-  width: 34px; height: 34px; display: grid; place-items: center;
+  width: 38px; height: 38px; display: grid; place-items: center;
   border: 0; background: transparent; border-radius: var(--radius); cursor: pointer;
 }
-.launcher-btn:hover { background: var(--shell-2); }
+.launcher-btn:hover { background: var(--surface-3); }
 .waffle { display: grid; grid-template-columns: repeat(3, 4px); gap: 3px; }
-.waffle i { width: 4px; height: 4px; border-radius: 50%; background: var(--shell-ink-2); display: block; }
-.launcher-btn:hover .waffle i { background: var(--accent); }
-.gh-brand { display: flex; align-items: center; gap: 8px; flex: none; }
-.brand-mark { width: 26px; height: 26px; border-radius: var(--radius); background: var(--accent); color: var(--on-accent); display: grid; place-items: center; font-size: 11px; font-weight: 700; flex: none; }
-.brand-name { font-size: var(--t-mid); font-weight: 700; color: var(--shell-ink); }
+.waffle i { width: 4px; height: 4px; border-radius: 50%; background: var(--ink-4); display: block; }
+.launcher-btn:hover .waffle i { background: var(--brand); }
+
+/* The brand sits in the rail on a desktop; this is the phone's copy. */
+.gh-brand { display: none; align-items: center; gap: 8px; flex: none; }
+.brand-mark { width: 30px; height: 30px; border-radius: var(--radius); background: var(--brand); color: var(--on-fill); display: grid; place-items: center; font-size: var(--t-small); font-weight: 800; flex: none; }
+.brand-name { font-size: var(--t-mid); font-weight: 700; color: var(--ink); }
 .brand-logo { max-width: 150px; max-height: 30px; object-fit: contain; object-position: left center; display: block; }
+
 .gh-search-wrap { display: flex; justify-content: center; min-width: 0; }
+/* A PILL, filled rather than outlined. On a white bar an outlined field
+   is four more lines across the top of the screen; a soft grey fill says
+   "type here" with none. */
 .topsearch {
-  width: min(560px, 100%); height: 32px; padding: 0 12px 0 32px;
+  width: min(620px, 100%); height: 42px; padding: 0 14px 0 42px;
   font: inherit; font-size: var(--t-body); color: var(--ink);
-  background: var(--surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23747474' stroke-width='2.4' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-3.5-3.5'/%3E%3C/svg%3E") no-repeat 11px center;
-  border: 1px solid var(--rule-strong); border-radius: var(--radius);
+  background: var(--surface-2) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2380838C' stroke-width='2.2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-3.5-3.5'/%3E%3C/svg%3E") no-repeat 15px center;
+  border: 1px solid transparent; border-radius: var(--radius-pill);
+  transition: background var(--t-quick) var(--ease), border-color var(--t-quick) var(--ease);
 }
 .topsearch::placeholder { color: var(--ink-4); }
-.topsearch:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-weak); }
-.topbar-crumb { font-size: var(--t-small); color: var(--shell-ink-2); white-space: nowrap; }
-.topbar-company { max-width: 220px; height: 32px; padding-block: 0; font-size: var(--t-small); }
-.gh-user { position: relative; flex: none; }
-.who-mark {
-  width: 32px; height: 32px; border-radius: 50%; border: 0; cursor: pointer;
-  background: var(--accent); color: var(--on-accent);
-  display: grid; place-items: center; font: inherit; font-size: var(--t-small); font-weight: 700;
+.topsearch:hover { background-color: var(--surface-3); }
+.topsearch:focus { outline: none; background-color: var(--surface); border-color: var(--brand); box-shadow: 0 0 0 4px var(--accent-weak); }
+
+.gh-icon-btn {
+  width: 38px; height: 38px; flex: none; display: grid; place-items: center;
+  border: 0; border-radius: var(--radius-pill); background: transparent;
+  color: var(--ink-3); cursor: pointer;
 }
+.gh-icon-btn:hover { background: var(--surface-3); color: var(--ink); }
+
+.topbar-crumb { font-size: var(--t-small); color: var(--ink-4); white-space: nowrap; }
+.topbar-company { max-width: 220px; height: 38px; padding-block: 0; font-size: var(--t-small); }
+.gh-user { position: relative; flex: none; }
+
+/* NAME AND ROLE BESIDE THE INITIALS. On a shared machine, which is most
+   of them here, a circle with two letters in it does not answer "whose
+   session is this?". The words fold away under 1200px. */
+.who-btn {
+  display: flex; align-items: center; gap: 9px; height: 46px; padding: 0 8px 0 4px;
+  border: 0; border-radius: var(--radius-pill); background: transparent; cursor: pointer; font: inherit;
+}
+.who-btn:hover { background: var(--surface-3); }
+.who-mark {
+  width: 36px; height: 36px; flex: none; border-radius: 50%; border: 0;
+  background: var(--brand); color: var(--on-fill);
+  display: grid; place-items: center; font: inherit; font-size: var(--t-body); font-weight: 700;
+}
+.who-words { display: grid; gap: 0; text-align: left; min-width: 0; }
+.who-btn-name { font-size: var(--t-body); font-weight: 700; color: var(--ink); line-height: 1.2; white-space: nowrap; }
+.who-btn-role { font-size: var(--t-small); color: var(--ink-4); line-height: 1.2; }
+.who-caret { font-size: 10px; color: var(--ink-4); }
+
 .gh-user-menu {
   position: absolute; right: 0; top: calc(100% + 6px); z-index: 60;
   min-width: 220px; padding: 14px; display: grid; gap: 4px;
-  background: var(--surface); border: 1px solid var(--rule-strong); border-radius: var(--radius-card);
-  box-shadow: var(--lift);
+  background: var(--surface); border: 1px solid var(--rule); border-radius: var(--radius-card);
+  box-shadow: var(--shadow-2);
 }
 .who-name { font-size: var(--t-mid); font-weight: 700; color: var(--ink); }
 .who-role { font-size: var(--t-small); color: var(--ink-3); margin-bottom: 8px; }
@@ -220,7 +317,22 @@
 /* ── mobile ────────────────────────────────────────────────────────── */
 .mobile-only { display: none; }
 
+/* Under 1200px the words beside the avatar go and the circle stands
+   alone — the search field is worth more of the bar than the name is. */
+@media (max-width: 1200px) {
+  .who-words, .who-caret { display: none; }
+  .who-btn { padding: 0; }
+}
+
 @media (max-width: 960px) {
+  /* THE RAIL GOES, AND THE BOTTOM BAR TAKES OVER. 268px of rail on a
+     phone is most of the screen; the launcher in the top bar still
+     reaches every section the bottom bar has no room for. */
+  .rail { display: none; }
+  .gh-brand { display: flex; }
+  .global-header { padding: 0 var(--gap-wide); gap: var(--gap-tight); }
+  .topsearch { height: 38px; }
+
   .page { padding: var(--gap) var(--gap) 72px; }
   .tile { padding: 11px 13px 13px; }
   .tile-value { font-size: var(--t-lg); }

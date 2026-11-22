@@ -114,6 +114,9 @@
   background: var(--surface);
   border: 1px solid var(--rule);
   border-radius: var(--radius-card);
+  /* The resting lift. Cards sit ON the canvas now rather than being cut
+     out of it, which is what the reference's depth comes from. */
+  box-shadow: var(--shadow-1);
   transition: border-color var(--t-quick) var(--ease), box-shadow var(--t-quick) var(--ease);
   /* A flex item defaults to min-width: auto, which refuses to shrink below
      its content. A 700px table inside then widened the CARD, the card
@@ -123,17 +126,17 @@
 }
 /* Only the ones you can click. A card that lifts under the cursor while
    doing nothing when clicked is a promise the screen does not keep. */
-.card.is-clickable:hover { border-color: var(--rule-strong); box-shadow: var(--lift); }
+.card.is-clickable:hover { border-color: var(--rule-strong); box-shadow: var(--shadow-2); }
 /* Cards sitting side by side share a bottom edge. Ragged bottoms across a
    row read as unfinished, however tidy each card is on its own. */
 .card > .card-pad { flex: 1 1 auto; }
 .card-pad { padding: 15px var(--gap-wide) var(--gap-wide); }
 .card-head {
   display: flex; align-items: center; justify-content: space-between; gap: var(--gap);
-  padding: 12px var(--gap-wide);
+  padding: 14px var(--gap-wide) 12px;
   border-bottom: 1px solid var(--rule);
 }
-.card-title { font-size: var(--t-mid); font-weight: 600; color: var(--ink); }
+.card-title { display: flex; align-items: center; gap: 9px; font-size: var(--t-mid); font-weight: 700; color: var(--ink); }
 
 /* The action edge. A card that needs something carries a coloured left
    rule — structural, not decorative, and it reads at a glance down a list. */
@@ -143,50 +146,83 @@
 .edge-good { border-left-color: var(--good); }
 .edge-accent { border-left-color: var(--accent); }
 
-/* ── summary bar ───────────────────────────────────────────────────────
-   The headline figures read as ONE instrument, divided by hairlines —
-   not as five separate floating cards. A row of rounded boxes is a
-   consumer-dashboard idiom; a single ruled panel is how a ledger, a
-   trading screen or an ERP presents the same numbers, and it is denser. */
+/* ── summary tiles ─────────────────────────────────────────────────────
+   SEPARATE TINTED CARDS, which reverses what stood here. The note this
+   replaces argued that one ruled panel was denser and more ledger-like
+   than "a row of rounded boxes — a consumer-dashboard idiom", and it was
+   right about the density. The company asked for the other thing, with a
+   reference in hand, so the note goes with the code rather than sitting
+   above it disagreeing.
+
+   THE TINT IS NOT DECORATION, which is the rule that survived. A tile is
+   washed in the colour of what it MEASURES: the won tile is green
+   because those deals are won, the payments tile red because that money
+   is late. `tone` drives the wash, the border, the icon and the value
+   together — so a tile can never be one colour and mean another. A tile
+   with no tone is the brand wash, which claims nothing. */
 .summary {
   display: grid;
   grid-template-columns: repeat(var(--summary-cols, 4), minmax(0, 1fr));
-  background: var(--surface);
-  border: 1px solid var(--rule);
-  border-radius: var(--radius-card);
-  overflow: hidden;
+  gap: var(--gap-wide);
 }
 .tile {
-  padding: 14px var(--gap-wide) 16px; border-left: 1px solid var(--rule); min-width: 0;
-  transition: background-color var(--t-quick) var(--ease);
+  position: relative; overflow: hidden; min-width: 0;
+  padding: 15px 16px 14px;
+  background: var(--brand-weak);
+  border: 1px solid var(--brand-rule);
+  border-radius: var(--radius-card);
+  transition: box-shadow var(--t-quick) var(--ease), transform var(--t-quick) var(--ease);
 }
+.tile.is-good { background: var(--good-weak);    border-color: var(--good-rule); }
+.tile.is-warn { background: var(--warn-weak);    border-color: var(--warn-rule); }
+.tile.is-bad  { background: var(--bad-weak);     border-color: var(--bad-rule); }
+
 /* A tile rendered as a button filters the list below it. Making that
    obvious on hover is the difference between a figure and a control. */
-button.tile { text-align: left; font: inherit; color: inherit; background: transparent; border-top: 0; border-right: 0; border-bottom: 0; cursor: pointer; }
-button.tile:hover { background: var(--surface-2); }
-button.tile:active { background: var(--surface-3); }
-.tile:first-child { border-left: 0; }
-.tile-label { font-size: var(--t-small); font-weight: 500; color: var(--ink-3); }
-.tile-value { margin-top: 6px; font-size: var(--t-xl); font-weight: 600; color: var(--ink); letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
-.tile-meta { margin-top: 2px; font-size: var(--t-small); color: var(--ink-4); }
-.tile-value.is-good { color: var(--good); }
-.tile-value.is-bad  { color: var(--bad); }
-.tile-value.is-warn { color: var(--warn); }
-button.tile { background: transparent; text-align: left; font: inherit; cursor: pointer; }
-button.tile:hover { background: var(--surface-2); }
+button.tile { text-align: left; font: inherit; color: inherit; cursor: pointer; display: block; width: 100%; }
+button.tile:hover { box-shadow: var(--shadow-1); transform: translateY(-1px); }
+button.tile:active { transform: none; }
 
-/* Wrapping onto a second line needs a rule above it, or the grid reads as
-   two unrelated bars. */
-@media (max-width: 1100px) {
-  .summary { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .summary .tile:nth-child(n+4) { border-top: 1px solid var(--rule); }
-  .summary .tile:nth-child(3n+1) { border-left: 0; }
+.tile-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+/* The rounded square that carries the tile's icon. Its colour is the
+   tile's colour: one more place the tone has to agree with itself. */
+.tile-icon {
+  width: 38px; height: 38px; flex: none; display: grid; place-items: center;
+  border-radius: var(--radius); background: var(--brand); color: var(--on-fill);
 }
-@media (max-width: 620px) {
-  .summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .summary .tile:nth-child(n+3) { border-top: 1px solid var(--rule); }
-  .summary .tile:nth-child(odd) { border-left: 0; }
+.tile.is-good .tile-icon { background: var(--good); }
+.tile.is-warn .tile-icon { background: var(--warn); }
+.tile.is-bad  .tile-icon { background: var(--bad); }
+
+/* The change against last month. Up is not automatically good — see
+   tileTrend in the dashboard: for money owed, up is bad — so the
+   direction and the colour are given separately. */
+.tile-trend {
+  display: inline-flex; align-items: center; gap: 3px; flex: none;
+  padding: 3px 8px; border-radius: var(--radius-pill);
+  background: var(--on-tint);
+  font-size: var(--t-small); font-weight: 700; font-variant-numeric: tabular-nums;
 }
+.tile-trend.is-up   { color: var(--good); }
+.tile-trend.is-down { color: var(--bad); }
+.tile-trend.is-flat { color: var(--ink-4); }
+
+.tile-label { font-size: var(--t-body); font-weight: 600; color: var(--ink-3); }
+.tile-value { margin-top: 3px; font-size: var(--t-xl); font-weight: 700; color: var(--ink); letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.tile-meta { margin-top: 2px; font-size: var(--t-small); color: var(--ink-4); }
+/* The value stays ink. Its tile is already the colour of its meaning,
+   and colouring both made the figure harder to read for no more signal. */
+
+/* The sparkline, bottom-right, behind the words. Shape only: it carries
+   no axis and no figure, and is marked hidden to a screen reader, which
+   gets the number and the trend chip instead. */
+.tile-spark { position: absolute; right: 0; bottom: 0; width: 96px; height: 38px; opacity: .55; pointer-events: none; }
+
+@media (max-width: 1100px) { .summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+/* TWO, NOT ONE, on the narrowest phone. Four headline figures at
+   one per screen is four screens before any content — the reason the
+   rule in design-rules.test.ts exists. */
+@media (max-width: 620px)  { .summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
 /* ── chip: state, never decoration ─────────────────────────────────────
    The default carries no fill at all — a dot and coloured text. Down a
@@ -1024,13 +1060,22 @@ button.path-hit { cursor: pointer; }
 }
 .record-path { margin-top: var(--gap-wide); }
 
-/* ── Lightning-style finish ───────────────────────────────────────────
-   The enterprise look asked for in October 2026. Kept together at the end
-   so it reads as one decision and overrides the earlier, quieter rules. */
-.card, .summary { border-color: var(--rule-strong); box-shadow: var(--elev-1); }
+/* ── the finish ───────────────────────────────────────────────────────
+   THE LAST WORD, and it has to be kept in step with the direction or it
+   quietly undoes it. This block was written for the October 2026
+   "Lightning" look and was still winning after the November redesign —
+   it was pinning cards to --elev-1 and un-bolding every figure the new
+   tiles had just set in bold. It is updated here rather than deleted,
+   because the reason for a block of overrides at the end is sound: the
+   finishing decisions read as one, in one place.
+
+   --elev-1 is the OLD elevation family, still declared in motion.css and
+   still used by motion's own rules. Cards take --shadow-1 now, which is
+   the token the direction names. */
+.card, .summary { border-color: var(--rule); box-shadow: var(--shadow-1); }
 .card-head { background: var(--surface); border-bottom-color: var(--rule); }
 .card-title { font-size: var(--t-mid); font-weight: 700; }
-.btn { font-weight: 400; }
+.btn { font-weight: 600; }
 /* The neutral button is white with blue text, as the whole family is. */
 .btn-default { color: var(--accent); border-color: var(--rule-strong); }
 .btn-default:hover:not(:disabled) { background: var(--surface-2); color: var(--accent-hover); }
@@ -1044,15 +1089,15 @@ button.path-hit { cursor: pointer; }
   padding: 8px 12px;
 }
 .table td { padding: 8px 12px; }
-.table tbody tr:hover td { background: var(--accent-weak); }
-.table .strong { font-weight: 400; color: var(--accent); }
-.tile-value { font-weight: 400; }
-.summary .tile-label, .tile-label { font-weight: 400; }
+.table tbody tr:hover td { background: var(--surface-2); }
+.table .strong { font-weight: 600; color: var(--ink); }
+/* The tiles set their own weights — see the summary block above.
+   These two lines un-bolded both and are gone. */
 /* Path: done steps green, the current one deep blue. */
 .path-step.is-done { background: var(--good); color: var(--on-accent); }
 .path-step.is-current.is-accent { background: var(--accent-hover); }
 .path-step.is-todo { background: var(--surface-3); color: var(--ink-3); }
-.input:focus, .select:focus, .textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-weak); }
+.input:focus, .select:focus, .textarea:focus { border-color: var(--brand); box-shadow: 0 0 0 4px var(--accent-weak); }
 .table .num.strong { color: var(--ink); }
 
 /* ── mail: the three-pane layout every mail client has had since Outlook
@@ -1253,3 +1298,151 @@ button.path-hit { cursor: pointer; }
 .pay-list li.is-editing { background: var(--accent-weak); }
 .pay-when { flex: 1 1 14rem; min-width: 0; font-size: var(--t-small); color: var(--neutral); }
 .pay-sum { font-weight: 700; font-variant-numeric: tabular-nums; }
+
+/* ─────────────────────────────────────────────────────────────────────
+   The Sales Command Centre.
+
+   Everything below belongs to features/dashboard. It is at the foot of
+   this file rather than in one of its own because the shapes here — the
+   ring, the bars, the activity rows — are built from the same tokens as
+   every other card, and splitting them out would mean two files to keep
+   in step the next time the radius changes.
+   ───────────────────────────────────────────────────────────────────── */
+
+/* ── the hero band ─────────────────────────────────────────────────────
+   A GRADIENT, AND A PLACE FOR A PHOTOGRAPH. The reference has a building
+   behind this. Set --hero-image to a url() on .hero and it paints over
+   the gradient with the same scrim and the same text treatment — no
+   other change needed. Nothing is shipped in it, because the company
+   does not own the picture in the reference. */
+.hero {
+  position: relative; overflow: hidden;
+  display: flex; align-items: center;
+  min-height: 132px; padding: 22px var(--gap-block);
+  margin-bottom: var(--gap-block);
+  border-radius: var(--radius-card);
+  background: var(--shell);
+  background-image:
+    var(--hero-image, none),
+    linear-gradient(100deg, var(--hero-from) 0%, var(--hero-mid) 38%, var(--hero-to) 72%, var(--brand) 118%);
+  background-size: cover; background-position: right center;
+  box-shadow: var(--shadow-1);
+}
+/* The scrim: the words have to clear AA over whatever is behind them,
+   and "whatever" is the point — a photograph dropped in later must not
+   be able to make the title unreadable. */
+.hero::after {
+  content: ""; position: absolute; inset: 0;
+  background: linear-gradient(90deg, var(--hero-scrim) 0%, var(--hero-scrim) 45%, var(--hero-scrim-2) 100%);
+}
+.hero-ink { position: relative; z-index: 1; }
+.hero-title { margin: 0; font-size: 30px; font-weight: 800; letter-spacing: -0.02em; color: var(--on-fill); }
+.hero-sub { margin: 6px 0 0; font-size: var(--t-mid); color: var(--on-tint); }
+
+/* ── the greeting row ──────────────────────────────────────────────── */
+.greet-row { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--gap-wide); flex-wrap: wrap; margin-bottom: var(--gap-block); }
+.greet { margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -0.02em; color: var(--ink); }
+/* --brand and not --accent: this is 26px bold, where AA Large applies at
+   3:1, and the brighter orange is the one in the reference. A 13px link
+   in the same colour would fail, which is the whole reason for the pair. */
+.greet-name { color: var(--brand); }
+.greet-sub { margin: 4px 0 0; font-size: var(--t-mid); color: var(--ink-4); }
+.month-pill {
+  display: inline-flex; align-items: center; gap: 8px; flex: none;
+  height: var(--control-h); padding: 0 14px;
+  border: 1px solid var(--rule-strong); border-radius: var(--radius);
+  background: var(--surface); color: var(--ink-2);
+  font-size: var(--t-body); font-weight: 600;
+}
+.month-pill svg { color: var(--ink-4); }
+
+/* ── dashboard grids ───────────────────────────────────────────────── */
+/* STRETCH, NOT START. Three cards of different natural heights in
+   one row leave ragged bottoms, which reads as unfinished however tidy
+   each card is. */
+.grid-dash3 { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr) minmax(0, .95fr); gap: var(--gap-wide); align-items: stretch; }
+.grid-dash2 { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: var(--gap-wide); align-items: stretch; }
+@media (max-width: 1280px) {
+  .grid-dash3 { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .grid-dash3 > :last-child { grid-column: 1 / -1; }
+}
+@media (max-width: 960px) {
+  .grid-dash3, .grid-dash2 { grid-template-columns: minmax(0, 1fr); }
+  .grid-dash3 > :last-child { grid-column: auto; }
+}
+
+/* The small coloured square beside a card's title. Identity, not state:
+   it says which part of the business this card is about. */
+.card-dot { width: 28px; height: 28px; flex: none; display: grid; place-items: center; border-radius: 8px; color: var(--on-fill); }
+.card-dot svg { width: 17px; height: 17px; }
+.card-title-sub { font-weight: 400; color: var(--ink-4); }
+.card-foot { padding: 10px var(--gap-wide); border-top: 1px solid var(--rule); }
+
+.headline-figure { font-size: var(--t-xl); font-weight: 800; letter-spacing: -0.02em; color: var(--ink); font-variant-numeric: tabular-nums; }
+
+/* ── the segmented switch ──────────────────────────────────────────── */
+.seg { display: inline-flex; padding: 3px; gap: 2px; background: var(--surface-2); border-radius: var(--radius-pill); }
+.seg-btn {
+  height: 28px; padding: 0 14px; border: 0; border-radius: var(--radius-pill);
+  background: transparent; color: var(--ink-3); cursor: pointer;
+  font: inherit; font-size: var(--t-small); font-weight: 600;
+  transition: background var(--t-quick) var(--ease), color var(--t-quick) var(--ease);
+}
+.seg-btn:hover { color: var(--ink); }
+.seg-btn[aria-pressed="true"] { background: var(--brand); color: var(--on-fill); }
+
+/* ── the bar chart ─────────────────────────────────────────────────── */
+.bars { display: flex; align-items: flex-end; gap: var(--gap); height: 176px; }
+.bar-col { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; height: 100%; }
+.bar-figure { flex: none; height: 18px; font-size: var(--t-small); color: var(--ink-4); text-align: center; font-variant-numeric: tabular-nums; }
+.bar-track { flex: 1 1 auto; display: flex; align-items: flex-end; min-height: 0; }
+.bar {
+  width: 100%; border-radius: 8px 8px 3px 3px;
+  background: linear-gradient(180deg, var(--brand-lift), var(--brand));
+}
+/* THE MONTH YOU ARE IN IS DARKER. Six bars of one colour make the
+   current month just another bar; it is the one being judged. */
+.bar.is-last { background: linear-gradient(180deg, var(--brand), var(--brand-deep)); }
+.bar-label { flex: none; margin-top: 7px; font-size: var(--t-small); color: var(--ink-4); text-align: center; }
+
+/* ── the pipeline ring ─────────────────────────────────────────────── */
+.ring-wrap { display: flex; align-items: center; gap: var(--gap-wide); flex-wrap: wrap; }
+.ring { position: relative; flex: none; width: 168px; height: 168px; }
+.ring svg { width: 100%; height: 100%; transform: rotate(0deg); }
+/* The arcs are drawn from the top, which is what the 25 in donutArcs is
+   for; nothing is rotated in CSS, so the two cannot disagree. */
+.ring-arc { transition: stroke-dasharray var(--t-enter) var(--ease); }
+.ring-centre { position: absolute; inset: 0; display: grid; align-content: center; justify-items: center; gap: 0; text-align: center; }
+.ring-total { font-size: 30px; font-weight: 800; letter-spacing: -0.02em; color: var(--ink); line-height: 1.05; font-variant-numeric: tabular-nums; }
+.ring-total-label { font-size: var(--t-small); color: var(--ink-4); }
+.ring-total-value { margin-top: 3px; font-size: var(--t-body); font-weight: 700; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.ring-legend { flex: 1 1 200px; min-width: 0; list-style: none; margin: 0; padding: 0; display: grid; gap: 1px; }
+.legend-row {
+  display: grid; grid-template-columns: 10px minmax(0, 1fr) auto auto; align-items: center; gap: 9px;
+  width: 100%; padding: 6px 8px; border: 0; border-radius: 8px; background: transparent;
+  cursor: pointer; font: inherit; font-size: var(--t-body); text-align: left;
+}
+.legend-row:hover { background: var(--surface-2); }
+.legend-dot { width: 10px; height: 10px; border-radius: 3px; }
+.legend-label { color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.legend-count { color: var(--ink); font-weight: 700; font-variant-numeric: tabular-nums; }
+.legend-value { color: var(--ink-4); font-size: var(--t-small); font-variant-numeric: tabular-nums; min-width: 62px; text-align: right; }
+
+/* ── my activities ─────────────────────────────────────────────────── */
+.activity-list { list-style: none; margin: 0; padding: 6px; display: grid; gap: 2px; }
+.activity-row {
+  display: grid; grid-template-columns: 34px auto minmax(0, 1fr) auto; align-items: center; gap: 11px;
+  width: 100%; padding: 9px 10px; border: 0; border-radius: var(--radius); background: transparent;
+  cursor: pointer; font: inherit; text-align: left;
+}
+.activity-row:hover { background: var(--surface-2); }
+.activity-icon { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 9px; }
+.activity-icon svg { width: 17px; height: 17px; }
+.activity-icon.is-warn { background: var(--warn-weak); color: var(--warn); }
+.activity-icon.is-bad  { background: var(--bad-weak);  color: var(--bad); }
+.activity-count { font-size: var(--t-mid); font-weight: 800; color: var(--ink); font-variant-numeric: tabular-nums; }
+.activity-label { font-size: var(--t-body); color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; }
+.activity-go { font-size: 17px; color: var(--ink-4); }
+
+/* Overdue, in the one column where lateness is the subject. */
+.due-late { color: var(--bad); font-weight: 600; }

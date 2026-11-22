@@ -147,26 +147,80 @@ export function Card({ title, actions, edge, padded = true, className, children 
   );
 }
 
-/* ── stat tile ─────────────────────────────────────────────────────── */
+/* ── stat tile ─────────────────────────────────────────────────────────
+   THE TONE COLOURS THE WHOLE TILE, not just the figure. A tile is washed
+   in the colour of what it measures — green for won, red for money that
+   is late — so the wash, the border and the icon are all driven by this
+   one prop and cannot drift apart. A tile with no tone takes the brand
+   wash, which claims nothing about its number. */
 export interface StatTileProps {
   label: string;
   value: ReactNode;
   meta?: ReactNode;
-  /** Colours the figure. Use only when the number itself carries a state. */
   tone?: Exclude<Tone, "accent" | "neutral">;
+  /** The glyph in the rounded square. */
+  icon?: ReactNode;
+  /**
+   * The change against the period before.
+   *
+   * DIRECTION AND COLOUR ARE GIVEN SEPARATELY because up is not always
+   * good: receivables rising is bad news with an upward arrow on it.
+   * The caller decides, since only the caller knows what the figure is.
+   */
+  trend?: { text: string; direction: "up" | "down" | "flat"; good?: boolean };
+  /** Six or so points, oldest first. Drawn as shape alone — no axis, no
+   *  figures, hidden from screen readers, which get the value instead. */
+  spark?: readonly number[];
   onClick?: () => void;
 }
 
-export function StatTile({ label, value, meta, tone, onClick }: StatTileProps) {
+/** The sparkline: a filled area and its line, normalised to its own
+ *  range. A flat series would divide by zero, so it draws level. */
+function Spark({ points, tone }: { points: readonly number[]; tone?: string }) {
+  if (points.length < 2) return null;
+  const w = 96, h = 38;
+  const max = Math.max(...points), min = Math.min(...points);
+  const span = max - min || 1;
+  const xs = (i: number) => (i / (points.length - 1)) * w;
+  const ys = (v: number) => h - 4 - ((v - min) / span) * (h - 10);
+  const line = points.map((v, i) => `${i ? "L" : "M"}${xs(i).toFixed(1)},${ys(v).toFixed(1)}`).join(" ");
+  const stroke = tone === "good" ? "var(--good)" : tone === "warn" ? "var(--warn)" : tone === "bad" ? "var(--bad)" : "var(--brand)";
+  return (
+    <svg className="tile-spark" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" aria-hidden focusable="false">
+      <path d={`${line} L${w},${h} L0,${h} Z`} fill={stroke} opacity=".16" />
+      <path d={line} fill="none" stroke={stroke} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+const ARROW = { up: "▲", down: "▼", flat: "—" } as const;
+
+export function StatTile({ label, value, meta, tone, icon, trend, spark, onClick }: StatTileProps) {
   const body = (
     <>
+      {icon || trend ? (
+        <div className="tile-top">
+          {icon ? <span className="tile-icon" aria-hidden>{icon}</span> : <span />}
+          {trend ? (
+            <span
+              className={cx("tile-trend", trend.direction === "flat"
+                ? "is-flat"
+                : (trend.good ?? trend.direction === "up") ? "is-up" : "is-down")}
+            >
+              <span aria-hidden>{ARROW[trend.direction]}</span>{trend.text}
+            </span>
+          ) : null}
+        </div>
+      ) : null}
       <div className="tile-label">{label}</div>
-      <div className={cx("tile-value", tone && `is-${tone}`)}><AnimatedNumber value={value} /></div>
+      <div className="tile-value"><AnimatedNumber value={value} /></div>
       {meta ? <div className="tile-meta">{meta}</div> : null}
+      {spark ? <Spark points={spark} tone={tone} /> : null}
     </>
   );
-  if (!onClick) return <div className="tile">{body}</div>;
-  return <button type="button" className="tile" onClick={onClick}>{body}</button>;
+  const cls = cx("tile", tone && `is-${tone}`);
+  if (!onClick) return <div className={cls}>{body}</div>;
+  return <button type="button" className={cls} onClick={onClick}>{body}</button>;
 }
 
 /**
