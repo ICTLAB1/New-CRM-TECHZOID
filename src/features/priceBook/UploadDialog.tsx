@@ -255,6 +255,19 @@ export function UploadDialog({
                 Change the columns
               </button>
             </p>
+            {/* SAID OUT LOUD WHEN THE SKU IS NOT JUST THE SKU COLUMN. A
+                Microsoft list keys on ProductId:SkuId:Term:BillingPlan,
+                because its SkuId repeats for every term the product is
+                sold on — so the SKU in the price book is not the number
+                in the SkuId column, and an Admin should not have to work
+                that out from the preview. */}
+            {(result.skuFromLabels?.length ?? 0) > 1 ? (
+              <p className="field-hint">
+                The SKU column alone did not tell the rows apart, so each SKU is built from{" "}
+                <strong>{result.skuFromLabels!.join(" + ")}</strong> — that is what keeps a
+                monthly price and an annual price of the same product as two separate lines.
+              </p>
+            ) : null}
 
             <Changes result={result} oem={oem} />
             <Preview result={result} />

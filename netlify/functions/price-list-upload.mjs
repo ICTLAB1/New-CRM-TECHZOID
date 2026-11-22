@@ -155,6 +155,8 @@ export async function handler(event) {
     mappingFrom = "the column headings";
   }
 
+  mapping = withGuessedGaps(mapping, headers);
+
   const short = missingFields(mapping);
   if (short.length) {
     return json(event, 200, {
@@ -170,7 +172,7 @@ export async function handler(event) {
     });
   }
 
-  const { items, errors, truncated } = readGrid(sheet.rows, mapping, { headerRow });
+  const { items, errors, truncated, skuFrom } = readGrid(sheet.rows, mapping, { headerRow });
 
   if (!body.commit) {
     /* What the new prices do to the list in force. Asked BEFORE loading,
@@ -191,6 +193,12 @@ export async function handler(event) {
       headers,
       mapping,
       mappingFrom,
+      /* Which columns the SKU was built from, so an Admin looking at
+         "CFQ7TTC0HL8Z:1:P1Y:Monthly" can see where it came from before
+         anything is loaded, rather than wondering why it is not the part
+         number in the file. */
+      skuFrom,
+      skuFromLabels: skuFrom.map((f) => headers[mapping[f]]).filter(Boolean),
       itemCount: items.length,
       errorCount: errors.length,
       truncated,
@@ -252,6 +260,29 @@ export async function handler(event) {
 }
 
 /** A field -> column-index object, and nothing else. */
+/**
+ * Fill in fields a mapping says nothing about, from the headings.
+ *
+ * A MAPPING SAVED BEFORE A FIELD EXISTED HAS NOTHING FOR IT, and would go
+ * on reading the file the old way for ever. Product ID and Billing Plan
+ * were added after the first Microsoft lists had been loaded, and without
+ * them the SKU cannot be made unique — the November 2026 channel list
+ * imported 211 of its 3,833 rows for exactly that reason, and remembering
+ * last month's mapping would have reproduced it every month after.
+ *
+ * ONLY KEYS THAT ARE ABSENT. A field the Admin deliberately set is left
+ * alone, and so is one they deliberately set to nothing: `{ unit: null }`
+ * means "this file has no unit column", which is an answer, not a gap.
+ */
+export function withGuessedGaps(mapping, headers) {
+  const guessed = suggestMapping(headers);
+  const out = { ...mapping };
+  for (const [field, col] of Object.entries(guessed)) {
+    if (!(field in out) && Number.isInteger(col)) out[field] = col;
+  }
+  return out;
+}
+
 export function isMapping(v) {
   if (!v || typeof v !== "object" || Array.isArray(v)) return false;
   return Object.values(v).every((n) => Number.isInteger(n) && n >= 0 && n < 16384);

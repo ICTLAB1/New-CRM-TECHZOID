@@ -22,13 +22,39 @@
 /** The fields a price book row is made of, in the order the mapping screen shows them. */
 export const FIELDS = [
   { key: "sku", label: "SKU / Part No", required: true },
+  { key: "productId", label: "Product ID", required: false },
   { key: "productName", label: "Product Name", required: true },
   { key: "category", label: "Category", required: false },
   { key: "licenceType", label: "Licence Type / Term", required: false },
+  { key: "billingPlan", label: "Billing Plan", required: false },
   { key: "unit", label: "Unit", required: false },
   { key: "resellerPrice", label: "Reseller Price", required: true },
   { key: "currency", label: "Currency", required: false },
 ];
+
+/**
+ * The columns that together identify one price line, in the order they are
+ * joined when the SKU column alone does not tell two rows apart.
+ *
+ * THE SKU COLUMN IS OFTEN NOT A KEY. Microsoft's NCE list is the case that
+ * forced this: its SkuId is 1, 4, 5, 000B — unique only WITHIN a ProductId,
+ * and repeated again for every term and billing plan the product is sold
+ * on. Microsoft's own name for a catalog item is ProductId:SkuId, and the
+ * price genuinely differs per term and per billing plan, so a row is
+ * "CFQ7TTC0HL8Z:1, one year, billed monthly" and the three-year one is a
+ * different line at a different price.
+ *
+ * Keyed on the SkuId alone, a 3,833-row list imported as 211 rows and threw
+ * the other 3,622 away as duplicates — including every monthly and every
+ * three-year price in the file.
+ *
+ * THE ORDER IS THE ORDER THEY ARE ADDED IN, narrowest first, and only as
+ * far as it takes to tell the rows apart — so the NCE sheet keys on
+ * ProductId:SkuId:Term:BillingPlan and stops, while the PERPETUAL sheet in
+ * the same workbook needs Segment as well, because there the one SkuId
+ * covers Commercial, Education and Charity at three different prices.
+ */
+export const IDENTITY_FIELDS = ["productId", "sku", "licenceType", "billingPlan", "category"];
 
 export const REQUIRED_FIELDS = FIELDS.filter((f) => f.required).map((f) => f.key);
 
@@ -51,6 +77,14 @@ export const HEADER_HINTS = {
     "product name", "sku title", "skutitle", "product description", "description",
     "item name", "item", "product", "name", "sku description", "particulars", "offer name",
   ],
+  /* Only reached when a more specific SKU column was claimed first — the
+     sku hints above already take "product id" when there is nothing
+     better, so a sheet whose only identifier is a product code is
+     unaffected by this field existing. */
+  productId: [
+    "product id", "productid", "product code", "productcode", "material code",
+    "offer id", "offerid", "parent sku", "base sku",
+  ],
   category: [
     "category", "product category", "sub category", "subcategory", "product family",
     "family", "segment", "group", "product group", "licence group", "license group",
@@ -60,6 +94,7 @@ export const HEADER_HINTS = {
     "term", "duration", "billing plan", "billing term", "subscription term",
     "licence", "license", "plan", "validity",
   ],
+  billingPlan: ["billing plan", "billing cycle", "billing frequency", "billing", "payment plan"],
   unit: ["unit", "uom", "unit of measure", "units", "per", "pack size"],
   resellerPrice: [
     "reseller price", "resellerprice", "reseller", "partner price", "partner",
@@ -71,6 +106,33 @@ export const HEADER_HINTS = {
 
 /** Trim, lowercase, and squeeze runs of space so " ERP  Price " matches "erp price". */
 const norm = (v) => String(v ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+
+/**
+ * The same name with camelCase split apart and punctuation turned into
+ * spaces, so "TermDuration" matches the hint "term duration".
+ *
+ * WHY THIS EXISTS. Microsoft's NCE price list spells every heading in
+ * camelCase — Publisher, ProductId, SkuId, SkuTitle, TermDuration,
+ * BillingPlan — and the hint lists below are written as words. Two of those
+ * matched anyway because somebody had added the squashed spelling to the
+ * list by hand ("skuid", "skutitle", "productid"); "TermDuration" and
+ * "BillingPlan" had not been, so the Term column came through EMPTY on
+ * every Microsoft list ever uploaded, and nobody could see which term a
+ * floor price belonged to.
+ *
+ * Adding two more squashed spellings would have fixed those two headings
+ * and left the next one to be found the same way. This fixes the class.
+ */
+const normWords = (v) =>
+  norm(
+    String(v ?? "")
+      .replace(/([a-z0-9])([A-Z])/g, "$1 $2")      // skuTitle  -> sku Title
+      .replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2")   // ERPPrice  -> ERP Price
+      .replace(/[_\-./]+/g, " "),                  // unit_sell -> unit sell
+  );
+
+/** Whether a heading matches a hint, under either spelling. */
+const headerIs = (header, hint) => norm(header) === hint || normWords(header) === hint;
 
 /** Cell text, with Date and boolean rendered rather than stringified oddly. */
 function cellText(v) {
@@ -101,9 +163,9 @@ export function headerRowIndex(grid) {
   let fallback = -1;
   const limit = Math.min(grid.length, 20);
   for (let i = 0; i < limit; i++) {
-    const cells = (grid[i] ?? []).map(norm).filter(Boolean);
+    const cells = (grid[i] ?? []).filter((c) => norm(c));
     if (cells.length < 2) continue;
-    const named = (field) => cells.some((c) => HEADER_HINTS[field].includes(c));
+    const named = (field) => cells.some((c) => HEADER_HINTS[field].some((h) => headerIs(c, h)));
     const hasThing = named("sku") || named("productName");
     const hasPrice = named("resellerPrice");
     if (hasThing && hasPrice) return i;
@@ -126,13 +188,13 @@ export function headerRowIndex(grid) {
  * row would import with a part number that is a sentence.
  */
 export function suggestMapping(headerCells) {
-  const headers = (headerCells ?? []).map(norm);
+  const headers = headerCells ?? [];
   const mapping = {};
   const taken = new Set();
 
   for (const { key } of FIELDS) {
     for (const hint of HEADER_HINTS[key]) {
-      const at = headers.findIndex((h, i) => h === hint && !taken.has(i));
+      const at = headers.findIndex((h, i) => headerIs(h, hint) && !taken.has(i));
       if (at !== -1) {
         mapping[key] = at;
         taken.add(at);
@@ -183,6 +245,16 @@ export const MAX_ROWS = 50_000;
  *   so a single repeated row would otherwise lose the entire upload with a
  *   message about an index.
  *
+ *   — BUT THE SKU COLUMN IS WIDENED FIRST. Rows that repeat a SKU are very
+ *   often not duplicates at all: they are the same product on a different
+ *   term or billing plan, at a different price, and throwing them away
+ *   leaves a salesperson quoting a monthly licence with no floor under it.
+ *   So before any row is called a duplicate, the SKU is rebuilt from every
+ *   identity column the mapping has — see IDENTITY_FIELDS — and that is
+ *   only done if it actually tells the rows apart. Whatever the rows are
+ *   keyed on, the result says so in `skuFrom`, and the Admin sees it before
+ *   anything is loaded.
+ *
  *   A NEGATIVE PRICE, and anything that will not parse as a number.
  *
  * A BLANK ROW IS NOT AN ERROR. Spreadsheets are full of them, and a report
@@ -202,6 +274,15 @@ export function readGrid(grid, mapping, options = {}) {
     return Number.isInteger(col) ? row[col] : undefined;
   };
 
+  /* Which columns the SKU is built from. "sku" alone unless that repeats
+     and the wider key does not — see the note above. The decision is made
+     once, from the whole sheet, so every row in one list is keyed the same
+     way; deciding per row would produce a list where some SKUs carry the
+     term and others do not. */
+  const skuFields = chooseSkuFields(body, mapping, at);
+  const skuOf = (row) =>
+    skuFields.map((f) => cellText(at(row, f))).filter(Boolean).join(":");
+
   body.forEach((raw, i) => {
     const row = raw ?? [];
     /* 1-based, and counted in the sheet's own numbering so that a person
@@ -212,7 +293,7 @@ export function readGrid(grid, mapping, options = {}) {
     const anything = used.some((col) => cellText(row[col]) !== "");
     if (!anything) return;
 
-    const sku = cellText(at(row, "sku"));
+    const sku = skuOf(row);
     const productName = cellText(at(row, "productName"));
     const rawPrice = at(row, "resellerPrice");
 
@@ -257,7 +338,56 @@ export function readGrid(grid, mapping, options = {}) {
   });
 
   const truncated = grid.length - (headerAt + 1) > MAX_ROWS;
-  return { headerRow: headerAt, items, errors, truncated };
+  return { headerRow: headerAt, items, errors, truncated, skuFrom: skuFields };
+}
+
+/**
+ * Which columns to build the SKU from.
+ *
+ * The SKU column on its own whenever that is a key, which it is on most
+ * distributors' lists and which keeps their SKUs spelled exactly as the
+ * file spells them. Only when it repeats is the wider key considered, and
+ * only if the wider key is genuinely better: a list that repeats a part
+ * number because the same part really is in it twice gains nothing from a
+ * longer SKU, and those rows should still be reported as the duplicates
+ * they are.
+ *
+ * ALL OR NOTHING ACROSS THE SHEET. Qualifying only the rows that clash
+ * would give one list two kinds of SKU, and a salesperson searching for
+ * the part number they can see in the file would find some of them.
+ */
+export function chooseSkuFields(body, mapping, at) {
+  if (!Number.isInteger(mapping?.sku)) return ["sku"];
+
+  const dupes = (fields) => {
+    const seen = new Set();
+    let n = 0;
+    for (const raw of body) {
+      const key = norm(fields.map((f) => cellText(at(raw ?? [], f))).filter(Boolean).join(":"));
+      if (!key) continue;
+      if (seen.has(key)) n++;
+      else seen.add(key);
+    }
+    return n;
+  };
+
+  let best = ["sku"];
+  let bestDupes = dupes(best);
+
+  /* ONE COLUMN AT A TIME, and only one that earns its place. A column that
+     does not reduce the clashes is not added, so a list whose Category says
+     "Software" on every row does not get "Software" in all of its SKUs. */
+  for (const field of IDENTITY_FIELDS) {
+    if (!bestDupes) break;
+    if (field === "sku" || !Number.isInteger(mapping[field])) continue;
+    const next = IDENTITY_FIELDS.filter((f) => f === field || best.includes(f));
+    const n = dupes(next);
+    if (n < bestDupes) {
+      best = next;
+      bestDupes = n;
+    }
+  }
+  return best;
 }
 
 /** The header names as they are spelled in the sheet, for the mapping screen. */

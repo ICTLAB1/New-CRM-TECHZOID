@@ -89,7 +89,8 @@ describe("guessing which column is which", () => {
 
   it("offers the fields in the order the mapping screen shows them", () => {
     expect(FIELDS.map((f) => f.key)).toEqual([
-      "sku", "productName", "category", "licenceType", "unit", "resellerPrice", "currency",
+      "sku", "productId", "productName", "category", "licenceType", "billingPlan",
+      "unit", "resellerPrice", "currency",
     ]);
   });
 });
@@ -253,5 +254,146 @@ describe("a real .xlsx, end to end", () => {
     expect(asSheets([[1, 2], [3, 4]])).toEqual([{ name: "Sheet1", rows: [[1, 2], [3, 4]] }]);
     expect(asSheets([])).toEqual([]);
     expect(asSheets(null)).toEqual([]);
+  });
+});
+
+/* ── the Microsoft NCE shape ──────────────────────────────────────────
+   The November 2026 channel list, reduced to the columns that matter.
+   Every heading is camelCase, the SkuId repeats across products and
+   across terms, and the price differs per term and per billing plan. */
+const NCE_SHEET = [
+  ["Publisher", "ProductId", "SkuId", "SkuTitle", "Segment", "TermDuration", "BillingPlan", "ERP Price"],
+  ["Microsoft", "CFQ7TTC0HL8Z", 1, "Audit Log Retention", "Commercial", "P1Y", "Monthly", 2079],
+  ["Microsoft", "CFQ7TTC0HL8Z", 1, "Audit Log Retention", "Commercial", "P1Y", "Annual", 1980],
+  ["Microsoft", "CFQ7TTC0HL8Z", 1, "Audit Log Retention", "Commercial", "P1M", "Monthly", 198],
+  ["Microsoft", "CFQ7TTC0RN26", 1, "Advanced Data Residency", "Commercial", "P1Y", "Annual", 1980],
+];
+
+describe("headings written in camelCase", () => {
+  it("MATCHES TermDuration TO THE TERM FIELD", () => {
+    /* The one this was found by: every Microsoft list ever uploaded came
+       through with an empty Term column, because the hint is spelled
+       "term duration" and the heading is spelled "TermDuration". Two of
+       the headings in the same file matched only because somebody had
+       added "skutitle" and "productid" to the lists by hand. */
+    const m = suggestMapping(NCE_SHEET[0]);
+    expect(NCE_SHEET[0][m.licenceType]).toBe("TermDuration");
+    expect(NCE_SHEET[0][m.billingPlan]).toBe("BillingPlan");
+  });
+
+  it("still matches the spaced spelling, which is what most lists use", () => {
+    const m = suggestMapping(["Part No", "Description", "Term Duration", "ERP Price"]);
+    expect(m.licenceType).toBe(2);
+  });
+
+  it("reads a heading separated by underscores or dots", () => {
+    const m = suggestMapping(["part_no", "sku.title", "unit-price"]);
+    expect(m.sku).toBe(0);
+    expect(m.productName).toBe(1);
+    expect(m.resellerPrice).toBe(2);
+  });
+
+  it("finds the header row even when every heading is camelCase", () => {
+    expect(headerRowIndex(NCE_SHEET)).toBe(0);
+  });
+});
+
+describe("a SKU column that is not a key", () => {
+  const read = (grid) => readGrid(grid, suggestMapping(grid[0]), { headerRow: 0 });
+
+  it("KEEPS EVERY TERM AND BILLING PLAN rather than calling them duplicates", () => {
+    /* The fault this was written for: keyed on SkuId alone, a 3,833-row
+       Microsoft list imported as 211 rows and discarded the rest — every
+       monthly price and every three-year price in the file. A salesperson
+       quoting a monthly licence then had no floor under them at all. */
+    const { items, errors } = read(NCE_SHEET);
+    expect(errors).toEqual([]);
+    expect(items).toHaveLength(4);
+  });
+
+  it("builds the SKU the way Microsoft names a catalog item", () => {
+    const { items, skuFrom } = read(NCE_SHEET);
+    expect(skuFrom).toEqual(["productId", "sku", "licenceType", "billingPlan"]);
+    expect(items[0].sku).toBe("CFQ7TTC0HL8Z:1:P1Y:Monthly");
+    expect(items[1].sku).toBe("CFQ7TTC0HL8Z:1:P1Y:Annual");
+  });
+
+  it("gives every row a different SKU, which the database requires", () => {
+    const { items } = read(NCE_SHEET);
+    expect(new Set(items.map((i) => i.sku.toLowerCase())).size).toBe(items.length);
+  });
+
+  it("carries the term through, so a floor says which term it is for", () => {
+    expect(read(NCE_SHEET).items[0].licenceType).toBe("P1Y");
+  });
+
+  it("LEAVES AN ALREADY-UNIQUE SKU EXACTLY AS THE FILE SPELLS IT", () => {
+    /* Most distributors' lists have a real part number. Lengthening those
+       would change the SKU a salesperson searches for, and would not match
+       the SKUs loaded in any previous month. */
+    const { items, skuFrom } = read(CSP_SHEET.slice(3));
+    expect(skuFrom).toEqual(["sku"]);
+    expect(items.map((i) => i.sku)).toEqual(["M365-E3", "M365-E5", "VISIO-P2"]);
+  });
+
+  it("ADDS ONLY A COLUMN THAT EARNS ITS PLACE", () => {
+    /* ProductId is the same on both clashing rows, so it separates
+       nothing and must not be added; the term is what tells them apart.
+       The two rows that clash are deliberately identical on the column
+       that comes FIRST in IDENTITY_FIELDS — otherwise a rule that adds
+       every mapped column would pass this by accident, because the search
+       stops as soon as the key is unique. */
+    const grid = [
+      ["Part No", "ProductId", "SkuTitle", "TermDuration", "ERP Price"],
+      ["A", "P1", "One", "P1Y", 10],
+      ["A", "P1", "One", "P1M", 20],
+      ["B", "P2", "Two", "P1Y", 30],
+    ];
+    const { skuFrom, items } = read(grid);
+    expect(skuFrom).toEqual(["sku", "licenceType"]);
+    expect(items.map((i) => i.sku)).toEqual(["A:P1Y", "A:P1M", "B:P1Y"]);
+  });
+
+  it("does not add a column that is the same on every row", () => {
+    /* Segment is "Commercial" throughout, so it tells nothing apart and
+       must not end up in all three SKUs. */
+    const grid = [
+      ["Part No", "ProductId", "SkuTitle", "Segment", "ERP Price"],
+      ["A", "P1", "One", "Commercial", 10],
+      ["A", "P2", "Two", "Commercial", 20],
+      ["B", "P3", "Three", "Commercial", 30],
+    ];
+    const { skuFrom, items } = read(grid);
+    expect(skuFrom).toEqual(["productId", "sku"]);
+    expect(items[0].sku).toBe("P1:A");
+  });
+
+  it("STILL REPORTS A ROW THAT REPEATS ON EVERY COLUMN", () => {
+    /* A genuinely duplicated line is still a duplicate, and must be
+       reported rather than widened away — the database would refuse the
+       whole upload over it. */
+    const grid = [
+      ["Part No", "ProductId", "SkuTitle", "TermDuration", "ERP Price"],
+      ["A", "P1", "One", "P1Y", 10],
+      ["A", "P1", "One", "P1Y", 10],
+    ];
+    const { items, errors } = read(grid);
+    expect(items).toHaveLength(1);
+    expect(errors).toHaveLength(1);
+    expect(errors[0].problem).toMatch(/repeats row 2/);
+  });
+
+  it("keys the whole sheet one way, never some rows and not others", () => {
+    /* Qualifying only the clashing rows would give one list two kinds of
+       SKU, and the part number a salesperson can see in the file would
+       find some rows and not others. */
+    const grid = [
+      ["Part No", "ProductId", "SkuTitle", "ERP Price"],
+      ["A", "P1", "One", 10],
+      ["A", "P2", "Two", 20],
+      ["UNIQUE", "P3", "Three", 30],
+    ];
+    const { items } = read(grid);
+    expect(items.map((i) => i.sku)).toEqual(["P1:A", "P2:A", "P3:UNIQUE"]);
   });
 });

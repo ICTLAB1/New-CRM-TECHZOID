@@ -2,7 +2,7 @@ import { createHmac } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { asService, closePool } from "../../api/lib/db.mjs";
 import { makeXlsx } from "../../api/lib/testdata/makeXlsx.mjs";
-import { chooseSheet, decodeUpload, headersFit, isMapping } from "../functions/price-list-upload.mjs";
+import { chooseSheet, decodeUpload, headersFit, isMapping, withGuessedGaps } from "../functions/price-list-upload.mjs";
 
 /**
  * The upload, whole: a real .xlsx in, rows in the price book out, with the
@@ -289,5 +289,43 @@ describe("the pieces that need no database", () => {
     expect(headersFit({ sku: 0, resellerPrice: 5 }, ["SKU", "Name", "Price"])).toBe(false);
     expect(headersFit({ sku: 0, resellerPrice: 2 }, ["SKU", "Name", "Price"])).toBe(true);
     expect(headersFit({}, ["SKU"])).toBe(false);
+  });
+});
+
+describe("a mapping remembered from a month before a field existed", () => {
+  /* The headings of the Microsoft NCE sheet, in the file's own spelling. */
+  const HEADERS = [
+    "Publisher", "ChangeIndicator", "ProductId", "SkuId", "SkuTitle",
+    "Tags", "Segment", "TermDuration", "BillingPlan", "Unit SELL Price",
+    "Discounted Price", "Qty", "Total", "Discount %", "ERP Price",
+  ];
+
+  it("FILLS IN THE FIELDS IT SAYS NOTHING ABOUT", () => {
+    /* Product ID and Billing Plan were added after the first Microsoft
+       lists had been loaded. Without this, next month's upload would reuse
+       last month's mapping, have nothing to build a unique SKU from, and
+       throw away 3,622 of 3,833 rows again — every month, silently. */
+    const lastMonth = { sku: 3, productName: 4, category: 6, resellerPrice: 14 };
+    const filled = withGuessedGaps(lastMonth, HEADERS);
+    expect(filled.productId).toBe(2);
+    expect(filled.licenceType).toBe(7);
+    expect(filled.billingPlan).toBe(8);
+  });
+
+  it("does not move a column the Admin chose", () => {
+    const chosen = { sku: 3, productName: 4, resellerPrice: 9 };
+    expect(withGuessedGaps(chosen, HEADERS).resellerPrice).toBe(9);
+  });
+
+  it("LEAVES A FIELD DELIBERATELY SET TO NOTHING ALONE", () => {
+    /* `{ unit: null }` is an answer — "this file has no unit column" — and
+       not a gap to be helpfully filled from a heading that looks like one. */
+    const chosen = { sku: 3, productName: 4, resellerPrice: 14, licenceType: null };
+    expect(withGuessedGaps(chosen, HEADERS).licenceType).toBeNull();
+  });
+
+  it("changes nothing when the mapping is already complete", () => {
+    const full = { sku: 0, productId: 1, productName: 2, category: 3, licenceType: 4, billingPlan: 5, unit: 6, resellerPrice: 7, currency: 8 };
+    expect(withGuessedGaps(full, HEADERS)).toEqual(full);
   });
 });

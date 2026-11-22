@@ -244,6 +244,12 @@ export interface UploadResult {
   mapping?: ColumnMapping;
   /** Where the mapping came from: you, a past upload, or the headings. */
   mappingFrom?: string;
+  /** Which mapped fields the SKU was built from. One of them normally; more
+   *  when the SKU column alone does not tell two rows apart — a Microsoft
+   *  list repeats its SkuId for every term the product is sold on. */
+  skuFrom?: string[];
+  /** The same, spelled as the headings in the file, for showing a person. */
+  skuFromLabels?: string[];
   missing?: string[];
   message?: string;
   itemCount?: number;
