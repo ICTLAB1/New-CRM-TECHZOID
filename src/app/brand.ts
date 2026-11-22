@@ -22,3 +22,20 @@
  * and every email went out with a broken-image icon.
  */
 export const COMPANY_LOCKUP_PATH = "/brand/company-lockup.png";
+
+/**
+ * Microsoft's four-square mark, for the "Sign in with Microsoft" button.
+ *
+ * CROPPED FROM THE ARTWORK MICROSOFT SUPPLIES, not drawn here. It is the
+ * left half of public/brand/vendor-microsoft.png — the same file the
+ * company profile email prints — with the "Microsoft" wordmark cut away,
+ * because the button sets that word in its own label and would otherwise
+ * say it twice. public/brand/README.md carries the standing rule: another
+ * company's mark is reproduced from the file they supply and is never
+ * generated, redrawn or approximated.
+ *
+ * IT KEEPS ITS WHITE GROUND, which is why the button puts it in a white
+ * tile rather than straight onto the orange. The mark was drawn for white
+ * and four flat colours on burnt orange is not a thing to improvise.
+ */
+export const MICROSOFT_MARK_PATH = "/brand/microsoft-mark.png";

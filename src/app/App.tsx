@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { ToastProvider } from "../components/Toast";
-import { Button, Card } from "../components/primitives";
+import { Button } from "../components/primitives";
 import { Workbench } from "./Workbench";
 import { SignIn, NoProfile } from "./SignIn";
+import { COMPANY_LOCKUP_PATH } from "./brand";
 import { PublicLeadForm } from "../features/leads/PublicLeadForm";
 import { CustomerPortal } from "../features/portal/CustomerPortal";
 import { ErrorBoundary } from "../components/ErrorBoundary";
@@ -251,23 +252,29 @@ function restore(
   }
 }
 
+/**
+ * Loading, and the screens that say why loading failed.
+ *
+ * IT WEARS THE SIGN-IN CARD, because it is the same moment: nothing has
+ * loaded and the only thing on screen is one sentence about why. It used
+ * to set its own lockup — an orange tile reading "TZ" beside the word
+ * TechZoid, drawn in CSS. That was a letter mark this code invented, and
+ * the company has one logo. It shows that instead.
+ */
 function Splash({ message, action }: { message: string; action?: React.ReactNode }) {
   return (
-    <main className="signin">
-      <div className="signin-panel">
-        <div className="signin-brand">
-          <span className="brand-mark">TZ</span>
-          <span className="brand-name">TechZoid</span>
+    <main className="splash">
+      <div className="signin-card">
+        <div className="signin-card-logo">
+          <img src={COMPANY_LOCKUP_PATH} alt="TechZoid Technologies" />
         </div>
-        <Card>
-          <div className="stack">
-            <p style={{ margin: 0 }}>{message}</p>
-            {/* An indeterminate bar while there is nothing to act on. Once
-                there is an action the wait has ended — showing both would
-                say "still working" over a button asking you to retry. */}
-            {action ? action : <div className="loading-bar" aria-hidden />}
-          </div>
-        </Card>
+        <div className="stack">
+          <p style={{ margin: 0 }}>{message}</p>
+          {/* An indeterminate bar while there is nothing to act on. Once
+              there is an action the wait has ended — showing both would
+              say "still working" over a button asking you to retry. */}
+          {action ? action : <div className="loading-bar" aria-hidden />}
+        </div>
       </div>
     </main>
   );

@@ -376,66 +376,163 @@
 }
 
 /* ── sign in ───────────────────────────────────────────────────────────
-   The only screen with no shell around it. Centred, narrow, and nothing
-   else on it: there is exactly one thing to do here. */
-/* ── sign in ───────────────────────────────────────────────────────────
    TWO PANELS: the company on the left, the form on the right. This is
    the first screen anybody sees and it was a 380px card floating on grey
    — correct, and indistinguishable from any other product's. The left
    panel is the same near-black and the same warm glow as the navigation
    rail, so signing in and arriving are the same place.
 
+   BUILT TO THE COMPANY'S REFERENCE (November 2026): an eyebrow over a
+   display headline, three named capabilities each with its own icon
+   tile, and on the right a white card lifted off grey with the three
+   things the CRM is for set under the form.
+
    UNDER 860px THE LEFT PANEL GOES, not shrinks. A brand panel folded
    above a form on a phone is a screenful of decoration between somebody
    and the password field, and the keyboard then pushes the field they
-   are typing in off the bottom. */
-.signin { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); min-height: 100vh; background: var(--surface); }
+   are typing in off the bottom. The lockup is in the card at every
+   width, so the phone still says whose CRM this is. */
+.signin { display: grid; grid-template-columns: minmax(0, 1.08fr) minmax(0, 1fr); min-height: 100vh; background: var(--bg); }
 
+/* ── the company side ─────────────────────────────────────────────── */
 .signin-aside {
   position: relative; overflow: hidden;
-  display: flex; flex-direction: column; justify-content: space-between;
-  padding: var(--gap-block) calc(var(--gap-block) + 10px);
+  display: flex; flex-direction: column; justify-content: flex-start;
+  padding: calc(var(--gap-block) + 12px) calc(var(--gap-block) + 16px);
   background: var(--shell); color: var(--shell-ink);
 }
-.signin-aside-logo { width: min(260px, 70%); }
+/* SPACED BY MARGIN, NOT space-between. Distributing three blocks evenly
+   down a 900px panel left a quarter of the screen empty under the logo
+   and pushed the strapline onto the very last pixel. The ink block gets
+   a measured gap and the footer is pinned to the bottom. */
+.signin-aside-ink { margin-top: clamp(26px, 7vh, 76px); }
+.signin-foot { margin-top: auto; }
+/* The glow and the trail are painted behind; everything with words on it
+   is lifted above them. */
+.signin-aside-logo, .signin-aside-ink, .signin-foot { position: relative; z-index: 1; }
+
+/* The lockup is black artwork, so it gets the white ground it was drawn
+   for — the same decision as the navigation rail, and the reason is in
+   public/brand/README.md. */
+.signin-aside-logo { width: min(248px, 64%); background: var(--surface); padding: 13px 16px; border-radius: var(--radius-card); }
 .signin-aside-logo img { width: 100%; display: block; }
-/* The logo is black artwork, so it gets the white ground it was drawn
-   for — the same decision as the navigation rail. */
-.signin-aside-logo { background: var(--surface); padding: 14px 16px; border-radius: var(--radius-card); }
-.signin-aside-ink { position: relative; z-index: 1; max-width: 420px; }
-.signin-head { margin: 0; font-size: 32px; font-weight: 800; letter-spacing: -0.02em; color: var(--on-fill); line-height: 1.15; }
-.signin-sub { margin: 10px 0 0; font-size: var(--t-mid); color: var(--shell-ink-2); line-height: 1.55; }
-.signin-points { margin: 22px 0 0; padding: 0; list-style: none; display: grid; gap: 10px; }
-.signin-points li { display: flex; align-items: center; gap: 10px; font-size: var(--t-body); color: var(--shell-ink-2); }
-.signin-tick { width: 20px; height: 20px; flex: none; display: grid; place-items: center; border-radius: 50%; background: var(--rail-wash-1); color: var(--brand); }
-.signin-foot { position: relative; z-index: 1; font-size: var(--t-small); color: var(--shell-ink-3); }
+
+/* 475px is also what the trail is drawn around — it stays flat until the
+   text has ended. Widening this without looking at Trail in SignIn.tsx
+   puts the strokes back through the words. */
+.signin-aside-ink { max-width: 475px; }
+.signin-eyebrow {
+  display: flex; align-items: center; gap: 12px; margin: 0 0 14px;
+  font-size: var(--t-small); font-weight: 700; letter-spacing: .22em;
+  text-transform: uppercase; color: var(--shell-ink-2);
+}
+.signin-eyebrow-rule { width: 34px; height: 3px; flex: none; border-radius: var(--radius-pill); background: var(--brand); }
+.signin-head { margin: 0; font-size: 40px; font-weight: 800; letter-spacing: -0.025em; color: var(--on-fill); line-height: 1.12; }
+.signin-sub { margin: 14px 0 0; max-width: 430px; font-size: var(--t-mid); color: var(--shell-ink-2); line-height: 1.6; }
+
+.signin-points { margin: 34px 0 0; padding: 0; list-style: none; display: grid; gap: 18px; }
+.signin-points li { display: flex; align-items: flex-start; gap: 14px; }
+.signin-point-icon {
+  width: 42px; height: 42px; flex: none; display: grid; place-items: center;
+  border-radius: 12px; background: var(--rail-wash-2);
+  border: 1px solid var(--shell-rule); color: var(--brand);
+}
+.signin-point-ink { display: grid; gap: 2px; }
+.signin-point-ink strong { font-size: var(--t-mid); font-weight: 700; color: var(--on-fill); }
+.signin-point-ink span { font-size: var(--t-body); color: var(--shell-ink-2); }
+
+/* The orange bar is the eyebrow rule again, turned on its side — the one
+   mark that bookends the panel. */
+.signin-foot { margin: auto 0 0; padding-left: 12px; border-left: var(--edge) solid var(--brand); font-size: var(--t-small); color: var(--shell-ink-2); }
+
 /* The same glow as the foot of the rail, and the same reason: it is the
    one piece of decoration, and it is marked hidden in the markup. */
 .signin-glow {
-  position: absolute; left: -60px; right: -40px; bottom: -120px; height: 380px; pointer-events: none;
+  position: absolute; left: -60px; right: -40px; bottom: -120px; height: 380px;
+  z-index: 0; pointer-events: none;
   background:
     radial-gradient(55% 55% at 25% 80%, var(--glow-1), transparent 70%),
     radial-gradient(45% 45% at 65% 100%, var(--glow-2), transparent 70%);
   filter: blur(18px); opacity: .5;
 }
+/* The fan of warm strokes over it. Drawn in the markup so it carries no
+   image file; see the Trail component in SignIn.tsx. */
+.signin-trail { position: absolute; left: 0; right: 0; bottom: 0; width: 100%; height: 300px; z-index: 0; pointer-events: none; }
 
-.signin-main { display: grid; place-items: center; padding: var(--gap-block) var(--gap-wide); background: var(--surface); }
-.signin-panel { width: 100%; max-width: 400px; }
-.signin-brand { display: flex; align-items: center; gap: 9px; margin-bottom: 18px; justify-content: center; }
-/* The panel is already on white here, so the card inside it would be a
-   white box on white with a line round it. It carries the form directly. */
-.signin-panel .card { border: 0; box-shadow: none; background: transparent; }
-.signin-panel .card-head { padding-left: 0; padding-right: 0; border-bottom: 0; }
-.signin-panel .card-pad { padding-left: 0; padding-right: 0; }
-.signin-panel .card-title { font-size: 24px; font-weight: 800; letter-spacing: -0.02em; }
-.signin-welcome { margin: -8px 0 18px; font-size: var(--t-mid); color: var(--ink-4); }
-.signin-mobile-logo { display: none; margin: 0 auto 22px; max-width: 220px; }
-.signin-mobile-logo img { width: 100%; display: block; }
+/* ── the form side ────────────────────────────────────────────────── */
+.signin-main { display: grid; place-items: center; padding: var(--gap-block) var(--gap-wide); background: var(--bg); }
+.splash { min-height: 100vh; display: grid; place-items: center; padding: var(--gap-block) var(--gap-wide); background: var(--bg); }
+
+.signin-card {
+  position: relative; width: 100%; max-width: 440px;
+  padding: 38px 36px 30px;
+  background: var(--surface); border-radius: var(--radius-panel); box-shadow: var(--shadow-2);
+}
+/* Centred, because it is the one thing on the card that is not read left
+   to right. The words under it are. */
+.signin-card-logo { width: 212px; margin: 0 auto 26px; }
+.signin-card-logo img { width: 100%; display: block; }
+
+.signin-title { margin: 0; font-size: 30px; font-weight: 800; letter-spacing: -0.025em; color: var(--ink); line-height: 1.15; }
+.signin-welcome { margin: 8px 0 26px; font-size: var(--t-mid); color: var(--ink-4); }
+.signin-note { margin: 2px 0 0; font-size: var(--t-body); color: var(--ink-4); text-align: center; }
+
+/* THE ONE BUTTON ON THE SCREEN, and the only gradient on a control
+   anywhere in the product. It is allowed here because this screen has
+   exactly one thing to do and nothing to compete with: the rule that
+   keeps gradients off buttons is in design-rules.test.ts, with this
+   named as the single exception. */
+.signin-go {
+  position: relative; width: 100%; height: 56px;
+  display: flex; align-items: center; justify-content: center; gap: 12px;
+  border: 0; border-radius: 12px;
+  font-size: var(--t-mid); font-weight: 700; color: var(--on-fill);
+  background: linear-gradient(100deg, var(--brand-deep), var(--brand));
+  box-shadow: var(--shadow-1);
+}
+.signin-go:hover:not(:disabled) { background: linear-gradient(100deg, var(--accent-hover), var(--brand-deep)); }
+.signin-go:disabled { opacity: .55; }
+/* Pinned right rather than placed in the flow, so the label stays centred
+   whether or not a mark sits beside it. */
+.signin-go-arrow { position: absolute; right: 18px; top: 50%; transform: translateY(-50%); }
+
+/* Microsoft's mark keeps the white ground it was drawn for. */
+.signin-ms-mark { width: 30px; height: 30px; flex: none; display: grid; place-items: center; background: var(--surface); border-radius: 7px; }
+.signin-ms-mark img { width: 18px; height: 18px; display: block; }
+
+/* What the CRM is for. Three, divided, on the brand wash — the only
+   place on this screen colour is used without a job to do, and it is
+   under the form rather than above it for that reason. */
+.signin-uses {
+  margin: 26px 0 0; padding: 0; list-style: none;
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  background: var(--brand-weak); border-radius: var(--radius-card); overflow: hidden;
+}
+.signin-uses li {
+  display: grid; justify-items: center; gap: 8px; padding: 16px 6px;
+  font-size: var(--t-body); font-weight: 600; color: var(--ink-2); text-align: center;
+}
+.signin-uses li + li { border-left: 1px solid var(--brand-rule); }
+.signin-use-icon { display: grid; place-items: center; color: var(--brand); }
+
+@media (max-width: 1100px) {
+  .signin-head { font-size: 33px; }
+  .signin-points { gap: 14px; }
+}
 
 @media (max-width: 860px) {
   .signin { grid-template-columns: minmax(0, 1fr); }
   .signin-aside { display: none; }
-  .signin-mobile-logo { display: block; }
+  .signin-main { padding: var(--gap-wide); }
+  .signin-card { padding: 30px 22px 24px; box-shadow: var(--shadow-1); }
+  .signin-title { font-size: 26px; }
+  .signin-card-logo { width: 184px; margin-bottom: 22px; }
+}
+
+/* "Track Pipeline" wraps to two lines at body size in a third of a 390px
+   phone, which leaves the three cells different heights. */
+@media (max-width: 480px) {
+  .signin-uses li { padding: 14px 4px; font-size: var(--t-small); }
 }
 
 /* A strip above the page, inside the scrolling area so it scrolls away

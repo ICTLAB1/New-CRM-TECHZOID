@@ -189,6 +189,11 @@
   /* ── geometry: soft ──────────────────────────────────────────────── */
   --radius:       10px;  /* controls, chips */
   --radius-card:  14px;  /* cards, tiles, sheets */
+  /* One step softer, for a panel that IS the screen rather than one card
+     among several — the sign-in card, which floats alone on grey. A
+     fourth radius would be drift; this one exists because 14px on a
+     440px card alone on a page reads as a dialog that lost its page. */
+  --radius-panel: 20px;
   --radius-pill:  999px;
   --control-h:    38px;
   --control-h-lg: 44px;

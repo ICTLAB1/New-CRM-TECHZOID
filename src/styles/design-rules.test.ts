@@ -49,7 +49,16 @@ describe("no decoration", () => {
     //                 door and the rail are recognisably one place
     //   .rail-ink     the wash behind the current rail item
     //   .bar          the chart bars, and the darker current month
-    const ALLOWED = /-wrap::after$|^\.skel$|^\.hero$|^\.hero::after$|^\.rail-glow$|^\.signin-glow$|^\.rail-ink$|^\.bar$|^\.bar\.is-last$/;
+    //   .signin-go    THE ONE GRADIENT ON A CONTROL in the product, and
+    //                 the entry that has to be argued for hardest. The
+    //                 company's reference design draws the sign-in button
+    //                 that way, and the sign-in screen is the one screen
+    //                 with a single thing to do on it and nothing to
+    //                 compete with. It is named here, rather than the
+    //                 rule being relaxed to "buttons", precisely so that
+    //                 the second gradient button has to come back to this
+    //                 comment and make its own case.
+    const ALLOWED = /-wrap::after$|^\.skel$|^\.hero$|^\.hero::after$|^\.rail-glow$|^\.signin-glow$|^\.rail-ink$|^\.bar$|^\.bar\.is-last$|^\.signin-go$|^\.signin-go:hover:not\(:disabled\)$/;
     const uses = [...allCode.matchAll(/([^{}]*)\{[^}]*(linear|radial|conic)-gradient[^}]*\}/g)]
       .map((m) => (m[1] ?? "").trim().split("\n").pop()?.trim() ?? "");
     for (const selector of uses) {

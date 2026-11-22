@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { existsSync, statSync } from "node:fs";
-import { COMPANY_LOCKUP_PATH } from "./brand";
+import { COMPANY_LOCKUP_PATH, MICROSOFT_MARK_PATH } from "./brand";
 
 /**
  * The logo the interface shows.
@@ -37,5 +37,29 @@ describe("the company lockup", () => {
        public/brand/README.md. */
     expect(COMPANY_LOCKUP_PATH).not.toBe("/brand/company-logo.png");
     expect(existsSync("public/brand/company-logo.png")).toBe(true);
+  });
+});
+
+describe("the Microsoft mark on the sign-in button", () => {
+  it("names a file that is actually in public/", () => {
+    expect(MICROSOFT_MARK_PATH.startsWith("/")).toBe(true);
+    expect(existsSync(`public${MICROSOFT_MARK_PATH}`), `public${MICROSOFT_MARK_PATH} is missing`).toBe(true);
+  });
+
+  it("IS NOT THE WORDMARK — the button sets that word itself", () => {
+    /* vendor-microsoft.png is the mark AND the word "Microsoft", drawn
+       for the company profile email. On a button labelled "Sign in with
+       Microsoft" it would print the word twice. Pointing this constant at
+       that file is the mistake this guard exists to catch. */
+    expect(MICROSOFT_MARK_PATH).not.toBe("/brand/vendor-microsoft.png");
+    expect(existsSync("public/brand/vendor-microsoft.png")).toBe(true);
+  });
+
+  it("is a few kilobytes, like the other marks beside it", () => {
+    /* It sits on the first screen anybody sees, before anything else has
+       loaded. A mark that is not tiny here is a mark somebody exported at
+       the wrong size. */
+    const bytes = statSync(`public${MICROSOFT_MARK_PATH}`).size;
+    expect(bytes, `${Math.round(bytes / 1024)} KB`).toBeLessThan(20 * 1024);
   });
 });

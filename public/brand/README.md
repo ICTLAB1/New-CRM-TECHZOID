@@ -124,6 +124,59 @@ filled in.
 that is not in `public/` — the same guard, and the same reason, as the
 signature image above.
 
+### The "TZ" monogram is not this company's mark
+
+A set of design renders came in during the November 2026 redesign showing
+a *different* lockup on the dark panels: a blue-and-orange **TZ**
+monogram beside a white TECHZOID wordmark. Nothing here was changed to
+match it, and it should not be reintroduced.
+
+TechZoid has one logo — the wordmark with the pinwheel through the O and
+"Connect, Communicate & Collaborate" under it — and that is what
+`company-lockup.png` holds.
+
+The app also used to draw its own: an orange tile reading "TZ" beside the
+word TechZoid, in CSS, on the loading and session-error screens. That was
+a letter mark this code invented. It is gone; those screens show the
+lockup.
+
+If a genuine reversed version of the real lockup is ever supplied, it
+drops in beside this one and the white panel comes off
+`.signin-aside-logo` and `.rail-brand`. Until then the white panel stays,
+and nothing in this repository recolours the mark to produce one.
+
+## microsoft-mark.png
+
+Microsoft's four-square mark alone, for the "Sign in with Microsoft"
+button on the front door. 96x96, white ground, about 3 KB.
+
+**It is a crop of `vendor-microsoft.png`, not a drawing.** That file is
+the mark and the word "Microsoft" together, as Microsoft supplies it: the
+squares occupy the left 84px, the gap after them is white, and the
+wordmark starts at 104px. Cropping in the gap takes the mark and nothing
+else.
+
+```
+convert vendor-microsoft.png -crop 86x84+0+0 +repage -fuzz 4% -trim \
+  +repage -resize 96x -strip microsoft-mark.png
+```
+
+**The wordmark is cut away on purpose.** The button sets "Sign in with
+Microsoft" as its own label, so the whole file would print the word twice
+— the same decision, for the same reason, as `company-logo.png` dropping
+the strapline for the email header.
+
+**It keeps its white ground, and the button gives it a white tile.** The
+mark was drawn for white. Four flat colours straight onto burnt orange is
+a recolouring of somebody else's mark, which is the thing this folder
+exists to prevent.
+
+The standing rule below applies to it in full: **never generate, redraw
+or approximate it.** If Microsoft's artwork changes, replace
+`vendor-microsoft.png` with the file they supply and re-run the crop.
+`src/app/brand.test.ts` fails if `MICROSOFT_MARK_PATH` names a file that
+is not here, and fails again if it is pointed back at the wordmark.
+
 ## vendor-microsoft.png, vendor-autodesk.png, vendor-adobe.png
 
 The three vendors' own marks, for the "What we supply" block in the company
