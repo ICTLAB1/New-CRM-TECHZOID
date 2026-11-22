@@ -233,18 +233,23 @@
 
 /* ── app launcher ───────────────────────────────────────────────────── */
 .launcher-scrim { position: fixed; inset: 0; z-index: 80; background: rgba(24,24,24,.45); display: grid; place-items: start center; padding: 60px var(--gap-wide); animation: scrim-in var(--t-enter) var(--ease) both; }
-.launcher { width: min(960px, 100%); max-height: calc(100vh - 120px); overflow-y: auto; background: var(--surface); border-radius: var(--radius-card); box-shadow: var(--lift); padding: var(--gap-block); }
+.launcher { width: min(980px, 100%); max-height: calc(100vh - 120px); overflow-y: auto; background: var(--surface); border-radius: var(--radius-card); box-shadow: var(--shadow-2); padding: var(--gap-block); }
 .launcher-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--gap-wide); }
 .launcher-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: var(--gap-block) var(--gap-wide); }
 .launcher-group { display: grid; gap: 2px; align-content: start; }
 .launcher-group .eyebrow { margin-bottom: 6px; }
+/* A ROW, NOT A LINK. Every item used to be accent-coloured text that
+   underlined on hover, so a column of thirty destinations read as thirty
+   links in a document. They are places, and a place is a target you aim
+   at: ink-coloured, with a surface that lights up under the pointer. */
 .launcher-item {
-  display: flex; align-items: center; gap: 10px; padding: 6px 8px;
+  display: flex; align-items: center; gap: 11px; width: 100%; padding: 8px 10px;
   border: 0; background: transparent; border-radius: var(--radius); cursor: pointer;
-  font: inherit; font-size: var(--t-body); color: var(--accent); text-align: left;
+  font: inherit; font-size: var(--t-body); color: var(--ink-2); text-align: left;
 }
-.launcher-item:hover { background: var(--accent-weak); text-decoration: underline; }
-.launcher-item[aria-current="page"] { font-weight: 700; }
+.launcher-label { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.launcher-item:hover { background: var(--surface-2); color: var(--ink); }
+.launcher-item[aria-current="page"] { background: var(--accent-weak); color: var(--accent); font-weight: 700; }
 
 /* ── object tiles ───────────────────────────────────────────────────── */
 .obj-tile {
@@ -373,9 +378,65 @@
 /* ── sign in ───────────────────────────────────────────────────────────
    The only screen with no shell around it. Centred, narrow, and nothing
    else on it: there is exactly one thing to do here. */
-.signin { display: grid; place-items: center; min-height: 100vh; padding: var(--gap-wide); background: var(--bg); }
-.signin-panel { width: 100%; max-width: 380px; }
+/* ── sign in ───────────────────────────────────────────────────────────
+   TWO PANELS: the company on the left, the form on the right. This is
+   the first screen anybody sees and it was a 380px card floating on grey
+   — correct, and indistinguishable from any other product's. The left
+   panel is the same near-black and the same warm glow as the navigation
+   rail, so signing in and arriving are the same place.
+
+   UNDER 860px THE LEFT PANEL GOES, not shrinks. A brand panel folded
+   above a form on a phone is a screenful of decoration between somebody
+   and the password field, and the keyboard then pushes the field they
+   are typing in off the bottom. */
+.signin { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); min-height: 100vh; background: var(--surface); }
+
+.signin-aside {
+  position: relative; overflow: hidden;
+  display: flex; flex-direction: column; justify-content: space-between;
+  padding: var(--gap-block) calc(var(--gap-block) + 10px);
+  background: var(--shell); color: var(--shell-ink);
+}
+.signin-aside-logo { width: min(260px, 70%); }
+.signin-aside-logo img { width: 100%; display: block; }
+/* The logo is black artwork, so it gets the white ground it was drawn
+   for — the same decision as the navigation rail. */
+.signin-aside-logo { background: var(--surface); padding: 14px 16px; border-radius: var(--radius-card); }
+.signin-aside-ink { position: relative; z-index: 1; max-width: 420px; }
+.signin-head { margin: 0; font-size: 32px; font-weight: 800; letter-spacing: -0.02em; color: var(--on-fill); line-height: 1.15; }
+.signin-sub { margin: 10px 0 0; font-size: var(--t-mid); color: var(--shell-ink-2); line-height: 1.55; }
+.signin-points { margin: 22px 0 0; padding: 0; list-style: none; display: grid; gap: 10px; }
+.signin-points li { display: flex; align-items: center; gap: 10px; font-size: var(--t-body); color: var(--shell-ink-2); }
+.signin-tick { width: 20px; height: 20px; flex: none; display: grid; place-items: center; border-radius: 50%; background: var(--rail-wash-1); color: var(--brand); }
+.signin-foot { position: relative; z-index: 1; font-size: var(--t-small); color: var(--shell-ink-3); }
+/* The same glow as the foot of the rail, and the same reason: it is the
+   one piece of decoration, and it is marked hidden in the markup. */
+.signin-glow {
+  position: absolute; left: -60px; right: -40px; bottom: -120px; height: 380px; pointer-events: none;
+  background:
+    radial-gradient(55% 55% at 25% 80%, var(--glow-1), transparent 70%),
+    radial-gradient(45% 45% at 65% 100%, var(--glow-2), transparent 70%);
+  filter: blur(18px); opacity: .5;
+}
+
+.signin-main { display: grid; place-items: center; padding: var(--gap-block) var(--gap-wide); background: var(--surface); }
+.signin-panel { width: 100%; max-width: 400px; }
 .signin-brand { display: flex; align-items: center; gap: 9px; margin-bottom: 18px; justify-content: center; }
+/* The panel is already on white here, so the card inside it would be a
+   white box on white with a line round it. It carries the form directly. */
+.signin-panel .card { border: 0; box-shadow: none; background: transparent; }
+.signin-panel .card-head { padding-left: 0; padding-right: 0; border-bottom: 0; }
+.signin-panel .card-pad { padding-left: 0; padding-right: 0; }
+.signin-panel .card-title { font-size: 24px; font-weight: 800; letter-spacing: -0.02em; }
+.signin-welcome { margin: -8px 0 18px; font-size: var(--t-mid); color: var(--ink-4); }
+.signin-mobile-logo { display: none; margin: 0 auto 22px; max-width: 220px; }
+.signin-mobile-logo img { width: 100%; display: block; }
+
+@media (max-width: 860px) {
+  .signin { grid-template-columns: minmax(0, 1fr); }
+  .signin-aside { display: none; }
+  .signin-mobile-logo { display: block; }
+}
 
 /* A strip above the page, inside the scrolling area so it scrolls away
    rather than eating height from every screen underneath it. */
@@ -492,7 +553,7 @@
     font: inherit; font-size: var(--t-micro); color: var(--ink-3); cursor: pointer;
     -webkit-tap-highlight-color: transparent;
   }
-  .bottom-glyph { font-size: 19px; line-height: 1.1; }
+  .bottom-glyph { line-height: 1; }
   .bottom-tab[aria-current="page"] { color: var(--accent); font-weight: 700; }
   .bottom-tab[aria-current="page"]::before { content: ""; position: absolute; top: -4px; left: 22%; right: 22%; height: 3px; border-radius: 0 0 3px 3px; background: var(--accent); }
   .bottom-badge { position: absolute; top: 2px; left: calc(50% + 6px); }

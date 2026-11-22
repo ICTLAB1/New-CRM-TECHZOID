@@ -274,8 +274,14 @@ export function AppShell({ view, onNavigate, user, brand, onSignOut, banner, bel
                   {sec.items.filter((i) => i.id !== "components").map((i) => (
                     <button key={i.id} type="button" className="launcher-item"
                       aria-current={i.id === view ? "page" : undefined} onClick={() => go(i.id)}>
-                      <span className="obj-tile" data-obj={objOf(i.id)} aria-hidden>{i.label.slice(0, 1)}</span>
-                      {i.label}
+                      {/* THE SAME ICON AS THE RAIL. It used to be the
+                          label's first letter in a coloured circle, which
+                          gave Prospects, Pipeline, Proformas and Purchase
+                          orders four identical "P"s — a picture that
+                          carried no information and had to be read past. */}
+                      <span className="obj-tile" data-obj={objOf(i.id)} aria-hidden><NavIcon id={i.id} /></span>
+                      <span className="launcher-label">{i.label}</span>
+                      {badges[i.id] ? <span className="nav-badge">{badges[i.id]}</span> : null}
                     </button>
                   ))}
                 </div>
@@ -288,11 +294,11 @@ export function AppShell({ view, onNavigate, user, brand, onSignOut, banner, bel
       {/* Phones: the five places people go most, under the thumb. Everything
           else is one tap away in the menu (the launcher). */}
       <nav className="bottom-nav" aria-label="Main">
-        {BOTTOM_TABS.map(([id, label, glyph]) => (
+        {BOTTOM_TABS.map(([id, label]) => (
           <button key={id} type="button" className="bottom-tab"
             aria-current={id === view ? "page" : undefined} onClick={() => go(id)}>
             {id === view ? <motion.span layoutId="bottom-tab-ink" className="bottom-tab-ink" transition={{ type: "spring", stiffness: 480, damping: 38, mass: 0.7 }} /> : null}
-            <span className="bottom-glyph" aria-hidden>{glyph}</span>
+            <span className="bottom-glyph" aria-hidden><NavIcon id={id} /></span>
             <span>{label}</span>
             {badges[id] ? <span key={badges[id]} className="nav-badge bottom-badge">{badges[id]}</span> : null}
           </button>
@@ -300,7 +306,10 @@ export function AppShell({ view, onNavigate, user, brand, onSignOut, banner, bel
         <button type="button" className="bottom-tab" aria-current={!BOTTOM_TABS.some(([id]) => id === view) ? "page" : undefined}
           onClick={() => setMenuOpen(true)}>
           {!BOTTOM_TABS.some(([id]) => id === view) ? <motion.span layoutId="bottom-tab-ink" className="bottom-tab-ink" transition={{ type: "spring", stiffness: 480, damping: 38, mass: 0.7 }} /> : null}
-          <span className="bottom-glyph" aria-hidden>☰</span>
+          <span className="bottom-glyph" aria-hidden>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              strokeWidth="1.8" strokeLinecap="round" aria-hidden><path d="M4 7h16M4 12h16M4 17h16" /></svg>
+          </span>
           <span>Menu</span>
         </button>
       </nav>
@@ -317,12 +326,16 @@ export function AppShell({ view, onNavigate, user, brand, onSignOut, banner, bel
   );
 }
 
-/** The bottom bar on a phone: [screen id, label, glyph]. */
-const BOTTOM_TABS: [string, string, string][] = [
-  ["dashboard", "Home", "⌂"],
-  ["tasks", "Tasks", "✓"],
-  ["pipeline", "Pipeline", "▤"],
-  ["customers", "Customers", "◉"],
+/** The bottom bar on a phone: [screen id, label]. The icon comes from
+ *  NavIcon, keyed by the id, so the bar and the rail cannot drift apart —
+ *  the glyphs here used to be the typographic characters ⌂ ✓ ▤ ◉, which
+ *  rendered as four different weights and sat at four different heights
+ *  depending on the phone's own font. */
+const BOTTOM_TABS: [string, string][] = [
+  ["dashboard", "Home"],
+  ["tasks", "Tasks"],
+  ["pipeline", "Pipeline"],
+  ["customers", "Customers"],
 ];
 
 /** Screens with a tab of their own; everything else sits in its section's

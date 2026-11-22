@@ -45,9 +45,11 @@ describe("no decoration", () => {
     //   .hero         the band behind the dashboard title
     //   .hero::after  its scrim, which is what keeps the words legible
     //   .rail-glow    the warm glow at the foot of the navigation rail
+    //   .signin-glow  the same glow on the sign-in panel, so the front
+    //                 door and the rail are recognisably one place
     //   .rail-ink     the wash behind the current rail item
     //   .bar          the chart bars, and the darker current month
-    const ALLOWED = /-wrap::after$|^\.skel$|^\.hero$|^\.hero::after$|^\.rail-glow$|^\.rail-ink$|^\.bar$|^\.bar\.is-last$/;
+    const ALLOWED = /-wrap::after$|^\.skel$|^\.hero$|^\.hero::after$|^\.rail-glow$|^\.signin-glow$|^\.rail-ink$|^\.bar$|^\.bar\.is-last$/;
     const uses = [...allCode.matchAll(/([^{}]*)\{[^}]*(linear|radial|conic)-gradient[^}]*\}/g)]
       .map((m) => (m[1] ?? "").trim().split("\n").pop()?.trim() ?? "");
     for (const selector of uses) {

@@ -1,14 +1,80 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Button, Card, Field, Input } from "../components/primitives";
 import { sendPasswordReset, signIn, signInWithMicrosoft, usesMicrosoftSignIn } from "../data/session";
+import { COMPANY_LOCKUP_PATH } from "./brand";
 
 /**
  * Sign in.
  *
- * One card, two fields, and errors that say what to do next. It never says
- * whether the email exists — that distinction is only useful to somebody
- * working out which addresses are worth attacking.
+ * Two fields, and errors that say what to do next. It never says whether
+ * the email exists — that distinction is only useful to somebody working
+ * out which addresses are worth attacking.
+ *
+ * TWO PANELS SINCE NOVEMBER 2026: the company on the left, the form on
+ * the right. It was a 380px card floating on grey, which was correct and
+ * looked like every other product. The left panel is the same near-black
+ * and the same warm glow as the navigation rail, so signing in and
+ * arriving are recognisably the same place. On a phone the panel is not
+ * folded above the form — it is gone, because a screenful of brand
+ * between somebody and the password field is a screenful they scroll
+ * past every morning.
  */
+
+/** The company side. One component, so the password form and the
+ *  Microsoft form cannot drift into two different front doors. */
+function Aside() {
+  return (
+    <aside className="signin-aside">
+      <div className="signin-aside-logo">
+        <img src={COMPANY_LOCKUP_PATH} alt="TechZoid Technologies" />
+      </div>
+      <div className="signin-aside-ink">
+        <h1 className="signin-head">Everything about a deal, in one place.</h1>
+        <p className="signin-sub">
+          Quotations, proformas, invoices, orders and the conversations around them — for the
+          whole team, on one screen.
+        </p>
+        <ul className="signin-points">
+          {[
+            "Quotations to invoices, without re-typing a line",
+            "Follow-ups and payment reminders that send themselves",
+            "WhatsApp and email against the customer's own record",
+          ].map((line) => (
+            <li key={line}>
+              <span className="signin-tick" aria-hidden>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                  strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round"><path d="m5 13 4 4L19 7" /></svg>
+              </span>
+              {line}
+            </li>
+          ))}
+        </ul>
+      </div>
+      <p className="signin-foot">TechZoid Technologies Private Limited</p>
+      <div className="signin-glow" aria-hidden />
+    </aside>
+  );
+}
+
+/** The frame both forms sit in. */
+function Frame({ children }: { children: ReactNode }) {
+  return (
+    <main className="signin">
+      <Aside />
+      <div className="signin-main">{children}</div>
+    </main>
+  );
+}
+
+/** Shown in place of the left panel on a phone, where that panel is not
+ *  rendered at all — so the screen still says whose CRM this is. */
+function MobileLogo() {
+  return (
+    <div className="signin-mobile-logo">
+      <img src={COMPANY_LOCKUP_PATH} alt="TechZoid Technologies" />
+    </div>
+  );
+}
 
 export function SignIn() {
   const [email, setEmail] = useState("");
@@ -49,16 +115,12 @@ export function SignIn() {
      then to conclude their account is broken. */
   if (usesMicrosoftSignIn()) {
     return (
-      <main className="signin">
+      <Frame>
         <div className="signin-panel">
-          <div className="signin-brand">
-            <span className="brand-mark">TZ</span>
-            <span className="brand-name">TechZoid</span>
-          </div>
-
-          <Card title="Sign in">
+          <MobileLogo />
+          <Card title="Welcome back">
+            <p className="signin-welcome">Use your TechZoid Microsoft account.</p>
             <div className="stack">
-              <p className="muted">Use your TechZoid Microsoft account.</p>
               <Button
                 tone="primary"
                 loading={busy}
@@ -75,23 +137,20 @@ export function SignIn() {
               >
                 Sign in with Microsoft
               </Button>
-              {error ? <p className="error">{error}</p> : null}
+              {error ? <div className="notice notice-bad"><span>{error}</span></div> : null}
             </div>
           </Card>
         </div>
-      </main>
+      </Frame>
     );
   }
 
   return (
-    <main className="signin">
+    <Frame>
       <form className="signin-panel" onSubmit={(e) => void submit(e)}>
-        <div className="signin-brand">
-          <span className="brand-mark">TZ</span>
-          <span className="brand-name">TechZoid</span>
-        </div>
-
-        <Card title="Sign in">
+        <MobileLogo />
+        <Card title="Welcome back">
+          <p className="signin-welcome">Sign in to your TechZoid CRM account.</p>
           <div className="stack">
             <Field label="Email">
               <Input
@@ -129,7 +188,7 @@ export function SignIn() {
           </div>
         </Card>
       </form>
-    </main>
+    </Frame>
   );
 }
 
@@ -154,8 +213,9 @@ export function NoProfile({ email, reason, onSignOut }: {
   onSignOut: () => void;
 }) {
   return (
-    <main className="signin">
+    <Frame>
       <div className="signin-panel">
+        <MobileLogo />
         <Card title="Signed in, but the CRM could not load your profile">
           <div className="stack">
             <p style={{ margin: 0 }}>
@@ -174,6 +234,6 @@ export function NoProfile({ email, reason, onSignOut }: {
           </div>
         </Card>
       </div>
-    </main>
+    </Frame>
   );
 }

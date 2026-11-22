@@ -735,18 +735,26 @@ button.tile:active { transform: none; }
   .table, .table tbody, .table tr, .table td { display: block; width: auto; }
   .table thead { display: none; }
 
+  /* THE SAME CARD AS EVERYTHING ELSE. These stacked rows kept the flat
+     hairline box of the old direction long after the cards around them
+     had lifted off the canvas, so a list on a phone looked like a
+     different product from the screen that linked to it. */
   .table tbody tr {
     position: relative;
     border: 1px solid var(--rule);
-    border-radius: var(--radius);
+    border-radius: var(--radius-card);
     background: var(--surface);
-    padding: 10px 12px;
-    margin-bottom: 8px;
+    box-shadow: var(--shadow-1);
+    padding: 14px 15px;
+    margin-bottom: 12px;
   }
   .table tbody tr:last-child { margin-bottom: 0; }
+  /* The row hover tint is for a cursor over a table row. On a card it
+     paints the whole card grey on the first tap and leaves it there. */
+  .table tbody tr:hover td { background: transparent; }
 
   .table td {
-    padding: 4px 0;
+    padding: 5px 0;
     border-bottom: 0;
     display: flex; gap: var(--gap); align-items: baseline; justify-content: space-between;
     text-align: right;
@@ -765,8 +773,9 @@ button.tile:active { transform: none; }
      label, sitting above the rest like a card title. */
   .table td[data-head] {
     display: block; text-align: left;
-    font-size: var(--t-mid); font-weight: 600; color: var(--ink);
-    padding-bottom: 6px;
+    font-size: var(--t-mid); font-weight: 700; color: var(--ink);
+    padding: 0 0 10px; margin-bottom: 6px;
+    border-bottom: 1px solid var(--rule);
   }
 
   /* The status stripe moves from a cell to the card's own left edge —
@@ -784,13 +793,39 @@ button.tile:active { transform: none; }
 
   /* Actions get their own full-width row under the facts, wrapping rather
      than crowding — three 40px buttons will not sit side by side here. */
-  .table td[data-actions] { display: block; padding-top: 10px; }
-  .table td[data-actions] .row-tight { flex-wrap: wrap; gap: 8px; }
-  /* Natural widths, NOT flex: 1. Stretching to fill made whichever action
-     landed alone on the last line the biggest thing on the card — which was
-     reliably Delete, since it is always last. A destructive action should
-     never be the loudest button in a row by accident of wrapping. */
-  .table td[data-actions] .btn { flex: 0 0 auto; }
+  /* THE ACTIONS ARE A GRID, NOT A WRAPPING ROW. Eight buttons of eight
+     different natural widths wrapped into a ragged block where nothing
+     lined up with anything — which is what the report showed. A
+     two-column grid gives every action the same target, in the order
+     they are written. */
+  .table td[data-actions] {
+    display: block; padding: 12px 0 0; margin-top: 8px;
+    border-top: 1px solid var(--rule);
+  }
+  .table td[data-actions] .row-tight {
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px;
+  }
+  .table td[data-actions] .btn { width: 100%; justify-content: center; }
+  /* EVERY CELL THE SAME KIND OF TARGET. The actions arrive as a mix of
+     tones — a filled primary, some outlined, some quiet text — which is
+     right in a toolbar on a desktop and reads as a broken grid on a
+     phone, where half the cells have an edge and half are floating
+     words. The quiet ones get the outline here; their tone still shows
+     in the text colour, so the primary is still the loud one. */
+  .table td[data-actions] .btn-quiet {
+    border: 1px solid var(--rule-strong);
+    background: var(--surface);
+  }
+  /* THE RULE THIS REPLACES SAID "natural widths, NOT flex: 1", because
+     stretching to fill made whichever action landed alone on the last
+     line the biggest thing on the card — reliably Delete, since it is
+     always last, and a destructive action should never become the
+     loudest button by accident of wrapping.
+
+     THAT CONCERN STILL HOLDS AND THE GRID ANSWERS IT BETTER. A lone last
+     button occupies ONE column, not the row: fixed 1fr columns cannot
+     stretch it. So the actions line up with each other and Delete is
+     never larger than Edit. */
 
   /* A row that is only a spacer or an empty cell should not leave a gap. */
   .table td:empty { display: none; }
@@ -1446,3 +1481,11 @@ button.path-hit { cursor: pointer; }
 
 /* Overdue, in the one column where lateness is the subject. */
 .due-late { color: var(--bad); font-weight: 600; }
+
+/* ── the bottom bar's icons ────────────────────────────────────────────
+   The bar used to carry the characters ⌂ ✓ ▤ ◉ ☰, which every phone
+   draws in its own font at its own weight and baseline — four glyphs
+   that never lined up with each other. They are the rail's icons now,
+   so the two navigations cannot drift apart. */
+.bottom-glyph { display: grid; place-items: center; width: 22px; height: 22px; line-height: 1; }
+.bottom-glyph svg { width: 21px; height: 21px; }
