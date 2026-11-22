@@ -39,3 +39,24 @@ export const COMPANY_LOCKUP_PATH = "/brand/company-lockup.png";
  * and four flat colours on burnt orange is not a thing to improvise.
  */
 export const MICROSOFT_MARK_PATH = "/brand/microsoft-mark.png";
+
+/**
+ * The photograph behind the sign-in panel.
+ *
+ * CUT FROM THE COMPANY'S OWN REFERENCE DESIGN — the glass elevation at
+ * sunset on the left-hand panel of the second login concept. It is the
+ * only part of those renders wide enough to take cleanly: the rest of
+ * that panel has the headline and the feature tiles set over it.
+ *
+ * IT IS 320px WIDE AND IS SCALED UP, which is why `.signin-photo` carries
+ * a blur and why `.signin-scrim` sits over it at 86% opacity on the left.
+ * Softness under a heavy scrim reads as depth of field; the same picture
+ * sharp and unscrimmed would read as a low-resolution JPEG. If a
+ * full-size original ever arrives it drops in here under the same name
+ * and the blur can come off.
+ *
+ * DECORATIVE, so it is rendered with an empty alt and aria-hidden. A
+ * screen reader has nothing to gain from "stock photograph of a
+ * building", and the panel's actual content is the words beside it.
+ */
+export const SIGNIN_BACKDROP_PATH = "/brand/signin-backdrop.jpg";

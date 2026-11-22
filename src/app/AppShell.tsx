@@ -1,9 +1,10 @@
 import { motion } from "motion/react";
-import { createContext, useContext, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 /** The screen on show, so a page title can carry that screen's tile. */
 const ViewLabel = createContext<string>("");
-import { useHotkeys } from "../components/hotkeys";
+import { MOD_LABEL, useHotkeys } from "../components/hotkeys";
+import { filterNav, firstMatch } from "./launcherSearch";
 import { ShortcutsHelp } from "../components/ShortcutsHelp";
 import { NAV } from "./nav";
 import { NavIcon } from "./NavIcon";
@@ -66,10 +67,15 @@ export function AppShell({ view, onNavigate, user, brand, onSignOut, banner, bel
   const [userOpen, setUserOpen] = useState(false);
   const section = NAV.find((s) => s.items.some((i) => i.id === view));
 
-  /* The two shortcuts that belong to the whole app rather than to one panel.
-     Both are bare keys, so they stay out of the way while anyone is typing —
-     see `tagIsTyping`. */
+  /* The shortcuts that belong to the whole app rather than to one panel.
+     The bare keys stay out of the way while anyone is typing — see
+     `tagIsTyping`; the one carrying Ctrl/Cmd is honoured everywhere. */
   useHotkeys([
+    /* THE LAUNCHER'S OWN KEY, and the reason it exists: the panel draws a
+       ⌘K chip on its search box, and a chip for a key that opened nothing
+       would be a lie on the first thing anybody opens. It is listed in
+       SHORTCUTS beside the hook so the cheatsheet cannot drift from it. */
+    { key: "k", mod: true, run: () => setMenuOpen(true) },
     /* No Shift requirement: on some layouts "?" is not a shifted key at all,
        and the character arriving is the signal regardless of how it was
        typed. */
@@ -261,34 +267,7 @@ export function AppShell({ view, onNavigate, user, brand, onSignOut, banner, bel
       ) : null}
 
       {menuOpen ? (
-        <div className="launcher-scrim" onClick={() => setMenuOpen(false)}>
-          <div className="launcher" role="dialog" aria-label="App launcher" onClick={(e) => e.stopPropagation()}>
-            <div className="launcher-head">
-              <h2 className="page-title">App Launcher</h2>
-              <Button tone="quiet" size="sm" onClick={() => setMenuOpen(false)}>Close</Button>
-            </div>
-            <div className="launcher-grid">
-              {NAV.filter((sec) => sec.items.some((i) => i.id !== "components")).map((sec) => (
-                <div key={sec.label} className="launcher-group">
-                  <div className="eyebrow">{sec.label}</div>
-                  {sec.items.filter((i) => i.id !== "components").map((i) => (
-                    <button key={i.id} type="button" className="launcher-item"
-                      aria-current={i.id === view ? "page" : undefined} onClick={() => go(i.id)}>
-                      {/* THE SAME ICON AS THE RAIL. It used to be the
-                          label's first letter in a coloured circle, which
-                          gave Prospects, Pipeline, Proformas and Purchase
-                          orders four identical "P"s — a picture that
-                          carried no information and had to be read past. */}
-                      <span className="obj-tile" data-obj={objOf(i.id)} aria-hidden><NavIcon id={i.id} /></span>
-                      <span className="launcher-label">{i.label}</span>
-                      {badges[i.id] ? <span className="nav-badge">{badges[i.id]}</span> : null}
-                    </button>
-                  ))}
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
+        <Launcher view={view} badges={badges} onGo={go} onClose={() => setMenuOpen(false)} />
       ) : null}
 
       {/* Phones: the five places people go most, under the thumb. Everything
@@ -321,6 +300,163 @@ export function AppShell({ view, onNavigate, user, brand, onSignOut, banner, bel
           <div key={view} className="view" data-obj={objOf(view)}>{children}</div>
         </ViewLabel.Provider>
       </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── the app launcher ─────────────────────────────────────────────────
+   Every destination in the product on one dark panel, searchable.
+
+   DARK, AND THE ONLY DIALOG THAT IS. It is the one surface that is about
+   the application rather than about the work: it belongs with the rail,
+   not with the white cards the records live on, and on a phone it is the
+   whole screen. Everything painted here uses --shell-ink, and
+   design-rules.test.ts now checks that, because --ink on near-black is
+   invisible and nobody notices a label that has quietly stopped being
+   there.
+
+   THE SEARCH IS REAL. The reference design draws a search field with a
+   ⌘K chip on it; a field that did not filter, or a chip for a key that
+   opened nothing, would be two lies on the first panel anybody opens.
+   The key is bound in AppShell above and listed in SHORTCUTS beside the
+   hook, so the cheatsheet cannot drift from what the app does. */
+
+/** One icon per section heading, keyed by the section's own label. A
+ *  section with no entry gets the dot NavIcon falls back to, which is
+ *  how a new section in nav.ts fails: visibly, and without breaking the
+ *  grid. */
+const SECTION_ICON: Record<string, string> = {
+  Sell: "pipeline",
+  Find: "prospects",
+  Buy: "purchase-orders",
+  Deliver: "dispatch",
+  "Get paid": "receivables",
+  Collect: "payment-tracker",
+  Understand: "reports",
+  Administer: "settings",
+};
+
+/** The arcs in the corner of the launcher's header band — the reference
+ *  design's one flourish. Drawn rather than filed, for the same reason
+ *  the sign-in trail is: it follows --brand and weighs nothing. */
+function Arcs() {
+  return (
+    <svg className="launcher-arcs" viewBox="0 0 280 170" aria-hidden="true" focusable="false">
+      {/* Quarter circles sharing a centre on the panel's top-right corner,
+          so they read as one sweep bleeding off the edge rather than as
+          eight separate curves. The widest run past the band and are
+          clipped by it, which is what makes it look like a corner of
+          something larger. */}
+      {Array.from({ length: 8 }, (_, i) => {
+        const r = 46 + i * 20;
+        return (
+          <path key={i} d={`M${280 - r} 0 A ${r} ${r} 0 0 1 280 ${r}`}
+            fill="none" stroke="var(--brand)" strokeWidth="1.3"
+            opacity={(0.46 - i * 0.045).toFixed(3)} />
+        );
+      })}
+    </svg>
+  );
+}
+
+function Launcher({ view, badges, onGo, onClose }: {
+  view: string;
+  badges: Record<string, number>;
+  onGo: (id: string) => void;
+  onClose: () => void;
+}) {
+  const [q, setQ] = useState("");
+  const box = useRef<HTMLInputElement>(null);
+
+  /* Focus the box on open, so ⌘K then typing works without a click. */
+  useEffect(() => { box.current?.focus(); }, []);
+
+  const groups = useMemo(() => filterNav(q), [q]);
+  const first = firstMatch(groups);
+
+  return (
+    <div className="launcher-scrim" onClick={onClose}>
+      <div
+        className="launcher" role="dialog" aria-modal="true" aria-label="App launcher"
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") { e.stopPropagation(); onClose(); return; }
+          /* Enter opens what the search is showing. Only from the box —
+             pressing Enter on a focused row must activate that row, which
+             is the button's own job. */
+          if (e.key === "Enter" && first && e.target === box.current) {
+            e.preventDefault();
+            onGo(first);
+          }
+        }}
+      >
+        <div className="launcher-top">
+          {/* Black artwork on a near-black panel gets the white ground it
+              was drawn for, exactly as the rail and the sign-in do. */}
+          <div className="launcher-logo">
+            <img src={COMPANY_LOCKUP_PATH} alt="TechZoid Technologies" />
+          </div>
+          <button type="button" className="launcher-close" onClick={onClose} aria-label="Close the launcher">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
+          </button>
+          <Arcs />
+        </div>
+
+        <h2 className="launcher-title">App Launcher</h2>
+        <p className="launcher-sub">Access all your CRM modules, tools and business operations.</p>
+
+        <div className="launcher-search">
+          <span className="launcher-search-icon" aria-hidden="true"><NavIcon id="prospects" /></span>
+          <input
+            ref={box}
+            type="text"
+            className="launcher-input"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Search apps, modules or features…"
+            aria-label="Search apps, modules or features"
+            autoComplete="off"
+            spellCheck={false}
+          />
+          <kbd className="launcher-kbd">{MOD_LABEL === "⌘" ? "⌘K" : "Ctrl K"}</kbd>
+        </div>
+
+        {groups.length ? (
+          <div className="launcher-grid">
+            {groups.map((sec) => (
+              <section key={sec.label} className="launcher-group">
+                <h3 className="launcher-group-head">
+                  <span className="launcher-group-icon" aria-hidden="true">
+                    <NavIcon id={SECTION_ICON[sec.label] ?? ""} />
+                  </span>
+                  {sec.label}
+                </h3>
+                <div className="launcher-rows">
+                  {sec.items.map((i) => (
+                    <button key={i.id} type="button" className="launcher-item"
+                      aria-current={i.id === view ? "page" : undefined} onClick={() => onGo(i.id)}>
+                      {/* THE SAME ICON AS THE RAIL. It used to be the
+                          label's first letter in a coloured circle, which
+                          gave Prospects, Pipeline, Proformas and Purchase
+                          orders four identical "P"s — a picture that
+                          carried no information and had to be read past. */}
+                      <span className="obj-tile" data-obj={objOf(i.id)} aria-hidden="true"><NavIcon id={i.id} /></span>
+                      <span className="launcher-label">{i.label}</span>
+                      {badges[i.id] ? <span className="nav-badge">{badges[i.id]}</span> : null}
+                      <svg className="launcher-chev" width="15" height="15" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                        aria-hidden="true"><path d="m9 18 6-6-6-6" /></svg>
+                    </button>
+                  ))}
+                </div>
+              </section>
+            ))}
+          </div>
+        ) : (
+          <p className="launcher-empty">Nothing here is called “{q.trim()}”.</p>
+        )}
       </div>
     </div>
   );

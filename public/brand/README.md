@@ -177,6 +177,38 @@ or approximate it.** If Microsoft's artwork changes, replace
 `src/app/brand.test.ts` fails if `MICROSOFT_MARK_PATH` names a file that
 is not here, and fails again if it is pointed back at the wordmark.
 
+## signin-backdrop.jpg
+
+The photograph behind the sign-in panel: a glass elevation at sunset.
+320x992, about 50 KB. The only photograph in this folder, and the only
+file here that is deliberately NOT a PNG — the same picture as a PNG is
+roughly eight times the bytes for nothing visible.
+
+**Cut from the company's own reference design**, the left-hand panel of
+the second login concept. That is the only region of those renders wide
+enough to take cleanly: everything else has the headline, the feature
+tiles or the wave set over it.
+
+**It is 320px wide and is scaled well past that**, which is why
+`.signin-photo` carries `filter: blur(1.5px)` and a 1.05 scale, and why
+`.signin-scrim` sits over it at 86% opacity on the left and 24% on the
+right. Softness under a heavy scrim reads as depth of field; the same
+picture sharp and unscrimmed reads as a low-resolution JPEG.
+
+**If a full-size original arrives**, drop it in under the same name —
+roughly 1600px wide, JPEG, under 120 KB (`src/app/brand.test.ts` fails
+above that, and fails if the file is not a `.jpg`/`.jpeg`) — and the
+blur can come off `.signin-photo`. Nothing else changes.
+
+```
+convert original.jpg -resize 1600x -strip -interlace Plane -quality 80 \
+  signin-backdrop.jpg
+```
+
+**It is decorative**, rendered with an empty `alt` and `aria-hidden`. A
+screen reader gains nothing from "photograph of a building", and the
+panel's actual content is the words beside it.
+
 ## vendor-microsoft.png, vendor-autodesk.png, vendor-adobe.png
 
 The three vendors' own marks, for the "What we supply" block in the company

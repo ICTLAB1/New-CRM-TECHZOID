@@ -47,6 +47,9 @@ describe("no decoration", () => {
     //   .rail-glow    the warm glow at the foot of the navigation rail
     //   .signin-glow  the same glow on the sign-in panel, so the front
     //                 door and the rail are recognisably one place
+    //   .signin-scrim the scrim over the sign-in photograph — like
+    //                 .hero::after, it is what keeps the words legible,
+    //                 which is information and not decoration
     //   .rail-ink     the wash behind the current rail item
     //   .bar          the chart bars, and the darker current month
     //   .signin-go    THE ONE GRADIENT ON A CONTROL in the product, and
@@ -58,7 +61,7 @@ describe("no decoration", () => {
     //                 rule being relaxed to "buttons", precisely so that
     //                 the second gradient button has to come back to this
     //                 comment and make its own case.
-    const ALLOWED = /-wrap::after$|^\.skel$|^\.hero$|^\.hero::after$|^\.rail-glow$|^\.signin-glow$|^\.rail-ink$|^\.bar$|^\.bar\.is-last$|^\.signin-go$|^\.signin-go:hover:not\(:disabled\)$/;
+    const ALLOWED = /-wrap::after$|^\.skel$|^\.hero$|^\.hero::after$|^\.rail-glow$|^\.signin-glow$|^\.rail-ink$|^\.bar$|^\.bar\.is-last$|^\.signin-go$|^\.signin-go:hover:not\(:disabled\)$|^\.signin-scrim$/;
     const uses = [...allCode.matchAll(/([^{}]*)\{[^}]*(linear|radial|conic)-gradient[^}]*\}/g)]
       .map((m) => (m[1] ?? "").trim().split("\n").pop()?.trim() ?? "");
     for (const selector of uses) {
@@ -126,9 +129,16 @@ describe("the chrome is dark and the content is light", () => {
      background: var(--surface), white, and its labels correctly use
      content ink. Listing it was this test's own mistake, caught by
      itself on the first run after the rewrite. */
+  /* THE APP LAUNCHER JOINED THE LIST when it went dark. It is the only
+     dialog in the product that is not a white card, which makes it
+     exactly the surface where somebody will reach for --ink out of
+     habit — it is a dialog, and every other dialog wants --ink. */
   const CHROME = [
     ".rail", ".rail-name", ".rail-tag", ".rail-item", ".rail-item:hover",
     ".rail-label", ".rail-group-label", ".rail-brand",
+    ".launcher", ".launcher-item", ".launcher-item:hover", ".launcher-label",
+    ".launcher-title", ".launcher-sub", ".launcher-group", ".launcher-group-head",
+    ".launcher-input", ".launcher-kbd", ".launcher-close", ".launcher-empty",
   ];
 
   it("never paints content ink onto the dark shell", () => {

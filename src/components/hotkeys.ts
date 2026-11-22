@@ -86,6 +86,7 @@ export function useHotkeys(keys: Hotkey[], enabled = true): void {
  *  documentation cannot drift apart. */
 export const SHORTCUTS: ReadonlyArray<{ keys: string; what: string; where: string }> = [
   { keys: "?", what: "Show this list", where: "Anywhere" },
+  { keys: `${MOD_LABEL} + K`, what: "Open the app launcher", where: "Anywhere" },
   { keys: "/", what: "Jump to search", where: "Any list" },
   /* One row, because they do the same thing. Two rows implying otherwise is
      the kind of small lie that makes people stop trusting the whole list. */

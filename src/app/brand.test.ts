@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { existsSync, statSync } from "node:fs";
-import { COMPANY_LOCKUP_PATH, MICROSOFT_MARK_PATH } from "./brand";
+import { COMPANY_LOCKUP_PATH, MICROSOFT_MARK_PATH, SIGNIN_BACKDROP_PATH } from "./brand";
 
 /**
  * The logo the interface shows.
@@ -61,5 +61,29 @@ describe("the Microsoft mark on the sign-in button", () => {
        the wrong size. */
     const bytes = statSync(`public${MICROSOFT_MARK_PATH}`).size;
     expect(bytes, `${Math.round(bytes / 1024)} KB`).toBeLessThan(20 * 1024);
+  });
+});
+
+describe("the photograph behind the sign-in panel", () => {
+  it("names a file that is actually in public/", () => {
+    expect(SIGNIN_BACKDROP_PATH.startsWith("/")).toBe(true);
+    expect(existsSync(`public${SIGNIN_BACKDROP_PATH}`), `public${SIGNIN_BACKDROP_PATH} is missing`).toBe(true);
+  });
+
+  it("IS A PHOTOGRAPH, so it is stored as one", () => {
+    /* The same picture as a PNG is roughly eight times the bytes for no
+       visible gain. This is the one file in public/brand that is a
+       photograph rather than a mark, and the one that should not be a
+       PNG. */
+    expect(SIGNIN_BACKDROP_PATH).toMatch(/\.jpe?g$/);
+  });
+
+  it("stays small enough to sit on the front door", () => {
+    /* It loads on the sign-in screen, which is the first thing anybody
+       waits for and often on a phone on mobile data. Under 120 KB —
+       generous for a photograph, and far under what an unoptimised
+       export off a design tool weighs. */
+    const bytes = statSync(`public${SIGNIN_BACKDROP_PATH}`).size;
+    expect(bytes, `${Math.round(bytes / 1024)} KB`).toBeLessThan(120 * 1024);
   });
 });

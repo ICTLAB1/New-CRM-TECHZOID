@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { Button, Field, Input } from "../components/primitives";
 import { sendPasswordReset, signIn, signInWithMicrosoft, usesMicrosoftSignIn } from "../data/session";
-import { COMPANY_LOCKUP_PATH, MICROSOFT_MARK_PATH } from "./brand";
+import { COMPANY_LOCKUP_PATH, MICROSOFT_MARK_PATH, SIGNIN_BACKDROP_PATH } from "./brand";
 import { NavIcon } from "./NavIcon";
 
 /**
@@ -80,6 +80,12 @@ function Trail() {
 function Aside() {
   return (
     <aside className="signin-aside">
+      {/* The photograph, and the scrim that makes the words legible over
+          it. Decorative, so it is hidden from a screen reader: the panel's
+          content is the text beside it. See SIGNIN_BACKDROP_PATH. */}
+      <img className="signin-photo" src={SIGNIN_BACKDROP_PATH} alt="" aria-hidden="true" />
+      <div className="signin-scrim" aria-hidden="true" />
+
       {/* The lockup is black artwork, so it gets the white ground it was
           drawn for — the same decision as the navigation rail, and the
           reason is in public/brand/README.md. */}
