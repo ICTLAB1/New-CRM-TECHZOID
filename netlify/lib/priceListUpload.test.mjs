@@ -2,7 +2,7 @@ import { createHmac } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { asService, closePool } from "../../api/lib/db.mjs";
 import { makeXlsx } from "../../api/lib/testdata/makeXlsx.mjs";
-import { chooseSheet, decodeUpload, headersFit, isMapping, withGuessedGaps } from "../functions/price-list-upload.mjs";
+import { ALL_SHEETS, wantsOneSheet, chooseSheet, decodeUpload, headersFit, isMapping, mappingFor, mergeSheets, planSheets, withGuessedGaps } from "../functions/price-list-upload.mjs";
 
 /**
  * The upload, whole: a real .xlsx in, rows in the price book out, with the
@@ -327,5 +327,165 @@ describe("a mapping remembered from a month before a field existed", () => {
   it("changes nothing when the mapping is already complete", () => {
     const full = { sku: 0, productId: 1, productName: 2, category: 3, licenceType: 4, billingPlan: 5, unit: 6, resellerPrice: 7, currency: 8 };
     expect(withGuessedGaps(full, HEADERS)).toEqual(full);
+  });
+});
+
+/* ── merging a multi-sheet workbook ─────────────────────────────────── */
+
+/* Two sheets with DIFFERENT column layouts, which is the whole reason a
+   merged load needs one mapping per sheet: here the price is column 4 on
+   one and column 3 on the other. */
+const NCE_ROWS = [
+  ["ProductId", "SkuId", "SkuTitle", "TermDuration", "ERP Price"],
+  ["CFQ7", 1, "Audit Log", "P1Y", 2079],
+  ["CFQ7", 1, "Audit Log", "P1M", 198],
+];
+const PERP_ROWS = [
+  ["ProductId", "SkuId", "SkuTitle", "ERP"],
+  ["DG7G", 2, "Access LTSC", 14443],
+];
+const READ_ME = [
+  ["Microsoft channel price list"],
+  ["Effective 1 November 2026"],
+];
+const BOOK = [
+  { name: "NCE", rows: NCE_ROWS },
+  { name: "PERPETUAL", rows: PERP_ROWS },
+  { name: "Read me", rows: READ_ME },
+];
+
+describe("choosing what to read out of a workbook", () => {
+  it("TREATS ASKING FOR NOTHING AS ASKING FOR ALL OF THEM", () => {
+    /* The default decides whether a Microsoft upload loads 3,547 rows or
+       4,887. Asking for nothing, or for the sentinel, means every sheet. */
+    expect(wantsOneSheet(undefined)).toBe(false);
+    expect(wantsOneSheet("")).toBe(false);
+    expect(wantsOneSheet(ALL_SHEETS)).toBe(false);
+    expect(wantsOneSheet("NCE")).toBe(true);
+  });
+
+  it("reads every sheet when planSheets is given no options at all", () => {
+    const { plans } = planSheets(BOOK);
+    expect(plans.map((p) => p.sheet.name)).toEqual(["NCE", "PERPETUAL"]);
+  });
+
+  it("READS EVERY SHEET BY DEFAULT", () => {
+    /* A price list workbook is usually several sheets of price list.
+       Reading one leaves the rest of the month's prices out of the book —
+       1,340 of 4,887 rows, on the November 2026 Microsoft list. */
+    const { plans } = planSheets(BOOK, { wantOne: false });
+    expect(plans.map((p) => p.sheet.name)).toEqual(["NCE", "PERPETUAL"]);
+  });
+
+  it("LEAVES OUT A COVER PAGE, AND SAYS SO", () => {
+    /* Silently dropping it would be the same fault as reading one sheet,
+       wearing a different hat. */
+    const { skipped } = planSheets(BOOK, { wantOne: false });
+    expect(skipped.map((s) => s.name)).toEqual(["Read me"]);
+    expect(skipped[0].why).toMatch(/headings|column/);
+  });
+
+  it("GIVES EACH SHEET ITS OWN MAPPING", () => {
+    /* The two sheets put the price in different columns. One mapping
+       across both reads a price out of the wrong column — which on the
+       real workbook would be "Discount %". */
+    const { plans } = planSheets(BOOK, { wantOne: false });
+    expect(plans[0].mapping.resellerPrice).toBe(4);
+    expect(plans[1].mapping.resellerPrice).toBe(3);
+  });
+
+  it("reads one sheet when one is asked for", () => {
+    const { plans } = planSheets([BOOK[0]], { wantOne: true });
+    expect(plans).toHaveLength(1);
+    expect(plans[0].sheet.name).toBe("NCE");
+  });
+
+  it("ASKS ABOUT A NAMED SHEET SHORT OF A COLUMN, rather than skipping it", () => {
+    /* A sheet the Admin did not name is noise; one they named is a
+       question, and comes back as the mapping screen so they can point at
+       the price column themselves. */
+    const noPrice = [{ name: "Oddity", rows: [["Part No", "Description"], ["A", "thing"]] }];
+    const { plans, skipped } = planSheets(noPrice, { wantOne: true });
+    expect(skipped).toEqual([]);
+    expect(plans[0].missing).toContain("resellerPrice");
+  });
+
+  it("skips that same sheet without asking when it was not named", () => {
+    const noPrice = [{ name: "Oddity", rows: [["Part No", "Description"], ["A", "thing"]] }];
+    const { plans, skipped } = planSheets(noPrice, { wantOne: false });
+    expect(plans).toEqual([]);
+    expect(skipped[0].why).toMatch(/resellerPrice/);
+  });
+
+  it("reports a sheet with no headings at all as skipped, with the reason", () => {
+    const { skipped } = planSheets([{ name: "Read me", rows: READ_ME }], { wantOne: true });
+    expect(skipped).toEqual([{ name: "Read me", why: "no column headings were found" }]);
+  });
+});
+
+describe("putting the sheets together", () => {
+  const read = (overrides = {}) => [
+    { name: "NCE", items: [{ sku: "A" }, { sku: "B" }], errors: [{ row: 9, problem: "x" }] },
+    { name: "PERPETUAL", items: [{ sku: "C" }], errors: [] },
+    ...(overrides.extra ?? []),
+  ];
+
+  it("keeps every sheet's rows and tags each with where it came from", () => {
+    const { items, errors } = mergeSheets(read());
+    expect(items.map((i) => i.sku)).toEqual(["A", "B", "C"]);
+    expect(items.map((i) => i.sheet)).toEqual(["NCE", "NCE", "PERPETUAL"]);
+    expect(errors[0].sheet).toBe("NCE");
+  });
+
+  it("LEAVES SKUs ALONE WHEN THE SHEETS DO NOT CLASH", () => {
+    /* The real November workbook merges 4,887 rows across four sheets
+       with no clash at all. Prefixing those would have changed every SKU
+       in the book for nothing, and broken the match against last month. */
+    const { items, qualifiedBySheet } = mergeSheets(read());
+    expect(qualifiedBySheet).toBe(false);
+    expect(items[0].sku).toBe("A");
+  });
+
+  it("PUTS THE SHEET IN FRONT OF EVERY SKU WHEN TWO SHEETS CLASH", () => {
+    /* The database has a unique index on (list, lower(sku)) and would
+       refuse the whole upload over one collision. */
+    const { items, qualifiedBySheet } = mergeSheets(
+      read({ extra: [{ name: "EST", items: [{ sku: "A" }], errors: [] }] }),
+    );
+    expect(qualifiedBySheet).toBe(true);
+    expect(items.map((i) => i.sku)).toEqual(["NCE/A", "NCE/B", "PERPETUAL/C", "EST/A"]);
+    expect(new Set(items.map((i) => i.sku)).size).toBe(items.length);
+  });
+
+  it("does not prefix a single-sheet load, whatever it holds", () => {
+    const one = [{ name: "NCE", items: [{ sku: "A" }], errors: [] }];
+    expect(mergeSheets(one).qualifiedBySheet).toBe(false);
+  });
+});
+
+describe("a mapping remembered per sheet", () => {
+  const FLAT = { sku: 0, productName: 1, resellerPrice: 2 };
+
+  it("gives a flat mapping to whichever sheet asks", () => {
+    /* Every list loaded before merging existed was stored this way, and
+       must still fit a single-sheet load this month. */
+    expect(mappingFor(FLAT, "NCE")).toEqual(FLAT);
+    expect(mappingFor(FLAT, "anything")).toEqual(FLAT);
+  });
+
+  it("gives each sheet its own out of a per-sheet mapping", () => {
+    const perSheet = { NCE: FLAT, PERPETUAL: { sku: 1, productName: 2, resellerPrice: 3 } };
+    expect(mappingFor(perSheet, "PERPETUAL").resellerPrice).toBe(3);
+  });
+
+  it("says nothing for a sheet the stored mapping has never seen", () => {
+    expect(mappingFor({ NCE: FLAT }, "SUBSCRIPTIONS")).toBeNull();
+    expect(mappingFor(null, "NCE")).toBeNull();
+    expect(mappingFor({}, "NCE")).toBeNull();
+  });
+
+  it("names the all-sheets sentinel as something no sheet can be called", () => {
+    /* Excel forbids * in a sheet name, so it cannot collide with one. */
+    expect(ALL_SHEETS).toBe("*");
   });
 });

@@ -233,6 +233,23 @@ export interface PriceChange {
   change_pct: number | null;
 }
 
+/**
+ * "Every sheet in the workbook", as the server expects it to be asked for.
+ *
+ * A sheet can be called anything, so the value meaning "all of them" has
+ * to be one Excel will not allow as a sheet name. It forbids : \\ / ? * [ ]
+ */
+export const ALL_SHEETS = "*";
+
+/** What one sheet contributed to a merged load. */
+export interface SheetTally {
+  name: string;
+  itemCount: number;
+  errorCount: number;
+  mappingFrom?: string;
+  skuFromLabels?: string[];
+}
+
 export interface UploadResult {
   /** mapping: say which column is which. preview: here is what I found.
    *  confirm: there are bad rows, say whether to go on. loaded: done. */
@@ -250,6 +267,15 @@ export interface UploadResult {
   skuFrom?: string[];
   /** The same, spelled as the headings in the file, for showing a person. */
   skuFromLabels?: string[];
+  /** What each sheet contributed to a merged load. */
+  perSheet?: SheetTally[];
+  /** Sheets left out of a merged load, each with the reason. */
+  skipped?: { name: string; why: string }[];
+  /** True when two sheets named a SKU the same way and every SKU in the
+   *  list therefore carries its sheet name in front of it. */
+  qualifiedBySheet?: boolean;
+  /** True when this load read every sheet rather than one. */
+  allSheets?: boolean;
   missing?: string[];
   message?: string;
   itemCount?: number;

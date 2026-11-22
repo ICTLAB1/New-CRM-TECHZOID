@@ -38,6 +38,15 @@ import {
  * NOT `xlsx@0.18.5` — see api/lib/priceListWorkbook.mjs.
  */
 
+/**
+ * "Every sheet in the workbook", as the browser asks for it.
+ *
+ * A sheet can be called anything, so the value that means "all of them"
+ * has to be one a sheet cannot be called. Excel forbids these characters
+ * in a sheet name: : \ / ? * [ ]
+ */
+export const ALL_SHEETS = "*";
+
 /** Preview sizes. Enough to see the shape; not enough to be a download. */
 const PREVIEW_ROWS = 25;
 const PREVIEW_ERRORS = 200;
@@ -122,42 +131,42 @@ export async function handler(event) {
     return fail(event, 400, err?.message ?? "That file could not be read.");
   }
 
-  const sheet = chooseSheet(sheets, body.sheet);
-  if (!sheet) return fail(event, 400, "That workbook has no sheets in it.");
+  /* WHICH SHEETS. A price list workbook is usually several sheets of price
+     list — Microsoft's is four, one per licensing programme — and reading
+     one of them silently leaves the rest of the month's prices out of the
+     book. So the default is all of them, and the picker narrows to one.
 
-  const headerRow = Number.isInteger(body.headerRow) ? body.headerRow : headerRowIndex(sheet.rows);
-  if (headerRow < 0) {
-    return fail(event, 400, `No column headings were found on "${sheet.name}". Pick the sheet and the heading row, or check the file has a row naming the SKU and the price.`);
-  }
-  const headers = headerNames(sheet.rows, headerRow);
+     A sheet is only in if its required columns can be found. That is what
+     keeps a "Read me" or a "Change log" tab out without anybody having to
+     name it, and it means an unreadable sheet is reported as skipped
+     rather than failing the upload. */
+  const wantOne = wantsOneSheet(body.sheet);
+  const chosen = wantOne ? [chooseSheet(sheets, body.sheet)].filter(Boolean) : sheets;
+  if (!chosen.length) return fail(event, 400, "That workbook has no sheets in it.");
 
-  /* The mapping, in order of how much it is worth trusting: what the Admin
-     set on this upload, then what was used for this OEM last month — which
-     is what makes next month one click — then a guess from the headings. */
-  let mapping = isMapping(body.mapping) ? body.mapping : null;
-  let mappingFrom = mapping ? "you" : null;
+  const { data: last } = await db.rpc("price_list_last_mapping", { p_company: company, p_oem: oem });
+  const remembered = Array.isArray(last) ? last[0] : null;
 
-  if (!mapping) {
-    const { data: last } = await db.rpc("price_list_last_mapping", { p_company: company, p_oem: oem });
-    const remembered = Array.isArray(last) ? last[0] : null;
-    if (remembered && isMapping(remembered.column_map) && Object.keys(remembered.column_map).length) {
-      /* Only if it still fits this file: a distributor who reorders their
-         columns would otherwise have every price read out of the wrong one. */
-      const fits = headersFit(remembered.column_map, headers);
-      if (fits) {
-        mapping = remembered.column_map;
-        mappingFrom = `the ${remembered.period} upload`;
-      }
-    }
-  }
-  if (!mapping) {
-    mapping = suggestMapping(headers);
-    mappingFrom = "the column headings";
+  const { plans, skipped } = planSheets(chosen, {
+    wantOne,
+    headerRow: body.headerRow,
+    mapping: body.mapping,
+    remembered,
+  });
+  if (!plans.length) {
+    return fail(event, 400, skipped.length
+      ? `No sheet in that workbook could be read as a price list. ${skipped.map((s) => `"${s.name}" — ${s.why}`).join("; ")}.`
+      : "No sheet in that workbook could be read as a price list.");
   }
 
-  mapping = withGuessedGaps(mapping, headers);
-
-  const short = missingFields(mapping);
+  /* One sheet, and it is short a required column: ask. */
+  const first = plans[0];
+  const sheet = first.sheet;
+  const headerRow = first.headerRow;
+  const headers = first.headers;
+  const mapping = first.mapping;
+  const mappingFrom = first.mappingFrom;
+  const short = first.missing;
   if (short.length) {
     return json(event, 200, {
       stage: "mapping",
@@ -172,7 +181,24 @@ export async function handler(event) {
     });
   }
 
-  const { items, errors, truncated, skuFrom } = readGrid(sheet.rows, mapping, { headerRow });
+  const read = plans.map((p) => ({
+    name: p.sheet.name,
+    mapping: p.mapping,
+    mappingFrom: p.mappingFrom,
+    headerRow: p.headerRow,
+    headers: p.headers,
+    ...readGrid(p.sheet.rows, p.mapping, { headerRow: p.headerRow }),
+  }));
+  const { items, errors, qualifiedBySheet } = mergeSheets(read);
+  const truncated = read.some((r) => r.truncated);
+  const skuFrom = read[0].skuFrom;
+  const perSheet = read.map((r) => ({
+    name: r.name,
+    itemCount: r.items.length,
+    errorCount: r.errors.length,
+    mappingFrom: r.mappingFrom,
+    skuFromLabels: r.skuFrom.map((f) => r.headers[r.mapping[f]]).filter(Boolean),
+  }));
 
   if (!body.commit) {
     /* What the new prices do to the list in force. Asked BEFORE loading,
@@ -188,7 +214,11 @@ export async function handler(event) {
     return json(event, 200, {
       stage: "preview",
       sheets: sheets.map((s) => s.name),
-      sheet: sheet.name,
+      /* ECHOED BACK AS THE BROWSER MUST SEND IT NEXT TIME. Returning the
+         first sheet's name here would put the picker on "NCE", and the
+         next request — changing the header row, say — would quietly read
+         that one sheet instead of all four. */
+      sheet: wantOne ? sheet.name : ALL_SHEETS,
       headerRow,
       headers,
       mapping,
@@ -199,6 +229,13 @@ export async function handler(event) {
          number in the file. */
       skuFrom,
       skuFromLabels: skuFrom.map((f) => headers[mapping[f]]).filter(Boolean),
+      /* What each sheet contributed, and what was left out and why. A
+         merged load that quietly dropped a sheet would be the fault this
+         whole change exists to fix, wearing a different hat. */
+      perSheet,
+      skipped,
+      qualifiedBySheet,
+      allSheets: !wantOne,
       itemCount: items.length,
       errorCount: errors.length,
       truncated,
@@ -237,9 +274,14 @@ export async function handler(event) {
     p_year: year,
     p_month: month,
     p_items: JSON.stringify(items.map(forStorage)),
-    p_sheet: sheet.name,
+    /* What was read, so a disputed price can be traced to the sheet and
+       the columns it came out of — and so next month's upload offers the
+       same mapping back, per sheet. */
+    p_sheet: wantOne ? sheet.name : read.map((r) => r.name).join(", "),
     p_header_row: headerRow,
-    p_map: JSON.stringify(mapping),
+    p_map: JSON.stringify(
+      wantOne ? mapping : Object.fromEntries(read.map((r) => [r.name, r.mapping])),
+    ),
     p_source_name: String(body.fileName ?? "").slice(0, 200) || null,
     p_sha: sha256(buffer),
     p_activate: body.activate !== false,
@@ -283,9 +325,140 @@ export function withGuessedGaps(mapping, headers) {
   return out;
 }
 
+/**
+ * What to read from each sheet: where its headings are, and which column
+ * is which.
+ *
+ * ONE MAPPING PER SHEET, because the sheets of one workbook do not share
+ * a layout. Microsoft's November 2026 list puts the price in column 14 on
+ * NCE, column 15 on PERPETUAL and column 12 on EST, and NCE has no
+ * ProductTitle column at all. A single mapping across them reads a price
+ * out of "Discount %".
+ *
+ * A SHEET THAT CANNOT BE READ IS SKIPPED, NOT FATAL — unless the Admin
+ * named that sheet themselves, in which case it is a question and comes
+ * back as the mapping screen. That is what keeps a "Read me" tab out of a
+ * merged load without anybody having to say so, and it is why the result
+ * carries `skipped` with a reason for each: a merged load that quietly
+ * dropped a sheet would be the same fault as reading only one of them.
+ */
+export function planSheets(chosen, { wantOne = false, headerRow, mapping: asked, remembered } = {}) {
+  const plans = [];
+  const skipped = [];
+  for (const s of chosen) {
+    /* A header row given by hand belongs to the sheet it was given for. */
+    const headerAt = wantOne && Number.isInteger(headerRow) ? headerRow : headerRowIndex(s.rows);
+    if (headerAt < 0) {
+      skipped.push({ name: s.name, why: "no column headings were found" });
+      continue;
+    }
+    const sheetHeaders = headerNames(s.rows, headerAt);
+
+    /* The mapping, in order of how much it is worth trusting: what the
+       Admin set on this upload, then what was used for this OEM last
+       month — which is what makes next month one click — then a guess
+       from the headings. Each sheet gets its own: the four sheets of one
+       Microsoft workbook have four different column layouts, and one
+       mapping across them would read prices out of the wrong column. */
+    let mapping = mappingFor(asked, s.name);
+    let mappingFrom = mapping ? "you" : null;
+
+    if (!mapping) {
+      const saved = mappingFor(remembered?.column_map, s.name);
+      /* Only if it still fits this file: a distributor who reorders their
+         columns would otherwise have every price read out of the wrong one. */
+      if (saved && Object.keys(saved).length && headersFit(saved, sheetHeaders)) {
+        mapping = saved;
+        mappingFrom = `the ${remembered.period} upload`;
+      }
+    }
+    if (!mapping) {
+      mapping = suggestMapping(sheetHeaders);
+      mappingFrom = "the column headings";
+    }
+    mapping = withGuessedGaps(mapping, sheetHeaders);
+
+    const missing = missingFields(mapping);
+    if (missing.length) {
+      /* Asking about a sheet the Admin did not name is noise; one they did
+         name is a question. */
+      if (wantOne) {
+        plans.push({ sheet: s, headerRow: headerAt, headers: sheetHeaders, mapping, mappingFrom, missing });
+        continue;
+      }
+      skipped.push({ name: s.name, why: `no column holds ${missing.join(" or ")}` });
+      continue;
+    }
+    plans.push({ sheet: s, headerRow: headerAt, headers: sheetHeaders, mapping, mappingFrom, missing: [] });
+  }
+  return { plans, skipped };
+}
+
+/**
+ * Whether the browser asked for one named sheet.
+ *
+ * EVERY SHEET IS THE DEFAULT, and this is where that is decided. Asking
+ * for nothing means all of them: a price list workbook is usually several
+ * sheets of price list, and reading one leaves the rest of the month's
+ * prices out of the book — 1,340 rows of 4,887, on the November 2026
+ * Microsoft list.
+ */
+export const wantsOneSheet = (asked) => Boolean(asked && asked !== ALL_SHEETS);
+
 export function isMapping(v) {
   if (!v || typeof v !== "object" || Array.isArray(v)) return false;
   return Object.values(v).every((n) => Number.isInteger(n) && n >= 0 && n < 16384);
+}
+
+/**
+ * The mapping for one sheet, out of either shape.
+ *
+ * TWO SHAPES, BECAUSE THERE ARE TWO KINDS OF UPLOAD. A single-sheet load
+ * carries one field -> column object, which is what every list loaded
+ * before this existed was stored as. A merged load carries one of those
+ * PER SHEET, keyed by sheet name, because the four sheets of a Microsoft
+ * workbook have four different column layouts — NCE puts the price in
+ * column 14 and PERPETUAL in column 15, and one mapping across both would
+ * read a price out of "Discount %".
+ *
+ * A flat mapping is returned for any sheet asked for, so last month's
+ * single-sheet mapping still fits this month's single-sheet load.
+ */
+export function mappingFor(stored, sheetName) {
+  if (!stored || typeof stored !== "object" || Array.isArray(stored)) return null;
+  if (isMapping(stored) && Object.keys(stored).length) return stored;
+  const own = stored[sheetName];
+  return isMapping(own) && Object.keys(own).length ? own : null;
+}
+
+/**
+ * Put the sheets' rows together into one list.
+ *
+ * SKUs ARE UNIQUE WITHIN A SHEET ALREADY — readGrid sees to that — so the
+ * only thing left to settle is a clash BETWEEN sheets, where two licensing
+ * programmes happen to name an item the same way. The sheet name goes in
+ * front of every SKU when that happens, and in front of none when it does
+ * not: the November 2026 Microsoft workbook merges 4,887 rows across four
+ * sheets with no clash at all, and prefixing those would have changed
+ * every SKU in the book for nothing.
+ *
+ * ALL OR NOTHING, for the reason the SKU widening is: a list where some
+ * SKUs carry a sheet name and others do not is a list nobody can search.
+ */
+export function mergeSheets(read) {
+  const tag = (r) => r.items.map((it) => ({ ...it, sheet: r.name }));
+  const items = read.flatMap(tag);
+  const errors = read.flatMap((r) => r.errors.map((e) => ({ ...e, sheet: r.name })));
+
+  const keys = items.map((it) => String(it.sku).toLowerCase());
+  const clashes = keys.length - new Set(keys).size;
+  if (!clashes || read.length < 2) return { items, errors, qualifiedBySheet: false };
+
+  return {
+    items: items.map((it) => ({ ...it, sku: `${it.sheet}/${it.sku}` })),
+    errors,
+    qualifiedBySheet: true,
+  };
 }
 
 /**

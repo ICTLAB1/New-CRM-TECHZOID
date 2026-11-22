@@ -1489,3 +1489,12 @@ button.path-hit { cursor: pointer; }
    so the two navigations cannot drift apart. */
 .bottom-glyph { display: grid; place-items: center; width: 22px; height: 22px; line-height: 1; }
 .bottom-glyph svg { width: 21px; height: 21px; }
+
+/* ── a merged price list's sheets ─────────────────────────────────────
+   What each sheet of the workbook contributed. Named with its count, so
+   a sheet that came through empty is visible rather than absent — the
+   whole point of merging them is that nothing is quietly left out. */
+.upload-sheets { margin: 0; padding: 0; list-style: none; display: grid; gap: 1px; background: var(--rule); border: 1px solid var(--rule); border-radius: var(--radius); overflow: hidden; }
+.upload-sheets li { display: flex; align-items: baseline; gap: var(--gap); padding: 8px 12px; background: var(--surface-2); font-size: var(--t-body); }
+.upload-sheets strong { flex: 1 1 auto; min-width: 0; color: var(--ink); }
+.upload-sheets span { font-variant-numeric: tabular-nums; color: var(--ink-3); }

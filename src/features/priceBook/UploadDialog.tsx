@@ -4,6 +4,7 @@ import { Modal } from "../../components/Modal";
 import { useToast } from "../../components/Toast";
 import { inr } from "../../domain/currency/format";
 import {
+  ALL_SHEETS,
   readFileAsBase64,
   uploadPriceList,
   type ColumnMapping,
@@ -261,6 +262,33 @@ export function UploadDialog({
                 sold on — so the SKU in the price book is not the number
                 in the SkuId column, and an Admin should not have to work
                 that out from the preview. */}
+            {/* WHAT EACH SHEET CONTRIBUTED. A merged load that quietly
+                dropped a sheet would be the same fault as reading only one
+                of them, so every sheet is named with its count, and every
+                sheet left out is named with the reason. */}
+            {(result.perSheet?.length ?? 0) > 1 ? (
+              <ul className="upload-sheets">
+                {result.perSheet!.map((s) => (
+                  <li key={s.name}>
+                    <strong>{s.name}</strong>
+                    <span>{s.itemCount.toLocaleString("en-IN")} rows</span>
+                    {s.errorCount ? <span className="muted">{s.errorCount} skipped</span> : null}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            {result.skipped?.length ? (
+              <p className="field-hint">
+                Left out:{" "}
+                {result.skipped.map((s) => `"${s.name}" — ${s.why}`).join("; ")}.
+              </p>
+            ) : null}
+            {result.qualifiedBySheet ? (
+              <p className="field-hint">
+                Two sheets named a SKU the same way, so every SKU carries its sheet name in
+                front of it.
+              </p>
+            ) : null}
             {(result.skuFromLabels?.length ?? 0) > 1 ? (
               <p className="field-hint">
                 The SKU column alone did not tell the rows apart, so each SKU is built from{" "}
@@ -320,14 +348,33 @@ function SheetPicker({
   if (!result.sheets?.length) return null;
   return (
     <div className="row">
-      <Field label="Sheet" hint="A workbook whose first tab is a cover page is the normal case.">
-        <Select value={sheet || result.sheet || ""} onChange={(e) => onSheet(e.target.value)}>
-          {result.sheets.map((s) => <option key={s} value={s}>{s}</option>)}
+      <Field
+        label="Sheet"
+        hint="All of them, unless you want one. A cover page or a change log is left out on its own."
+      >
+        <Select value={sheet || result.sheet || ALL_SHEETS} onChange={(e) => onSheet(e.target.value)}>
+          {/* EVERY SHEET IS THE DEFAULT. A price list workbook is usually
+              several sheets of price list — Microsoft's is four, one per
+              licensing programme — and loading one of them leaves the rest
+              of the month's prices out of the book. */}
+          <option value={ALL_SHEETS}>
+            All sheets{result.sheets.length > 1 ? ` (${result.sheets.length}, merged into one list)` : ""}
+          </option>
+          {result.sheets.map((s) => <option key={s} value={s}>{s} only</option>)}
         </Select>
       </Field>
-      <Field label="Headings are on row" hint="Counted as the spreadsheet counts: the first row is 1.">
+      {/* The heading row can only be given by hand for one named sheet —
+          across four sheets it is four different answers, and each sheet's
+          is found on its own anyway. */}
+      <Field
+        label="Headings are on row"
+        hint={sheet === ALL_SHEETS || (!sheet && result.sheet === ALL_SHEETS)
+          ? "Found per sheet. Pick a single sheet to set this by hand."
+          : "Counted as the spreadsheet counts: the first row is 1."}
+      >
         <Input
           numeric
+          disabled={sheet === ALL_SHEETS || (!sheet && result.sheet === ALL_SHEETS)}
           value={(headerRow ?? result.headerRow ?? 0) + 1}
           onChange={(e) => onHeaderRow(Math.max(0, (Number(e.target.value) || 1) - 1))}
         />
