@@ -41,6 +41,7 @@ const FIELD_LABELS: Record<string, string> = {
   licenceType: "Licence Type / Term",
   unit: "Unit",
   resellerPrice: "Reseller Price",
+  dtp: "DTP / what we buy at",
   currency: "Currency",
 };
 

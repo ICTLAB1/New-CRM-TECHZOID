@@ -41,6 +41,12 @@ export interface PriceBookHit {
 /** The same with the cost picture, for Admin and Manager only. */
 export interface CostedHit extends PriceBookHit {
   resellerPrice: number;
+  /** The distributor transfer price — what we buy at, as the price list
+   *  states it. Null when that list carried no such column, and the
+   *  negotiated distributor discount answers instead. COST: this type is
+   *  only ever filled from the costed search, which refuses anyone but an
+   *  Admin or a Manager. */
+  dtp: number | null;
   buyingPrice: number;
   minMarginPct: number;
 }
@@ -84,6 +90,7 @@ export function toCostedHit(row: Record<string, unknown>): CostedHit {
   return {
     ...toHit(row),
     resellerPrice: num(row.reseller_price),
+    dtp: row.dtp === null || row.dtp === undefined ? null : num(row.dtp),
     buyingPrice: num(row.buying_price),
     minMarginPct: num(row.min_margin_pct),
   };
@@ -648,6 +655,9 @@ export interface ApprovalLine {
   requestedPrice: number;
   approvedPrice: number | null;
   resellerPrice: number | null;
+  /** What the price list says we buy at. Null when it did not say, and
+   *  the negotiated discount was applied to the list price instead. */
+  dtp: number | null;
   buyingPrice: number | null;
   /** Of the sale, which is what the CRM's other margin figures mean. */
   marginAtRequested: number | null;
@@ -666,6 +676,7 @@ export function toApprovalLine(row: Record<string, unknown>): ApprovalLine {
     requestedPrice: num(row.requested_price),
     approvedPrice: maybe(row.approved_price),
     resellerPrice: maybe(row.reseller_price),
+    dtp: maybe(row.dtp),
     buyingPrice: maybe(row.buying_price),
     marginAtRequested: maybe(row.margin_at_requested),
     markupAtRequested: maybe(row.markup_at_requested),

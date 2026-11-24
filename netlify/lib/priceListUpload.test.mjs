@@ -328,8 +328,24 @@ describe("a mapping remembered from a month before a field existed", () => {
     expect(withGuessedGaps(chosen, HEADERS).licenceType).toBeNull();
   });
 
+  it("FILLS IN THE DTP TOO, so the cost stops being a guess", () => {
+    /* The distributor transfer price was added after these lists had been
+       loaded. Without this, next month's upload would reuse last month's
+       mapping, find no DTP column, and go on reconstructing the cost from
+       a typed percentage — on a file that states it outright. */
+    const lastMonth = { sku: 3, productName: 4, resellerPrice: 14 };
+    const filled = withGuessedGaps(lastMonth, HEADERS);
+    expect(HEADERS[filled.dtp]).toBe("Unit SELL Price");
+    /* And it did NOT take the DTP for the price a quotation is floored
+       against, which is the mistake that would drop every floor by 20%. */
+    expect(filled.resellerPrice).toBe(14);
+  });
+
   it("changes nothing when the mapping is already complete", () => {
-    const full = { sku: 0, productId: 1, productName: 2, category: 3, licenceType: 4, billingPlan: 5, unit: 6, resellerPrice: 7, currency: 8 };
+    const full = {
+      sku: 0, productId: 1, productName: 2, category: 3, licenceType: 4,
+      billingPlan: 5, unit: 6, resellerPrice: 7, dtp: 9, currency: 8,
+    };
     expect(withGuessedGaps(full, HEADERS)).toEqual(full);
   });
 });

@@ -487,6 +487,7 @@ const forStorage = (i) => ({
   billingPlan: i.billingPlan,
   unit: i.unit,
   resellerPrice: i.resellerPrice,
+  dtp: i.dtp,
   currency: i.currency,
 });
 

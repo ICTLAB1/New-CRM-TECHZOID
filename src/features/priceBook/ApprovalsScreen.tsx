@@ -301,8 +301,18 @@ function DecideDialog({
               </div>
 
               <dl className="grid grid-2" style={{ marginTop: "var(--gap)" }}>
-                <div><dt className="field-label">Reseller price</dt><dd className="num">{l.resellerPrice === null ? "—" : inr(l.resellerPrice)}</dd></div>
-                <div><dt className="field-label">We pay at {discount}%</dt><dd className="num">{l.buyingPrice === null ? "—" : inr(l.buyingPrice)}</dd></div>
+                <div><dt className="field-label">List price</dt><dd className="num">{l.resellerPrice === null ? "—" : inr(l.resellerPrice)}</dd></div>
+                {/* WHERE THE COST CAME FROM, said out loud. The price list
+                    states what we buy at, and when it does that figure is
+                    used as it stands — the typed distributor discount is
+                    only the fallback for a list that carried no such
+                    column. An Admin deciding a discount should be able to
+                    tell which of the two they are looking at, because one
+                    is a fact and the other is an assumption. */}
+                <div>
+                  <dt className="field-label">{l.dtp === null ? `We pay at ${discount}%` : "We pay (DTP)"}</dt>
+                  <dd className="num">{l.buyingPrice === null ? "—" : inr(l.buyingPrice)}</dd>
+                </div>
                 <div><dt className="field-label">Minimum</dt><dd className="num">{inr(l.minPrice)}</dd></div>
                 <div><dt className="field-label">Asked for</dt><dd className="num strong">{inr(l.requestedPrice)}</dd></div>
               </dl>

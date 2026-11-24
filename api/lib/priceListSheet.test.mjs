@@ -90,7 +90,7 @@ describe("guessing which column is which", () => {
   it("offers the fields in the order the mapping screen shows them", () => {
     expect(FIELDS.map((f) => f.key)).toEqual([
       "sku", "productId", "productName", "category", "licenceType", "billingPlan",
-      "unit", "resellerPrice", "currency",
+      "unit", "resellerPrice", "dtp", "currency",
     ]);
   });
 });
@@ -102,9 +102,9 @@ describe("reading the rows", () => {
     const { items, errors } = readGrid(CSP_SHEET, mapping);
     expect(errors).toEqual([]);
     expect(items).toEqual([
-      { sku: "M365-E3", productName: "Microsoft 365 E3", category: "Cloud", licenceType: "1 Year", billingPlan: null, unit: "User", resellerPrice: 1000, currency: "INR", row: 5 },
-      { sku: "M365-E5", productName: "Microsoft 365 E5", category: "Cloud", licenceType: "1 Year", billingPlan: null, unit: "User", resellerPrice: 2000.5, currency: "INR", row: 6 },
-      { sku: "VISIO-P2", productName: "Visio Plan 2", category: "Desktop", licenceType: "1 Year", billingPlan: null, unit: "User", resellerPrice: 500, currency: "INR", row: 7 },
+      { sku: "M365-E3", productName: "Microsoft 365 E3", category: "Cloud", licenceType: "1 Year", billingPlan: null, unit: "User", resellerPrice: 1000, dtp: null, currency: "INR", row: 5 },
+      { sku: "M365-E5", productName: "Microsoft 365 E5", category: "Cloud", licenceType: "1 Year", billingPlan: null, unit: "User", resellerPrice: 2000.5, dtp: null, currency: "INR", row: 6 },
+      { sku: "VISIO-P2", productName: "Visio Plan 2", category: "Desktop", licenceType: "1 Year", billingPlan: null, unit: "User", resellerPrice: 500, dtp: null, currency: "INR", row: 7 },
     ]);
   });
 
@@ -184,7 +184,7 @@ describe("reading the rows", () => {
     expect(errors).toEqual([]);
     expect(items[0]).toEqual({
       sku: "A-1", productName: "Thing", category: null, licenceType: null, billingPlan: null, unit: null,
-      resellerPrice: 250, currency: "INR", row: 2,
+      resellerPrice: 250, dtp: null, currency: "INR", row: 2,
     });
   });
 
@@ -412,5 +412,49 @@ describe("the billing plan", () => {
     const grid = [["Part No", "Description", "ERP Price"], ["A", "One", 10]];
     const { items } = readGrid(grid, suggestMapping(grid[0]), { headerRow: 0 });
     expect(items[0].billingPlan).toBeNull();
+  });
+});
+
+describe("the distributor transfer price", () => {
+  /* The Microsoft shape: the file states BOTH prices, and which is which
+     matters — one is the floor a quotation is held to, the other is what
+     the company actually pays. */
+  const BOTH = [
+    ["ProductId", "SkuId", "SkuTitle", "TermDuration", "Unit SELL Price", "ERP Price"],
+    ["CFQ7", 1, "Exchange Online Archiving", "P1Y", 1663.2, 2079],
+  ];
+
+  it("TAKES ERP AS THE PRICE AND Unit SELL AS THE DTP, not the other way round", () => {
+    /* Swapped, every floor in the book drops by 20% and every margin an
+       Admin is shown is wrong. */
+    const { items } = readGrid(BOTH, suggestMapping(BOTH[0]), { headerRow: 0 });
+    expect(items[0].resellerPrice).toBe(2079);
+    expect(items[0].dtp).toBe(1663.2);
+  });
+
+  it("leaves the DTP null when the file has no such column", () => {
+    /* Not zero: zero would claim the line is free and show a 100% margin.
+       Null is "the file did not say", and the negotiated discount answers
+       instead. */
+    const grid = [["Part No", "Description", "ERP Price"], ["A", "One", 10]];
+    const { items } = readGrid(grid, suggestMapping(grid[0]), { headerRow: 0 });
+    expect(items[0].dtp).toBeNull();
+  });
+
+  it("NEVER REFUSES A ROW OVER THE DTP", () => {
+    /* It is a column the salesperson cannot even see. Dropping a sellable
+       product because its cost column is blank would take the floor away
+       from a line that has one. */
+    const grid = [["Part No", "Description", "ERP Price", "DTP"], ["A", "One", 10, "n/a"]];
+    const { items, errors } = readGrid(grid, suggestMapping(grid[0]), { headerRow: 0 });
+    expect(errors).toEqual([]);
+    expect(items[0].resellerPrice).toBe(10);
+    expect(items[0].dtp).toBeNull();
+  });
+
+  it("strips what a spreadsheet puts round the number", () => {
+    const grid = [["Part No", "Description", "ERP Price", "Cost Price"], ["A", "One", 10, "₹1,663.20"]];
+    const { items } = readGrid(grid, suggestMapping(grid[0]), { headerRow: 0 });
+    expect(items[0].dtp).toBe(1663.2);
   });
 });

@@ -29,6 +29,7 @@ export const FIELDS = [
   { key: "billingPlan", label: "Billing Plan", required: false },
   { key: "unit", label: "Unit", required: false },
   { key: "resellerPrice", label: "Reseller Price", required: true },
+  { key: "dtp", label: "DTP / what we buy at", required: false },
   { key: "currency", label: "Currency", required: false },
 ];
 
@@ -100,6 +101,20 @@ export const HEADER_HINTS = {
     "reseller price", "resellerprice", "reseller", "partner price", "partner",
     "distributor price", "dealer price", "net price", "erp price", "erp",
     "list price", "unit price", "unit rate", "rate", "price",
+  ],
+  /* THE DISTRIBUTOR TRANSFER PRICE: what we buy at, which the file states
+     and the CRM used to reconstruct from a typed percentage. Claimed
+     AFTER resellerPrice, so on a Microsoft sheet "ERP Price" goes to the
+     price a quotation is floored against and "Unit SELL Price" comes here.
+
+     None of these names appears in the resellerPrice list, deliberately:
+     a column called "cost" must never be read as the price a salesperson
+     is held to. */
+  dtp: [
+    "dtp", "d.t.p", "distributor transfer price", "transfer price",
+    "unit sell price", "unit selling price", "sell price", "sell to partner",
+    "buy price", "buying price", "purchase price", "cost price", "cost",
+    "landed cost", "our price",
   ],
   currency: ["currency", "ccy", "curr", "cur"],
 };
@@ -301,6 +316,16 @@ export function readGrid(grid, mapping, options = {}) {
     if (!sku) problems.push("no SKU / part number");
     if (!productName) problems.push("no product name");
 
+    /* Read, but never a reason to refuse a row: a line whose DTP is
+       missing or unreadable still has a floor, and refusing it would take
+       a sellable product out of the book over a column the salesperson
+       cannot see. */
+    const dtpRaw = stripMoney(at(row, "dtp"));
+    const dtpNum = Number(dtpRaw);
+    const dtpValue = dtpRaw !== "" && Number.isFinite(dtpNum) && dtpNum >= 0
+      ? Math.round(dtpNum * 100) / 100
+      : null;
+
     const priceText = stripMoney(rawPrice);
     const price = Number(priceText);
     if (priceText === "" || !Number.isFinite(price)) {
@@ -338,6 +363,11 @@ export function readGrid(grid, mapping, options = {}) {
       billingPlan: cellText(at(row, "billingPlan")) || null,
       unit: cellText(at(row, "unit")) || null,
       resellerPrice: Math.round(price * 100) / 100,
+      /* NULL WHEN THE FILE DID NOT SAY, which is not the same as zero: the
+         typed distributor discount answers for those lines instead, and a
+         zero would claim the line is free. A DTP that will not parse is
+         treated the same way — a guess is better than a wrong number. */
+      dtp: dtpValue,
       currency,
       row: sheetRow,
     });
