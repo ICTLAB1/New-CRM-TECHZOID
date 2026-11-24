@@ -420,16 +420,52 @@ describe("the distributor transfer price", () => {
      matters — one is the floor a quotation is held to, the other is what
      the company actually pays. */
   const BOTH = [
-    ["ProductId", "SkuId", "SkuTitle", "TermDuration", "Unit SELL Price", "ERP Price"],
-    ["CFQ7", 1, "Exchange Online Archiving", "P1Y", 1663.2, 2079],
+    ["ProductId", "SkuId", "SkuTitle", "TermDuration", "Unit SELL Price", "Discounted Price", "ERP Price"],
+    ["CFQ7", 1, "Exchange Online Archiving", "P1Y", 1663.2, 1663.2, 2079],
   ];
 
-  it("TAKES ERP AS THE PRICE AND Unit SELL AS THE DTP, not the other way round", () => {
-    /* Swapped, every floor in the book drops by 20% and every margin an
-       Admin is shown is wrong. */
+  it("FLOORS ON WHAT WE PAY, AND NEVER ON THE ERP", () => {
+    /* THIS ASSERTION USED TO SAY THE OPPOSITE, and it was wrong. ERP is
+       the Estimated Retail Price — what the customer is expected to pay —
+       and the minimum margin in this CRM is defined as margin over what
+       WE pay. Flooring on the ERP therefore stacked the distributor's
+       margin on top of ours and priced every quotation about 20% high.
+       The discounted price is the money that actually leaves. */
     const { items } = readGrid(BOTH, suggestMapping(BOTH[0]), { headerRow: 0 });
-    expect(items[0].resellerPrice).toBe(2079);
-    expect(items[0].dtp).toBe(1663.2);
+    expect(items[0].resellerPrice).toBe(1663.2);
+    expect(items[0].resellerPrice).not.toBe(2079);
+  });
+
+  it("prefers the discounted price over the price before the discount", () => {
+    /* Identical on every row of the November 2026 workbook, whose
+       Discount % is zero throughout — but where they differ, the money
+       that leaves is the discounted one. */
+    const grid = [
+      ["Part No", "Description", "Unit SELL Price", "Discounted Price", "ERP Price"],
+      ["A", "One", 1000, 900, 1250],
+    ];
+    const { items } = readGrid(grid, suggestMapping(grid[0]), { headerRow: 0 });
+    expect(items[0].resellerPrice).toBe(900);
+  });
+
+  it("falls back to the sell price on a sheet with no discounted column", () => {
+    /* The EST sheet of that same workbook has none, and must still be
+       floored on what we pay rather than quietly reverting to its ERP. */
+    const grid = [
+      ["Part No", "Description", "Unit SELL Price", "ERP Price"],
+      ["A", "One", 108.77, 135.96],
+    ];
+    const { items } = readGrid(grid, suggestMapping(grid[0]), { headerRow: 0 });
+    expect(items[0].resellerPrice).toBe(108.77);
+  });
+
+  it("STILL TAKES THE ERP when the file offers nothing else", () => {
+    /* A distributor who sends one price and calls it ERP must still be
+       loadable — demoting it must not mean refusing it. */
+    const grid = [["Part No", "Description", "ERP Price"], ["A", "One", 500]];
+    const { items, errors } = readGrid(grid, suggestMapping(grid[0]), { headerRow: 0 });
+    expect(errors).toEqual([]);
+    expect(items[0].resellerPrice).toBe(500);
   });
 
   it("leaves the DTP null when the file has no such column", () => {

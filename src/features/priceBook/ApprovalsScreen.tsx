@@ -301,14 +301,14 @@ function DecideDialog({
               </div>
 
               <dl className="grid grid-2" style={{ marginTop: "var(--gap)" }}>
-                <div><dt className="field-label">List price</dt><dd className="num">{l.resellerPrice === null ? "—" : inr(l.resellerPrice)}</dd></div>
-                {/* WHERE THE COST CAME FROM, said out loud. The price list
-                    states what we buy at, and when it does that figure is
-                    used as it stands — the typed distributor discount is
-                    only the fallback for a list that carried no such
-                    column. An Admin deciding a discount should be able to
-                    tell which of the two they are looking at, because one
-                    is a fact and the other is an assumption. */}
+                {/* ONE PRICE, NOT TWO. The price book now holds the DTP —
+                    what we pay — rather than the ERP, so the line that
+                    used to say "List price" was printing the same figure
+                    again under a name that suggested otherwise. The label
+                    still says where it came from, because a stated DTP is
+                    a fact and a typed distributor discount is an
+                    assumption, and an Admin deciding a discount should be
+                    able to tell which they are looking at. */}
                 <div>
                   <dt className="field-label">{l.dtp === null ? `We pay at ${discount}%` : "We pay (DTP)"}</dt>
                   <dd className="num">{l.buyingPrice === null ? "—" : inr(l.buyingPrice)}</dd>

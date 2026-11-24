@@ -98,9 +98,30 @@ export const HEADER_HINTS = {
   billingPlan: ["billing plan", "billing cycle", "billing frequency", "billing", "payment plan"],
   unit: ["unit", "uom", "unit of measure", "units", "per", "pack size"],
   resellerPrice: [
+    /* WHAT WE PAY, IN ORDER OF HOW DIRECTLY THE FILE SAYS IT.
+       THE ERP IS LAST, and that is the decision this order exists to
+       record. ERP is the Estimated Retail Price — the list, what the
+       customer is expected to pay — and it used to be taken first. It is
+       the wrong number to floor a quotation against: the minimum margin
+       in this CRM is defined as margin OVER WHAT WE PAY (see the note in
+       approval_lines), so basing the floor on the list price silently
+       added the distributor's margin on top of ours and priced every
+       quotation about 20% too high.
+
+       "Discounted price" comes first because it is what we pay after any
+       discount the distributor has already applied; "unit sell price" is
+       the same figure before one. In the November 2026 Microsoft workbook
+       they are identical on all 3,819 rows that have both, because its
+       Discount % is zero throughout — but a file where they differ should
+       use the discounted one, which is the money that actually leaves. */
+    "discounted price", "discounted", "net price",
+    "unit sell price", "unit selling price", "sell price",
     "reseller price", "resellerprice", "reseller", "partner price", "partner",
-    "distributor price", "dealer price", "net price", "erp price", "erp",
+    "distributor price", "dealer price",
     "list price", "unit price", "unit rate", "rate", "price",
+    /* Only when the file offers nothing better. A list that states one
+       price and calls it ERP still has to be loadable. */
+    "erp price", "erp",
   ],
   /* THE DISTRIBUTOR TRANSFER PRICE: what we buy at, which the file states
      and the CRM used to reconstruct from a typed percentage. Claimed

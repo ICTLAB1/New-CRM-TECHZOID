@@ -40,7 +40,7 @@ const FIELD_LABELS: Record<string, string> = {
   category: "Category",
   licenceType: "Licence Type / Term",
   unit: "Unit",
-  resellerPrice: "Reseller Price",
+  resellerPrice: "Price we pay (DTP)",
   dtp: "DTP / what we buy at",
   currency: "Currency",
 };
@@ -502,7 +502,7 @@ function Preview({ result }: { result: UploadResult }) {
           <th>Product</th>
           <th>SKU</th>
           <th>Term</th>
-          <th className="num">Reseller price</th>
+          <th className="num">Price we pay</th>
         </tr>
       </thead>
       <tbody>
@@ -511,7 +511,7 @@ function Preview({ result }: { result: UploadResult }) {
             <td data-label="Product" className="strong">{i.productName}</td>
             <td data-label="SKU" className="mono">{i.sku}</td>
             <td data-label="Term">{[i.licenceType, i.unit].filter(Boolean).join(" / ") || "—"}</td>
-            <td data-label="Reseller price" className="num">
+            <td data-label="Price we pay" className="num">
               {i.currency === "INR" ? inr(i.resellerPrice) : `${i.currency} ${i.resellerPrice.toFixed(2)}`}
             </td>
           </tr>
