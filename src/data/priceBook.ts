@@ -27,6 +27,9 @@ export interface PriceBookHit {
   productName: string;
   category: string | null;
   licenceType: string | null;
+  /** Annual, Monthly, Triennial — how the term is paid for, which is a
+   *  different axis from the term itself and a different price. */
+  billingPlan: string | null;
   unit: string | null;
   currency: string;
   /** The lowest price this person may quote. The only price they get. */
@@ -69,6 +72,7 @@ export function toHit(row: Record<string, unknown>): PriceBookHit {
     productName: text(row.product_name),
     category: orNull(row.category),
     licenceType: orNull(row.licence_type),
+    billingPlan: orNull(row.billing_plan),
     unit: orNull(row.unit),
     currency: text(row.currency) || "INR",
     minPrice: num(row.min_price),
@@ -103,6 +107,72 @@ const rows = (data: unknown): Record<string, unknown>[] =>
   Array.isArray(data) ? (data as Record<string, unknown>[]) : [];
 
 /**
+ * The three axes one product varies on, and the price with it.
+ *
+ * A Microsoft product is sold on a term (one month, one year, three
+ * years), on a billing plan (paid monthly, annually, once) and to a
+ * segment (Commercial, Education, Charity) — nine or more lines for one
+ * product, each a different floor. Empty means "any".
+ */
+export interface VariantFilter {
+  term?: string | null;
+  billing?: string | null;
+  segment?: string | null;
+}
+
+/** EMPTY MEANS ANY, and is sent as null rather than "". The function reads
+ *  an empty string the same way, but sending null keeps the intent plain
+ *  in a log and does not depend on that. */
+const variantArgs = (v: VariantFilter) => ({
+  p_term: v.term?.trim() ? v.term.trim() : null,
+  p_billing: v.billing?.trim() ? v.billing.trim() : null,
+  p_segment: v.segment?.trim() ? v.segment.trim() : null,
+});
+
+/** A value a filter can offer, and how many rows carry it. */
+export interface Facet {
+  kind: "term" | "billing" | "segment";
+  value: string;
+  n: number;
+}
+
+/**
+ * What the filters should offer, read from the price book itself.
+ *
+ * NOT A LIST IN THE CODE. A hardcoded set of terms is wrong the first
+ * time an OEM ships a P2Y, and wrong silently — the filter simply never
+ * offers it and nobody learns those rows are unreachable.
+ */
+export async function priceBookFacets(company: string, oem?: string | null): Promise<Facet[]> {
+  if (!hasBackend() || !company) return [];
+  const { data, error } = await getDb().rpc("price_book_facets", {
+    p_company: company,
+    p_oem: oem?.trim() ? oem.trim() : null,
+  });
+  if (error) throw new Error(error.message ?? "The price book filters could not be read.");
+  return rows(data)
+    .map((r) => ({ kind: text(r.kind) as Facet["kind"], value: text(r.value), n: num(r.n) }))
+    .filter((f) => f.value);
+}
+
+/**
+ * How a licence term reads to a person.
+ *
+ * Microsoft writes ISO 8601 durations — P1Y, P1M, P3Y — and a price book
+ * row saying "P1Y" is a row a salesperson has to decode. Anything not
+ * recognised is passed through unchanged rather than mangled: a
+ * distributor who writes "Annual" already said it in words.
+ */
+export function termLabel(term: string | null | undefined): string {
+  const t = (term ?? "").trim();
+  const m = /^P(\d+)([YM])$/i.exec(t);
+  if (!m) return t;
+  const n = Number(m[1]);
+  const unit = m[2]!.toUpperCase() === "Y" ? "year" : "month";
+  return `${n} ${unit}${n === 1 ? "" : "s"}`;
+}
+
+/**
  * Search the active price lists.
  *
  * Returns [] when there is no backend — the preview build has none — rather
@@ -114,6 +184,7 @@ export async function searchPriceBook(
   query: string,
   oem?: string | null,
   limit = 50,
+  narrow: VariantFilter = {},
 ): Promise<PriceBookHit[]> {
   if (!hasBackend() || !company) return [];
   const { data, error } = await getDb().rpc("price_book_search", {
@@ -121,6 +192,7 @@ export async function searchPriceBook(
     p_query: query?.trim() ? query.trim() : null,
     p_oem: oem?.trim() ? oem.trim() : null,
     p_limit: limit,
+    ...variantArgs(narrow),
   });
   if (error) throw new Error(error.message ?? "The price book could not be searched.");
   return rows(data).map(toHit);
@@ -133,6 +205,7 @@ export async function searchWithCost(
   oem: string | null,
   distributorDiscountPct: number,
   limit = 50,
+  narrow: VariantFilter = {},
 ): Promise<CostedHit[]> {
   if (!hasBackend() || !company) return [];
   const { data, error } = await getDb().rpc("price_book_search_costed", {
@@ -141,6 +214,7 @@ export async function searchWithCost(
     p_oem: oem?.trim() ? oem.trim() : null,
     p_limit: limit,
     p_distributor_pct: Number.isFinite(distributorDiscountPct) ? distributorDiscountPct : 0,
+    ...variantArgs(narrow),
   });
   if (error) throw new Error(error.message ?? "The cost picture could not be read.");
   return rows(data).map(toCostedHit);

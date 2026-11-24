@@ -179,9 +179,13 @@ d("loading a month's price list, end to end", () => {
     expect(data[0].min_price).toBe(1150);
     expect(typeof data[0].min_price).toBe("number");
     expect(data[0].period).toBe("2026-12");
+    /* billing_plan joined this list when a price book started holding one
+       row per variant. It is not a cost: it is Annual or Monthly, which a
+       salesperson must see to know which floor they are looking at. The
+       list stays exact, so a cost column arriving still fails here. */
     expect(Object.keys(data[0])).toEqual([
       "item_id", "oem", "sku", "product_name", "category",
-      "licence_type", "unit", "currency", "min_price", "period",
+      "licence_type", "billing_plan", "unit", "currency", "min_price", "period",
     ]);
 
     /* And the cost table itself is still shut to them. */
@@ -400,21 +404,38 @@ describe("choosing what to read out of a workbook", () => {
     expect(plans[0].sheet.name).toBe("NCE");
   });
 
-  it("ASKS ABOUT A NAMED SHEET SHORT OF A COLUMN, rather than skipping it", () => {
-    /* A sheet the Admin did not name is noise; one they named is a
-       question, and comes back as the mapping screen so they can point at
-       the price column themselves. */
+  it("KEEPS A SHEET SHORT OF A COLUMN ASKABLE, rather than only skipping it", () => {
+    /* It is left out of a merged load and reported — but it is still
+       handed back, so a workbook where NOTHING mapped can ask the Admin
+       which column holds the price instead of refusing outright. A
+       single-sheet workbook with an oddly named price column is exactly
+       who the mapping screen is for, and an earlier version of this
+       change refused those with "no sheet could be read". */
     const noPrice = [{ name: "Oddity", rows: [["Part No", "Description"], ["A", "thing"]] }];
-    const { plans, skipped } = planSheets(noPrice, { wantOne: true });
-    expect(skipped).toEqual([]);
-    expect(plans[0].missing).toContain("resellerPrice");
+    const { plans, skipped, short } = planSheets(noPrice, { wantOne: true });
+    expect(plans).toEqual([]);
+    expect(short[0].missing).toContain("resellerPrice");
+    expect(short[0].headers).toEqual(["Part No", "Description"]);
+    /* And it is named in the report either way, so a merged load never
+       loses a sheet in silence. */
+    expect(skipped[0].why).toMatch(/resellerPrice/);
   });
 
-  it("skips that same sheet without asking when it was not named", () => {
+  it("treats it the same way when it was not the sheet asked for", () => {
     const noPrice = [{ name: "Oddity", rows: [["Part No", "Description"], ["A", "thing"]] }];
-    const { plans, skipped } = planSheets(noPrice, { wantOne: false });
+    const { plans, skipped, short } = planSheets(noPrice, { wantOne: false });
     expect(plans).toEqual([]);
+    expect(short).toHaveLength(1);
     expect(skipped[0].why).toMatch(/resellerPrice/);
+  });
+
+  it("does not let a short sheet block the ones that did map", () => {
+    /* The regression this guards: a four-sheet workbook must not be
+       refused because its cover page has no price column. */
+    const mixed = [...BOOK, { name: "Oddity", rows: [["Part No", "Description"], ["A", "x"]] }];
+    const { plans, skipped } = planSheets(mixed, { wantOne: false });
+    expect(plans.map((p) => p.sheet.name)).toEqual(["NCE", "PERPETUAL"]);
+    expect(skipped.map((s) => s.name).sort()).toEqual(["Oddity", "Read me"]);
   });
 
   it("reports a sheet with no headings at all as skipped, with the reason", () => {

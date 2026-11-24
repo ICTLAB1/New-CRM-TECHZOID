@@ -147,39 +147,41 @@ export async function handler(event) {
   const { data: last } = await db.rpc("price_list_last_mapping", { p_company: company, p_oem: oem });
   const remembered = Array.isArray(last) ? last[0] : null;
 
-  const { plans, skipped } = planSheets(chosen, {
+  const { plans, skipped, short } = planSheets(chosen, {
     wantOne,
     headerRow: body.headerRow,
     mapping: body.mapping,
     remembered,
   });
+
+  /* NOTHING MAPPED. If a sheet at least has headings, this is a question —
+     "which column holds the price?" — and not a refusal. */
   if (!plans.length) {
+    if (short.length) {
+      const ask = short[0];
+      return json(event, 200, {
+        stage: "mapping",
+        sheets: sheets.map((s) => s.name),
+        sheet: ask.sheet.name,
+        headerRow: ask.headerRow,
+        headers: ask.headers,
+        mapping: ask.mapping,
+        mappingFrom: ask.mappingFrom,
+        missing: ask.missing,
+        message: `Say which column holds ${ask.missing.join(" and ")}.`,
+      });
+    }
     return fail(event, 400, skipped.length
       ? `No sheet in that workbook could be read as a price list. ${skipped.map((s) => `"${s.name}" — ${s.why}`).join("; ")}.`
       : "No sheet in that workbook could be read as a price list.");
   }
 
-  /* One sheet, and it is short a required column: ask. */
   const first = plans[0];
   const sheet = first.sheet;
   const headerRow = first.headerRow;
   const headers = first.headers;
   const mapping = first.mapping;
   const mappingFrom = first.mappingFrom;
-  const short = first.missing;
-  if (short.length) {
-    return json(event, 200, {
-      stage: "mapping",
-      sheets: sheets.map((s) => s.name),
-      sheet: sheet.name,
-      headerRow,
-      headers,
-      mapping,
-      mappingFrom,
-      missing: short,
-      message: `Say which column holds ${short.join(" and ")}.`,
-    });
-  }
 
   const read = plans.map((p) => ({
     name: p.sheet.name,
@@ -218,7 +220,7 @@ export async function handler(event) {
          first sheet's name here would put the picker on "NCE", and the
          next request — changing the header row, say — would quietly read
          that one sheet instead of all four. */
-      sheet: wantOne ? sheet.name : ALL_SHEETS,
+      sheet: read.length === 1 ? read[0].name : ALL_SHEETS,
       headerRow,
       headers,
       mapping,
@@ -345,6 +347,7 @@ export function withGuessedGaps(mapping, headers) {
 export function planSheets(chosen, { wantOne = false, headerRow, mapping: asked, remembered } = {}) {
   const plans = [];
   const skipped = [];
+  const short = [];
   for (const s of chosen) {
     /* A header row given by hand belongs to the sheet it was given for. */
     const headerAt = wantOne && Number.isInteger(headerRow) ? headerRow : headerRowIndex(s.rows);
@@ -380,18 +383,19 @@ export function planSheets(chosen, { wantOne = false, headerRow, mapping: asked,
 
     const missing = missingFields(mapping);
     if (missing.length) {
-      /* Asking about a sheet the Admin did not name is noise; one they did
-         name is a question. */
-      if (wantOne) {
-        plans.push({ sheet: s, headerRow: headerAt, headers: sheetHeaders, mapping, mappingFrom, missing });
-        continue;
-      }
+      /* NOT A PLAN, BUT NOT NOTHING EITHER. A sheet whose columns cannot
+         all be found is left out of a merged load and reported — but it is
+         kept here so that a workbook where NOTHING mapped can still ask
+         the Admin which column is which, rather than refusing outright.
+         A single-sheet workbook with an oddly named price column is
+         exactly who the mapping screen is for. */
       skipped.push({ name: s.name, why: `no column holds ${missing.join(" or ")}` });
+      short.push({ sheet: s, headerRow: headerAt, headers: sheetHeaders, mapping, mappingFrom, missing });
       continue;
     }
     plans.push({ sheet: s, headerRow: headerAt, headers: sheetHeaders, mapping, mappingFrom, missing: [] });
   }
-  return { plans, skipped };
+  return { plans, skipped, short };
 }
 
 /**
@@ -480,6 +484,7 @@ const forStorage = (i) => ({
   productName: i.productName,
   category: i.category,
   licenceType: i.licenceType,
+  billingPlan: i.billingPlan,
   unit: i.unit,
   resellerPrice: i.resellerPrice,
   currency: i.currency,

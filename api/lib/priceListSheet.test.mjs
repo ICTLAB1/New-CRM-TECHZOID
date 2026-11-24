@@ -102,9 +102,9 @@ describe("reading the rows", () => {
     const { items, errors } = readGrid(CSP_SHEET, mapping);
     expect(errors).toEqual([]);
     expect(items).toEqual([
-      { sku: "M365-E3", productName: "Microsoft 365 E3", category: "Cloud", licenceType: "1 Year", unit: "User", resellerPrice: 1000, currency: "INR", row: 5 },
-      { sku: "M365-E5", productName: "Microsoft 365 E5", category: "Cloud", licenceType: "1 Year", unit: "User", resellerPrice: 2000.5, currency: "INR", row: 6 },
-      { sku: "VISIO-P2", productName: "Visio Plan 2", category: "Desktop", licenceType: "1 Year", unit: "User", resellerPrice: 500, currency: "INR", row: 7 },
+      { sku: "M365-E3", productName: "Microsoft 365 E3", category: "Cloud", licenceType: "1 Year", billingPlan: null, unit: "User", resellerPrice: 1000, currency: "INR", row: 5 },
+      { sku: "M365-E5", productName: "Microsoft 365 E5", category: "Cloud", licenceType: "1 Year", billingPlan: null, unit: "User", resellerPrice: 2000.5, currency: "INR", row: 6 },
+      { sku: "VISIO-P2", productName: "Visio Plan 2", category: "Desktop", licenceType: "1 Year", billingPlan: null, unit: "User", resellerPrice: 500, currency: "INR", row: 7 },
     ]);
   });
 
@@ -183,7 +183,7 @@ describe("reading the rows", () => {
     const { items, errors } = readGrid(grid, suggestMapping(grid[0]));
     expect(errors).toEqual([]);
     expect(items[0]).toEqual({
-      sku: "A-1", productName: "Thing", category: null, licenceType: null, unit: null,
+      sku: "A-1", productName: "Thing", category: null, licenceType: null, billingPlan: null, unit: null,
       resellerPrice: 250, currency: "INR", row: 2,
     });
   });
@@ -395,5 +395,22 @@ describe("a SKU column that is not a key", () => {
     ];
     const { items } = read(grid);
     expect(items.map((i) => i.sku)).toEqual(["P1:A", "P2:A", "P3:UNIQUE"]);
+  });
+});
+
+describe("the billing plan", () => {
+  it("IS KEPT AS A FIELD, not only inside the SKU", () => {
+    /* It was read out of the workbook and then dropped: it went into the
+       SKU and nowhere else, so "annual or monthly billing" could not be
+       asked as a question of the price book — and with a row per variant
+       that question is the only way to find the line being quoted. */
+    const { items } = readGrid(NCE_SHEET, suggestMapping(NCE_SHEET[0]), { headerRow: 0 });
+    expect(items.map((i) => i.billingPlan)).toEqual(["Monthly", "Annual", "Monthly", "Annual"]);
+  });
+
+  it("is null when the sheet has no such column, rather than an empty string", () => {
+    const grid = [["Part No", "Description", "ERP Price"], ["A", "One", 10]];
+    const { items } = readGrid(grid, suggestMapping(grid[0]), { headerRow: 0 });
+    expect(items[0].billingPlan).toBeNull();
   });
 });

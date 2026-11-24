@@ -1498,3 +1498,15 @@ button.path-hit { cursor: pointer; }
 .upload-sheets li { display: flex; align-items: baseline; gap: var(--gap); padding: 8px 12px; background: var(--surface-2); font-size: var(--t-body); }
 .upload-sheets strong { flex: 1 1 auto; min-width: 0; color: var(--ink); }
 .upload-sheets span { font-variant-numeric: tabular-nums; color: var(--ink-3); }
+
+/* ── the price book's search and filters ──────────────────────────────
+   FIVE CONTROLS AND TWO BUTTONS, which is more than a flex .row can hold
+   on a phone: it does not wrap, so each select collapsed to its chevron
+   and the form ran 72px off the side of a 390px screen.
+
+   A grid that reflows instead. The filters exist because a price book now
+   holds one row per term, billing plan and segment — a dozen lines for one
+   product — so they are not optional furniture that could simply be hidden
+   on a phone. */
+.pb-search { display: grid; grid-template-columns: repeat(auto-fit, minmax(158px, 1fr)); gap: var(--gap); align-items: end; }
+.pb-search .btn { justify-content: center; }

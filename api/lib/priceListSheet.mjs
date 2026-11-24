@@ -330,6 +330,12 @@ export function readGrid(grid, mapping, options = {}) {
       productName,
       category: cellText(at(row, "category")) || null,
       licenceType: cellText(at(row, "licenceType")) || null,
+      /* KEPT AS A FIELD, not only as part of the SKU. It went into the SKU
+         and nowhere else, which meant "annual or monthly billing" could
+         not be asked as a question of the price book — and with a row per
+         variant, that question is the only way to find the one line a
+         salesperson is actually quoting. */
+      billingPlan: cellText(at(row, "billingPlan")) || null,
       unit: cellText(at(row, "unit")) || null,
       resellerPrice: Math.round(price * 100) / 100,
       currency,

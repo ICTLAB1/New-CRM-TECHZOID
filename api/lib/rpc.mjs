@@ -125,7 +125,25 @@ export const CALLABLE = {
      result because there is no cost column in the function's select — the
      reseller price is read inside it, used to derive the minimum, and
      never returned. */
-  price_book_search: [{ args: ["p_company", "p_query", "p_oem", "p_limit"], returns: "rows" }],
+  price_book_search: [
+    { args: ["p_company", "p_query", "p_oem", "p_limit"], returns: "rows" },
+    /* With the three axes a variant varies on. A Microsoft product is one
+       row per term, billing plan and segment — a dozen lines with a dozen
+       floors — and these are how the one being quoted is found. The older
+       four-argument shape stays listed so a browser still running
+       yesterday's bundle keeps working through a deploy. */
+    {
+      args: ["p_company", "p_query", "p_oem", "p_limit", "p_term", "p_billing", "p_segment"],
+      returns: "rows",
+    },
+  ],
+
+  /* WHICH TERMS, BILLING PLANS AND SEGMENTS THE BOOK ACTUALLY HOLDS, so
+     the filters offer real values rather than a list hardcoded in the
+     browser — which would be wrong, and silently, the first time an OEM
+     shipped a term nobody had thought of. It returns nothing but those
+     values and a count each: no price, no cost. */
+  price_book_facets: [{ args: ["p_company", "p_oem"], returns: "rows" }],
 
   /* The same search WITH the cost picture — reseller price, buying price
      at a given distributor discount, and the margin. It raises unless the
@@ -135,6 +153,13 @@ export const CALLABLE = {
      reads like "no products matched". */
   price_book_search_costed: [
     { args: ["p_company", "p_query", "p_oem", "p_limit", "p_distributor_pct"], returns: "rows" },
+    {
+      args: [
+        "p_company", "p_query", "p_oem", "p_limit", "p_distributor_pct",
+        "p_term", "p_billing", "p_segment",
+      ],
+      returns: "rows",
+    },
   ],
 
   /* One approval request with the cost behind it, for the Admin deciding

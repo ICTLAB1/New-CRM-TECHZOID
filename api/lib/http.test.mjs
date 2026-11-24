@@ -479,6 +479,12 @@ describe("the whitelist itself", () => {
       "next_customer_code",
       "next_doc_number",
       "next_doc_seq",
+      /* WHICH TERMS, BILLING PLANS AND SEGMENTS the active lists hold, so
+         the Browse filters offer values that exist rather than a list
+         hardcoded in the browser. It returns those strings and a count
+         each — no price, no cost, nothing a Sales user may not already
+         read off the rows themselves. */
+      "price_book_facets",
       /* The price book, in the two shapes it is allowed to take. The plain
          search has NO cost column in its return type, so there is nothing
          to forget to redact; the costed one raises unless the caller is

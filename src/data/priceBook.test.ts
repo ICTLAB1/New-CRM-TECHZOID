@@ -1,17 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { toCostedHit, toHit, toListRow, toMarginRule } from "./priceBook";
+import { toCostedHit, toHit, toListRow, toMarginRule, termLabel } from "./priceBook";
 
 describe("what the browser keeps from a price book row", () => {
   it("renames the columns and nothing more", () => {
     const hit = toHit({
       item_id: "i1", oem: "Microsoft", sku: "M365-E3", product_name: "Microsoft 365 E3",
-      category: "Cloud", licence_type: "1 Year", unit: "User", currency: "INR",
-      min_price: 1150, period: "2026-11",
+      category: "Cloud", licence_type: "P1Y", billing_plan: "Annual", unit: "User",
+      currency: "INR", min_price: 1150, period: "2026-11",
     });
     expect(hit).toEqual({
       itemId: "i1", oem: "Microsoft", sku: "M365-E3", productName: "Microsoft 365 E3",
-      category: "Cloud", licenceType: "1 Year", unit: "User", currency: "INR",
-      minPrice: 1150, period: "2026-11",
+      category: "Cloud", licenceType: "P1Y", billingPlan: "Annual", unit: "User",
+      currency: "INR", minPrice: 1150, period: "2026-11",
     });
   });
 
@@ -26,8 +26,8 @@ describe("what the browser keeps from a price book row", () => {
       reseller_price: 1000, buying_price: 965, min_margin_pct: 15, distributor_discount_pct: 3.5,
     }) as unknown as Record<string, unknown>;
     expect(Object.keys(hit).sort()).toEqual([
-      "category", "currency", "itemId", "licenceType", "minPrice", "oem", "period",
-      "productName", "sku", "unit",
+      "billingPlan", "category", "currency", "itemId", "licenceType", "minPrice", "oem",
+      "period", "productName", "sku", "unit",
     ]);
     expect(hit.resellerPrice).toBeUndefined();
     expect(hit.buyingPrice).toBeUndefined();
@@ -74,5 +74,35 @@ describe("a margin rule", () => {
     expect(toMarginRule({ oem: "*", min_margin_pct: 5 })).toMatchObject({ oem: "*", category: null, sku: null, minMarginPct: 5 });
     expect(toMarginRule({ oem: "Microsoft", category: "Cloud", min_margin_pct: 15 }))
       .toMatchObject({ oem: "Microsoft", category: "Cloud", sku: null });
+  });
+});
+
+describe("how a licence term reads to a person", () => {
+  it("TURNS MICROSOFT'S ISO DURATIONS INTO WORDS", () => {
+    /* A price book row saying "P1Y" is a row a salesperson has to decode,
+       and the whole point of the term filter is that they can tell the
+       one-year line from the one-month line at a glance. */
+    expect(termLabel("P1Y")).toBe("1 year");
+    expect(termLabel("P1M")).toBe("1 month");
+    expect(termLabel("P3Y")).toBe("3 years");
+  });
+
+  it("PASSES THROUGH A TERM ALREADY WRITTEN IN WORDS", () => {
+    /* Most distributors are not Microsoft. Mangling "Annual" into
+       something else would make their lists worse, not better. */
+    expect(termLabel("Annual")).toBe("Annual");
+    expect(termLabel("Perpetual")).toBe("Perpetual");
+    expect(termLabel("OneTime")).toBe("OneTime");
+  });
+
+  it("says nothing for a row that has no term", () => {
+    expect(termLabel(null)).toBe("");
+    expect(termLabel(undefined)).toBe("");
+    expect(termLabel("  ")).toBe("");
+  });
+
+  it("does not mistake something shaped like a duration but not one", () => {
+    expect(termLabel("P1D")).toBe("P1D");
+    expect(termLabel("PART-1Y")).toBe("PART-1Y");
   });
 });

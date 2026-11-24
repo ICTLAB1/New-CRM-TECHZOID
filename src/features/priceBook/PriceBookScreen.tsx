@@ -9,9 +9,12 @@ import {
   activatePriceList,
   deleteMarginRule,
   marginRules,
+  priceBookFacets,
   priceListHistory,
   saveMarginRule,
   searchPriceBook,
+  termLabel,
+  type Facet,
   type MarginRuleRow,
   type PriceBookHit,
   type PriceListRow,
@@ -92,6 +95,14 @@ export function PriceBookScreen({
 function BrowseTab({ company }: { company: string }) {
   const [query, setQuery] = useState("");
   const [oem, setOem] = useState("");
+  /* The three axes one product varies on. A Microsoft product is sold on a
+     term, a billing plan and to a segment, so "Exchange Online Archiving"
+     is a dozen rows with a dozen different floors. Without these the right
+     one cannot be found. */
+  const [term, setTerm] = useState("");
+  const [billing, setBilling] = useState("");
+  const [segment, setSegment] = useState("");
+  const [facets, setFacets] = useState<Facet[]>([]);
   const [hits, setHits] = useState<PriceBookHit[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -101,13 +112,13 @@ function BrowseTab({ company }: { company: string }) {
     setBusy(true);
     setError("");
     try {
-      setHits(await searchPriceBook(company, query, oem || null, 200));
+      setHits(await searchPriceBook(company, query, oem || null, 200, { term, billing, segment }));
       setSearched(true);
     } catch (e) {
       setError((e as Error)?.message || "The price book could not be searched.");
     }
     setBusy(false);
-  }, [company, query, oem]);
+  }, [company, query, oem, term, billing, segment]);
 
   /* Load the first page on arrival, so an empty price book says so rather
      than looking like a search nobody has run yet. */
@@ -116,11 +127,27 @@ function BrowseTab({ company }: { company: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [company]);
 
+  /* What the filters may offer, read from the book rather than listed
+     here. Re-read when the OEM changes: Adobe's terms are not Microsoft's,
+     and offering one OEM's values under another is a filter that returns
+     nothing for no stated reason. */
+  useEffect(() => {
+    let live = true;
+    void priceBookFacets(company, oem || null)
+      .then((f) => { if (live) setFacets(f); })
+      .catch(() => { if (live) setFacets([]); });
+    return () => { live = false; };
+  }, [company, oem]);
+
+  /* A filter with one value is not a choice, so it is not shown. */
+  const choices = (kind: Facet["kind"]) => facets.filter((f) => f.kind === kind);
+  const narrowed = Boolean(term || billing || segment);
+
   return (
     <div className="stack">
       <Card>
         <form
-          className="row"
+          className="pb-search"
           onSubmit={(e) => {
             e.preventDefault();
             void run();
@@ -141,7 +168,45 @@ function BrowseTab({ company }: { company: string }) {
               ))}
             </Select>
           </Field>
+          {choices("term").length > 1 ? (
+            <Field label="Term">
+              <Select value={term} onChange={(e) => setTerm(e.target.value)}>
+                <option value="">Any</option>
+                {choices("term").map((f) => (
+                  <option key={f.value} value={f.value}>{termLabel(f.value)}</option>
+                ))}
+              </Select>
+            </Field>
+          ) : null}
+          {choices("billing").length > 1 ? (
+            <Field label="Billing">
+              <Select value={billing} onChange={(e) => setBilling(e.target.value)}>
+                <option value="">Any</option>
+                {choices("billing").map((f) => (
+                  <option key={f.value} value={f.value}>{f.value}</option>
+                ))}
+              </Select>
+            </Field>
+          ) : null}
+          {choices("segment").length > 1 ? (
+            <Field label="Segment">
+              <Select value={segment} onChange={(e) => setSegment(e.target.value)}>
+                <option value="">Any</option>
+                {choices("segment").map((f) => (
+                  <option key={f.value} value={f.value}>{f.value}</option>
+                ))}
+              </Select>
+            </Field>
+          ) : null}
           <Button type="submit" tone="primary" loading={busy} loadingLabel="Searching…">Search</Button>
+          {narrowed ? (
+            <Button
+              tone="quiet"
+              onClick={() => { setTerm(""); setBilling(""); setSegment(""); }}
+            >
+              Clear filters
+            </Button>
+          ) : null}
         </form>
         <p className="field-hint">
           The minimum selling price is the floor. Quote above it freely; below it needs an Admin's
@@ -155,8 +220,8 @@ function BrowseTab({ company }: { company: string }) {
         <Empty
           title="Nothing in the price book yet"
           body={
-            query || oem
-              ? "No product matched. Try a part number, or clear the OEM filter."
+            query || oem || narrowed
+              ? "No product matched. Try a part number, or widen the term, billing and segment filters."
               : "An Admin loads each OEM's monthly reseller list, and the products appear here with the lowest price you may quote."
           }
         />
@@ -168,7 +233,8 @@ function BrowseTab({ company }: { company: string }) {
                 <tr>
                   <th>Product</th>
                   <th>SKU</th>
-                  <th>Licence term</th>
+                  <th>Term</th>
+                  <th>Billing</th>
                   <th className="num">Minimum selling price</th>
                   <th>Price list</th>
                 </tr>
@@ -181,7 +247,8 @@ function BrowseTab({ company }: { company: string }) {
                       <div className="muted">{[h.oem, h.category].filter(Boolean).join(" · ")}</div>
                     </td>
                     <td data-label="SKU" className="mono">{h.sku}</td>
-                    <td data-label="Licence term">{[h.licenceType, h.unit].filter(Boolean).join(" / ") || "—"}</td>
+                    <td data-label="Term">{[termLabel(h.licenceType), h.unit].filter(Boolean).join(" / ") || "—"}</td>
+                    <td data-label="Billing">{h.billingPlan || "—"}</td>
                     <td data-label="Minimum selling price" className="num strong">
                       {h.currency === "INR" ? inr(h.minPrice) : `${h.currency} ${h.minPrice.toFixed(2)}`}
                     </td>
