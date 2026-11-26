@@ -348,7 +348,12 @@ describe("header and details", () => {
    */
   it("heads the details column with what the document actually is", () => {
     expect(build({}, "quotation").detailsHeading).toBe("QUOTATION DETAILS");
-    expect(build({}, "proforma").detailsHeading).toBe("INVOICE DETAILS");
+    /* THIS ASSERTION USED TO READ "INVOICE DETAILS", which is what the
+       code did, so the test held the mistake in place rather than
+       catching it: a proforma printed "INVOICE DETAILS" over "Invoice
+       No." in the PDF the customer received. A test that agrees with the
+       bug is worse than no test, because it is read as proof. */
+    expect(build({}, "proforma").detailsHeading).toBe("PROFORMA INVOICE DETAILS");
     expect(build({}, "invoice").detailsHeading).toBe("TAX INVOICE DETAILS");
     expect(build({}, "purchase_order").detailsHeading).toBe("PURCHASE ORDER DETAILS");
   });
@@ -357,6 +362,27 @@ describe("header and details", () => {
     const m = build({}, "invoice");
     const own = JSON.stringify([m.title, m.detailsHeading, m.details]).toLowerCase();
     expect(own).not.toContain("quotation");
+  });
+
+  it("NEVER CALLS A PROFORMA'S NUMBER AN INVOICE NUMBER", () => {
+    /* A proforma is a request for payment before supply. It carries no
+       input tax credit, and the document says so in its own closing line.
+       Labelling its number "Invoice No." is the CRM telling the
+       customer's accounts team to book it as a tax invoice. */
+    const m = build({}, "proforma");
+    const labels = m.details.map(([label]) => label);
+    expect(labels).toContain("Proforma No.");
+    expect(labels).not.toContain("Invoice No.");
+    expect(labels).not.toContain("Invoice Date");
+  });
+
+  it("marks a proforma as a proforma on every field of its own", () => {
+    /* The heading and the rows are derived together for this reason: a
+       heading that said PROFORMA over rows that said Invoice would be the
+       same lie, just harder to see. */
+    const m = build({}, "proforma");
+    expect(m.detailsHeading).toContain("PROFORMA");
+    expect(m.details[0]?.[0]).toBe("Proforma No.");
   });
 });
 

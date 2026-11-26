@@ -377,8 +377,14 @@ export function buildDocumentModel(input: BuildModelInput): DocumentModel {
       ]
     : isProforma
     ? [
-        ["Invoice No.", doc.number],
-        ["Invoice Date", fmtDate(doc.date)],
+        /* NOT "Invoice No." A proforma is not an invoice: it is a request
+           for payment before supply, it carries no tax credit, and this
+           document's own closing line says "This is a Proforma Invoice and
+           not a Tax Invoice." Labelling its number "Invoice No." invited
+           the customer's accounts team to book it as one — and it was the
+           CRM saying it, in the PDF they receive. */
+        ["Proforma No.", doc.number],
+        ["Proforma Date", fmtDate(doc.date)],
         ["Valid Until", fmtDate(doc.validUntil)],
         ["Customer ID", doc.customerCode || "—"],
         ["Sales Executive", doc.preparedBy || "—"],
@@ -397,7 +403,7 @@ export function buildDocumentModel(input: BuildModelInput): DocumentModel {
 
   const detailsHeading = isPurchaseOrder ? "PURCHASE ORDER DETAILS"
     : isInvoice ? "TAX INVOICE DETAILS"
-    : isProforma ? "INVOICE DETAILS"
+    : isProforma ? "PROFORMA INVOICE DETAILS"
     : "QUOTATION DETAILS";
 
   const references: RefCell[] = [
