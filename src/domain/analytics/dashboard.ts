@@ -63,7 +63,10 @@ export interface Kpis {
   wonThisMonthCount: number;
   quotesPending: number;
   quotesStale: number;
-  paymentsDue: number;
+  /* PER CURRENCY FOR THE SAME REASON, and this one had the fault the comment
+     above describes: it was a single rupee number, so a dollar invoice was
+     added into the rupee total as though the two were the same money. */
+  paymentsDue: CurrencyTotal[];
   paymentsOverdue: number;
   renewalsDue: number;
   renewalsValue: number;
@@ -83,14 +86,47 @@ export function kpis(ws: Workspace, sellerState: string, now: Date = new Date())
      this tile was written and never wired into it, so an overdue invoice
      showed on Receivables and nowhere on the dashboard — the screen people
      actually look at first. Money owed is money owed whichever document
-     asked for it. */
-  let paymentsDue = 0;
+     asked for it.
+     ────────────────────────────────────────────────────────────────────
+     ONE DEBT PER DEAL, THOUGH, which is what adding invoices here broke.
+     A proforma asks for the money and the tax invoice raised from it asks
+     for the SAME money, on the document that can actually be paid against;
+     counting both told the owner he was owed twice what he was. The invoice
+     carries quoteId back to the document it came from, so a proforma an
+     invoice supersedes drops out here — and a CANCELLED invoice supersedes
+     nothing, handing the debt back to the proforma, which is already how
+     the screen that refuses to raise a second invoice reads it.
+
+     Not covered, deliberately: a quotation with a proforma raised from it
+     AND an invoice raised straight from the quotation rather than from the
+     proforma. Those two share a quoteId but neither points at the other,
+     and merging them on that alone would also merge a genuine part-invoice
+     against a larger proforma. Two documents are counted twice there,
+     visibly, rather than one of them being guessed away. */
+  const superseded = new Set(
+    (ws.invoices ?? [])
+      .filter((inv) => inv.status !== "Cancelled" && inv.quoteId)
+      .map((inv) => inv.quoteId as string),
+  );
+
+  const owing: { outstanding: number; currency?: string | null }[] = [];
   let paymentsOverdue = 0;
-  for (const doc of [...ws.proformas, ...(ws.invoices ?? [])]) {
-    if (doc.status === "Draft") continue;
+  for (const doc of [...ws.proformas.filter((p) => !superseded.has(p.id)), ...(ws.invoices ?? [])]) {
+    /* THE SAME TWO STATUSES RECEIVABLES SKIPS. A draft has not been issued,
+       so nobody owes it yet; a cancelled document is not a debt at all. This
+       tile skipped only drafts, so cancelling a proforma left its money on
+       the dashboard for good while Receivables had already let it go — two
+       screens reading one ledger and disagreeing about it. */
+    if (doc.status === "Draft" || doc.status === "Cancelled") continue;
     const info = computePaymentInfo(doc, grandOf(doc, sellerState), today);
-    if (info.paymentStatus === "paid") continue;
-    paymentsDue += info.outstanding;
+    /* NOT "paymentStatus is paid", WHICH ANSWERS A DIFFERENT QUESTION. A
+       document worth nothing is reported unpaid, because nothing was
+       received against it — true, and not money owed. One of those past its
+       date added 0 to the total and 1 to the overdue count, which is how
+       this tile could say "overdue" with no money behind it. An over-payment
+       drops out here too, as it does on Receivables. */
+    if (info.outstanding <= 0) continue;
+    owing.push({ outstanding: info.outstanding, currency: doc.currency });
     if (info.overdue) paymentsOverdue++;
   }
 
@@ -101,7 +137,7 @@ export function kpis(ws: Workspace, sellerState: string, now: Date = new Date())
     wonThisMonthCount: won.length,
     quotesPending: pending.length,
     quotesStale: stale.length,
-    paymentsDue,
+    paymentsDue: totalsByCurrency(owing, (r) => r.outstanding, (r) => r.currency),
     paymentsOverdue,
     renewalsDue: dueForRenewal(ws.subscriptions, 30, now).length,
     renewalsValue: valueAtRisk(ws.subscriptions, 30, now),

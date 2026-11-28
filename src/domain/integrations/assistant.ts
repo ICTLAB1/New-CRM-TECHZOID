@@ -1,5 +1,4 @@
 import { kpis, needsAttention, scopeWorkspace, teamPerformance, type DashboardUser, type Workspace } from "../analytics/dashboard";
-import { effectiveStatus } from "../documents/create";
 import { daysLeft, type Subscription } from "../subscriptions/expiry";
 import { isOpenStage } from "../pipeline/stages";
 import { formatTotals, inrShort, moneyShort } from "../currency/format";
@@ -87,7 +86,12 @@ export function buildCrmContext(
     "QUOTATIONS AND PAYMENTS",
     `- Awaiting a reply: ${k.quotesPending}`,
     `- Sent but past their validity date: ${k.quotesStale}`,
-    `- Proforma payments outstanding: ${money(k.paymentsDue)} across ${ws.proformas.filter((p) => effectiveStatus(p, today) !== "Draft").length} documents, ${k.paymentsOverdue} overdue`,
+    /* THE COUNT NOW DESCRIBES THE SAME DOCUMENTS AS THE MONEY BESIDE IT.
+       It used to be every non-draft proforma — so it counted the fully paid
+       ones, left every tax invoice out, and sat next to a figure drawn from
+       a different set. The per-currency bins carry their own count, which is
+       exactly the documents that still owe something. */
+    `- Payments outstanding: ${formatTotals(k.paymentsDue, moneyShort) || "nothing"} across ${k.paymentsDue.reduce((a, t) => a + t.count, 0)} proformas and tax invoices, ${k.paymentsOverdue} overdue`,
     "",
     "RENEWALS",
     `- Due within 30 days: ${expiring.length} worth ${money(k.renewalsValue)}`,

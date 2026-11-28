@@ -108,8 +108,78 @@ describe("KPIs", () => {
 
   it("totals outstanding money on sent proformas only", () => {
     // A draft proforma is not owed by anyone yet.
-    expect(k.paymentsDue).toBe(216000);
+    expect(rupees(k.paymentsDue)).toBe(216000);
     expect(k.paymentsOverdue).toBe(1);
+  });
+
+  /**
+   * WHAT THIS TILE IS ALLOWED TO ADD UP.
+   *
+   * It read "₹4.10 L / 7 overdue" while the Receivables screen, looking at
+   * the same ledger, did not agree — so the one number on the first screen
+   * anybody opens was the one nobody could trust. Four separate ways of
+   * being wrong are nailed down below, each on its own, because each would
+   * have inflated the figure by itself.
+   */
+  const owed = (ws: Partial<Workspace>) =>
+    kpis({ customers: [], quotations: [], proformas: [], orders: [], challans: [], subscriptions: [], ...ws }, "Delhi", NOW);
+
+  it("DOES NOT COUNT A CANCELLED DOCUMENT AS MONEY OWED", () => {
+    /* Receivables has always skipped these; this tile skipped only drafts,
+       so cancelling a proforma left its money on the dashboard for good. */
+    const k2 = owed({
+      proformas: [
+        doc({ id: "p1", number: "TZ/PI/0001", status: "Sent", validUntil: "2026-09-30" }),
+        doc({ id: "p2", number: "TZ/PI/0002", status: "Cancelled", validUntil: "2026-09-30" }),
+      ],
+    });
+    expect(rupees(k2.paymentsDue)).toBe(118000);
+  });
+
+  it("COUNTS A PROFORMA AND THE TAX INVOICE RAISED FROM IT ONCE, NOT TWICE", () => {
+    /* Raising the invoice does not create a second debt — it moves the same
+       one onto the document that can be paid against. The invoice carries
+       quoteId back to the proforma, which is the link used here. */
+    const k2 = owed({
+      proformas: [doc({ id: "p1", number: "TZ/PI/0001", status: "Sent", validUntil: "2026-09-30" })],
+      invoices: [doc({ id: "i1", number: "TZ/INV/0001", status: "Sent", validUntil: "2026-09-30", quoteId: "p1" })],
+    });
+    expect(rupees(k2.paymentsDue)).toBe(118000);
+  });
+
+  it("still owes the proforma when the invoice raised from it was cancelled", () => {
+    /* The money did not go away because the invoice did. Cancelling the
+       invoice hands the debt back to the proforma, which is how the screen
+       that refuses to raise a duplicate invoice already reads it. */
+    const k2 = owed({
+      proformas: [doc({ id: "p1", number: "TZ/PI/0001", status: "Sent", validUntil: "2026-09-30" })],
+      invoices: [doc({ id: "i1", number: "TZ/INV/0001", status: "Cancelled", quoteId: "p1" })],
+    });
+    expect(rupees(k2.paymentsDue)).toBe(118000);
+  });
+
+  it("SPLITS WHAT IS OWED BY CURRENCY, AND NEVER CALLS DOLLARS RUPEES", () => {
+    /* The tile printed one ₹ figure, so a dollar invoice was added into the
+       rupee total as though the two were the same money. The tiles either
+       side of it have been per-currency all along. */
+    const k2 = owed({
+      proformas: [doc({ id: "p1", number: "TZ/PI/0001", status: "Sent", validUntil: "2026-09-30" })],
+      invoices: [doc({ id: "i1", number: "TZ/INV/0001", status: "Sent", validUntil: "2026-09-30", currency: "USD", taxType: "none" })],
+    });
+    expect(k2.paymentsDue.find((t) => t.code === "INR")?.total).toBe(118000);
+    expect(k2.paymentsDue.find((t) => t.code === "USD")?.total).toBe(100000);
+  });
+
+  it("DOES NOT CALL A DOCUMENT WITH NOTHING LEFT ON IT OVERDUE", () => {
+    /* computePaymentInfo reports "unpaid" for a document worth nothing,
+       because nothing was received against it — true, and not a debt. One
+       of those past its date added 0 to the money and 1 to the count, which
+       is how the tile could say "overdue" with no money behind it. */
+    const k2 = owed({
+      proformas: [doc({ id: "p1", number: "TZ/PI/0001", status: "Sent", validUntil: "2026-01-01", items: [] })],
+    });
+    expect(k2.paymentsDue).toEqual([]);
+    expect(k2.paymentsOverdue).toBe(0);
   });
 
   it("counts renewals inside thirty days", () => {

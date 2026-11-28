@@ -268,7 +268,7 @@ export function DashboardScreen({
           />
           <StatTile
             label="Payments Due"
-            value={inrShort(k.paymentsDue)}
+            value={formatTotals(k.paymentsDue, moneyShort) || "—"}
             meta={k.paymentsOverdue ? `${k.paymentsOverdue} overdue` : "none overdue"}
             tone={k.paymentsOverdue ? "bad" : undefined}
             icon={<IconCard />}
